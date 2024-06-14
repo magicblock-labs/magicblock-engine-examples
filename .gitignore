@@ -1,0 +1,9 @@
+*.DS_Store
+.idea
+**/*.rs.bk
+/anchor-counter/target/*
+/anchor-counter/node_modules
+/anchor-counter/test-ledger
+/anchor-counter/.anchor
+/anchor-counter/.yarn
+!/anchor-counter/target/deploy/anchor_counter-keypair.json
