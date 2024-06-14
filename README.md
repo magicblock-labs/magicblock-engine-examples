@@ -1,4 +1,4 @@
-# ⚡ Ephemeral Rollups - Integration Examples
+# ⚡ MagicBlock Engine - Integration Examples
 
 Scaling solution for performant, composable games and applications.
 
