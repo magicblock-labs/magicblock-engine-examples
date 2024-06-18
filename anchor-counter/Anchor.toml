@@ -16,7 +16,7 @@ wallet = "~/.config/solana/id.json"
 
 [[test.genesis]]
 address = "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
-program = "/Users/gabrielepicco/Downloads/delegator/target/deploy/dlp.so"
+program = "tests/fixtures/dlp.so"
 upgradeable = false
 
 [scripts]
