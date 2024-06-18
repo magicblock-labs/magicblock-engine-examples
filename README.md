@@ -10,6 +10,7 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 ## 👷Examples
 
 - [Anchor Counter](./anchor-counter/README.md) - A simple counter that can be incremented. Tests use the ts sdk to delegate/undelegate accounts and run transactions.
+- [Bolt Counter](./bolt-counter/README.md) - A simple counter that can be incremented. Tests use the bolt sdk to delegate/undelegate accounts and run transactions.
 
 ## 🚧 Under Testing 🚧
 
