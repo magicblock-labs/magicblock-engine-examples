@@ -45,6 +45,12 @@
     "@metaplex-foundation/beet" "^0.7.1"
     "@metaplex-foundation/beet-solana" "^0.4.0"
 
+"@magicblock-labs/delegation-program@file:/Users/gabrielepicco/Downloads/delegator/sdk/ts":
+  version "0.1.0"
+  dependencies:
+    "@metaplex-foundation/beet" "^0.7.2"
+    "@solana/web3.js" "^1.92.3"
+
 "@metaplex-foundation/beet-solana@^0.4.0":
   version "0.4.1"
   resolved "https://registry.yarnpkg.com/@metaplex-foundation/beet-solana/-/beet-solana-0.4.1.tgz#255747aa7feee1c20202146a752c057feca1948f"
@@ -55,7 +61,7 @@
     bs58 "^5.0.0"
     debug "^4.3.4"
 
-"@metaplex-foundation/beet@>=0.1.0", "@metaplex-foundation/beet@^0.7.1":
+"@metaplex-foundation/beet@>=0.1.0", "@metaplex-foundation/beet@^0.7.1", "@metaplex-foundation/beet@^0.7.2":
   version "0.7.2"
   resolved "https://registry.yarnpkg.com/@metaplex-foundation/beet/-/beet-0.7.2.tgz#fa4726e4cfd4fb6fed6cddc9b5213c1c2a2d0b77"
   integrity sha512-K+g3WhyFxKPc0xIvcIjNyV1eaTVJTiuaHZpig7Xx0MuYRMoJLLvhLTnUXhFdR5Tu2l2QSyKwfyXDgZlzhULqFg==
@@ -84,7 +90,7 @@
   dependencies:
     buffer "~6.0.3"
 
-"@solana/web3.js@^1.56.2", "@solana/web3.js@^1.68.0":
+"@solana/web3.js@^1.56.2", "@solana/web3.js@^1.68.0", "@solana/web3.js@^1.92.3":
   version "1.93.0"
   resolved "https://registry.yarnpkg.com/@solana/web3.js/-/web3.js-1.93.0.tgz#4b6975020993cec2f6626e4f2bf559ca042df8db"
   integrity sha512-suf4VYwWxERz4tKoPpXCRHFRNst7jmcFUaD65kII+zg9urpy5PeeqgLV6G5eWGzcVzA9tZeXOju1A1Y+0ojEVw==

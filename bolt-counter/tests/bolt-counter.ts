@@ -80,7 +80,7 @@ describe("BoltCounter", () => {
       payer: provider.wallet.publicKey,
     });
     const tx = new anchor.web3.Transaction().add(delegateIx);
-    const txSign = await provider.sendAndConfirm(tx, [], { skipPreflight: true });
+    const txSign = await provider.sendAndConfirm(tx, [], { skipPreflight: true, commitment: 'finalized' });
     console.log(
         `Delegation signature: ${txSign}`
     );
@@ -89,7 +89,6 @@ describe("BoltCounter", () => {
   });
 
   it("Apply the increase system", async () => {
-    await delay(15000);
     const applySystem = await ApplySystem({
       authority: providerEphemeralRollup.wallet.publicKey,
       system: systemIncrease.programId,
@@ -101,7 +100,6 @@ describe("BoltCounter", () => {
   });
 
   it("Undelegate the counter", async () => {
-    await delay(10000);
     const counterComponentPda = FindComponentPda(
         counterComponent.programId,
         entityPda

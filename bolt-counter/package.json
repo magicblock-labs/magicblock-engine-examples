@@ -4,19 +4,20 @@
         "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
     },
     "dependencies": {
-        "@coral-xyz/anchor": "^0.30.0"
+        "@coral-xyz/anchor": "^0.30.0",
+        "@magicblock-labs/delegation-program": "file:/Users/gabrielepicco/Downloads/delegator/sdk/ts"
     },
     "devDependencies": {
-        "chai": "^4.3.4",
-        "mocha": "^9.0.3",
-        "ts-mocha": "^10.0.0",
+        "@magicblock-labs/bolt-sdk": "latest",
+        "@metaplex-foundation/beet": "^0.7.1",
+        "@metaplex-foundation/beet-solana": "^0.4.0",
         "@types/bn.js": "^5.1.0",
         "@types/chai": "^4.3.0",
         "@types/mocha": "^9.0.0",
-        "typescript": "^4.3.5",
+        "chai": "^4.3.4",
+        "mocha": "^9.0.3",
         "prettier": "^2.6.2",
-        "@metaplex-foundation/beet": "^0.7.1",
-        "@metaplex-foundation/beet-solana": "^0.4.0",
-        "@magicblock-labs/bolt-sdk": "latest"
+        "ts-mocha": "^10.0.0",
+        "typescript": "^4.3.5"
     }
 }

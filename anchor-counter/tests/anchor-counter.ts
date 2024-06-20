@@ -3,6 +3,7 @@ import { Program } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
 import {
   createUndelegateInstruction,
+  createCommitInstruction,
   DelegateAccounts,
   DELEGATION_PROGRAM_ID,
 } from "@magicblock-labs/delegation-program";
@@ -79,7 +80,7 @@ describe("anchor-counter", () => {
     } = DelegateAccounts(pda, program.programId);
 
     // Delegate, Close PDA, and Lock PDA in a single instruction
-    const tx = await program.methods
+    let tx = await program.methods
       .delegate()
       .accounts({
         payer: provider.wallet.publicKey,
@@ -90,8 +91,12 @@ describe("anchor-counter", () => {
         delegationRecord: delegationPda,
         delegationProgram: DELEGATION_PROGRAM_ID,
       })
-      .rpc({ skipPreflight: true });
-    console.log("Your transaction signature", tx);
+      .transaction();
+    tx.feePayer = provider.wallet.publicKey;
+    tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
+    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
+    const txSign = await provider.sendAndConfirm(tx, [],  {skipPreflight: true, commitment: "finalized"});
+    console.log("Your transaction signature", txSign);
   });
 
   it("Increase the delegate counter", async () => {
@@ -112,6 +117,22 @@ describe("anchor-counter", () => {
 
     const counterAccount = await program.account.counter.fetch(pda);
     console.log("Counter: ", counterAccount.count.toString());
+  });
+
+  it("Manual trigger an account commit", async () => {
+    const ix = createCommitInstruction({
+      payer: providerEphemeralRollup.wallet.publicKey,
+      delegatedAccount: pda,
+    });
+    let tx = new anchor.web3.Transaction().add(ix);
+    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
+    tx.recentBlockhash = (
+        await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
+
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], {skipPreflight: true});
+    console.log("Trigger Manual Commit Tx: ", txSign);
   });
 
   it("Undelegate the counter", async () => {

@@ -5,7 +5,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.0",
-    "@magicblock-labs/delegation-program": "^0.1.0"
+    "@magicblock-labs/delegation-program": "^0.1.1"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",
