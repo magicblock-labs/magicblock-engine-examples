@@ -95,7 +95,7 @@ describe("anchor-counter", () => {
     tx.feePayer = provider.wallet.publicKey;
     tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txSign = await provider.sendAndConfirm(tx, [],  {skipPreflight: true, commitment: "finalized"});
+    const txSign = await provider.sendAndConfirm(tx, [],  {skipPreflight: true, commitment: "confirmed"});
     console.log("Your transaction signature", txSign);
   });
 
@@ -156,6 +156,7 @@ describe("anchor-counter", () => {
       reimbursement: provider.wallet.publicKey,
     });
     tx.add(ixUndelegate);
+
     tx.feePayer = provider.wallet.publicKey;
     tx.recentBlockhash = (
       await provider.connection.getLatestBlockhash()

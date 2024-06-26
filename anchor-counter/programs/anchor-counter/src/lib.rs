@@ -24,7 +24,6 @@ pub mod anchor_counter {
         Ok(())
     }
 
-
     /// Allow undelegation if the counter is greater than 0.
     pub fn allow_undelegation(ctx: Context<AllowUndelegation>) -> Result<()> {
         let counter =
