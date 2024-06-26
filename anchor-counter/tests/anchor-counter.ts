@@ -73,7 +73,7 @@ describe("anchor-counter", () => {
     }
     const {
       delegationPda,
-      delegatedAccountSeedsPda,
+      delegationMetadata,
       bufferPda,
       commitStateRecordPda,
       commitStatePda,
@@ -86,7 +86,7 @@ describe("anchor-counter", () => {
         payer: provider.wallet.publicKey,
         pda: pda,
         ownerProgram: program.programId,
-        delegateAccountSeeds: delegatedAccountSeedsPda,
+        delegationMetadata: delegationMetadata,
         buffer: bufferPda,
         delegationRecord: delegationPda,
         delegationProgram: DELEGATION_PROGRAM_ID,
@@ -95,7 +95,7 @@ describe("anchor-counter", () => {
     tx.feePayer = provider.wallet.publicKey;
     tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txSign = await provider.sendAndConfirm(tx, [],  {skipPreflight: true, commitment: "finalized"});
+    const txSign = await provider.sendAndConfirm(tx, [],  {skipPreflight: true, commitment: "confirmed"});
     console.log("Your transaction signature", txSign);
   });
 
@@ -136,13 +136,27 @@ describe("anchor-counter", () => {
   });
 
   it("Undelegate the counter", async () => {
-    const ix = createUndelegateInstruction({
+    // Create the unlock undelegation instruction
+    const { delegationPda, delegationMetadata, bufferPda, commitStateRecordPda, commitStatePda} = DelegateAccounts(pda, program.programId);
+    let tx = await program.methods
+        .allowUndelegation()
+        .accounts({
+          counter: pda,
+          delegationRecord: delegationPda,
+          delegationMetadata: delegationMetadata,
+          buffer: bufferPda,
+          delegationProgram: DELEGATION_PROGRAM_ID,
+        }).transaction();
+
+    // Create the undelegation ix
+    const ixUndelegate = createUndelegateInstruction({
       payer: provider.wallet.publicKey,
       delegatedAccount: pda,
       ownerProgram: program.programId,
       reimbursement: provider.wallet.publicKey,
     });
-    let tx = new anchor.web3.Transaction().add(ix);
+    tx.add(ixUndelegate);
+
     tx.feePayer = provider.wallet.publicKey;
     tx.recentBlockhash = (
       await provider.connection.getLatestBlockhash()

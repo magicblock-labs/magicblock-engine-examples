@@ -24,6 +24,24 @@ pub mod anchor_counter {
         Ok(())
     }
 
+    /// Allow undelegation if the counter is greater than 0.
+    pub fn allow_undelegation(ctx: Context<AllowUndelegation>) -> Result<()> {
+        let counter =
+            Counter::try_deserialize_unchecked(&mut (&**ctx.accounts.counter.try_borrow_data()?))?;
+        if counter.count > 0 {
+            msg!("Counter is greater than 0, undelegation is allowed");
+            delegation_program_sdk::allow_undelegation(
+                &ctx.accounts.counter,
+                &ctx.accounts.delegation_record,
+                &ctx.accounts.delegation_metadata,
+                &ctx.accounts.buffer,
+                &ctx.accounts.delegation_program,
+                &id(),
+            )?;
+        }
+        Ok(())
+    }
+
     /// Delegate the account to the delegation program
     pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
         let pda_seeds: &[&[u8]] = &[TEST_PDA_SEED];
@@ -34,7 +52,7 @@ pub mod anchor_counter {
             &ctx.accounts.owner_program,
             &ctx.accounts.buffer,
             &ctx.accounts.delegation_record,
-            &ctx.accounts.delegate_account_seeds,
+            &ctx.accounts.delegation_metadata,
             &ctx.accounts.delegation_program,
             &ctx.accounts.system_program,
             pda_seeds,
@@ -71,11 +89,30 @@ pub struct DelegateInput<'info> {
     pub delegation_record: AccountInfo<'info>,
     /// CHECK: The seeds to create the delegate account
     #[account(mut)]
-    pub delegate_account_seeds: AccountInfo<'info>,
+    pub delegation_metadata: AccountInfo<'info>,
     /// CHECK: The delegation program ID
     pub delegation_program: AccountInfo<'info>,
     /// CHECK: The system program
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AllowUndelegation<'info> {
+    #[account(seeds = [TEST_PDA_SEED], bump)]
+    /// CHECK: The counter pda
+    pub counter: AccountInfo<'info>,
+    #[account()]
+    /// CHECK: delegation record
+    pub delegation_record: AccountInfo<'info>,
+    #[account(mut)]
+    /// CHECK: delegation metadata
+    pub delegation_metadata: AccountInfo<'info>,
+    #[account()]
+    /// CHECK: singer buffer to enforce CPI
+    pub buffer: AccountInfo<'info>,
+    #[account()]
+    /// CHECK:`
+    pub delegation_program: AccountInfo<'info>,
 }
 
 /// Account for the increment instruction.

@@ -729,9 +729,9 @@ dependencies = [
 
 [[package]]
 name = "delegation-program-sdk"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bdcce308b528b458c346a4fc1d249579e1272a6feb5b6d746f88cab6ecc7890"
+checksum = "3cefbc8411275aa419386962205ccc211e8db3c7fc915f13f851336fea4c167a"
 dependencies = [
  "borsh 0.10.3",
  "delegation-sdk-attribute-delegate",
