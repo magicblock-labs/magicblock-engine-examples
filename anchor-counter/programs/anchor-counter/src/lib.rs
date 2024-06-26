@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use delegation_program_sdk::{delegate, delegate_account};
+use delegation_program_sdk::{delegate, delegate_account, trigger_commit};
 
 declare_id!("852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr");
 
@@ -21,6 +21,17 @@ pub mod anchor_counter {
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
+        Ok(())
+    }
+
+    /// Increment the counter + manual commit the account in the ER.
+    pub fn increment_and_commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
+        let counter = &mut ctx.accounts.counter;
+        counter.count += 1;
+        trigger_commit(
+            &ctx.accounts.payer,
+            &ctx.accounts.counter.to_account_info(),
+            &ctx.accounts.magic_program)?;
         Ok(())
     }
 
@@ -120,6 +131,17 @@ pub struct AllowUndelegation<'info> {
 pub struct Increment<'info> {
     #[account(mut, seeds = [TEST_PDA_SEED], bump)]
     pub counter: Account<'info, Counter>,
+}
+
+/// Account for the increment instruction + manual commit.
+#[derive(Accounts)]
+pub struct IncrementAndCommit<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut, seeds = [TEST_PDA_SEED], bump)]
+    pub counter: Account<'info, Counter>,
+    /// CHECK:`
+    pub magic_program: AccountInfo<'info>,
 }
 
 #[account]

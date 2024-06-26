@@ -5,7 +5,7 @@ import {
   createUndelegateInstruction,
   createCommitInstruction,
   DelegateAccounts,
-  DELEGATION_PROGRAM_ID,
+  DELEGATION_PROGRAM_ID, MAGIC_PROGRAM_ID,
 } from "@magicblock-labs/delegation-program";
 
 const SEED_TEST_PDA = "test-pda";
@@ -95,7 +95,7 @@ describe("anchor-counter", () => {
     tx.feePayer = provider.wallet.publicKey;
     tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txSign = await provider.sendAndConfirm(tx, [],  {skipPreflight: true, commitment: "confirmed"});
+    const txSign = await provider.sendAndConfirm(tx, [],  {skipPreflight: true, commitment: "finalized"});
     console.log("Your transaction signature", txSign);
   });
 
@@ -114,6 +114,28 @@ describe("anchor-counter", () => {
 
     const txSign = await providerEphemeralRollup.sendAndConfirm(tx);
     console.log("Increment Tx: ", txSign);
+
+    const counterAccount = await program.account.counter.fetch(pda);
+    console.log("Counter: ", counterAccount.count.toString());
+  });
+
+  it("Increase the delegate counter and commit through CPI", async () => {
+    let tx = await program.methods
+        .incrementAndCommit()
+        .accounts({
+          payer: providerEphemeralRollup.wallet.publicKey,
+          counter: pda,
+          magicProgram: MAGIC_PROGRAM_ID,
+        })
+        .transaction();
+    tx.feePayer = provider.wallet.publicKey;
+    tx.recentBlockhash = (
+        await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
+
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx);
+    console.log("Increment Tx and Commit: ", txSign);
 
     const counterAccount = await program.account.counter.fetch(pda);
     console.log("Counter: ", counterAccount.count.toString());
