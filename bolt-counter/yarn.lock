@@ -45,8 +45,10 @@
     "@metaplex-foundation/beet" "^0.7.1"
     "@metaplex-foundation/beet-solana" "^0.4.0"
 
-"@magicblock-labs/delegation-program@file:/Users/gabrielepicco/Downloads/delegator/sdk/ts":
-  version "0.1.0"
+"@magicblock-labs/delegation-program@^0.1.2":
+  version "0.1.2"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/delegation-program/-/delegation-program-0.1.2.tgz#7b298398259d80a368eb9e91cb911e5a6e542391"
+  integrity sha512-9EGtcBWGAXGCOjTJVyzxydMpM8GGk8QjzQlgpV0q96BAbmpEO9C6b/N3lvMRTR1FfDuBn43a3Pa5YEiHyUu8Eg==
   dependencies:
     "@metaplex-foundation/beet" "^0.7.2"
     "@solana/web3.js" "^1.92.3"
