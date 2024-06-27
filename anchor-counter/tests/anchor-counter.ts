@@ -5,7 +5,8 @@ import {
   createUndelegateInstruction,
   createCommitInstruction,
   DelegateAccounts,
-  DELEGATION_PROGRAM_ID, MAGIC_PROGRAM_ID,
+  DELEGATION_PROGRAM_ID,
+  MAGIC_PROGRAM_ID,
 } from "@magicblock-labs/delegation-program";
 
 const SEED_TEST_PDA = "test-pda";
@@ -29,18 +30,26 @@ describe("anchor-counter", () => {
   );
 
   it("Initializes the counter if it is not already initialized.", async () => {
+    await provider.connection.requestAirdrop(
+      provider.wallet.publicKey,
+      anchor.web3.LAMPORTS_PER_SOL
+    );
     const counterAccountInfo = await provider.connection.getAccountInfo(pda);
-    if (counterAccountInfo === null) {
-      const tx = await program.methods
-        .initialize()
-        .accounts({
-          // @ts-ignore
-          counter: pda,
-          user: provider.wallet.publicKey,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .rpc({ skipPreflight: true });
-      console.log("Init Pda Tx: ", tx);
+    if (counterAccountInfo == null) {
+      try {
+        const tx = await program.methods
+          .initialize()
+          .accounts({
+            // @ts-ignore
+            counter: pda,
+            user: provider.wallet.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .rpc({ skipPreflight: true });
+        console.log("Init Pda Tx: ", tx);
+      } catch (err) {
+        console.error(err);
+      }
     }
 
     const counterAccount = await program.account.counter.fetch(pda);
@@ -71,13 +80,10 @@ describe("anchor-counter", () => {
       console.log("Counter is locked by the delegation program");
       return;
     }
-    const {
-      delegationPda,
-      delegationMetadata,
-      bufferPda,
-      commitStateRecordPda,
-      commitStatePda,
-    } = DelegateAccounts(pda, program.programId);
+    const { delegationPda, delegationMetadata, bufferPda } = DelegateAccounts(
+      pda,
+      program.programId
+    );
 
     // Delegate, Close PDA, and Lock PDA in a single instruction
     let tx = await program.methods
@@ -93,9 +99,14 @@ describe("anchor-counter", () => {
       })
       .transaction();
     tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
+    tx.recentBlockhash = (
+      await provider.connection.getLatestBlockhash()
+    ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txSign = await provider.sendAndConfirm(tx, [],  {skipPreflight: true, commitment: "finalized"});
+    const txSign = await provider.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+      commitment: "finalized",
+    });
     console.log("Your transaction signature", txSign);
   });
 
@@ -121,21 +132,23 @@ describe("anchor-counter", () => {
 
   it("Increase the delegate counter and commit through CPI", async () => {
     let tx = await program.methods
-        .incrementAndCommit()
-        .accounts({
-          payer: providerEphemeralRollup.wallet.publicKey,
-          counter: pda,
-          magicProgram: MAGIC_PROGRAM_ID,
-        })
-        .transaction();
+      .incrementAndCommit()
+      .accounts({
+        payer: providerEphemeralRollup.wallet.publicKey,
+        counter: pda,
+        magicProgram: MAGIC_PROGRAM_ID,
+      })
+      .transaction();
     tx.feePayer = provider.wallet.publicKey;
     tx.recentBlockhash = (
-        await providerEphemeralRollup.connection.getLatestBlockhash()
+      await providerEphemeralRollup.connection.getLatestBlockhash()
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
 
     const txSign = await providerEphemeralRollup.sendAndConfirm(tx);
     console.log("Increment Tx and Commit: ", txSign);
+    const txx = await providerEphemeralRollup.connection.getTransaction(txSign);
+    console.log(txx.meta.logMessages);
 
     const counterAccount = await program.account.counter.fetch(pda);
     console.log("Counter: ", counterAccount.count.toString());
@@ -149,26 +162,32 @@ describe("anchor-counter", () => {
     let tx = new anchor.web3.Transaction().add(ix);
     tx.feePayer = providerEphemeralRollup.wallet.publicKey;
     tx.recentBlockhash = (
-        await providerEphemeralRollup.connection.getLatestBlockhash()
+      await providerEphemeralRollup.connection.getLatestBlockhash()
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
 
-    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], {skipPreflight: true});
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+    });
     console.log("Trigger Manual Commit Tx: ", txSign);
   });
 
   it("Undelegate the counter", async () => {
     // Create the unlock undelegation instruction
-    const { delegationPda, delegationMetadata, bufferPda, commitStateRecordPda, commitStatePda} = DelegateAccounts(pda, program.programId);
+    const { delegationPda, delegationMetadata, bufferPda } = DelegateAccounts(
+      pda,
+      program.programId
+    );
     let tx = await program.methods
-        .allowUndelegation()
-        .accounts({
-          counter: pda,
-          delegationRecord: delegationPda,
-          delegationMetadata: delegationMetadata,
-          buffer: bufferPda,
-          delegationProgram: DELEGATION_PROGRAM_ID,
-        }).transaction();
+      .allowUndelegation()
+      .accounts({
+        counter: pda,
+        delegationRecord: delegationPda,
+        delegationMetadata: delegationMetadata,
+        buffer: bufferPda,
+        delegationProgram: DELEGATION_PROGRAM_ID,
+      })
+      .transaction();
 
     // Create the undelegation ix
     const ixUndelegate = createUndelegateInstruction({
@@ -185,7 +204,9 @@ describe("anchor-counter", () => {
     ).blockhash;
     tx = await provider.wallet.signTransaction(tx);
 
-    const txSign = await provider.sendAndConfirm(tx, [], {skipPreflight: true});
+    const txSign = await provider.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+    });
     console.log("Undelegate Tx: ", txSign);
   });
 });
