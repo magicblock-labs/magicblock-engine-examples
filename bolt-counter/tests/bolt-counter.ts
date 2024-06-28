@@ -9,11 +9,12 @@ import {
   InitializeComponent,
   ApplySystem,
   FindComponentPda,
+  createUndelegateInstruction,
   createDelegateInstruction,
   DELEGATION_PROGRAM_ID,
+  createAllowUndelegationInstruction,
 } from "@magicblock-labs/bolt-sdk";
 import { expect } from "chai";
-import {createUndelegateInstruction} from "@magicblock-labs/bolt-sdk/lib/delegation/undelegate";
 
 describe("BoltCounter", () => {
   // Configure the client to use the local cluster.
@@ -55,7 +56,7 @@ describe("BoltCounter", () => {
     const txSign = await provider.sendAndConfirm(addEntity.transaction);
     entityPda = addEntity.entityPda;
     console.log(
-      `Initialized a new Entity (ID=${addEntity.entityId}). Initialization signature: ${txSign}`
+      `Initialized a new Entity (ID=${addEntity.entityPda}). Initialization signature: ${txSign}`
     );
   });
 
@@ -72,7 +73,10 @@ describe("BoltCounter", () => {
   });
 
   it("Delegate a PDA", async () => {
-    const counterPda = FindComponentPda(counterComponent.programId, entityPda);
+    const counterPda = FindComponentPda({
+        componentId: counterComponent.programId,
+        entity: entityPda,
+    });
     const delegateIx = createDelegateInstruction({
       entity: entityPda,
       account: counterPda,
@@ -91,26 +95,36 @@ describe("BoltCounter", () => {
   it("Apply the increase system", async () => {
     const applySystem = await ApplySystem({
       authority: providerEphemeralRollup.wallet.publicKey,
-      system: systemIncrease.programId,
-      entity: entityPda,
-      components: [counterComponent.programId],
+      entities: [
+        {
+          entity: entityPda,
+          components: [{ componentId: counterComponent.programId }],
+        },
+      ],
+      systemId: systemIncrease.programId,
     });
     const txSign = await providerEphemeralRollup.sendAndConfirm(applySystem.transaction);
     console.log(`Applied a system. Signature: ${txSign}`);
   });
 
   it("Undelegate the counter", async () => {
-    const counterComponentPda = FindComponentPda(
-        counterComponent.programId,
-        entityPda
-    );
+    const counterComponentPda = FindComponentPda({
+      componentId: counterComponent.programId,
+      entity: entityPda,
+    });
+    const allowUndelegateIx = createAllowUndelegationInstruction({
+      delegatedAccount: counterComponentPda,
+      ownerProgram: counterComponent.programId,
+    });
     const undelegateIx = createUndelegateInstruction({
       payer: provider.wallet.publicKey,
       delegatedAccount: counterComponentPda,
       ownerProgram: counterComponent.programId,
       reimbursement: provider.wallet.publicKey,
     });
-    const tx = new anchor.web3.Transaction().add(undelegateIx);
+    const tx = new anchor.web3.Transaction()
+        .add(allowUndelegateIx)
+        .add(undelegateIx);
     await provider.sendAndConfirm(tx, [], { skipPreflight: true });
     const acc = await provider.connection.getAccountInfo(
         counterComponentPda

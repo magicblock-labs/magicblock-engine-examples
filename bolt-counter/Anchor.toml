@@ -12,7 +12,7 @@ counter = "Bw1hH1X7pbsVdsk84pbj971P1NoFDcmTWxDEJbgi5ijy"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [workspace]
