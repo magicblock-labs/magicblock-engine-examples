@@ -12,12 +12,17 @@ const SEED_TEST_PDA = "test-pda";
 
 describe("anchor-counter", () => {
   // Configure the client to use the local cluster.
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
+  const devnetProvider = new anchor.AnchorProvider(
+    new anchor.web3.Connection(process.env.DEVNET_RPC, {
+      wsEndpoint: process.env.DEVNET_PUBSUB,
+    }),
+    anchor.Wallet.local()
+  );
+  anchor.setProvider(devnetProvider);
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
-    new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT, {
-      wsEndpoint: process.env.WS_ENDPOINT,
+    new anchor.web3.Connection(process.env.EPHEM_RPC, {
+      wsEndpoint: process.env.EPHEM_PUBSUB,
     }),
     anchor.Wallet.local()
   );
@@ -29,14 +34,20 @@ describe("anchor-counter", () => {
   );
 
   it("Initializes the counter if it is not already initialized.", async () => {
-    const counterAccountInfo = await provider.connection.getAccountInfo(pda);
-    if (counterAccountInfo === null) {
+    const counterAccountInfo = await devnetProvider.connection.getAccountInfo(
+      pda
+    );
+    devnetProvider.connection.requestAirdrop(
+      devnetProvider.wallet.publicKey,
+      1000000000
+    );
+    if (counterAccountInfo == null) {
       const tx = await program.methods
         .initialize()
         .accounts({
           // @ts-ignore
           counter: pda,
-          user: provider.wallet.publicKey,
+          user: devnetProvider.wallet.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc({ skipPreflight: true });
@@ -48,7 +59,9 @@ describe("anchor-counter", () => {
   });
 
   it("Increase the counter", async () => {
-    const counterAccountInfo = await provider.connection.getAccountInfo(pda);
+    const counterAccountInfo = await devnetProvider.connection.getAccountInfo(
+      pda
+    );
     if (counterAccountInfo.owner.toString() == DELEGATION_PROGRAM_ID) {
       console.log("Counter is locked by the delegation program");
       return;
@@ -66,24 +79,23 @@ describe("anchor-counter", () => {
   });
 
   it("Delegate a PDA", async () => {
-    const counterAccountInfo = await provider.connection.getAccountInfo(pda);
+    const counterAccountInfo = await devnetProvider.connection.getAccountInfo(
+      pda
+    );
     if (counterAccountInfo.owner.toString() == DELEGATION_PROGRAM_ID) {
       console.log("Counter is locked by the delegation program");
       return;
     }
-    const {
-      delegationPda,
-      delegationMetadata,
-      bufferPda,
-      commitStateRecordPda,
-      commitStatePda,
-    } = DelegateAccounts(pda, program.programId);
+    const { delegationPda, delegationMetadata, bufferPda } = DelegateAccounts(
+      pda,
+      program.programId
+    );
 
     // Delegate, Close PDA, and Lock PDA in a single instruction
     let tx = await program.methods
       .delegate()
       .accounts({
-        payer: provider.wallet.publicKey,
+        payer: devnetProvider.wallet.publicKey,
         pda: pda,
         ownerProgram: program.programId,
         delegationMetadata: delegationMetadata,
@@ -92,10 +104,15 @@ describe("anchor-counter", () => {
         delegationProgram: DELEGATION_PROGRAM_ID,
       })
       .transaction();
-    tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
+    tx.feePayer = devnetProvider.wallet.publicKey;
+    tx.recentBlockhash = (
+      await devnetProvider.connection.getLatestBlockhash()
+    ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txSign = await provider.sendAndConfirm(tx, [],  {skipPreflight: true, commitment: "finalized"});
+    const txSign = await devnetProvider.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+      commitment: "finalized",
+    });
     console.log("Your transaction signature", txSign);
   });
 
@@ -127,43 +144,50 @@ describe("anchor-counter", () => {
     let tx = new anchor.web3.Transaction().add(ix);
     tx.feePayer = providerEphemeralRollup.wallet.publicKey;
     tx.recentBlockhash = (
-        await providerEphemeralRollup.connection.getLatestBlockhash()
+      await providerEphemeralRollup.connection.getLatestBlockhash()
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
 
-    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], {skipPreflight: true});
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+    });
     console.log("Trigger Manual Commit Tx: ", txSign);
   });
 
   it("Undelegate the counter", async () => {
     // Create the unlock undelegation instruction
-    const { delegationPda, delegationMetadata, bufferPda, commitStateRecordPda, commitStatePda} = DelegateAccounts(pda, program.programId);
+    const { delegationPda, delegationMetadata, bufferPda } = DelegateAccounts(
+      pda,
+      program.programId
+    );
     let tx = await program.methods
-        .allowUndelegation()
-        .accounts({
-          counter: pda,
-          delegationRecord: delegationPda,
-          delegationMetadata: delegationMetadata,
-          buffer: bufferPda,
-          delegationProgram: DELEGATION_PROGRAM_ID,
-        }).transaction();
+      .allowUndelegation()
+      .accounts({
+        delegationRecord: delegationPda,
+        delegationMetadata: delegationMetadata,
+        buffer: bufferPda,
+        delegationProgram: DELEGATION_PROGRAM_ID,
+      })
+      .transaction();
 
     // Create the undelegation ix
     const ixUndelegate = createUndelegateInstruction({
-      payer: provider.wallet.publicKey,
+      payer: devnetProvider.wallet.publicKey,
       delegatedAccount: pda,
       ownerProgram: program.programId,
-      reimbursement: provider.wallet.publicKey,
+      reimbursement: devnetProvider.wallet.publicKey,
     });
     tx.add(ixUndelegate);
 
-    tx.feePayer = provider.wallet.publicKey;
+    tx.feePayer = devnetProvider.wallet.publicKey;
     tx.recentBlockhash = (
-      await provider.connection.getLatestBlockhash()
+      await devnetProvider.connection.getLatestBlockhash()
     ).blockhash;
-    tx = await provider.wallet.signTransaction(tx);
+    tx = await devnetProvider.wallet.signTransaction(tx);
 
-    const txSign = await provider.sendAndConfirm(tx, [], {skipPreflight: true});
+    const txSign = await devnetProvider.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+    });
     console.log("Undelegate Tx: ", txSign);
   });
 });

@@ -1,7 +1,8 @@
 [node.accounts]
 remote = "devnet"
 clone = { readonly = "programs", writable = "none" }
-commit = { frequency_millis = 500_000, trigger = false, compute_unit_price = 1_000_000 }
+## We don't to ever want to commit
+commit = { frequency_millis = 9_000_000_000_000, trigger = false, compute_unit_price = 1_000_000 }
 create = true
 
 [node.rpc]
