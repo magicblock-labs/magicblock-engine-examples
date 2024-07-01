@@ -1,0 +1,21 @@
+[node.accounts]
+remote = "devnet"
+clone = { readonly = "programs", writable = "none" }
+commit = { frequency_millis = 500_000, trigger = false, compute_unit_price = 1_000_000 }
+create = true
+
+[node.rpc]
+port = 7799
+
+[node.geyser_grpc]
+port = 10001
+
+[grpc]
+port = 50052
+
+[[node.program]]
+id = "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+path = "../tests/fixtures/dlp.so"
+
+[[workspace]]
+path = "../"
