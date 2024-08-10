@@ -33,14 +33,17 @@ Delegation is done by invoking trough CPI the `delegate` instruction of the dele
 1. Add the delegation sdk to your project:
 
     ```bash
-    cargo add delegation-program-sdk
+    cargo add ephemeral-rollups-sdk
     ```
 
 2. Mark your program with `#[delegate]` and add the CPI call to one instruction of your program:
 
     ```rust
-    use delegation_program_sdk::{delegate, delegate_account};
-   
+    use ephemeral_rollups_sdk::cpi::delegate_account;
+    use ephemeral_rollups_sdk::er::commit_accounts;
+    use ephemeral_rollups_sdk::anchor::delegate;
+
+
     #[delegate]
     #[program]
     pub mod anchor_counter {
@@ -74,7 +77,7 @@ Delegation is done by invoking trough CPI the `delegate` instruction of the dele
 1. Add the typescript sdk to your project:
 
     ```bash
-    yarn add @magicblock-labs/delegation-program
+    yarn add @magicblock-labs/ephemeral-rollups-sdk
     ```
 
 2. Call the instruction to execute the delegation
