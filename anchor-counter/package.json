@@ -4,8 +4,8 @@
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "^0.30.0",
-    "@magicblock-labs/delegation-program": "^0.1.2"
+    "@coral-xyz/anchor": "^0.30.1",
+    "@magicblock-labs/ephemeral-rollups-sdk": "^0.0.1"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",

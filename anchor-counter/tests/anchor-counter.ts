@@ -3,12 +3,11 @@ import { Program } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
 import {
   createUndelegateInstruction,
-  createCommitInstruction,
   DelegateAccounts,
-  DELEGATION_PROGRAM_ID,
-} from "@magicblock-labs/delegation-program";
+  DELEGATION_PROGRAM_ID, MAGIC_PROGRAM_ID,
+} from "@magicblock-labs/ephemeral-rollups-sdk";
 
-const SEED_TEST_PDA = "test-pda";
+const SEED_TEST_PDA = "test-pda"; // 5RgeA5P8bRaynJovch3zQURfJxXL3QK2JYg1YamSvyLb
 
 describe("anchor-counter", () => {
   // Configure the client to use the local cluster.
@@ -119,28 +118,36 @@ describe("anchor-counter", () => {
     console.log("Counter: ", counterAccount.count.toString());
   });
 
-  it("Manual trigger an account commit", async () => {
-    const ix = createCommitInstruction({
-      payer: providerEphemeralRollup.wallet.publicKey,
-      delegatedAccount: pda,
-    });
-    let tx = new anchor.web3.Transaction().add(ix);
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
+  it("Increase the delegate counter and commit through CPI", async () => {
+    let tx = await program.methods
+        .incrementAndCommit()
+        .accounts({
+          payer: providerEphemeralRollup.wallet.publicKey,
+          // @ts-ignore
+          counter: pda,
+          magicProgram: MAGIC_PROGRAM_ID,
+        })
+        .transaction();
+    tx.feePayer = provider.wallet.publicKey;
     tx.recentBlockhash = (
         await providerEphemeralRollup.connection.getLatestBlockhash()
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
 
-    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], {skipPreflight: true});
-    console.log("Trigger Manual Commit Tx: ", txSign);
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx);
+    console.log("Increment Tx and Commit: ", txSign);
+
+    const counterAccount = await program.account.counter.fetch(pda);
+    console.log("Counter: ", counterAccount.count.toString());
   });
 
-  it("Undelegate the counter", async () => {
+  it.only("Undelegate the counter", async () => {
     // Create the unlock undelegation instruction
     const { delegationPda, delegationMetadata, bufferPda, commitStateRecordPda, commitStatePda} = DelegateAccounts(pda, program.programId);
     let tx = await program.methods
         .allowUndelegation()
         .accounts({
+          // @ts-ignore
           counter: pda,
           delegationRecord: delegationPda,
           delegationMetadata: delegationMetadata,
