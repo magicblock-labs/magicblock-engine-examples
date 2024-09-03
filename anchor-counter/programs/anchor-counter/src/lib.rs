@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
-use ephemeral_rollups_sdk::cpi::delegate_account;
-use ephemeral_rollups_sdk::er::commit_accounts;
 use ephemeral_rollups_sdk::anchor::delegate;
+use ephemeral_rollups_sdk::cpi::delegate_account;
+use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
 declare_id!("852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr");
 
@@ -33,25 +33,20 @@ pub mod anchor_counter {
         commit_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_program)?;
+            &ctx.accounts.magic_program,
+        )?;
         Ok(())
     }
 
-    /// Allow undelegation if the counter is greater than 0.
-    pub fn allow_undelegation(ctx: Context<AllowUndelegation>) -> Result<()> {
-        let counter =
-            Counter::try_deserialize_unchecked(&mut (&**ctx.accounts.counter.try_borrow_data()?))?;
-        if counter.count > 0 {
-            msg!("Counter is greater than 0, undelegation is allowed");
-            ephemeral_rollups_sdk::cpi::allow_undelegation(
-                &ctx.accounts.counter,
-                &ctx.accounts.delegation_record,
-                &ctx.accounts.delegation_metadata,
-                &ctx.accounts.buffer,
-                &ctx.accounts.delegation_program,
-                &id(),
-            )?;
-        }
+    /// Increment the counter + manual commit the account in the ER.
+    pub fn increment_and_undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
+        let counter = &mut ctx.accounts.counter;
+        //counter.count += 1;
+        commit_and_undelegate_accounts(
+            &ctx.accounts.payer,
+            vec![&ctx.accounts.counter.to_account_info()],
+            &ctx.accounts.magic_program,
+        )?;
         Ok(())
     }
 
@@ -107,25 +102,6 @@ pub struct DelegateInput<'info> {
     pub delegation_program: AccountInfo<'info>,
     /// CHECK: The system program
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct AllowUndelegation<'info> {
-    #[account(seeds = [TEST_PDA_SEED], bump)]
-    /// CHECK: The counter pda
-    pub counter: AccountInfo<'info>,
-    #[account()]
-    /// CHECK: delegation record
-    pub delegation_record: AccountInfo<'info>,
-    #[account(mut)]
-    /// CHECK: delegation metadata
-    pub delegation_metadata: AccountInfo<'info>,
-    #[account()]
-    /// CHECK: singer buffer to enforce CPI
-    pub buffer: AccountInfo<'info>,
-    #[account()]
-    /// CHECK:`
-    pub delegation_program: AccountInfo<'info>,
 }
 
 /// Account for the increment instruction.

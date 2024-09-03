@@ -2,9 +2,10 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
 import {
-  createUndelegateInstruction,
   DelegateAccounts,
-  DELEGATION_PROGRAM_ID, MAGIC_PROGRAM_ID,
+  DELEGATION_PROGRAM_ID,
+  GetCommitmentSignature,
+  MAGIC_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const SEED_TEST_PDA = "test-pda"; // 5RgeA5P8bRaynJovch3zQURfJxXL3QK2JYg1YamSvyLb
@@ -92,9 +93,14 @@ describe("anchor-counter", () => {
       })
       .transaction();
     tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
+    tx.recentBlockhash = (
+      await provider.connection.getLatestBlockhash()
+    ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txSign = await provider.sendAndConfirm(tx, [],  {skipPreflight: true, commitment: "finalized"});
+    const txSign = await provider.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+      commitment: "finalized",
+    });
     console.log("Your transaction signature", txSign);
   });
 
@@ -120,17 +126,55 @@ describe("anchor-counter", () => {
 
   it("Increase the delegate counter and commit through CPI", async () => {
     let tx = await program.methods
-        .incrementAndCommit()
-        .accounts({
-          payer: providerEphemeralRollup.wallet.publicKey,
-          // @ts-ignore
-          counter: pda,
-          magicProgram: MAGIC_PROGRAM_ID,
-        })
-        .transaction();
+      .incrementAndCommit()
+      .accounts({
+        payer: providerEphemeralRollup.wallet.publicKey,
+        // @ts-ignore
+        counter: pda,
+        magicProgram: MAGIC_PROGRAM_ID,
+      })
+      .transaction();
     tx.feePayer = provider.wallet.publicKey;
     tx.recentBlockhash = (
-        await providerEphemeralRollup.connection.getLatestBlockhash()
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
+
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx);
+    console.log("Increment Tx and Commit: ", txSign);
+
+    // Await for the commitment on the base layer
+    const txCommitSgn = await GetCommitmentSignature(
+      txSign,
+      providerEphemeralRollup.connection
+    );
+    console.log("Account commit signature:", txCommitSgn);
+    const latestBlockhash = await provider.connection.getLatestBlockhash();
+    await provider.connection.confirmTransaction(
+      {
+        signature: txCommitSgn,
+        ...latestBlockhash,
+      },
+      "confirmed"
+    );
+
+    const counterAccount = await program.account.counter.fetch(pda);
+    console.log("Counter: ", counterAccount.count.toString());
+  });
+
+  it("Increase the delegate counter and undelegate through CPI", async () => {
+    let tx = await program.methods
+      .incrementAndUndelegate()
+      .accounts({
+        payer: providerEphemeralRollup.wallet.publicKey,
+        // @ts-ignore
+        counter: pda,
+        magicProgram: MAGIC_PROGRAM_ID,
+      })
+      .transaction();
+    tx.feePayer = provider.wallet.publicKey;
+    tx.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
 
@@ -139,38 +183,5 @@ describe("anchor-counter", () => {
 
     const counterAccount = await program.account.counter.fetch(pda);
     console.log("Counter: ", counterAccount.count.toString());
-  });
-
-  it.only("Undelegate the counter", async () => {
-    // Create the unlock undelegation instruction
-    const { delegationPda, delegationMetadata, bufferPda, commitStateRecordPda, commitStatePda} = DelegateAccounts(pda, program.programId);
-    let tx = await program.methods
-        .allowUndelegation()
-        .accounts({
-          // @ts-ignore
-          counter: pda,
-          delegationRecord: delegationPda,
-          delegationMetadata: delegationMetadata,
-          buffer: bufferPda,
-          delegationProgram: DELEGATION_PROGRAM_ID,
-        }).transaction();
-
-    // Create the undelegation ix
-    const ixUndelegate = createUndelegateInstruction({
-      payer: provider.wallet.publicKey,
-      delegatedAccount: pda,
-      ownerProgram: program.programId,
-      reimbursement: provider.wallet.publicKey,
-    });
-    tx.add(ixUndelegate);
-
-    tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (
-      await provider.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await provider.wallet.signTransaction(tx);
-
-    const txSign = await provider.sendAndConfirm(tx, [], {skipPreflight: true});
-    console.log("Undelegate Tx: ", txSign);
   });
 });

@@ -43,13 +43,8 @@
     bn.js "^5.1.2"
     buffer-layout "^1.2.0"
 
-"@magicblock-labs/ephemeral-rollups-sdk@^0.0.1":
-  version "0.0.1"
-  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.0.1.tgz#42b5168616647a5db74a0cc194d79a00b7dcc7d3"
-  integrity sha512-wowAsUXnetd3aNYdlopJYMTccXdTope1PtqcIR6d1/BLRpUmqOzbfFAPwi51XJHjqg5niUt4k4PlmhYqd47SSg==
-  dependencies:
-    "@metaplex-foundation/beet" "^0.7.2"
-    "@solana/web3.js" "^1.92.3"
+"@magicblock-labs/ephemeral-rollups-sdk@file:../../../validator/ephemeral-rollups-sdk/sdk/ts/lib":
+  version "0.0.0"
 
 "@metaplex-foundation/beet@^0.7.2":
   version "0.7.2"
@@ -80,7 +75,7 @@
   dependencies:
     buffer "~6.0.3"
 
-"@solana/web3.js@^1.68.0", "@solana/web3.js@^1.92.3":
+"@solana/web3.js@^1.68.0":
   version "1.93.0"
   resolved "https://registry.yarnpkg.com/@solana/web3.js/-/web3.js-1.93.0.tgz#4b6975020993cec2f6626e4f2bf559ca042df8db"
   integrity sha512-suf4VYwWxERz4tKoPpXCRHFRNst7jmcFUaD65kII+zg9urpy5PeeqgLV6G5eWGzcVzA9tZeXOju1A1Y+0ojEVw==
@@ -463,9 +458,9 @@ debug@4.3.3:
     ms "2.1.2"
 
 debug@^4.3.3:
-  version "4.3.5"
-  resolved "https://registry.yarnpkg.com/debug/-/debug-4.3.5.tgz#e83444eceb9fedd4a1da56d671ae2446a01a6e1e"
-  integrity sha512-pt0bNEmneDIvdL1Xsd9oDQ/wrQRkXDT4AUWlNZNPKvW5x/jyO9VFXkJUP07vQ2upmw5PlaITaPKc31jK13V+jg==
+  version "4.3.6"
+  resolved "https://registry.yarnpkg.com/debug/-/debug-4.3.6.tgz#2ab2c38fbaffebf8aa95fdfe6d88438c7a13c52b"
+  integrity sha512-O/09Bd4Z1fBrU4VzkhFqVgpPzaGbw6Sm9FEkBT1A/YBXQFGuuSxa1dN2nxgxS34JmKXqYx8CZAwEVoJFImUXIg==
   dependencies:
     ms "2.1.2"
 

@@ -777,9 +777,9 @@ checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.0.1"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f77566977a5978581233c55bbebbba1a495f53ef058b0ab3da14d449ba0a1955"
+checksum = "cd9fb3aba3ba31cc0cf8c1c6135f7a820f783f12aa9e7876c1ceb5d11f10dce6"
 dependencies = [
  "borsh 0.10.3",
  "ephemeral-rollups-sdk-attribute-delegate",
@@ -789,9 +789,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.0.1"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "442b66cdaa429d1072c66776fc7411bc8ab6eb637be80116bb964d806c1ad181"
+checksum = "5b0de2f4fda4c54cea256403f850b073dab8b6cc9dfbb4659160f34ae1dd2af1"
 dependencies = [
  "proc-macro2",
  "quote",
