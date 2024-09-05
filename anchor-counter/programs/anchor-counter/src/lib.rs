@@ -41,7 +41,9 @@ pub mod anchor_counter {
     /// Increment the counter + manual commit the account in the ER.
     pub fn increment_and_undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
-        //counter.count += 1;
+        counter.count += 1;
+        // Serialize the Anchor counter account, commit and undelegate
+        counter.exit(&crate::ID)?;
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.counter.to_account_info()],
