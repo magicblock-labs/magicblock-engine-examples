@@ -26,6 +26,37 @@ pub mod anchor_counter {
         Ok(())
     }
 
+    /// Delegate the account to the delegation program
+    pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
+        let pda_seeds: &[&[u8]] = &[TEST_PDA_SEED];
+
+        delegate_account(
+            &ctx.accounts.payer,
+            &ctx.accounts.pda,
+            &ctx.accounts.owner_program,
+            &ctx.accounts.buffer,
+            &ctx.accounts.delegation_record,
+            &ctx.accounts.delegation_metadata,
+            &ctx.accounts.delegation_program,
+            &ctx.accounts.system_program,
+            pda_seeds,
+            0,
+            30_000_000,
+        )?;
+
+        Ok(())
+    }
+
+    /// Undelegate the account from the delegation program
+    pub fn undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
+        commit_and_undelegate_accounts(
+            &ctx.accounts.payer,
+            vec![&ctx.accounts.counter.to_account_info()],
+            &ctx.accounts.magic_program,
+        )?;
+        Ok(())
+    }
+
     /// Increment the counter + manual commit the account in the ER.
     pub fn increment_and_commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
@@ -49,27 +80,6 @@ pub mod anchor_counter {
             vec![&ctx.accounts.counter.to_account_info()],
             &ctx.accounts.magic_program,
         )?;
-        Ok(())
-    }
-
-    /// Delegate the account to the delegation program
-    pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
-        let pda_seeds: &[&[u8]] = &[TEST_PDA_SEED];
-
-        delegate_account(
-            &ctx.accounts.payer,
-            &ctx.accounts.pda,
-            &ctx.accounts.owner_program,
-            &ctx.accounts.buffer,
-            &ctx.accounts.delegation_record,
-            &ctx.accounts.delegation_metadata,
-            &ctx.accounts.delegation_program,
-            &ctx.accounts.system_program,
-            pda_seeds,
-            0,
-            30000,
-        )?;
-
         Ok(())
     }
 }

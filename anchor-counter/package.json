@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@metaplex-foundation/beet": "^0.7.2",
+    "@solana/spl-token": "^0.4.8",
     "@types/bn.js": "^5.1.0",
     "@types/chai": "^4.3.0",
     "@types/mocha": "^9.0.0",

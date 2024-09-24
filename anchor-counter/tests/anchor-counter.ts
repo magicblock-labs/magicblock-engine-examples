@@ -16,8 +16,8 @@ describe("anchor-counter", () => {
   anchor.setProvider(provider);
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
-    new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT, {
-      wsEndpoint: process.env.WS_ENDPOINT,
+    new anchor.web3.Connection("https://devnet.magicblock.app/", {
+      wsEndpoint: "wss://devnet.magicblock.app/",
     }),
     anchor.Wallet.local()
   );
@@ -75,8 +75,6 @@ describe("anchor-counter", () => {
       delegationPda,
       delegationMetadata,
       bufferPda,
-      commitStateRecordPda,
-      commitStatePda,
     } = DelegateAccounts(pda, program.programId);
 
     // Delegate, Close PDA, and Lock PDA in a single instruction
