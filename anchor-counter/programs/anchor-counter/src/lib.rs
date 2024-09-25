@@ -23,6 +23,9 @@ pub mod anchor_counter {
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
+        if(counter.count > 1000) {
+            counter.count = 0;
+        }
         Ok(())
     }
 
