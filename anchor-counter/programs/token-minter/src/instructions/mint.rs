@@ -42,6 +42,8 @@ pub fn mint_token(ctx: Context<MintToken>, amount: u64) -> Result<()> {
         &mut &*(*ctx.accounts.counter.data.borrow()).as_ref(),
     ).map_err(Into::<Error>::into)?;
 
+    msg!("Counter: {:?}", counter_data.count);
+
     let signer_seeds: &[&[&[u8]]] = &[&[b"mint", &[ctx.bumps.mint_account]]];
     mint_to(
         CpiContext::new(

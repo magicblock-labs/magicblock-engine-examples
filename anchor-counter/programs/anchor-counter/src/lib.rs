@@ -23,7 +23,7 @@ pub mod anchor_counter {
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
-        if(counter.count > 1000) {
+        if counter.count > 1000 {
             counter.count = 0;
         }
         Ok(())
@@ -55,6 +55,7 @@ pub mod anchor_counter {
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.counter.to_account_info()],
+            &ctx.accounts.magic_context,
             &ctx.accounts.magic_program,
         )?;
         Ok(())
@@ -67,6 +68,7 @@ pub mod anchor_counter {
         commit_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.counter.to_account_info()],
+            &ctx.accounts.magic_context,
             &ctx.accounts.magic_program,
         )?;
         Ok(())
@@ -81,6 +83,7 @@ pub mod anchor_counter {
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.counter.to_account_info()],
+            &ctx.accounts.magic_context,
             &ctx.accounts.magic_program,
         )?;
         Ok(())
@@ -135,6 +138,9 @@ pub struct IncrementAndCommit<'info> {
     pub counter: Account<'info, Counter>,
     /// CHECK:`
     pub magic_program: AccountInfo<'info>,
+    #[account(mut)]
+    /// CHECK:`
+    pub magic_context: AccountInfo<'info>,
 }
 
 #[account]
