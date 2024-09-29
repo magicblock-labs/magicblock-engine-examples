@@ -1,0 +1,24 @@
+[meta]
+name = "Denvet:7799"
+
+[node.accounts]
+remote = "devnet"
+lifecycle = "programs-replica"
+commit = { frequency_millis = 9_000_000_000_000, compute_unit_price = 1_000_000 }
+
+[node.validator]
+millis_per_slot = 50
+sigverify = true
+
+[node.rpc]
+port = 7799
+
+[node.geyser_grpc]
+port = 10001
+
+[grpc]
+port = 60062
+
+[[workspace]]
+path = "/Volumes/d/dev/mb/demos/magicblock-engine-examples/anchor-counter"
+watch = true
