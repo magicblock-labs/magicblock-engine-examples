@@ -13,7 +13,6 @@ impl anchor_lang::Id for crate::DelegationProgram {
     fn id() -> Pubkey {
         ephemeral_rollups_sdk::consts::DELEGATION_PROGRAM_ID
     }
-
 }
 
 pub struct MagicProgram;
@@ -22,7 +21,6 @@ impl anchor_lang::Id for MagicProgram {
     fn id() -> Pubkey {
         ephemeral_rollups_sdk::consts::MAGIC_PROGRAM_ID
     }
-
 }
 
 #[delegate]
@@ -86,7 +84,10 @@ pub mod anchor_counter {
         msg!("Payer: {:?}", ctx.accounts.payer.key);
         commit_accounts(
             &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info(), &ctx.accounts.counter.to_account_info()],
+            vec![
+                &ctx.accounts.counter.to_account_info(),
+                &ctx.accounts.counter.to_account_info(),
+            ],
             &ctx.accounts.magic_context.to_account_info(),
             &ctx.accounts.magic_program,
         )?;
