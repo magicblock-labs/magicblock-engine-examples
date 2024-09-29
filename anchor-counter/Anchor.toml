@@ -17,7 +17,7 @@ token-minter = "HfPTAU1bZBHPqcpEGweinAH9zsPafYnnaxk4k5xsTU3M"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

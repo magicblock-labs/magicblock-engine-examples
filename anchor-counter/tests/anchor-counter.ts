@@ -123,7 +123,7 @@ describe("anchor-counter", () => {
     console.log("Counter: ", counterAccount.count.toString());
   });
 
-  it.only("Increase the delegate counter and commit through CPI", async () => {
+  it("Increase the delegate counter and commit through CPI", async () => {
     let tx = await program.methods
       .incrementAndCommit()
       .accounts({
@@ -140,9 +140,10 @@ describe("anchor-counter", () => {
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
 
-    console.log(providerEphemeralRollup.connection);
+    console.log(tx);
+    console.log(tx.instructions.keys())
     console.log(bs58.encode(tx.signature));
-    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], {skipPreflight: false});
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], {skipPreflight: true});
     console.log("Increment Tx and Commit: ", txSign);
 
     // Await for the commitment on the base layer
@@ -164,7 +165,7 @@ describe("anchor-counter", () => {
     console.log("Counter: ", counterAccount.count.toString());
   });
 
-  it("Increase the delegate counter and undelegate through CPI", async () => {
+  it.only("Increase the delegate counter and undelegate through CPI", async () => {
     let tx = await program.methods
       .incrementAndUndelegate()
       .accounts({
@@ -172,6 +173,7 @@ describe("anchor-counter", () => {
         // @ts-ignore
         counter: pda,
         magicProgram: MAGIC_PROGRAM_ID,
+        magicContext: new anchor.web3.PublicKey("MagicContext1111111111111111111111111111111"),
       })
       .transaction();
     tx.feePayer = provider.wallet.publicKey;

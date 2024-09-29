@@ -65,9 +65,10 @@ pub mod anchor_counter {
     pub fn increment_and_commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
+        msg!("Payer: {:?}", ctx.accounts.payer.key);
         commit_accounts(
             &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
+            vec![&ctx.accounts.counter.to_account_info(), &ctx.accounts.counter.to_account_info()],
             &ctx.accounts.magic_context,
             &ctx.accounts.magic_program,
         )?;
