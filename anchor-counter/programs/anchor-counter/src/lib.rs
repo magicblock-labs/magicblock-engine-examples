@@ -1,27 +1,11 @@
 use anchor_lang::prelude::*;
-use ephemeral_rollups_sdk::anchor::delegate;
+use ephemeral_rollups_sdk::anchor::{commit, delegate, DelegationProgram, MagicProgram};
 use ephemeral_rollups_sdk::cpi::delegate_account;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
 declare_id!("852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
-
-pub struct DelegationProgram;
-
-impl anchor_lang::Id for crate::DelegationProgram {
-    fn id() -> Pubkey {
-        ephemeral_rollups_sdk::consts::DELEGATION_PROGRAM_ID
-    }
-}
-
-pub struct MagicProgram;
-
-impl anchor_lang::Id for MagicProgram {
-    fn id() -> Pubkey {
-        ephemeral_rollups_sdk::consts::MAGIC_PROGRAM_ID
-    }
-}
 
 #[delegate]
 #[program]
@@ -60,18 +44,16 @@ pub mod anchor_counter {
             &ctx.accounts.system_program,
             pda_seeds,
             0,
-            30_000_000,
+            u32::MAX,
         )?;
-
         Ok(())
     }
-
     /// Undelegate the account from the delegation program
     pub fn undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context.to_account_info(),
+            &ctx.accounts.magic_context,
             &ctx.accounts.magic_program,
         )?;
         Ok(())
@@ -81,14 +63,12 @@ pub mod anchor_counter {
     pub fn increment_and_commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
-        msg!("Payer: {:?}", ctx.accounts.payer.key);
         commit_accounts(
             &ctx.accounts.payer,
             vec![
                 &ctx.accounts.counter.to_account_info(),
-                &ctx.accounts.counter.to_account_info(),
             ],
-            &ctx.accounts.magic_context.to_account_info(),
+            &ctx.accounts.magic_context,
             &ctx.accounts.magic_program,
         )?;
         Ok(())
@@ -103,7 +83,7 @@ pub mod anchor_counter {
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context.to_account_info(),
+            &ctx.accounts.magic_context,
             &ctx.accounts.magic_program,
         )?;
         Ok(())
@@ -130,26 +110,20 @@ pub struct DelegateInput<'info> {
     pub owner_program: AccountInfo<'info>,
     /// CHECK The temporary buffer account used during delegation
     #[account(
-        mut,
-        seeds = [ephemeral_rollups_sdk::consts::BUFFER, crate::id().as_ref()],
-        bump,
-        seeds::program = delegation_program.key()
+        mut, seeds = [ephemeral_rollups_sdk::consts::BUFFER, crate::id().as_ref()],
+        bump, seeds::program = delegation_program.key()
     )]
     pub buffer: AccountInfo<'info>,
     /// CHECK: The delegation record account
     #[account(
-        mut,
-        seeds = [ephemeral_rollups_sdk::consts::DELEGATION_RECORD, pda.key().as_ref()],
-        bump,
-        seeds::program = delegation_program.key()
+        mut, seeds = [ephemeral_rollups_sdk::consts::DELEGATION_RECORD, pda.key().as_ref()],
+        bump, seeds::program = delegation_program.key()
     )]
     pub delegation_record: AccountInfo<'info>,
     /// CHECK: The delegation metadata account
     #[account(
-        mut,
-        seeds = [ephemeral_rollups_sdk::consts::DELEGATION_METADATA, pda.key().as_ref()],
-        bump,
-        seeds::program = delegation_program.key()
+        mut, seeds = [ephemeral_rollups_sdk::consts::DELEGATION_METADATA, pda.key().as_ref()],
+        bump, seeds::program = delegation_program.key()
     )]
     pub delegation_metadata: AccountInfo<'info>,
     pub delegation_program: Program<'info, DelegationProgram>,
@@ -164,16 +138,13 @@ pub struct Increment<'info> {
 }
 
 /// Account for the increment instruction + manual commit.
+#[commit]
 #[derive(Accounts)]
 pub struct IncrementAndCommit<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(mut, seeds = [TEST_PDA_SEED], bump)]
     pub counter: Account<'info, Counter>,
-    pub magic_program: Program<'info, MagicProgram>,
-    #[account(mut, address = ephemeral_rollups_sdk::consts::MAGIC_CONTEXT_ID)]
-    /// CHECK:`
-    pub magic_context: AccountInfo<'info>,
 }
 
 #[account]
