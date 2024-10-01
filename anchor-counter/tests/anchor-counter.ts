@@ -5,7 +5,6 @@ import {
   DelegateAccounts,
   DELEGATION_PROGRAM_ID,
   GetCommitmentSignature,
-  MAGIC_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const SEED_TEST_PDA = "test-pda"; // 5RgeA5P8bRaynJovch3zQURfJxXL3QK2JYg1YamSvyLb
@@ -16,9 +15,12 @@ describe("anchor-counter", () => {
   anchor.setProvider(provider);
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
-    new anchor.web3.Connection("https://devnet.magicblock.app/", {
-      wsEndpoint: "wss://devnet.magicblock.app/",
-    }),
+    new anchor.web3.Connection(
+      process.env.PROVIDER_ENDPOINT || "https://devnet.magicblock.app/",
+      {
+        wsEndpoint: process.env.WS_ENDPOINT || "wss://devnet.magicblock.app/",
+      }
+    ),
     anchor.Wallet.local()
   );
 
@@ -71,23 +73,11 @@ describe("anchor-counter", () => {
       console.log("Counter is locked by the delegation program");
       return;
     }
-    const {
-      delegationPda,
-      delegationMetadata,
-      bufferPda,
-    } = DelegateAccounts(pda, program.programId);
-
-    // Delegate, Close PDA, and Lock PDA in a single instruction
     let tx = await program.methods
       .delegate()
       .accounts({
         payer: provider.wallet.publicKey,
         pda: pda,
-        ownerProgram: program.programId,
-        delegationMetadata: delegationMetadata,
-        buffer: bufferPda,
-        delegationRecord: delegationPda,
-        delegationProgram: DELEGATION_PROGRAM_ID,
       })
       .transaction();
     tx.feePayer = provider.wallet.publicKey;
@@ -97,7 +87,7 @@ describe("anchor-counter", () => {
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
     const txSign = await provider.sendAndConfirm(tx, [], {
       skipPreflight: true,
-      commitment: "finalized",
+      commitment: "confirmed",
     });
     console.log("Your transaction signature", txSign);
   });
@@ -129,16 +119,17 @@ describe("anchor-counter", () => {
         payer: providerEphemeralRollup.wallet.publicKey,
         // @ts-ignore
         counter: pda,
-        magicProgram: MAGIC_PROGRAM_ID,
       })
       .transaction();
-    tx.feePayer = provider.wallet.publicKey;
+    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
     tx.recentBlockhash = (
       await providerEphemeralRollup.connection.getLatestBlockhash()
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
 
-    const txSign = await providerEphemeralRollup.sendAndConfirm(tx);
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+    });
     console.log("Increment Tx and Commit: ", txSign);
 
     // Await for the commitment on the base layer
@@ -167,7 +158,6 @@ describe("anchor-counter", () => {
         payer: providerEphemeralRollup.wallet.publicKey,
         // @ts-ignore
         counter: pda,
-        magicProgram: MAGIC_PROGRAM_ID,
       })
       .transaction();
     tx.feePayer = provider.wallet.publicKey;

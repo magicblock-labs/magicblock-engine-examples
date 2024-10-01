@@ -5,16 +5,19 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
+anchor_counter = "852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr"
 token-minter = "HfPTAU1bZBHPqcpEGweinAH9zsPafYnnaxk4k5xsTU3M"
 
 [programs.localnet]
 anchor_counter = "852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr"
+token-minter = "HfPTAU1bZBHPqcpEGweinAH9zsPafYnnaxk4k5xsTU3M"
+
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Devnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
