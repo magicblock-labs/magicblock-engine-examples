@@ -110,8 +110,8 @@ pub struct DelegateInput<'info> {
     pub owner_program: AccountInfo<'info>,
     /// CHECK The temporary buffer account used during delegation
     #[account(
-        mut, seeds = [ephemeral_rollups_sdk::consts::BUFFER, crate::id().as_ref()],
-        bump, seeds::program = delegation_program.key()
+        mut, seeds = [ephemeral_rollups_sdk::consts::BUFFER, pda.key().as_ref()],
+        bump, seeds::program = crate::id()
     )]
     pub buffer: AccountInfo<'info>,
     /// CHECK: The delegation record account

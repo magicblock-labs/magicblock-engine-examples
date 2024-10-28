@@ -2,14 +2,13 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
 import {
-  DelegateAccounts,
   DELEGATION_PROGRAM_ID,
   GetCommitmentSignature,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const SEED_TEST_PDA = "test-pda"; // 5RgeA5P8bRaynJovch3zQURfJxXL3QK2JYg1YamSvyLb
 
-describe("anchor-counter", () => {
+describe.only("anchor-counter", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);

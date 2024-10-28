@@ -1,6 +1,6 @@
 use bolt_lang::*;
 
-declare_id!("Bw1hH1X7pbsVdsk84pbj971P1NoFDcmTWxDEJbgi5ijy");
+declare_id!("8G57v8BL4myb9FtXwLiwionAGZcZBGno2Ckps2AsGXwV");
 
 #[component(delegate)]
 #[derive(Default)]

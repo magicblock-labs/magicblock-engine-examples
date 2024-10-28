@@ -12,9 +12,9 @@ import {
   createUndelegateInstruction,
   createDelegateInstruction,
   DELEGATION_PROGRAM_ID,
-  createAllowUndelegationInstruction,
 } from "@magicblock-labs/bolt-sdk";
 import { expect } from "chai";
+import bs58 from "bs58";
 
 describe("BoltCounter", () => {
   // Configure the client to use the local cluster.
@@ -22,8 +22,8 @@ describe("BoltCounter", () => {
   anchor.setProvider(provider);
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
-      new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT, {
-        wsEndpoint: process.env.WS_ENDPOINT,
+      new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT || "https://devnet.magicblock.app", {
+        wsEndpoint: process.env.WS_ENDPOINT || "wss://devnet.magicblock.app",
       }),
       anchor.Wallet.local()
   );
@@ -84,7 +84,9 @@ describe("BoltCounter", () => {
       payer: provider.wallet.publicKey,
     });
     const tx = new anchor.web3.Transaction().add(delegateIx);
-    const txSign = await provider.sendAndConfirm(tx, [], { skipPreflight: true, commitment: 'finalized' });
+    tx.feePayer = provider.wallet.publicKey;
+    tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
+    const txSign = await provider.sendAndConfirm(tx, [], {commitment: "confirmed"});
     console.log(
         `Delegation signature: ${txSign}`
     );
@@ -95,6 +97,7 @@ describe("BoltCounter", () => {
   it("Apply the increase system", async () => {
     const applySystem = await ApplySystem({
       authority: providerEphemeralRollup.wallet.publicKey,
+      world: worldPda,
       entities: [
         {
           entity: entityPda,
@@ -103,7 +106,10 @@ describe("BoltCounter", () => {
       ],
       systemId: systemIncrease.programId,
     });
-    const txSign = await providerEphemeralRollup.sendAndConfirm(applySystem.transaction);
+    const tx = applySystem.transaction;
+    tx.feePayer = provider.wallet.publicKey;
+    tx.recentBlockhash = (await providerEphemeralRollup.connection.getLatestBlockhash()).blockhash;
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], { skipPreflight: true });
     console.log(`Applied a system. Signature: ${txSign}`);
   });
 
@@ -112,28 +118,21 @@ describe("BoltCounter", () => {
       componentId: counterComponent.programId,
       entity: entityPda,
     });
-    const allowUndelegateIx = createAllowUndelegationInstruction({
-      delegatedAccount: counterComponentPda,
-      ownerProgram: counterComponent.programId,
-    });
     const undelegateIx = createUndelegateInstruction({
       payer: provider.wallet.publicKey,
       delegatedAccount: counterComponentPda,
-      ownerProgram: counterComponent.programId,
-      reimbursement: provider.wallet.publicKey,
+      componentPda: counterComponent.programId,
     });
-    const tx = new anchor.web3.Transaction()
-        .add(allowUndelegateIx)
+    let tx = new anchor.web3.Transaction()
         .add(undelegateIx);
-    await provider.sendAndConfirm(tx, [], { skipPreflight: true });
-    const acc = await provider.connection.getAccountInfo(
+    tx.feePayer = provider.wallet.publicKey;
+    tx.recentBlockhash = (await providerEphemeralRollup.connection.getLatestBlockhash()).blockhash;
+    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], { skipPreflight: false });
+    const acc = await providerEphemeralRollup.connection.getAccountInfo(
         counterComponentPda
     );
-    expect(acc.owner).to.deep.equal(counterComponent.programId);
+    console.log(`Undelegation signature: ${txSign}`);
+    expect(acc.owner).to.deep.equal(new PublicKey(DELEGATION_PROGRAM_ID));
   });
-
 });
-
-function delay(ms: number) {
-  return new Promise( resolve => setTimeout(resolve, ms) );
-}

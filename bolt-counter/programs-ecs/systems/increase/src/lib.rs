@@ -1,7 +1,7 @@
 use bolt_lang::*;
 use counter::Counter;
 
-declare_id!("6Cnsm3Kmq2PprwQkAg7hp4pKzJKyLqL2TvM5KLnPhaz6");
+declare_id!("4uNf52XJbJCqSofxkuYbjTC1DaYinpoUixaQQhrNPZkg");
 
 #[system]
 pub mod increase {

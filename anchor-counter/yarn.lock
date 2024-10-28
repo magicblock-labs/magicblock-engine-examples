@@ -50,10 +50,10 @@
     bn.js "^5.1.2"
     buffer-layout "^1.2.0"
 
-"@magicblock-labs/ephemeral-rollups-sdk@0.0.6":
-  version "0.0.6"
-  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.0.6.tgz#47a667d9fd7df76752660a6d82688e54174241ab"
-  integrity sha512-moep9ja4fmDXPa0OcjJBvvOTUNrds8rwTzxmbGd5Myu/6AsykcCpTuUZjleQCRotu/yODLVkpheMDr1S0/mtpA==
+"@magicblock-labs/ephemeral-rollups-sdk@0.0.7":
+  version "0.0.7"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.0.7.tgz#4d9456f27b75eceec5a3bbcc77a93e360a9109c4"
+  integrity sha512-nEDbTD8Fu//xOAOlY9H4ziEue8qHZxyiFWit0ItG6dp8Zz/HBQaNeRpuQeK/OWPC7ytBnnTRpm+Qr6Soy4KtkA==
   dependencies:
     "@metaplex-foundation/beet" "^0.7.2"
     "@solana/web3.js" "^1.92.3"
