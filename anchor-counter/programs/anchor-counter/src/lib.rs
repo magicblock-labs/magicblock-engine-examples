@@ -1,13 +1,13 @@
 use anchor_lang::prelude::*;
-use ephemeral_rollups_sdk::anchor::{commit, delegate, DelegationProgram, MagicProgram};
-use ephemeral_rollups_sdk::cpi::delegate_account;
+use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
 declare_id!("852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 
-#[delegate]
+#[ephemeral]
 #[program]
 pub mod anchor_counter {
     use super::*;
@@ -31,23 +31,16 @@ pub mod anchor_counter {
 
     /// Delegate the account to the delegation program
     pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
-        let pda_seeds: &[&[u8]] = &[TEST_PDA_SEED];
 
-        delegate_account(
+        ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
-            &ctx.accounts.pda,
-            &ctx.accounts.owner_program,
-            &ctx.accounts.buffer,
-            &ctx.accounts.delegation_record,
-            &ctx.accounts.delegation_metadata,
-            &ctx.accounts.delegation_program,
-            &ctx.accounts.system_program,
-            pda_seeds,
-            0,
-            u32::MAX,
+            &[TEST_PDA_SEED],
+            DelegateConfig::default(),
         )?;
+
         Ok(())
     }
+
     /// Undelegate the account from the delegation program
     pub fn undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
         commit_and_undelegate_accounts(
@@ -65,9 +58,7 @@ pub mod anchor_counter {
         counter.count += 1;
         commit_accounts(
             &ctx.accounts.payer,
-            vec![
-                &ctx.accounts.counter.to_account_info(),
-            ],
+            vec![&ctx.accounts.counter.to_account_info()],
             &ctx.accounts.magic_context,
             &ctx.accounts.magic_program,
         )?;
@@ -99,35 +90,13 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[delegate]
 #[derive(Accounts)]
 pub struct DelegateInput<'info> {
     pub payer: Signer<'info>,
     /// CHECK The pda to delegate
-    #[account(mut)]
+    #[account(mut, del)]
     pub pda: AccountInfo<'info>,
-    /// CHECK: The program that owns the pda
-    #[account(address = crate::id())]
-    pub owner_program: AccountInfo<'info>,
-    /// CHECK The temporary buffer account used during delegation
-    #[account(
-        mut, seeds = [ephemeral_rollups_sdk::consts::BUFFER, pda.key().as_ref()],
-        bump, seeds::program = crate::id()
-    )]
-    pub buffer: AccountInfo<'info>,
-    /// CHECK: The delegation record account
-    #[account(
-        mut, seeds = [ephemeral_rollups_sdk::consts::DELEGATION_RECORD, pda.key().as_ref()],
-        bump, seeds::program = delegation_program.key()
-    )]
-    pub delegation_record: AccountInfo<'info>,
-    /// CHECK: The delegation metadata account
-    #[account(
-        mut, seeds = [ephemeral_rollups_sdk::consts::DELEGATION_METADATA, pda.key().as_ref()],
-        bump, seeds::program = delegation_program.key()
-    )]
-    pub delegation_metadata: AccountInfo<'info>,
-    pub delegation_program: Program<'info, DelegationProgram>,
-    pub system_program: Program<'info, System>,
 }
 
 /// Account for the increment instruction.

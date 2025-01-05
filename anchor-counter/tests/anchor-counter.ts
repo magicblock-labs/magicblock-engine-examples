@@ -8,7 +8,7 @@ import {
 
 const SEED_TEST_PDA = "test-pda"; // 5RgeA5P8bRaynJovch3zQURfJxXL3QK2JYg1YamSvyLb
 
-describe.only("anchor-counter", () => {
+describe("anchor-counter", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -24,6 +24,7 @@ describe.only("anchor-counter", () => {
   );
 
   const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
+  const ephemeralProgram = new Program(program.idl, providerEphemeralRollup);
   const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(SEED_TEST_PDA)],
     program.programId
@@ -50,7 +51,7 @@ describe.only("anchor-counter", () => {
 
   it("Increase the counter", async () => {
     const counterAccountInfo = await provider.connection.getAccountInfo(pda);
-    if (counterAccountInfo.owner.toString() == DELEGATION_PROGRAM_ID) {
+    if (counterAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()) {
       console.log("Counter is locked by the delegation program");
       return;
     }
@@ -59,7 +60,7 @@ describe.only("anchor-counter", () => {
       .accounts({
         counter: pda,
       })
-      .rpc({ skipPreflight: true });
+      .rpc();
     console.log("Increment Tx: ", tx);
 
     const counterAccount = await program.account.counter.fetch(pda);
@@ -68,7 +69,7 @@ describe.only("anchor-counter", () => {
 
   it("Delegate a PDA", async () => {
     const counterAccountInfo = await provider.connection.getAccountInfo(pda);
-    if (counterAccountInfo.owner.toString() == DELEGATION_PROGRAM_ID) {
+    if (counterAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()) {
       console.log("Counter is locked by the delegation program");
       return;
     }
@@ -103,11 +104,10 @@ describe.only("anchor-counter", () => {
       await providerEphemeralRollup.connection.getLatestBlockhash()
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-
     const txSign = await providerEphemeralRollup.sendAndConfirm(tx);
     console.log("Increment Tx: ", txSign);
 
-    const counterAccount = await program.account.counter.fetch(pda);
+    const counterAccount = await ephemeralProgram.account.counter.fetch(pda);
     console.log("Counter: ", counterAccount.count.toString());
   });
 
@@ -168,7 +168,7 @@ describe.only("anchor-counter", () => {
     const txSign = await providerEphemeralRollup.sendAndConfirm(tx);
     console.log("Increment Tx and Commit: ", txSign);
 
-    const counterAccount = await program.account.counter.fetch(pda);
+    const counterAccount = await ephemeralProgram.account.counter.fetch(pda);
     console.log("Counter: ", counterAccount.count.toString());
   });
 });

@@ -14,7 +14,6 @@ import {
   DELEGATION_PROGRAM_ID,
 } from "@magicblock-labs/bolt-sdk";
 import { expect } from "chai";
-import bs58 from "bs58";
 
 describe("BoltCounter", () => {
   // Configure the client to use the local cluster.
@@ -90,8 +89,10 @@ describe("BoltCounter", () => {
     console.log(
         `Delegation signature: ${txSign}`
     );
+    console.log(provider.connection.rpcEndpoint);
+    console.log(tx.recentBlockhash);
     const acc = await provider.connection.getAccountInfo(counterPda);
-    expect(acc.owner.toString()).to.equal(DELEGATION_PROGRAM_ID);
+    expect(acc.owner.toBase58()).to.equal(DELEGATION_PROGRAM_ID.toBase58());
   });
 
   it("Apply the increase system", async () => {
@@ -133,6 +134,6 @@ describe("BoltCounter", () => {
         counterComponentPda
     );
     console.log(`Undelegation signature: ${txSign}`);
-    expect(acc.owner).to.deep.equal(new PublicKey(DELEGATION_PROGRAM_ID));
+    expect(acc.owner.toBase58()).to.equal(DELEGATION_PROGRAM_ID.toBase58());
   });
 });

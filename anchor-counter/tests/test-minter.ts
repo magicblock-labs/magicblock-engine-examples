@@ -33,7 +33,7 @@ describe("NFT Minter", () => {
     console.log(`   Transaction Signature: ${transactionSignature}`);
   });
 
-  it.only("Mint 1 Token for player", async () => {
+  it("Mint 1 Token for player", async () => {
     // Derive the associated token address account for the mint and payer.
     const associatedTokenAccountAddress = getAssociatedTokenAddressSync(
       mintPDA,
