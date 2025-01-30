@@ -5,11 +5,11 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-anchor_counter = "852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr"
+anchor_counter = "GBjGdHEMHevDUuDrLKzhiid7fA6yYYsL58b9hHwmVrxT"
 token-minter = "HfPTAU1bZBHPqcpEGweinAH9zsPafYnnaxk4k5xsTU3M"
 
 [programs.localnet]
-anchor_counter = "852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr"
+anchor_counter = "GBjGdHEMHevDUuDrLKzhiid7fA6yYYsL58b9hHwmVrxT"
 token-minter = "HfPTAU1bZBHPqcpEGweinAH9zsPafYnnaxk4k5xsTU3M"
 
 
