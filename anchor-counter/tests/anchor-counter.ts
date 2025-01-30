@@ -18,17 +18,21 @@ describe("anchor-counter", () => {
       process.env.PROVIDER_ENDPOINT || "https://devnet.magicblock.app/",
       {
         wsEndpoint: process.env.WS_ENDPOINT || "wss://devnet.magicblock.app/",
+        commitment: 'confirmed' 
       }
+      
     ),
-    anchor.Wallet.local()
+    anchor.Wallet.local(),
+    { commitment: 'confirmed' }
   );
 
   const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
-  const ephemeralProgram = new Program(program.idl, providerEphemeralRollup);
+  const ephemeralProgram = new Program(program.idl, providerEphemeralRollup,);
   const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(SEED_TEST_PDA)],
     program.programId
   );
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   it("Initializes the counter if it is not already initialized.", async () => {
     const counterAccountInfo = await provider.connection.getAccountInfo(pda);
@@ -93,6 +97,12 @@ describe("anchor-counter", () => {
   });
 
   it("Increase the delegate counter", async () => {
+    try {
+      // Verify delegation first
+      const accountInfo = await providerEphemeralRollup.connection.getAccountInfo(pda);
+      if (!accountInfo || accountInfo.owner.toBase58() !== DELEGATION_PROGRAM_ID.toBase58()) {
+        throw new Error("Account not properly delegated");
+      }
     let tx = await program.methods
       .increment()
       .accounts({
@@ -104,11 +114,34 @@ describe("anchor-counter", () => {
       await providerEphemeralRollup.connection.getLatestBlockhash()
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txSign = await providerEphemeralRollup.sendAndConfirm(tx);
-    console.log("Increment Tx: ", txSign);
+    let retries = 3;
+      let txSign;
+      while (retries > 0) {
+        try {
+          txSign = await providerEphemeralRollup.sendAndConfirm(tx, [], {
+            skipPreflight: true,
+            commitment: 'confirmed'
+          });
+          break;
+        } catch (e) {
+          console.log(`Retry attempt ${4 - retries}`);
+          retries--;
+          if (retries === 0) throw e;
+          await delay(2000);
+        }
+      }
 
-    const counterAccount = await ephemeralProgram.account.counter.fetch(pda);
-    console.log("Counter: ", counterAccount.count.toString());
+      console.log("Increment Tx: ", txSign);
+      
+      // Add delay before fetching
+      await delay(2000);
+      
+      const counterAccount = await ephemeralProgram.account.counter.fetch(pda);
+      console.log("Counter: ", counterAccount.count.toString());
+    } catch (error) {
+      console.error("Increment error:", error);
+      throw error;
+    }
   });
 
   it("Increase the delegate counter and commit through CPI", async () => {
