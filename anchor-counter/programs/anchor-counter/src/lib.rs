@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("GBjGdHEMHevDUuDrLKzhiid7fA6yYYsL58b9hHwmVrxT");
+declare_id!("zqXuMMnW2vZtczgstTAEKF7mnuDhvBM5qDhsoreD43s"); //1. anchor build 2. solana-keygen pubkey target/deploy/anchor_counter-keypair.json
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 
