@@ -171,4 +171,46 @@ describe("anchor-counter", () => {
     const counterAccount = await ephemeralProgram.account.counter.fetch(pda);
     console.log("Counter: ", counterAccount.count.toString());
   });
+  it("Multiply the counter (without rollup)", async () => {
+    const counterAccountInfo = await provider.connection.getAccountInfo(pda);
+    if (counterAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()) {
+      console.log("Counter is locked by the delegation program");
+      return;
+    }
+    
+    console.time("Without Rollup");
+    const tx = await program.methods
+      .multiply()
+      .accounts({
+        counter: pda,
+      })
+      .rpc();
+    console.timeEnd("Without Rollup");
+    
+    console.log("Multiply Tx: ", tx);
+    const counterAccount = await program.account.counter.fetch(pda);
+    console.log("Counter after multiply: ", counterAccount.count.toString());
+  });
+  
+  // Test multiply with rollup
+  it("Multiply the delegated counter (with rollup)", async () => {
+    console.time("With Rollup");
+    let tx = await program.methods
+      .multiply()
+      .accounts({
+        counter: pda,
+      })
+      .transaction();
+    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
+    tx.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
+    const txSign = await providerEphemeralRollup.sendAndConfirm(tx);
+    console.timeEnd("With Rollup");
+    
+    console.log("Multiply Tx: ", txSign);
+    const counterAccount = await ephemeralProgram.account.counter.fetch(pda);
+    console.log("Counter after multiply: ", counterAccount.count.toString());
+  });
 });
