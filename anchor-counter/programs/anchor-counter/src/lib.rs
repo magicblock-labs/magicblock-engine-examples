@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("zqXuMMnW2vZtczgstTAEKF7mnuDhvBM5qDhsoreD43s"); //1. anchor build 2. solana-keygen pubkey target/deploy/anchor_counter-keypair.json
+declare_id!("BHrSByKU2PyztDpkkBJqyRsGKuvyxaGYyh1T8JweWpkq"); 
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 
@@ -73,10 +73,38 @@ pub mod anchor_counter {
         Ok(())
     }
 
+    /// Muliptly the counter + manual commit the account in the ER
+    pub fn multiply_and_commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
+        let counter = &mut ctx.accounts.counter;
+        counter.count *= 2;
+        commit_accounts(
+            &ctx.accounts.payer,
+            vec![&ctx.accounts.counter.to_account_info()],
+            &ctx.accounts.magic_context,
+            &ctx.accounts.magic_program,
+        )?;
+        Ok(())
+    }
+
     /// Increment and undelegate the account.
     pub fn increment_and_undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
+        // Serialize the Anchor counter account, commit and undelegate
+        counter.exit(&crate::ID)?;
+        commit_and_undelegate_accounts(
+            &ctx.accounts.payer,
+            vec![&ctx.accounts.counter.to_account_info()],
+            &ctx.accounts.magic_context,
+            &ctx.accounts.magic_program,
+        )?;
+        Ok(())
+    }
+
+    /// Multiply and undelegate the account.
+    pub fn multiply_and_undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
+        let counter = &mut ctx.accounts.counter;
+        counter.count *= 2;
         // Serialize the Anchor counter account, commit and undelegate
         counter.exit(&crate::ID)?;
         commit_and_undelegate_accounts(
@@ -129,6 +157,7 @@ pub struct IncrementAndCommit<'info> {
     #[account(mut, seeds = [TEST_PDA_SEED], bump)]
     pub counter: Account<'info, Counter>,
 }
+
 
 #[account]
 pub struct Counter {
