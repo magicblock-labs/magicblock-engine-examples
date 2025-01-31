@@ -23,6 +23,19 @@ Run the tests:
 anchor test --skip-deploy
 ```
 
+Add anchor idl:
+
+```bash
+anchor idl init --filepath target/idl/anchor_counter.json <PROGRAM_ID>
+```
+
+Get Program ID:
+
+```bash
+anchor build
+solana-keygen pubkey target/deploy/anchor_counter-keypair.json
+```
+
 ## 📤 Delegate an account
 
 Delegating an account is the process of transferring the ownership of an account to the delegation program.
