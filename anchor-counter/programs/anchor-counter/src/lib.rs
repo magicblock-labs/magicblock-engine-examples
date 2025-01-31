@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("BHrSByKU2PyztDpkkBJqyRsGKuvyxaGYyh1T8JweWpkq"); 
+declare_id!("9AauSsvebvnBy1buaduvTNteXYzS2DUCdWeHH47fKS3B"); 
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 
@@ -15,7 +15,7 @@ pub mod anchor_counter {
     /// Initialize the counter.
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
-        counter.count = 0;
+        counter.count = 1;
         Ok(())
     }
 

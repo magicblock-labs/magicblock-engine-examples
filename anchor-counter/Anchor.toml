@@ -5,12 +5,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-anchor_counter = "zqXuMMnW2vZtczgstTAEKF7mnuDhvBM5qDhsoreD43s"
-token-minter = "HfPTAU1bZBHPqcpEGweinAH9zsPafYnnaxk4k5xsTU3M"
+anchor_counter = "9AauSsvebvnBy1buaduvTNteXYzS2DUCdWeHH47fKS3B"
 
 [programs.localnet]
-anchor_counter = "zqXuMMnW2vZtczgstTAEKF7mnuDhvBM5qDhsoreD43s"
-token-minter = "HfPTAU1bZBHPqcpEGweinAH9zsPafYnnaxk4k5xsTU3M"
+anchor_counter = "9AauSsvebvnBy1buaduvTNteXYzS2DUCdWeHH47fKS3B"
 
 
 [registry]
@@ -29,6 +27,6 @@ shutdown_wait = 2000
 upgradeable = false
 
 [[test.genesis]]
-address = "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+address = "9AauSsvebvnBy1buaduvTNteXYzS2DUCdWeHH47fKS3B"
 program = "tests/fixtures/dlp.so"
 upgradeable = false

@@ -23,11 +23,17 @@ Run the tests:
 anchor test --skip-deploy
 ```
 
-Add anchor idl:
+Add anchor idl on solana:
 
 ```bash
 anchor idl init --filepath target/idl/anchor_counter.json <PROGRAM_ID>
 ```
+
+Upgrade anchor idl on solana:
+```bash
+anchor idl upgrade --filepath target/idl/anchor_counter.json <PROGRAM_ID>
+```
+
 
 Get Program ID:
 

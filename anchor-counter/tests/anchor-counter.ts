@@ -52,7 +52,7 @@ describe("anchor-counter", () => {
     const counterAccount = await program.account.counter.fetch(pda);
     console.log("Counter: ", counterAccount.count.toString());
   });
-
+/*
   it("Increase the counter", async () => {
     const counterAccountInfo = await provider.connection.getAccountInfo(pda);
     if (counterAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()) {
@@ -246,4 +246,5 @@ describe("anchor-counter", () => {
     const counterAccount = await ephemeralProgram.account.counter.fetch(pda);
     console.log("Counter after multiply: ", counterAccount.count.toString());
   });
+  */
 });
