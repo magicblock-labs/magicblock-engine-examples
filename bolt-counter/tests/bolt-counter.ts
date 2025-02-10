@@ -86,10 +86,7 @@ describe("BoltCounter", () => {
     tx.feePayer = provider.wallet.publicKey;
     tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
     const txSign = await provider.sendAndConfirm(tx, [], {commitment: "confirmed"});
-    console.log(
-        `Delegation signature: ${txSign}`
-    );
-    console.log(provider.connection.rpcEndpoint);
+    console.log(`Delegate: ${txSign}`);
     console.log(tx.recentBlockhash);
     const acc = await provider.connection.getAccountInfo(counterPda);
     expect(acc.owner.toBase58()).to.equal(DELEGATION_PROGRAM_ID.toBase58());
