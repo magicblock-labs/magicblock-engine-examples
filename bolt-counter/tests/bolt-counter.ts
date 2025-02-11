@@ -84,10 +84,9 @@ describe("BoltCounter", () => {
     });
     const tx = new anchor.web3.Transaction().add(delegateIx);
     tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
-    const txSign = await provider.sendAndConfirm(tx, [], {commitment: "confirmed"});
+    tx.recentBlockhash = (await provider.connection.getLatestBlockhash({commitment: "confirmed"})).blockhash;
+    const txSign = await provider.sendAndConfirm(tx, [], {commitment: "confirmed", skipPreflight: true});
     console.log(`Delegate: ${txSign}`);
-    console.log(tx.recentBlockhash);
     const acc = await provider.connection.getAccountInfo(counterPda);
     expect(acc.owner.toBase58()).to.equal(DELEGATION_PROGRAM_ID.toBase58());
   });
