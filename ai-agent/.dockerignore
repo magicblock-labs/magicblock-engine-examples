@@ -1,0 +1,123 @@
+# flyctl launch added from .gitignore
+**/.anchor
+**/.DS_Store
+**/target
+**/**/*.rs.bk
+**/node_modules
+**/test-ledger
+**/.yarn
+
+# flyctl launch added from .idea/.gitignore
+# Default ignored files
+.idea/shelf
+.idea/workspace.xml
+# Editor-based HTTP Client requests
+.idea/httpRequests
+# Datasource local storage ignored files
+.idea/dataSources
+.idea/dataSources.local.xml
+
+# flyctl launch added from app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/.gitignore
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/**/lib
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/**/android/build
+
+# flyctl launch added from app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/android/.gitignore
+# OSX
+#
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/android/**/.DS_Store
+
+# Android/IJ
+#
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/android/**/.classpath
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/android/**/.cxx
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/android/**/.gradle
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/android/**/.idea
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/android/**/.project
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/android/**/.settings
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/android/**/local.properties
+app/node_modules/@solana-mobile/mobile-wallet-adapter-protocol/android/**/android.iml
+
+# flyctl launch added from app/node_modules/jayson/.gitignore
+app/node_modules/jayson/node_modules
+app/node_modules/jayson/**/.*
+!app/node_modules/jayson/**/.gitignore
+!app/node_modules/jayson/**/.travis.yml
+!app/node_modules/jayson/**/.jshintrc
+!app/node_modules/jayson/**/.npmignore
+app/node_modules/jayson/coverage
+app/node_modules/jayson/yarn-error.log
+
+# flyctl launch added from app/node_modules/loglevel/vendor/grunt-template-jasmine-requirejs/tasks/.gitignore
+# Ignore everything in this directory
+app/node_modules/loglevel/vendor/grunt-template-jasmine-requirejs/tasks/**/*
+# Except this file
+!app/node_modules/loglevel/vendor/grunt-template-jasmine-requirejs/tasks/**/.gitignore
+
+# flyctl launch added from app/node_modules/tailwindcss/stubs/.gitignore
+!app/node_modules/tailwindcss/stubs/**/*
+
+# flyctl launch added from app/node_modules/tiny-secp256k1/native/secp256k1/.gitignore
+app/node_modules/tiny-secp256k1/native/secp256k1/**/bench_inv
+app/node_modules/tiny-secp256k1/native/secp256k1/**/bench_ecdh
+app/node_modules/tiny-secp256k1/native/secp256k1/**/bench_ecmult
+app/node_modules/tiny-secp256k1/native/secp256k1/**/bench_schnorrsig
+app/node_modules/tiny-secp256k1/native/secp256k1/**/bench_sign
+app/node_modules/tiny-secp256k1/native/secp256k1/**/bench_verify
+app/node_modules/tiny-secp256k1/native/secp256k1/**/bench_recover
+app/node_modules/tiny-secp256k1/native/secp256k1/**/bench_internal
+app/node_modules/tiny-secp256k1/native/secp256k1/**/tests
+app/node_modules/tiny-secp256k1/native/secp256k1/**/exhaustive_tests
+app/node_modules/tiny-secp256k1/native/secp256k1/**/gen_context
+app/node_modules/tiny-secp256k1/native/secp256k1/**/valgrind_ctime_test
+app/node_modules/tiny-secp256k1/native/secp256k1/**/*.exe
+app/node_modules/tiny-secp256k1/native/secp256k1/**/*.so
+app/node_modules/tiny-secp256k1/native/secp256k1/**/*.a
+!app/node_modules/tiny-secp256k1/native/secp256k1/**/.gitignore
+
+app/node_modules/tiny-secp256k1/native/secp256k1/**/Makefile
+app/node_modules/tiny-secp256k1/native/secp256k1/**/configure
+app/node_modules/tiny-secp256k1/native/secp256k1/**/.libs
+app/node_modules/tiny-secp256k1/native/secp256k1/**/Makefile.in
+app/node_modules/tiny-secp256k1/native/secp256k1/**/aclocal.m4
+app/node_modules/tiny-secp256k1/native/secp256k1/**/autom4te.cache
+app/node_modules/tiny-secp256k1/native/secp256k1/**/config.log
+app/node_modules/tiny-secp256k1/native/secp256k1/**/config.status
+app/node_modules/tiny-secp256k1/native/secp256k1/**/*.tar.gz
+app/node_modules/tiny-secp256k1/native/secp256k1/**/*.la
+app/node_modules/tiny-secp256k1/native/secp256k1/**/libtool
+app/node_modules/tiny-secp256k1/native/secp256k1/**/.deps
+app/node_modules/tiny-secp256k1/native/secp256k1/**/.dirstamp
+app/node_modules/tiny-secp256k1/native/secp256k1/**/*.lo
+app/node_modules/tiny-secp256k1/native/secp256k1/**/*.o
+app/node_modules/tiny-secp256k1/native/secp256k1/**/*~
+app/node_modules/tiny-secp256k1/native/secp256k1/**/*.log
+app/node_modules/tiny-secp256k1/native/secp256k1/**/*.trs
+app/node_modules/tiny-secp256k1/native/secp256k1/**/src/libsecp256k1-config.h
+app/node_modules/tiny-secp256k1/native/secp256k1/**/src/libsecp256k1-config.h.in
+app/node_modules/tiny-secp256k1/native/secp256k1/**/src/ecmult_static_context.h
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/config.guess
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/config.sub
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/depcomp
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/install-sh
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/ltmain.sh
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/m4/libtool.m4
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/m4/lt~obsolete.m4
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/m4/ltoptions.m4
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/m4/ltsugar.m4
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/m4/ltversion.m4
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/missing
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/compile
+app/node_modules/tiny-secp256k1/native/secp256k1/**/build-aux/test-driver
+app/node_modules/tiny-secp256k1/native/secp256k1/**/src/stamp-h1
+app/node_modules/tiny-secp256k1/native/secp256k1/**/libsecp256k1.pc
+
+# flyctl launch added from node_modules/jayson/.gitignore
+node_modules/jayson/node_modules
+node_modules/jayson/**/.*
+!node_modules/jayson/**/.gitignore
+!node_modules/jayson/**/.travis.yml
+!node_modules/jayson/**/.jshintrc
+!node_modules/jayson/**/.npmignore
+node_modules/jayson/coverage
+node_modules/jayson/yarn-error.log
+fly.toml
