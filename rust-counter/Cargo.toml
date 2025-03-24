@@ -1,0 +1,15 @@
+[package]
+name = "rust-counter"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+borsh = "1.5.1"
+solana-program = "1.18.26"
+ephemeral-rollups-sdk = "0.2.4"
+
+[lib]
+name = "rust_counter"
+crate-type = ["cdylib", "lib"]

@@ -1,0 +1,14 @@
+.Text {
+  padding: 4px 8px;
+  text-align: center;
+
+  &.Title {
+    font-weight: bold;
+  }
+  &.Warning {
+    color: rgb(255, 150, 150);
+  }
+  &.Fading {
+    opacity: 0.5;
+  }
+}

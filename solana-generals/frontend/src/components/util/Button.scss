@@ -1,0 +1,32 @@
+.Button {
+  flex-direction: row;
+  cursor: pointer;
+  background-color: white;
+  border-radius: 4px;
+
+  padding: 0px 4px;
+  border: 2px solid rgba(0, 0, 0, 0.3);
+
+  > .Icon {
+    margin-left: 8px;
+    width: 24px;
+  }
+
+  &.Soft {
+    color: white;
+    background-color: transparent;
+    border: 2px solid white;
+  }
+  &:hover {
+    opacity: 0.75;
+  }
+  &:active {
+    opacity: 0.5;
+  }
+  &.Disabled {
+    cursor: not-allowed;
+    pointer-events: none;
+    touch-action: none;
+    opacity: 0.5;
+  }
+}

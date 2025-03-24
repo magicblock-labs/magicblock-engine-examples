@@ -1,0 +1,17 @@
+[package]
+name = "llm_oracle"
+version = "0.1.0"
+license = "MIT"
+edition = "2021"
+
+[dependencies]
+solana-client = "^1.17"
+solana-sdk = "^1.17"
+solana-account-decoder = "^1.17"
+tokio = { version = "1.42.0", features = ["full"]  }
+tokio-stream = "0.1.17"
+solana-gpt-oracle = { path = "../programs/solana-gpt-oracle", features = ["cpi"] }
+futures = "0.3.31"
+anchor-lang = "0.30.1"
+chatgpt_rs = "1.2.3"
+rand = "0.8.5"

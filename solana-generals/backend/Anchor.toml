@@ -1,0 +1,48 @@
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+game = "C5iL81s4Fu6SnkQEfixFZpKPRQ32fqVizpotoLVTxA2n"
+
+command = "YGKbhp7S1cCvvheyQ8rcuECKUR1SVpKpHjnqCqdP1cm"
+finish = "HBdGPJycpHjjJ149T3RQGtQWjSC39MVpcKYF6JJvaF6e"
+generate = "3KFBmeDYJgrB9SB8jfsrXQN5wNvKinneJgNnpa2KgRw7"
+join = "3zMXokc8DYYAairrtAKZKPJZKHmWKRdj6G8bm8ZZVi9g"
+start = "Cu8JkUA9a5msGWNChAuhBJ9PTE6FdevwHNgPyxbABkUL"
+tick = "8tKAapRKPrNkxXwcArbSAnBHieYnX6M2WoTxukbCQtTa"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[workspace]
+members = ["programs-ecs/components/*", "programs-ecs/systems/*"]
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+
+[test]
+startup_wait = 5000
+shutdown_wait = 2000
+upgradeable = false
+
+[[test.genesis]]
+address = "WorLD15A7CrDwLcLy4fRqtaTb9fbd8o8iqiEMUDse2n"
+program = "tests/fixtures/world.so"
+upgradeable = false
+
+[test.validator]
+bind_address = "0.0.0.0"
+url = "https://rpc.magicblock.app/devnet/"
+ledger = ".bolt/test-ledger"
+rpc_port = 8899
+
+[[test.validator.account]]
+address = "EHLkWwAT9oebVv9ht3mtqrvHhRVMKrt54tF3MfHTey2K"
+filename = "tests/fixtures/registry.json"

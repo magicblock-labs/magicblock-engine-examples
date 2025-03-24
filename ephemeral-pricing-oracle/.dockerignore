@@ -1,0 +1,33 @@
+# flyctl launch added from .gitignore
+target
+**/.idea
+
+# flyctl launch added from .idea/.gitignore
+# Default ignored files
+.idea/shelf
+.idea/workspace.xml
+# Editor-based HTTP Client requests
+.idea/httpRequests
+# Datasource local storage ignored files
+.idea/dataSources
+.idea/dataSources.local.xml
+
+# flyctl launch added from program/ephemeral-oracle/.gitignore
+program/ephemeral-oracle/**/.anchor
+program/ephemeral-oracle/**/.DS_Store
+program/ephemeral-oracle/**/target
+program/ephemeral-oracle/**/**/*.rs.bk
+program/ephemeral-oracle/**/node_modules
+program/ephemeral-oracle/**/test-ledger
+program/ephemeral-oracle/**/.yarn
+
+# flyctl launch added from program/ephemeral-oracle/node_modules/jayson/.gitignore
+program/ephemeral-oracle/node_modules/jayson/node_modules
+program/ephemeral-oracle/node_modules/jayson/**/.*
+!program/ephemeral-oracle/node_modules/jayson/**/.gitignore
+!program/ephemeral-oracle/node_modules/jayson/**/.travis.yml
+!program/ephemeral-oracle/node_modules/jayson/**/.jshintrc
+!program/ephemeral-oracle/node_modules/jayson/**/.npmignore
+program/ephemeral-oracle/node_modules/jayson/coverage
+program/ephemeral-oracle/node_modules/jayson/yarn-error.log
+fly.toml

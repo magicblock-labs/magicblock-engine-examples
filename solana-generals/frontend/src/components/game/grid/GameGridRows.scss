@@ -1,0 +1,10 @@
+.GameGridRows {
+  align-items: center;
+  > .Rows {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    > .Row {
+      flex-direction: row;
+      flex-wrap: nowrap;
+    }
+  }
+}
