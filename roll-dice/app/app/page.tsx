@@ -136,7 +136,7 @@ export default function DiceRoller() {
 
     if (programRef.current) {
       try {
-        const tx = await programRef.current.methods.rollDice(Math.floor(Math.random())).rpc()
+        const tx = await programRef.current.methods.rollDice(Math.floor(Math.random() * 6) + 1).rpc()
         console.log("Dice rolled on-chain with tx:", tx)
 
         toast({
