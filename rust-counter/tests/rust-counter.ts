@@ -5,9 +5,9 @@ import * as fs from "fs";
 import { expect } from "chai"; // Use expect for assertions
 import { Suite } from 'mocha'; 
 import { Counter, CounterInstruction, CounterSchema, IncreaseCounterPayload } from "./schema";
+import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 import dotenv from 'dotenv'
-import { DELEGATION_PROGRAM_ID, getDelegationBufferPda, getDelegationMetadataPda, getDelegationRecordPda, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID } from "./constants";
 dotenv.config()
 
 describe("Running tests:", async function (this: Suite) {
@@ -201,19 +201,19 @@ describe("Running tests:", async function (this: Suite) {
             },
             // Delegation Buffer
             {
-                pubkey: getDelegationBufferPda(counterPda, PROGRAM_ID),
+                pubkey: delegateBufferPdaFromDelegatedAccountAndOwnerProgram(counterPda, PROGRAM_ID),
                 isSigner: false,
                 isWritable: true,
             },
             // Delegation Record
             {
-                pubkey: getDelegationRecordPda(counterPda),
+                pubkey: delegationRecordPdaFromDelegatedAccount(counterPda),
                 isSigner: false,
                 isWritable: true,
             },
             // Delegation Metadata
             {
-                pubkey: getDelegationMetadataPda(counterPda),
+                pubkey: delegationMetadataPdaFromDelegatedAccount(counterPda),
                 isSigner: false,
                 isWritable: true,
             },
