@@ -3,7 +3,9 @@
 import { useState, useCallback, useEffect, useRef } from "react"
 import Dice from "@/components/dice"
 import SolanaAddress from "@/components/solana-address"
+// @ts-ignore
 import * as anchor from "@coral-xyz/anchor"
+// @ts-ignore
 import {Connection, Keypair, PublicKey, Transaction, VersionedTransaction} from "@solana/web3.js"
 import { useToast } from "@/hooks/use-toast"
 
@@ -72,7 +74,6 @@ export default function DiceRoller() {
         if (!idl) throw new Error("IDL not found")
 
         // Create the program instance
-        console.log(idl)
         const program = new anchor.Program(idl, provider)
         programRef.current = program
 
@@ -99,6 +100,7 @@ export default function DiceRoller() {
 
         subscriptionIdRef.current = connection.onAccountChange(
             playerPk,
+            // @ts-ignore
             (accountInfo) => {
               const player = program.coder.accounts.decode("player", accountInfo.data)
               console.log("Player account changed:", player)
@@ -148,6 +150,22 @@ export default function DiceRoller() {
         rollIntervalRef.current = setInterval(() => {
           setDiceValue(Math.floor(Math.random() * 6) + 1)
         }, 100)
+
+        // Add a timeout to stop rolling after 10 seconds if still rolling
+        setTimeout(() => {
+          if (isRolling) {
+            console.log("Rolling timeout reached (10s), stopping animation")
+            setIsRolling(false)
+            clearRollInterval()
+            toast({
+              title: "Notice",
+              description: "Dice roll is taking longer than expected. Check transaction status in explorer.",
+              variant: "warning",
+            })
+          }
+        }, 10000)
+
+
       } catch (error) {
         console.error("Error rolling dice:", error)
         toast({

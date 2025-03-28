@@ -13,7 +13,7 @@ describe("roll-dice", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it("Do Coin Flip!", async () => {
+  it("Do Roll Dice!", async () => {
     const tx = await program.methods.rollDice(0).rpc();
     console.log("Your transaction signature", tx);
     const playerPk = web3.PublicKey.findProgramAddressSync([Buffer.from("playerd"), anchor.getProvider().publicKey.toBytes()], program.programId)[0];

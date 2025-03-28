@@ -44,7 +44,7 @@ pub mod random_dice {
         ctx: Context<CallbackRollDiceCtx>,
         randomness: [u8; 32],
     ) -> Result<()> {
-        let rnd_u8 = ephemeral_vrf_sdk::rnd::random_u8(&randomness) % 6 + 1;
+        let rnd_u8 = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 6);
         msg!("Consuming random number: {:?}", rnd_u8);
         let player = &mut ctx.accounts.player;
         player.last_result = rnd_u8; // Update the player's last result
