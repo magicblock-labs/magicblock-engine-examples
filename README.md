@@ -13,7 +13,6 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 - [Rust Counter](./rust-counter/README.md) - A simple counter that can be incremented. Tests natively to delegate/undelegate accounts and run transactions.
 - [Bolt Counter](./bolt-counter/README.md) - A simple counter that can be incremented. Tests use the bolt sdk to delegate/undelegate accounts and run transactions.
 - [Dummy Token Transfer](./dummy-token-transfer/README.md) - A token transferer that can delegate and execute both on-chain and in the ephemeral rollup.
-- [Solana Generals](./solana-generals/README.md) - Fully on-chain real-time game running 100% serverless using Solana's devnet and MagicBlock's devnet.
 
 ## 🚧 Under Testing 🚧
 
