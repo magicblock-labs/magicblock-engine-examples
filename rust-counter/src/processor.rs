@@ -3,7 +3,6 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
     msg,
-    borsh::try_from_slice_unchecked,
     program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -136,9 +135,9 @@ pub fn process_increase_counter(
     let accounts_iter = &mut accounts.iter();
     let initializer_account = next_account_info(accounts_iter)?;
     let counter_account = next_account_info(accounts_iter)?;
-    let system_program = next_account_info(accounts_iter)?;
+    let _system_program = next_account_info(accounts_iter)?;
 
-    let (counter_pda, bump_seed) = Pubkey::find_program_address(
+    let (counter_pda, _bump_seed) = Pubkey::find_program_address(
         &[b"counter_account", initializer_account.key.as_ref()],
         program_id,
     );
@@ -148,9 +147,6 @@ pub fn process_increase_counter(
         msg!("Invalid seeds for PDA");
         return Err(ProgramError::InvalidArgument);
     }
-
-    // Get and borrow lamports from greeting account
-    let borrowed_lamports = counter_account.try_borrow_lamports().unwrap();
 
     // The account must be owned by the program in order to modify its data
     if counter_account.owner != program_id {
@@ -173,7 +169,7 @@ pub fn process_increase_counter(
 }
 
 pub fn process_delegate(
-    program_id: &Pubkey,
+    _program_id: &Pubkey,
     accounts: &[AccountInfo],
 ) -> ProgramResult {
 
@@ -209,7 +205,7 @@ pub fn process_delegate(
         validator: None,
     };
 
-    delegate_account(delegate_accounts, &pda_seeds, delegate_config);
+    delegate_account(delegate_accounts, pda_seeds, delegate_config)?;
 
     Ok(())
 }
@@ -236,13 +232,13 @@ pub fn process_undelegate(
         initializer,
         system_program,
         pda_seeds,
-    );
+    )?;
 
     Ok(())
 }
 
 pub fn process_commit(
-    program_id: &Pubkey,
+    _program_id: &Pubkey,
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     // Get accounts
@@ -263,13 +259,13 @@ pub fn process_commit(
         vec![counter_account],
         magic_context,
         magic_program,
-    );
+    )?;
 
     Ok(())
 }
 
 pub fn process_commit_and_undelegate(
-    program_id: &Pubkey,
+    _program_id: &Pubkey,
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     // Get accounts
@@ -291,7 +287,7 @@ pub fn process_commit_and_undelegate(
         vec![counter_account],
         magic_context,
         magic_program,
-    );
+    )?;
 
     Ok(())
 }

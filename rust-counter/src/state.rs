@@ -1,8 +1,5 @@
 // state.rs
 use borsh::{BorshDeserialize, BorshSerialize};
-use solana_program::{
-    program_pack::{Sealed},
-};
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct Counter {
