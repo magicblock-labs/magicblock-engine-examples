@@ -10,7 +10,7 @@ import {Connection, Keypair, PublicKey, Transaction, VersionedTransaction} from 
 import { useToast } from "@/hooks/use-toast"
 
 // Program ID for the dice game
-const PROGRAM_ID = new anchor.web3.PublicKey("53rd42GvfyHQEy9xEPtcYVdzkyXKrN7KTbqBPsa676CE")
+const PROGRAM_ID = new anchor.web3.PublicKey("8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP")
 
 export default function DiceRoller() {
   const [diceValue, setDiceValue] = useState(1)
@@ -160,7 +160,7 @@ export default function DiceRoller() {
             toast({
               title: "Notice",
               description: "Dice roll is taking longer than expected. Check transaction status in explorer.",
-              variant: "warning",
+              variant: "destructive",
             })
           }
         }, 10000)

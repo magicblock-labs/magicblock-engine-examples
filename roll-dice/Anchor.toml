@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-rool_dice = "53rd42GvfyHQEy9xEPtcYVdzkyXKrN7KTbqBPsa676CE"
+rool_dice = "8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP"
 
 [registry]
 url = "https://api.apr.dev"

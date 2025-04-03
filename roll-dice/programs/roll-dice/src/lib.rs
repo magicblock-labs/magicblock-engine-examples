@@ -3,7 +3,7 @@ use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-declare_id!("53rd42GvfyHQEy9xEPtcYVdzkyXKrN7KTbqBPsa676CE");
+declare_id!("8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP");
 
 pub const PLAYER: &[u8] = b"playerd";
 
