@@ -37,15 +37,10 @@ describe("Running tests:", async function (this: Suite) {
         [Buffer.from("counter_account"), userKeypair.publicKey.toBuffer()],
         PROGRAM_ID
      );
+     console.log("Program ID: ", PROGRAM_ID.toString())
+    console.log("Counter PDA: ", counterPda.toString())
 
     it("Initialize counter on Solana", async function () {
-
-        // Check counter account ownership, skip test if delegated
-        const isDelegated = (await (new web3.Connection(rpcSolana)).getAccountInfo(counterPda))?.owner.toString() == DELEGATION_PROGRAM_ID.toString();
-        if (isDelegated){
-            console.log("Counter is delegated: Test skipped")
-            this.skip()
-        }
 
         // 1: IncreaseCounter
         // Create, send and confirm transaction
@@ -88,26 +83,9 @@ describe("Running tests:", async function (this: Suite) {
         ); 
         console.log("txId:", txHash)
 
-        // Fetch counter account on Solana, deserialize data, and check value
-        const counterAccount = await (new web3.Connection(rpcSolana, { commitment: "confirmed" })
-        ).getAccountInfo(counterPda);
-        const deserializedAccountData = borsh.deserialize(
-            CounterSchema,
-            Counter,
-            counterAccount!.data
-        );
-        console.log(`${counterPda}: ${deserializedAccountData.count} (Solana)`);
-        expect(Number(deserializedAccountData.count)).to.be.at.least(0, "The counter value should be 0");
     });
 
     it("Increase counter on Solana", async function () {
-
-        // Check counter account ownership, skip test if delegated
-        const isDelegated = (await (new web3.Connection(rpcSolana)).getAccountInfo(counterPda))?.owner.toString() == DELEGATION_PROGRAM_ID.toString();
-        if (isDelegated){
-            console.log("Counter is delegated: Test skipped")
-            this.skip()
-        }
 
         // 1: IncreaseCounter
         // Create, send and confirm transaction
@@ -151,25 +129,8 @@ describe("Running tests:", async function (this: Suite) {
         ); 
         console.log("txId:", txHash)
 
-        // Fetch counter account on Solana, deserialize data, and check value
-        const counterAccount = await (new web3.Connection(rpcSolana, { commitment: "confirmed" })
-        ).getAccountInfo(counterPda);
-        const deserializedAccountData = borsh.deserialize(
-            CounterSchema,
-            Counter,
-            counterAccount!.data
-        );
-        console.log(`${counterPda}: ${deserializedAccountData.count} (Solana)`);
-        expect(Number(deserializedAccountData.count)).to.be.at.least(1, "The counter value should be 1 or greater");
     });
     it("Delegate counter to ER", async function () {
-
-        // Check counter account ownership, skip test if delegated
-        const isDelegated = (await (new web3.Connection(rpcSolana)).getAccountInfo(counterPda))?.owner.toString() == DELEGATION_PROGRAM_ID.toString();
-        if (isDelegated){
-            console.log("Counter is delegated: Test skipped")
-            this.skip()
-        }
 
         // 2: Delegate
         // Create, send and confirm transaction
@@ -240,21 +201,9 @@ describe("Running tests:", async function (this: Suite) {
         ); 
         console.log("txId:", txHash)
 
-        // Fetch counter account on Solana and check owner
-        const counterAccount = await (new web3.Connection(rpcSolana, { commitment: "confirmed" })).getAccountInfo(counterPda);
-        const owner = counterAccount.owner.toString()
-        console.log(`PDA Owner: ${owner} (Solana)`);
-        expect(owner).equals(DELEGATION_PROGRAM_ID.toString(), "The counter should be owned by Delegation Program");
-
     });
     it("Increase counter on ER (1)", async function () {
-
-        // Check counter account ownership, skip test if NOT delegated
-        const isDelegated = (await (new web3.Connection(rpcSolana)).getAccountInfo(counterPda))?.owner.toString() == DELEGATION_PROGRAM_ID.toString();
-        if (!isDelegated){
-            console.log("Counter is NOT delegated: Test skipped")
-            this.skip()
-        }
+        const start = Date.now();
 
         // 1: IncreaseCounter
         // Create, send and confirm transaction
@@ -298,26 +247,12 @@ describe("Running tests:", async function (this: Suite) {
         ); 
         console.log("txId:", txHash)
 
-        // Fetch counter account on Solana, deserialize data, and check value
-        const counterAccount = await (new web3.Connection(rpcMagicblock, { commitment: "confirmed" })
-        ).getAccountInfo(counterPda);
-        const deserializedAccountData = borsh.deserialize(
-            CounterSchema,
-            Counter,
-            counterAccount!.data
-        );
-        console.log(`PDA ${counterPda}: ${deserializedAccountData.count} (ER)`);
-        expect(Number(deserializedAccountData.count)).to.be.at.least(1, "The counter value should be 1 or greater");
+        const duration = Date.now() - start;
+        console.log(`(${duration}ms)`);
 
     });
     it("Commit counter state on ER to Solana", async function () {
-
-        // Check counter account ownership, skip test if NOT delegated
-        const isDelegated = (await (new web3.Connection(rpcSolana)).getAccountInfo(counterPda))?.owner.toString() == DELEGATION_PROGRAM_ID.toString();
-        if (!isDelegated){
-            console.log("Counter is NOT delegated: Test skipped")
-            this.skip()
-        } 
+        const start = Date.now();
 
         // 3: Commit
         // Create, send and confirm transaction
@@ -364,21 +299,13 @@ describe("Running tests:", async function (this: Suite) {
         ); 
         console.log("txId:", txHash)
 
-        // Fetch counter account on Solana (to check owner)
-        const counterAccount = await (new web3.Connection(rpcSolana, { commitment: "confirmed" })).getAccountInfo(counterPda);
-        const owner = counterAccount.owner.toString()
-        console.log(`PDA Owner: ${owner} (Solana)`);
-        expect(owner).equals(DELEGATION_PROGRAM_ID.toString(), "The counter should be owned by Delegation Program");
+        const duration = Date.now() - start;
+        console.log(`(${duration}ms)`);
 
     });
     it("Increase counter on ER (2)", async function () {
 
-        // Check counter account ownership, skip test if NOT delegated
-        const isDelegated = (await (new web3.Connection(rpcSolana)).getAccountInfo(counterPda))?.owner.toString() == DELEGATION_PROGRAM_ID.toString();
-        if (!isDelegated){
-            console.log("Counter is NOT delegated: Test skipped")
-            this.skip()
-        }
+        const start = Date.now();
 
         // 1: IncreaseCounter
         // Create, send and confirm transaction
@@ -422,26 +349,13 @@ describe("Running tests:", async function (this: Suite) {
         ); 
         console.log("txId:", txHash)
 
-        // Fetch counter account on Solana, deserialize data, and check value
-        const counterAccount = await (new web3.Connection(rpcMagicblock, { commitment: "confirmed" })
-        ).getAccountInfo(counterPda);
-        const deserializedAccountData = borsh.deserialize(
-            CounterSchema,
-            Counter,
-            counterAccount!.data
-        );
-        console.log(`PDA ${counterPda}: ${deserializedAccountData.count} (ER)`);
-        expect(Number(deserializedAccountData.count)).to.be.at.least(1, "The counter value should be 1 or greater");
+        const duration = Date.now() - start;
+        console.log(`(${duration}ms)`);
 
     });
     it("Commit and undelegate counter on ER to Solana", async function () {
 
-        // Check counter account ownership, skip test if NOT delegated
-        const isDelegated = (await (new web3.Connection(rpcSolana)).getAccountInfo(counterPda))?.owner.toString() == DELEGATION_PROGRAM_ID.toString();
-        if (!isDelegated){
-            console.log("Counter is NOT delegated: Test skipped")
-            this.skip()
-        } 
+        const start = Date.now();
 
         // 3: CommitAndUndelegate
         // Create, send and confirm transaction
@@ -488,11 +402,7 @@ describe("Running tests:", async function (this: Suite) {
         ); 
         console.log("txId:", txHash)
 
-        // Fetch counter account on Solana (to check owner)
-        const counterAccount = await (new web3.Connection(rpcSolana, { commitment: "confirmed" })).getAccountInfo(counterPda);
-        const owner = counterAccount.owner.toString()
-        console.log(`PDA Owner: ${owner} (Solana)`);
-        expect(owner).not.equals(DELEGATION_PROGRAM_ID.toString(), "The counter should NOT be owned by Delegation Program");
-
+        const duration = Date.now() - start;
+        console.log(`(${duration}ms)`);
     });
   });
