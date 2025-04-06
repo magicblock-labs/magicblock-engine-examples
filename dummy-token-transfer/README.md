@@ -10,7 +10,7 @@ To run tests on the devnet, use the following command:
 anchor test --skip-local-validator --skip-build --skip-deploy
 ```
 
-## Running Tests on Devnet with a Local Ephemeral Rollup
+## Running tests with a Local Ephemeral Rollup and Devnet
 
 To run tests using a local ephemeral validator, follow these steps:
 
