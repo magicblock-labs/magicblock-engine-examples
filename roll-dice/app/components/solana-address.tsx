@@ -5,7 +5,7 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL, Keypair } from "@solana/web3.j
 import { Copy, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-export default function SolanaAddress() {
+export default function SolanaAddress({ onBalanceChange }: { onBalanceChange?: (balance: number) => void }) {
   const [address, setAddress] = useState<string>("")
   const [balance, setBalance] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
@@ -57,6 +57,16 @@ export default function SolanaAddress() {
       const pubkey = new PublicKey(pubkeyString)
       const balanceInLamports = await connection.getBalance(pubkey)
       const balanceInSOL = balanceInLamports / LAMPORTS_PER_SOL
+      if (balanceInSOL < 0.1){
+        // Request airdrop of 0.1 SOL
+        await connection.requestAirdrop(pubkey, 100000000 )
+      }
+
+      // Notify parent component about balance change
+      if (onBalanceChange && (balance !== balanceInSOL)) {
+        onBalanceChange(balanceInSOL)
+      }
+
       setBalance(balanceInSOL)
       setLastUpdated(new Date())
     } catch (error) {
