@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_and_undelegate_accounts};
 
-declare_id!("Ah1LWGdAEVc5AoMcmea3Cu9EV1Ck5PZhLrzNeVm6nhq1");
+declare_id!("58yUmvFtbxoV9dRmv3mbrmKCviJmQLY2MzECCa5cWR6j");
 
 #[ephemeral]
 #[program]

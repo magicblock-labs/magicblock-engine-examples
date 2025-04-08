@@ -5,10 +5,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-dummy_transfer = "Ah1LWGdAEVc5AoMcmea3Cu9EV1Ck5PZhLrzNeVm6nhq1"
+dummy_transfer = "58yUmvFtbxoV9dRmv3mbrmKCviJmQLY2MzECCa5cWR6j"
 
 [programs.localnet]
-dummy_transfer = "Ah1LWGdAEVc5AoMcmea3Cu9EV1Ck5PZhLrzNeVm6nhq1"
+dummy_transfer = "58yUmvFtbxoV9dRmv3mbrmKCviJmQLY2MzECCa5cWR6j"
 
 [registry]
 url = "https://api.apr.dev"

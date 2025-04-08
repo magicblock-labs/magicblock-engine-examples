@@ -20,6 +20,9 @@ describe("dummy-transfer", () => {
     anchor.Wallet.local()
   );
 
+  console.log("Provider Endpoint: ", providerEphemeralRollup.connection._rpcEndpoint)
+  console.log("Provider WS Endpoint: ", providerEphemeralRollup.connection._rpcWsEndpoint)
+
   const program = anchor.workspace.DummyTransfer as Program<DummyTransfer>;
   const ephemeralProgram = new Program(program.idl, providerEphemeralRollup);
 
@@ -79,7 +82,7 @@ describe("dummy-transfer", () => {
         .accounts({
           user: provider.wallet.publicKey,
         })
-        .rpc();
+        .rpc({skipPreflight: true});
       console.log("Init Balance Tx: ", tx);
     }
 
@@ -112,7 +115,7 @@ describe("dummy-transfer", () => {
           })
           .instruction(),
       ])
-      .rpc();
+      .rpc({skipPreflight: true});
     console.log("Transfer Tx: ", tx);
 
     let balanceAccount = await program.account.balance.fetch(ronBalancePda);
@@ -153,7 +156,7 @@ describe("dummy-transfer", () => {
             .instruction(),
       ])
       .signers([bob, fred])
-      .rpc( {commitment: "confirmed"});
+      .rpc( {commitment: "confirmed", skipPreflight: true});
 
     console.log("Delegation signature", tx);
   });
@@ -174,7 +177,7 @@ describe("dummy-transfer", () => {
               })
               .instruction(),
         ])
-        .rpc();
+        .rpc({skipPreflight: true});
     console.log("Transfer Tx: ", tx);
 
     let balanceAccount = await ephemeralProgram.account.balance.fetch(ronBalancePda);
@@ -215,7 +218,7 @@ describe("dummy-transfer", () => {
             .instruction(),
       ])
       .signers([bob, fred])
-      .rpc();
+      .rpc({skipPreflight: true});
   });
 
 });
