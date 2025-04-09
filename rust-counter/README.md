@@ -12,6 +12,20 @@ This program has utilized the following sofware packages.
 | **Rust**   | 1.82    | [Install Rust](https://www.rust-lang.org/tools/install)         |
 | **Anchor** | 0.30.1  | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
 
+```sh
+# Check and initialize your Solana version
+agave-install list
+agave-install init 2.0.21
+
+# Check and initialize your Rust version
+rustup show
+rustup install 1.82
+
+# Check and initialize your Anchor version
+avm list
+avm use 0.30.1
+```
+
 ## ✨ Build and Test
 
 Build and deploy the program:

@@ -2,12 +2,36 @@
 
 Simple counter program using Anchor and Ephemeral Rollups.
 
+## Software Packages
+
+This program has utilized the following sofware packages.
+
+| Software   | Version | Installation Guide                                              |
+| ---------- | ------- | --------------------------------------------------------------- |
+| **Solana** | 2.0.21  | [Install Solana](https://docs.anza.xyz/cli/install)             |
+| **Rust**   | 1.82    | [Install Rust](https://www.rust-lang.org/tools/install)         |
+| **Anchor** | 0.30.1  | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
+
+```sh
+# Check and initialize your Solana version
+agave-install list
+agave-install init 2.0.21
+
+# Check and initialize your Rust version
+rustup show
+rustup install 1.82
+
+# Check and initialize your Anchor version
+avm list
+avm use 0.30.1
+```
+
 ## ✨ Build and Test
 
 Run the tests with existing program:
 
 ```bash
-anchor test --skip-deploy --skip-build
+anchor test --skip-deploy --skip-build --skip-local-validator
 ```
 
 Build, deploy and run the tests with new program (note: delete keypairs in `/target/deploy` folder):

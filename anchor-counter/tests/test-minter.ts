@@ -21,6 +21,15 @@ describe("NFT Minter", () => {
   };
 
   it("Create a token!", async () => {
+    const accountInfo = await provider.connection.getAccountInfo(
+      mintPDA
+    );
+
+    if (accountInfo) {
+      console.log("Token account already exists. Skipping creation.");
+      return; // Skip token creation if the account already exists.
+    }
+
     const transactionSignature = await program.methods
       .createToken(metadata.name, metadata.symbol, metadata.uri)
       .accounts({
