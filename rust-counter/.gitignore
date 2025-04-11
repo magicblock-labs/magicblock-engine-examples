@@ -1,6 +1,6 @@
 /target
 /Cargo.lock
 *node_modules/*
-*.env
+**/.env
 *target/* 
 .DS_Store
