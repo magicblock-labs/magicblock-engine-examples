@@ -20,16 +20,17 @@ describe("Running tests:", async function (this: Suite) {
     const PROGRAM_ID = keypair.publicKey;
   
     // Set up a connection to blockchain cluster
-    const rpcSolana = process.env.RPC_SOLANA as string
-    const rpcMagicblock = process.env.RPC_MAGICBLOCK as string
+    const connectionBaseLayer = new web3.Connection("https://api.devnet.solana.com", {wsEndpoint: "wss://api.devnet.solana.com"});
+    const connectionEphemeralRollup = new web3.Connection(process.env.PROVIDER_ENDPOINT || "https://devnet.magicblock.app/", {wsEndpoint: process.env.WS_ENDPOINT || "wss://devnet.magicblock.app/"});
+    console.log("Base Layer Connection: ", connectionBaseLayer._rpcEndpoint);
+    console.log("Ephemeral Rollup Connection: ", connectionEphemeralRollup._rpcEndpoint);
   
     // Create user keypair and airdrop SOL if needed
     const userKeypair = initializeSolSignerKeypair();  // Use the keypair management function
   
     // Run this once before all tests
     before(async function () {
-        const connection = new web3.Connection(rpcSolana);
-        await airdropSolIfNeeded(connection, userKeypair.publicKey, 2, 0.05);
+        await airdropSolIfNeeded(connectionBaseLayer, userKeypair.publicKey, 2, 0.05);
     });
   
     // Get pda of counter_account
@@ -74,8 +75,7 @@ describe("Running tests:", async function (this: Suite) {
             data: serializedInstructionData
         });
         tx.add(initializeIx);
-        const connection = new web3.Connection(rpcSolana)
-        const txHash = await web3.sendAndConfirmTransaction(connection, tx, [userKeypair],
+        const txHash = await web3.sendAndConfirmTransaction(connectionBaseLayer, tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"
@@ -120,8 +120,7 @@ describe("Running tests:", async function (this: Suite) {
             data: serializedInstructionData
         });
         tx.add(increaseCounterIx);
-        const connection = new web3.Connection(rpcSolana)
-        const txHash = await web3.sendAndConfirmTransaction(connection, tx, [userKeypair],
+        const txHash = await web3.sendAndConfirmTransaction(connectionBaseLayer, tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"
@@ -192,8 +191,7 @@ describe("Running tests:", async function (this: Suite) {
             data: serializedInstructionData
         });
         tx.add(delegateIx);
-        const connection = new web3.Connection(rpcSolana);
-        const txHash = await web3.sendAndConfirmTransaction(connection, tx, [userKeypair],
+        const txHash = await web3.sendAndConfirmTransaction(connectionBaseLayer, tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"
@@ -238,8 +236,7 @@ describe("Running tests:", async function (this: Suite) {
             data: serializedInstructionData
         });
         tx.add(initializeIx);
-        const connection = new web3.Connection(rpcMagicblock);
-        const txHash = await web3.sendAndConfirmTransaction(connection, tx, [userKeypair],
+        const txHash = await web3.sendAndConfirmTransaction(connectionEphemeralRollup, tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"
@@ -290,8 +287,7 @@ describe("Running tests:", async function (this: Suite) {
             data: serializedInstructionData
         });
         tx.add(commitIx);
-        const connection = new web3.Connection(rpcMagicblock);
-        const txHash = await web3.sendAndConfirmTransaction(connection, tx, [userKeypair],
+        const txHash = await web3.sendAndConfirmTransaction(connectionEphemeralRollup, tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"
@@ -340,8 +336,7 @@ describe("Running tests:", async function (this: Suite) {
             data: serializedInstructionData
         });
         tx.add(initializeIx);
-        const connection = new web3.Connection(rpcMagicblock);
-        const txHash = await web3.sendAndConfirmTransaction(connection, tx, [userKeypair],
+        const txHash = await web3.sendAndConfirmTransaction(connectionEphemeralRollup, tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"
@@ -393,8 +388,7 @@ describe("Running tests:", async function (this: Suite) {
             data: serializedInstructionData
         });
         tx.add(undelegateIx);
-        const connection = new web3.Connection(rpcMagicblock);
-        const txHash = await web3.sendAndConfirmTransaction(connection, tx, [userKeypair],
+        const txHash = await web3.sendAndConfirmTransaction(connectionEphemeralRollup, tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"

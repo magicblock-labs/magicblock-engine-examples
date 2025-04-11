@@ -38,8 +38,6 @@ solana program deploy target/deploy/rust_counter.so
 Add wallet (if not a new keypair will be generated) and RPC endpoints to the file example.env and update filename to .env:
 
 ```bash
-RPC_SOLANA=https://api.devnet.solana.com
-RPC_MAGICBLOCK=https://devnet.magicblock.app
 PRIVATE_KEY=
 ```
 
@@ -151,9 +149,8 @@ const initializeIx = new web3.TransactionInstruction({
   data: serializedInstructionData,
 });
 tx.add(initializeIx);
-const connection = new web3.Connection(rpcMagicblock);
 const txHash = await web3.sendAndConfirmTransaction(
-  connection,
+  connectionEphemeralRollup, // "https://devnet.magicblock.app/" or "http://localhost:8899"
   tx,
   [userKeypair],
   {
@@ -209,9 +206,8 @@ const initializeIx = new web3.TransactionInstruction({
   data: serializedInstructionData,
 });
 tx.add(initializeIx);
-const connection = new web3.Connection(rpcMagicblock);
 const txHash = await web3.sendAndConfirmTransaction(
-  connection,
+  connectionEphemeralRollup, // "https://devnet.magicblock.app/" or "http://localhost:8899"
   tx,
   [userKeypair],
   {
@@ -249,13 +245,7 @@ ACCOUNTS_REMOTE=https://rpc.magicblock.app/devnet ACCOUNTS_LIFECYCLE=ephemeral e
 Execute the tests while pointing to the local validator:
 
 ```bash
-# Change in .env file, RPC_MAGICBLOCK to localhost
-RPC_SOLANA=https://api.devnet.solana.com
-RPC_MAGICBLOCK=http://localhost:8899
-```
-
-```bash
-yarn test
+PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=ws://localhost:8900 yarn test
 ```
 
 This setup ensures tests run efficiently on a local ephemeral rollup while connecting to the devnet.
