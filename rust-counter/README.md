@@ -46,7 +46,7 @@ PRIVATE_KEY=
 Run the tests:
 
 ```bash
-yarn install
+yarn
 yarn test
 ```
 
