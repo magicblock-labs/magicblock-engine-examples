@@ -11,25 +11,26 @@ use solana_program::{
     sysvar::Sysvar,
 };
 
-use ephemeral_rollups_sdk::cpi::{delegate_account, undelegate_account, DelegateAccounts, DelegateConfig};
-use ephemeral_rollups_sdk::ephem::{commit_and_undelegate_accounts, commit_accounts};
-
-use crate::{
-    instruction::ProgramInstruction,
-    state::Counter
+use ephemeral_rollups_sdk::cpi::{
+    delegate_account, undelegate_account, DelegateAccounts, DelegateConfig,
 };
+use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
+use crate::{instruction::ProgramInstruction, state::Counter};
 
 // program entrypoint's implementation
 pub fn process_instruction(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    _instruction_data: &[u8]
+    _instruction_data: &[u8],
 ) -> ProgramResult {
+    // Unpack instruction discriminator and data
+    // The instruction data is a byte array that contains the instruction discriminator
+    // and the data for the instruction. The instruction discriminator is a unique identifier
+    // for the instruction, and it is used to determine which instruction to execute.
     let instruction = ProgramInstruction::unpack(_instruction_data)?;
 
     match instruction {
-
         // 0: InitializeCounter
         ProgramInstruction::InitializeCounter => {
             msg!("Instruction: InitializeCounter");
@@ -65,39 +66,38 @@ pub fn process_instruction(
             msg!("Instruction: Undelegate");
             process_undelegate(program_id, accounts, pda_seeds)
         }
-      
     }
 }
 
-
-pub fn process_initialize_counter(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
-) -> ProgramResult {
+pub fn process_initialize_counter(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     // Iterating accounts
     let accounts_iter = &mut accounts.iter();
     let initializer_account = next_account_info(accounts_iter)?;
     let counter_account = next_account_info(accounts_iter)?;
     let system_program = next_account_info(accounts_iter)?;
 
+    // Check to ensure that you're using the right PDA
     let (counter_pda, bump_seed) = Pubkey::find_program_address(
         &[b"counter_account", initializer_account.key.as_ref()],
         program_id,
     );
-
-    // Check to ensure that you're using the right PDA
     if counter_pda != *counter_account.key {
         msg!("Invalid seeds for PDA");
         return Err(ProgramError::InvalidArgument);
     }
 
-    // Get and borrow lamports from greeting account
+    // Create account if the PDA account does not exist
+    // If the account already exists, we can skip the creation step
+    // and just update the count to 0
     let borrowed_lamports = counter_account.try_borrow_lamports().unwrap();
-
     if *borrowed_lamports == &mut 0 {
         let rent = Rent::get()?;
         let rent_lamports = rent.minimum_balance(Counter::SIZE);
-        msg!("Initializing counter account {} with {} lamports", counter_pda, rent_lamports);
+        msg!(
+            "Initializing counter account {} with {} lamports",
+            counter_pda,
+            rent_lamports
+        );
         drop(borrowed_lamports);
         invoke_signed(
             &system_instruction::create_account(
@@ -112,12 +112,19 @@ pub fn process_initialize_counter(
                 counter_account.clone(),
                 system_program.clone(),
             ],
-            &[&[b"counter_account", initializer_account.key.as_ref(), &[bump_seed]]],
+            &[&[
+                b"counter_account",
+                initializer_account.key.as_ref(),
+                &[bump_seed],
+            ]],
         )?;
-        msg!("Counter account {} created with its owner {}", counter_pda, counter_account.owner);
-    } 
+        msg!(
+            "Counter account {} created with its owner {}",
+            counter_pda,
+            counter_account.owner
+        );
+    }
 
-    // Set count to 0
     let mut counter_data = Counter::try_from_slice(&counter_account.data.borrow())?;
     msg!("Set count to 0");
     counter_data.count = 0;
@@ -129,7 +136,7 @@ pub fn process_initialize_counter(
 pub fn process_increase_counter(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    increase_by: u64
+    increase_by: u64,
 ) -> ProgramResult {
     // Iterating accounts
     let accounts_iter = &mut accounts.iter();
@@ -137,42 +144,27 @@ pub fn process_increase_counter(
     let counter_account = next_account_info(accounts_iter)?;
     let _system_program = next_account_info(accounts_iter)?;
 
+    // Check to ensure that you're using the right PDA derived from initializer account
     let (counter_pda, _bump_seed) = Pubkey::find_program_address(
         &[b"counter_account", initializer_account.key.as_ref()],
         program_id,
     );
-
-    // Check to ensure that you're using the right PDA
     if counter_pda != *counter_account.key {
         msg!("Invalid seeds for PDA");
         return Err(ProgramError::InvalidArgument);
     }
 
-    // The account must be owned by the program in order to modify its data
-    if counter_account.owner != program_id {
-        msg!("Counter account owner: {} does not have the correct program id {}", counter_account.owner, program_id);
-        return Err(ProgramError::IncorrectProgramId);
-    }
-
-    // Increment
+    // Increment by increase_by amount using deserialization and serialization
     let mut counter_data = Counter::try_from_slice(&counter_account.data.borrow())?;
     msg!("Increase count");
     counter_data.count += increase_by;
     counter_data.serialize(&mut &mut counter_account.data.borrow_mut()[..])?;
-    msg!(
-        "PDA {} count: {}",
-        counter_account.key,
-        counter_data.count
-    );
+    msg!("PDA {} count: {}", counter_account.key, counter_data.count);
 
     Ok(())
 }
 
-pub fn process_delegate(
-    _program_id: &Pubkey,
-    accounts: &[AccountInfo],
-) -> ProgramResult {
-
+pub fn process_delegate(_program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     // Get accounts
     let account_info_iter = &mut accounts.iter();
     let initializer = next_account_info(account_info_iter)?;
@@ -183,7 +175,7 @@ pub fn process_delegate(
     let delegation_record = next_account_info(account_info_iter)?;
     let delegation_metadata = next_account_info(account_info_iter)?;
     let delegation_program = next_account_info(account_info_iter)?;
-    
+
     // Prepare counter pda seeds
     let seed_1 = b"counter_account";
     let seed_2 = initializer.key.as_ref();
@@ -210,12 +202,10 @@ pub fn process_delegate(
     Ok(())
 }
 
-
-
 pub fn process_undelegate(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    pda_seeds: Vec<Vec<u8>>
+    pda_seeds: Vec<Vec<u8>>,
 ) -> ProgramResult {
     // Get accounts
     let account_info_iter = &mut accounts.iter();
@@ -237,10 +227,7 @@ pub fn process_undelegate(
     Ok(())
 }
 
-pub fn process_commit(
-    _program_id: &Pubkey,
-    accounts: &[AccountInfo],
-) -> ProgramResult {
+pub fn process_commit(_program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     // Get accounts
     let account_info_iter = &mut accounts.iter();
     let initializer = next_account_info(account_info_iter)?;
@@ -280,7 +267,7 @@ pub fn process_commit_and_undelegate(
         msg!("Initializer {} should be the signer", initializer.key);
         return Err(ProgramError::MissingRequiredSignature);
     }
-    
+
     // Commit and undelegate counter_account on ER
     commit_and_undelegate_accounts(
         initializer,

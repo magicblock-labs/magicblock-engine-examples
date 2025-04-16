@@ -1,18 +1,14 @@
 // instruction.rs
-use solana_program::{ program_error::ProgramError };
-use borsh::{BorshDeserialize};
+use borsh::BorshDeserialize;
+use solana_program::program_error::ProgramError;
 
 pub enum ProgramInstruction {
     InitializeCounter,
-    IncreaseCounter {
-        increase_by: u64
-    },
+    IncreaseCounter { increase_by: u64 },
     Delegate,
     CommitAndUndelegate,
     Commit,
-    Undelegate {
-        pda_seeds: Vec<Vec<u8>>
-    }
+    Undelegate { pda_seeds: Vec<Vec<u8>> },
 }
 
 #[derive(BorshDeserialize)]
@@ -28,26 +24,23 @@ impl ProgramInstruction {
         }
 
         // Extract the first 8 bytes as variant
-        let (variant_bytes, rest) = input.split_at(8);
-        let mut variant = [0u8; 8];
-        variant.copy_from_slice(variant_bytes);
+        let (ix_discriminator, rest) = input.split_at(8);
 
-        Ok(match variant {
+        // Match instruction discriminator with process and deserialize payload
+        Ok(match ix_discriminator {
             [0, 0, 0, 0, 0, 0, 0, 0] => Self::InitializeCounter,
             [1, 0, 0, 0, 0, 0, 0, 0] => {
                 let payload = IncreaseCounterPayload::try_from_slice(rest)?;
                 Self::IncreaseCounter {
                     increase_by: payload.increase_by,
                 }
-            },
+            }
             [2, 0, 0, 0, 0, 0, 0, 0] => Self::Delegate,
             [3, 0, 0, 0, 0, 0, 0, 0] => Self::CommitAndUndelegate,
             [4, 0, 0, 0, 0, 0, 0, 0] => Self::Commit,
-            [196, 28, 41, 206, 48, 37, 51, 167] => { 
+            [196, 28, 41, 206, 48, 37, 51, 167] => {
                 let pda_seeds: Vec<Vec<u8>> = Vec::<Vec<u8>>::try_from_slice(rest)?;
-                Self::Undelegate {
-                    pda_seeds
-                }
+                Self::Undelegate { pda_seeds }
             }
             _ => return Err(ProgramError::InvalidInstructionData),
         })

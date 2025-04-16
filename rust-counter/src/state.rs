@@ -9,4 +9,3 @@ pub struct Counter {
 impl Counter {
     pub const SIZE: usize = 8;
 }
-
