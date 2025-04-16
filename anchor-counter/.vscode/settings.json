@@ -1,5 +1,8 @@
 {
   "workbench.colorTheme": "GitHub Dark Default",
   "editor.fontSize": 14,
-  "terminal.integrated.fontSize": 13
+  "terminal.integrated.fontSize": 13,
+  "gitpod.openFiles": [
+    "anchor-counter/src/lib.rs"
+  ]
 }

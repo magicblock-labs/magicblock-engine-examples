@@ -8,7 +8,6 @@ tasks:
       cd anchor-counter
       solana-keygen new --no-bip39-passphrase --silent --force
       solana config set --url localhost
-      npm install -g @coral-xyz/anchor-cli
     command: |
       cd anchor-counter
       anchor build
@@ -17,6 +16,9 @@ vscode:
   extensions:
     - rust-lang.rust-analyzer
     - tamasfe.even-better-toml
+
+openFiles:
+  - anchor-counter/src/lib.rs
 
 ports:
   - port: 8899
