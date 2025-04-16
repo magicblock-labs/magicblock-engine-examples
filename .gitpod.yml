@@ -6,8 +6,6 @@ tasks:
   - name: Setup Environment
     init: |
       cd anchor-counter
-      rustup update stable
-      rustup component add rustfmt clippy
       solana-keygen new --no-bip39-passphrase --silent --force
       solana config set --url localhost
       npm install -g @coral-xyz/anchor-cli
