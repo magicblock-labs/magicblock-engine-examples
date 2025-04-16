@@ -3,6 +3,6 @@
   "editor.fontSize": 14,
   "terminal.integrated.fontSize": 13,
   "gitpod.openFiles": [
-    "anchor-counter/src/lib.rs"
+    "programs/anchor-counter/src/lib.rs"
   ]
 }

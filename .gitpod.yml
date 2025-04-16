@@ -9,7 +9,6 @@ tasks:
       solana-keygen new --no-bip39-passphrase --silent --force
       solana config set --url localhost
     command: |
-      cd anchor-counter
       anchor build
 
 vscode:
