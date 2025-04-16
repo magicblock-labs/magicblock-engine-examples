@@ -2,8 +2,10 @@
 FROM gitpod/workspace-full
 
 # Install Solana CLI
-RUN sh -c "$(curl -sSfL https://release.anza.xyz/v2.2.1/install)" && \
+RUN sh -c "$(curl -sSfL https://release.anza.xyz/v2.2.2/install)" && \
     echo 'export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"' >> /home/gitpod/.bashrc
+
+RUN rustup update
 
 ENV PATH="/home/gitpod/.local/share/solana/install/active_release/bin:${PATH}"
 
