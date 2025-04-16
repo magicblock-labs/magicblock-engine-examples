@@ -1,0 +1,37 @@
+# anchor-counter/.gitpod.yml
+image:
+  file: .gitpod.Dockerfile
+
+tasks:
+  - name: Setup Environment
+    init: |
+      cd anchor-counter
+      rustup update stable
+      rustup component add rustfmt clippy
+      solana-keygen new --no-bip39-passphrase --silent --force
+      solana config set --url localhost
+      npm install -g @coral-xyz/anchor-cli
+    command: |
+      cd anchor-counter
+      solana-test-validator --reset &
+      sleep 5
+      anchor build
+
+ports:
+  - port: 8899
+    onOpen: ignore
+  - port: 8900
+    onOpen: ignore
+  - port: 24678
+    onOpen: ignore
+
+vscode:
+  workspaceFolders:
+    - path: anchor-counter
+
+github:
+  prebuilds:
+    master: true
+    branches: true
+    pullRequests: true
+    addCheck: true
