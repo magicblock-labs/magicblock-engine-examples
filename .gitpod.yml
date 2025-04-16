@@ -22,16 +22,3 @@ ports:
     onOpen: ignore
   - port: 8900
     onOpen: ignore
-  - port: 24678
-    onOpen: ignore
-
-vscode:
-  workspaceFolders:
-    - path: anchor-counter
-
-github:
-  prebuilds:
-    master: true
-    branches: true
-    pullRequests: true
-    addCheck: true
