@@ -17,9 +17,6 @@ vscode:
     - rust-lang.rust-analyzer
     - tamasfe.even-better-toml
 
-openFiles:
-  - anchor-counter/src/lib.rs
-
 ports:
   - port: 8899
     onOpen: ignore
