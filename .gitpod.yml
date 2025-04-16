@@ -15,6 +15,11 @@ tasks:
       cd anchor-counter
       anchor build
 
+vscode:
+  extensions:
+    - rust-lang.rust-analyzer
+    - tamasfe.even-better-toml
+
 ports:
   - port: 8899
     onOpen: ignore
