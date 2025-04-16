@@ -1,0 +1,30 @@
+# anchor-counter/.gitpod.yml
+image:
+  file: .gitpod.Dockerfile
+
+tasks:
+  - name: Setup Environment
+    init: |
+      cd anchor-counter
+      solana-keygen new --no-bip39-passphrase --silent --force
+      solana config set --url localhost
+    command: |
+      anchor build
+
+vscode:
+  extensions:
+    - rust-lang.rust-analyzer
+    - tamasfe.even-better-toml
+
+ports:
+  - port: 8899
+    onOpen: ignore
+  - port: 8900
+    onOpen: ignore
+
+github:
+  prebuilds:
+    master: true
+    branches: true
+    pullRequests: true
+    addCheck: true
