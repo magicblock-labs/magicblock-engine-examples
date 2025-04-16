@@ -13,8 +13,6 @@ tasks:
       npm install -g @coral-xyz/anchor-cli
     command: |
       cd anchor-counter
-      solana-test-validator --reset &
-      sleep 5
       anchor build
 
 ports:
