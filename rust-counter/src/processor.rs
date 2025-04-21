@@ -24,12 +24,10 @@ pub fn process_instruction(
     accounts: &[AccountInfo],
     _instruction_data: &[u8],
 ) -> ProgramResult {
-    // Unpack instruction discriminator and data
-    // The instruction data is a byte array that contains the instruction discriminator
-    // and the data for the instruction. The instruction discriminator is a unique identifier
-    // for the instruction, and it is used to determine which instruction to execute.
+    // Unpack instruction discriminator and instruction data
     let instruction = ProgramInstruction::unpack(_instruction_data)?;
 
+    // Call the corresponding function
     match instruction {
         // 0: InitializeCounter
         ProgramInstruction::InitializeCounter => {
@@ -86,9 +84,7 @@ pub fn process_initialize_counter(program_id: &Pubkey, accounts: &[AccountInfo])
         return Err(ProgramError::InvalidArgument);
     }
 
-    // Create account if the PDA account does not exist
-    // If the account already exists, we can skip the creation step
-    // and just update the count to 0
+    // Create counter account, if the account already exists, skip the creation step and update the count to 0
     let borrowed_lamports = counter_account.try_borrow_lamports().unwrap();
     if *borrowed_lamports == &mut 0 {
         let rent = Rent::get()?;
@@ -126,9 +122,9 @@ pub fn process_initialize_counter(program_id: &Pubkey, accounts: &[AccountInfo])
     }
 
     let mut counter_data = Counter::try_from_slice(&counter_account.data.borrow())?;
-    msg!("Set count to 0");
     counter_data.count = 0;
     counter_data.serialize(&mut &mut counter_account.data.borrow_mut()[..])?;
+    msg!("PDA {} count: {}", counter_account.key, counter_data.count);
 
     Ok(())
 }
@@ -156,7 +152,6 @@ pub fn process_increase_counter(
 
     // Increment by increase_by amount using deserialization and serialization
     let mut counter_data = Counter::try_from_slice(&counter_account.data.borrow())?;
-    msg!("Increase count");
     counter_data.count += increase_by;
     counter_data.serialize(&mut &mut counter_account.data.borrow_mut()[..])?;
     msg!("PDA {} count: {}", counter_account.key, counter_data.count);

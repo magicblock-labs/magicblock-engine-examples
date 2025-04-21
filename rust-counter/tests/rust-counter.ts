@@ -5,7 +5,7 @@ import * as fs from "fs";
 import { expect } from "chai"; // Use expect for assertions
 import { Suite } from 'mocha'; 
 import { Counter, CounterInstruction, CounterSchema, IncreaseCounterPayload } from "./schema";
-import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 import dotenv from 'dotenv'
 dotenv.config()
@@ -42,6 +42,7 @@ describe("Running tests:", async function (this: Suite) {
     console.log("Counter PDA: ", counterPda.toString())
 
     it("Initialize counter on Solana", async function () {
+        const start = Date.now();
 
         // 1: IncreaseCounter
         // Create, send and confirm transaction
@@ -81,11 +82,13 @@ describe("Running tests:", async function (this: Suite) {
                 commitment: "confirmed"
             }
         ); 
-        console.log("txId:", txHash)
+        const duration = Date.now() - start;
+        console.log(`Base Layer (${duration}ms) txHash: ${txHash}`);
 
     });
 
     it("Increase counter on Solana", async function () {
+        const start = Date.now();
 
         // 1: IncreaseCounter
         // Create, send and confirm transaction
@@ -126,10 +129,12 @@ describe("Running tests:", async function (this: Suite) {
                 commitment: "confirmed"
             }
         ); 
-        console.log("txId:", txHash)
+        const duration = Date.now() - start;
+        console.log(`Base Layer (${duration}ms) txHash: ${txHash}`);
 
     });
     it("Delegate counter to ER", async function () {
+        const start = Date.now();
 
         // 2: Delegate
         // Create, send and confirm transaction
@@ -197,7 +202,8 @@ describe("Running tests:", async function (this: Suite) {
                 commitment: "confirmed"
             }
         ); 
-        console.log("txId:", txHash)
+        const duration = Date.now() - start;
+        console.log(`Base Layer (${duration}ms) txHash: ${txHash}`);
 
     });
     it("Increase counter on ER (1)", async function () {
@@ -242,10 +248,8 @@ describe("Running tests:", async function (this: Suite) {
                 commitment: "confirmed"
             }
         ); 
-        console.log("txId:", txHash)
-
         const duration = Date.now() - start;
-        console.log(`(${duration}ms)`);
+        console.log(`ER (${duration}ms) txHash: ${txHash}`);
 
     });
     it("Commit counter state on ER to Solana", async function () {
@@ -293,11 +297,18 @@ describe("Running tests:", async function (this: Suite) {
                 commitment: "confirmed"
             }
         ); 
-        console.log("txId:", txHash)
-
         const duration = Date.now() - start;
-        console.log(`(${duration}ms)`);
+        console.log(`ER (${duration}ms) txHash: ${txHash}`);
 
+        // Get the commitment signature on the base layer
+        const comfirmCommitStart = Date.now();
+        // Await for the commitment on the base layer
+        const txCommitSgn = await GetCommitmentSignature(
+            txHash,
+            connectionEphemeralRollup
+        );
+        const commitDuration = Date.now() - comfirmCommitStart;
+        console.log(`Base Layer (${commitDuration}ms) txHash: ${txCommitSgn}`);
     });
     it("Increase counter on ER (2)", async function () {
 
@@ -342,10 +353,8 @@ describe("Running tests:", async function (this: Suite) {
                 commitment: "confirmed"
             }
         ); 
-        console.log("txId:", txHash)
-
         const duration = Date.now() - start;
-        console.log(`(${duration}ms)`);
+        console.log(`ER (${duration}ms) txHash: ${txHash}`);
 
     });
     it("Commit and undelegate counter on ER to Solana", async function () {
@@ -394,9 +403,19 @@ describe("Running tests:", async function (this: Suite) {
                 commitment: "confirmed"
             }
         ); 
-        console.log("txId:", txHash)
-
         const duration = Date.now() - start;
-        console.log(`(${duration}ms)`);
-    });
+        console.log(`ER (${duration}ms) txHash: ${txHash}`);
+
+
+
+        // Get the commitment signature on the base layer
+        const comfirmCommitStart = Date.now();
+        // Await for the commitment on the base layer
+        const txCommitSgn = await GetCommitmentSignature(
+            txHash,
+            connectionEphemeralRollup
+        );
+        const commitDuration = Date.now() - comfirmCommitStart;
+        console.log(`Base Layer (${commitDuration}ms) txHash: ${txCommitSgn}`);
+});
   });
