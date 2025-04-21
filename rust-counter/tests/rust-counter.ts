@@ -83,7 +83,7 @@ describe("Running tests:", async function (this: Suite) {
             }
         ); 
         const duration = Date.now() - start;
-        console.log(`Base Layer (${duration}ms) txHash: ${txHash}`);
+        console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
 
     });
 
@@ -130,7 +130,7 @@ describe("Running tests:", async function (this: Suite) {
             }
         ); 
         const duration = Date.now() - start;
-        console.log(`Base Layer (${duration}ms) txHash: ${txHash}`);
+        console.log(`${duration}ms (Base Layer) Increment txHash: ${txHash}`);
 
     });
     it("Delegate counter to ER", async function () {
@@ -203,7 +203,7 @@ describe("Running tests:", async function (this: Suite) {
             }
         ); 
         const duration = Date.now() - start;
-        console.log(`Base Layer (${duration}ms) txHash: ${txHash}`);
+        console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
 
     });
     it("Increase counter on ER (1)", async function () {
@@ -249,7 +249,7 @@ describe("Running tests:", async function (this: Suite) {
             }
         ); 
         const duration = Date.now() - start;
-        console.log(`ER (${duration}ms) txHash: ${txHash}`);
+        console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
 
     });
     it("Commit counter state on ER to Solana", async function () {
@@ -298,7 +298,7 @@ describe("Running tests:", async function (this: Suite) {
             }
         ); 
         const duration = Date.now() - start;
-        console.log(`ER (${duration}ms) txHash: ${txHash}`);
+        console.log(`${duration}ms (ER) Commit txHash: ${txHash}`);
 
         // Get the commitment signature on the base layer
         const comfirmCommitStart = Date.now();
@@ -308,7 +308,7 @@ describe("Running tests:", async function (this: Suite) {
             connectionEphemeralRollup
         );
         const commitDuration = Date.now() - comfirmCommitStart;
-        console.log(`Base Layer (${commitDuration}ms) txHash: ${txCommitSgn}`);
+        console.log(`${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`);
     });
     it("Increase counter on ER (2)", async function () {
 
@@ -354,7 +354,7 @@ describe("Running tests:", async function (this: Suite) {
             }
         ); 
         const duration = Date.now() - start;
-        console.log(`ER (${duration}ms) txHash: ${txHash}`);
+        console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
 
     });
     it("Commit and undelegate counter on ER to Solana", async function () {
@@ -404,7 +404,7 @@ describe("Running tests:", async function (this: Suite) {
             }
         ); 
         const duration = Date.now() - start;
-        console.log(`ER (${duration}ms) txHash: ${txHash}`);
+        console.log(`${duration}ms (ER) Undelegate txHash: ${txHash}`);
 
 
 
@@ -416,6 +416,6 @@ describe("Running tests:", async function (this: Suite) {
             connectionEphemeralRollup
         );
         const commitDuration = Date.now() - comfirmCommitStart;
-        console.log(`Base Layer (${commitDuration}ms) txHash: ${txCommitSgn}`);
+        console.log(`${commitDuration}ms (Base Layer) Undelegate txHash: ${txCommitSgn}`);
 });
   });
