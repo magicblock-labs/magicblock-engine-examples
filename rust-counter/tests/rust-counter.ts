@@ -38,7 +38,7 @@ describe("Running tests:", async function (this: Suite) {
         [Buffer.from("counter_account"), userKeypair.publicKey.toBuffer()],
         PROGRAM_ID
      );
-     console.log("Program ID: ", PROGRAM_ID.toString())
+    console.log("Program ID: ", PROGRAM_ID.toString())
     console.log("Counter PDA: ", counterPda.toString())
 
     it("Initialize counter on Solana", async function () {
