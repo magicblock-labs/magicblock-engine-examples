@@ -138,7 +138,6 @@ pub fn process_increase_counter(
     let accounts_iter = &mut accounts.iter();
     let initializer_account = next_account_info(accounts_iter)?;
     let counter_account = next_account_info(accounts_iter)?;
-    let _system_program = next_account_info(accounts_iter)?;
 
     // Check to ensure that you're using the right PDA derived from initializer account
     let (counter_pda, _bump_seed) = Pubkey::find_program_address(

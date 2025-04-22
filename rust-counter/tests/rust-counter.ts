@@ -105,12 +105,6 @@ describe("Running tests:", async function (this: Suite) {
                 pubkey: counterPda,
                 isSigner: false,
                 isWritable: true,
-            },
-            // System Program
-            {
-                pubkey: web3.SystemProgram.programId,
-                isSigner: false,
-                isWritable: false,
             }
         ]
         const serializedInstructionData =  Buffer.concat([
@@ -224,12 +218,6 @@ describe("Running tests:", async function (this: Suite) {
                 pubkey: counterPda,
                 isSigner: false,
                 isWritable: true,
-            },
-            // System Program
-            {
-                pubkey: web3.SystemProgram.programId,
-                isSigner: false,
-                isWritable: false,
             }
         ]
         const serializedInstructionData =  Buffer.concat([
@@ -329,12 +317,6 @@ describe("Running tests:", async function (this: Suite) {
                 pubkey: counterPda,
                 isSigner: false,
                 isWritable: true,
-            },
-            // System Program
-            {
-                pubkey: web3.SystemProgram.programId,
-                isSigner: false,
-                isWritable: false,
             }
         ]
         const serializedInstructionData =  Buffer.concat([
