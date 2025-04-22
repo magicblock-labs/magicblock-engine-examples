@@ -86,7 +86,6 @@ describe("Running tests:", async function (this: Suite) {
         console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
 
     });
-
     it("Increase counter on Solana", async function () {
         const start = Date.now();
 
