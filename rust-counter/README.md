@@ -6,13 +6,12 @@ Simple counter program using Rust Native and Ephemeral Rollups
 
 This program has utilized the following sofware packages.
 
-| Software   | Version | Installation Guide                                              |
-| ---------- | ------- | --------------------------------------------------------------- |
-| **Solana** | 2.0.21  | [Install Solana](https://docs.anza.xyz/cli/install)             |
-| **Rust**   | 1.82    | [Install Rust](https://www.rust-lang.org/tools/install)         |
-| **Anchor** | 0.30.1  | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
+| Software   | Version | Installation Guide                                      |
+| ---------- | ------- | ------------------------------------------------------- |
+| **Solana** | 2.0.21  | [Install Solana](https://docs.anza.xyz/cli/install)     |
+| **Rust**   | 1.82    | [Install Rust](https://www.rust-lang.org/tools/install) |
 
-```sh
+````sh
 # Check and initialize your Solana version
 agave-install list
 agave-install init 2.0.21
@@ -21,10 +20,6 @@ agave-install init 2.0.21
 rustup show
 rustup install 1.82
 
-# Check and initialize your Anchor version
-avm list
-avm use 0.30.1
-```
 
 ## ✨ Build and Test
 
@@ -33,7 +28,7 @@ Build and deploy the program:
 ```bash
 cargo build-bpf
 solana program deploy target/deploy/rust_counter.so
-```
+````
 
 Add wallet (if not a new keypair will be generated) and RPC endpoints to the file example.env and update filename to .env:
 

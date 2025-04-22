@@ -15,8 +15,8 @@ describe("Running tests:", async function (this: Suite) {
   
     // Get programId from target folder
     const keypairPath = "target/deploy/rust_counter-keypair.json";
-    const secretKey = Uint8Array.from(JSON.parse(fs.readFileSync(keypairPath, "utf8")));
-    const keypair = web3.Keypair.fromSecretKey(secretKey);
+    const secretKeyArray = Uint8Array.from(JSON.parse(fs.readFileSync(keypairPath, "utf8")));
+    const keypair = web3.Keypair.fromSecretKey(secretKeyArray);
     const PROGRAM_ID = keypair.publicKey;
   
     // Set up a connection to blockchain cluster
