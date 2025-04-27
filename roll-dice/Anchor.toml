@@ -5,8 +5,13 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
+[programs.devnet]
+rool_dice = "8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP"
+roll-dice-delegated = "8QudyDCGXZw8jJnV7zAm5Fsr1Suztg6Nu5YCgAf2fuWj"
+
 [programs.localnet]
 rool_dice = "8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP"
+roll-dice-delegated = "8QudyDCGXZw8jJnV7zAm5Fsr1Suztg6Nu5YCgAf2fuWj"
 
 [registry]
 url = "https://api.apr.dev"

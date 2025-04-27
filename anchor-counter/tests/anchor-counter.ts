@@ -171,4 +171,11 @@ describe("anchor-counter", () => {
     const counterAccount = await ephemeralProgram.account.counter.fetch(pda);
     console.log("Counter: ", counterAccount.count.toString());
   });
+
+  it("Delegate the player PDA", async () => {
+    const tx = await program.methods
+        .delegate()
+        .rpc()
+    console.log("Delegate transaction signature", tx);
+  });
 });
