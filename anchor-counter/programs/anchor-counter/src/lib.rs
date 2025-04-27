@@ -31,13 +31,11 @@ pub mod anchor_counter {
 
     /// Delegate the account to the delegation program
     pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
-
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
             &[TEST_PDA_SEED],
             DelegateConfig::default(),
         )?;
-
         Ok(())
     }
 
