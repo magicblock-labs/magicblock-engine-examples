@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("6AfF3o9bMCaJuCV4oRu2yHunpiWYsYqivr7rYPNycYdf");
+declare_id!("852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 
@@ -16,7 +16,6 @@ pub mod anchor_counter {
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count = 0;
-        msg!("PDA {} count: {}", counter.key(), counter.count);
         Ok(())
     }
 
@@ -27,7 +26,6 @@ pub mod anchor_counter {
         if counter.count > 1000 {
             counter.count = 0;
         }
-        msg!("PDA {} count: {}", counter.key(), counter.count);
         Ok(())
     }
 
@@ -37,17 +35,6 @@ pub mod anchor_counter {
             &ctx.accounts.payer,
             &[TEST_PDA_SEED],
             DelegateConfig::default(),
-        )?;
-        Ok(())
-    }
-
-    /// Manual commit the account in the ER.
-    pub fn commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
-        commit_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
         )?;
         Ok(())
     }
@@ -67,7 +54,6 @@ pub mod anchor_counter {
     pub fn increment_and_commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
-        msg!("PDA {} count: {}", counter.key(), counter.count);
         commit_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.counter.to_account_info()],
@@ -81,7 +67,6 @@ pub mod anchor_counter {
     pub fn increment_and_undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
-        msg!("PDA {} count: {}", counter.key(), counter.count);
         // Serialize the Anchor counter account, commit and undelegate
         counter.exit(&crate::ID)?;
         commit_and_undelegate_accounts(
@@ -96,7 +81,7 @@ pub mod anchor_counter {
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init_if_needed, payer = user, space = 8 + 8, seeds = [TEST_PDA_SEED], bump)]
+    #[account(init, payer = user, space = 8 + 8, seeds = [TEST_PDA_SEED], bump)]
     pub counter: Account<'info, Counter>,
     #[account(mut)]
     pub user: Signer<'info>,

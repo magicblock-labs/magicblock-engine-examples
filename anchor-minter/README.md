@@ -1,6 +1,6 @@
-# ➕ Anchor Counter
+# ➕ Anchor Minter with Counter
 
-Simple counter program using Anchor and Ephemeral Rollups.
+Simple minter and counter program using Anchor and Ephemeral Rollups.
 
 ## Software Packages
 

@@ -6,9 +6,11 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
+anchor_counter = "852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr"
 token-minter = "HfPTAU1bZBHPqcpEGweinAH9zsPafYnnaxk4k5xsTU3M"
 
 [programs.localnet]
+anchor_counter = "852a53jomx7dGmkpbFPGXNJymRxywo3WsH1vusNASJRr"
 token-minter = "HfPTAU1bZBHPqcpEGweinAH9zsPafYnnaxk4k5xsTU3M"
 
 
