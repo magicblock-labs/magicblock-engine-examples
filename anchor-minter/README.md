@@ -1,6 +1,6 @@
 # ➕ Anchor Minter Program
 
-Simple token minter program mints tokens while reading delegated counter state.
+Simple token minter program mints tokens while reading delegated counter account state.
 
 ## Software Packages
 

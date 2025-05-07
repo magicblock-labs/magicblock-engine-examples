@@ -69,7 +69,7 @@ describe("NFT Minter", () => {
     // Fetch the transaction info to get the program logs.
     const txInfo = await provider.connection.getTransaction(transactionSignature, {
       commitment: "confirmed",
-      maxSupportedTransactionVersion: 2,
+      maxSupportedTransactionVersion: 1,
     });
     console.log("Program Logs:");
     console.log(txInfo?.meta?.logMessages?.join("\n"));
