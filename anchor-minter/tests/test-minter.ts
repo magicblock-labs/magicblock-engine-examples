@@ -65,5 +65,13 @@ describe("NFT Minter", () => {
       `   Associated Token Account Address: ${associatedTokenAccountAddress}`
     );
     console.log(`   Transaction Signature: ${transactionSignature}`);
+
+    // Fetch the transaction info to get the program logs.
+    const txInfo = await provider.connection.getTransaction(transactionSignature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 2,
+    });
+    console.log("Program Logs:");
+    console.log(txInfo?.meta?.logMessages?.join("\n"));
   });
 });

@@ -1,4 +1,4 @@
-use anchor_counter::Counter;
+use crate::Counter;
 use {
     anchor_lang::prelude::*,
     anchor_spl::{

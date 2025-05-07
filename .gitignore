@@ -13,3 +13,6 @@
 !/bolt-counter/target/deploy/counter-keypair.json
 !/bolt-counter/target/deploy/increase-keypair.json
 
+# But don't ignore the target/idl/ directory
+!**/anchor-minter/target/idl/
+!**/anchor-minter/target/deploy/

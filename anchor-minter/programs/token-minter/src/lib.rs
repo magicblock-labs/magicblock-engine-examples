@@ -21,3 +21,8 @@ pub mod token_minter {
         mint::mint_token(ctx, amount)
     }
 }
+
+#[account]
+pub struct Counter {
+    pub count: u64,
+}
