@@ -59,7 +59,19 @@ pub fn process_instruction(
             process_commit(program_id, accounts)
         }
 
-        // 5: Undelegate
+        // 5: IncrementAndCommit
+        ProgramInstruction::IncrementAndCommit { increase_by } => {
+            msg!("Instruction: IncrementAndCommit");
+            process_increment_commit(program_id, accounts, increase_by)
+        }
+
+        // 6: IncrementAndUndelegate
+        ProgramInstruction::IncrementAndUndelegate { increase_by } => {
+            msg!("Instruction: IncrementAndUndelegate");
+            process_increment_undelegate(program_id, accounts, increase_by)
+        }
+
+        // 7: Undelegate
         ProgramInstruction::Undelegate { pda_seeds } => {
             msg!("Instruction: Undelegate");
             process_undelegate(program_id, accounts, pda_seeds)
@@ -263,6 +275,90 @@ pub fn process_commit_and_undelegate(
     }
 
     // Commit and undelegate counter_account on ER
+    commit_and_undelegate_accounts(
+        initializer,
+        vec![counter_account],
+        magic_context,
+        magic_program,
+    )?;
+
+    Ok(())
+}
+
+pub fn process_increment_commit(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    increase_by: u64,
+) -> ProgramResult {
+    // Get accounts
+    let account_info_iter = &mut accounts.iter();
+    let initializer = next_account_info(account_info_iter)?;
+    let counter_account = next_account_info(account_info_iter)?;
+    let magic_program = next_account_info(account_info_iter)?;
+    let magic_context = next_account_info(account_info_iter)?;
+
+    // Check to ensure that you're using the right PDA derived from initializer account
+    let (counter_pda, _bump_seed) =
+        Pubkey::find_program_address(&[b"counter_account", initializer.key.as_ref()], program_id);
+    if counter_pda != *counter_account.key {
+        msg!("Invalid seeds for PDA");
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    // Increment by increase_by amount using deserialization and serialization
+    let mut counter_data = Counter::try_from_slice(&counter_account.data.borrow())?;
+    counter_data.count += increase_by;
+    counter_data.serialize(&mut &mut counter_account.data.borrow_mut()[..])?;
+    msg!("PDA {} count: {}", counter_account.key, counter_data.count);
+
+    // Signer should be the same as the initializer
+    if !initializer.is_signer {
+        msg!("Initializer {} should be the signer", initializer.key);
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    commit_accounts(
+        initializer,
+        vec![counter_account],
+        magic_context,
+        magic_program,
+    )?;
+
+    Ok(())
+}
+
+pub fn process_increment_undelegate(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    increase_by: u64,
+) -> ProgramResult {
+    // Get accounts
+    let account_info_iter = &mut accounts.iter();
+    let initializer = next_account_info(account_info_iter)?;
+    let counter_account = next_account_info(account_info_iter)?;
+    let magic_program = next_account_info(account_info_iter)?;
+    let magic_context = next_account_info(account_info_iter)?;
+
+    // Check to ensure that you're using the right PDA derived from initializer account
+    let (counter_pda, _bump_seed) =
+        Pubkey::find_program_address(&[b"counter_account", initializer.key.as_ref()], program_id);
+    if counter_pda != *counter_account.key {
+        msg!("Invalid seeds for PDA");
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    // Increment by increase_by amount using deserialization and serialization
+    let mut counter_data = Counter::try_from_slice(&counter_account.data.borrow())?;
+    counter_data.count += increase_by;
+    counter_data.serialize(&mut &mut counter_account.data.borrow_mut()[..])?;
+    msg!("PDA {} count: {}", counter_account.key, counter_data.count);
+
+    // Signer should be the same as the initializer
+    if !initializer.is_signer {
+        msg!("Initializer {} should be the signer", initializer.key);
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
     commit_and_undelegate_accounts(
         initializer,
         vec![counter_account],

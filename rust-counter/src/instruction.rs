@@ -9,6 +9,8 @@ pub enum ProgramInstruction {
     CommitAndUndelegate,
     Commit,
     Undelegate { pda_seeds: Vec<Vec<u8>> },
+    IncrementAndCommit { increase_by: u64 },
+    IncrementAndUndelegate { increase_by: u64 },
 }
 
 #[derive(BorshDeserialize)]
@@ -38,6 +40,18 @@ impl ProgramInstruction {
             [2, 0, 0, 0, 0, 0, 0, 0] => Self::Delegate,
             [3, 0, 0, 0, 0, 0, 0, 0] => Self::CommitAndUndelegate,
             [4, 0, 0, 0, 0, 0, 0, 0] => Self::Commit,
+            [5, 0, 0, 0, 0, 0, 0, 0] => {
+                let payload = IncreaseCounterPayload::try_from_slice(rest)?;
+                Self::IncrementAndCommit {
+                    increase_by: payload.increase_by,
+                }
+            }
+            [6, 0, 0, 0, 0, 0, 0, 0] => {
+                let payload = IncreaseCounterPayload::try_from_slice(rest)?;
+                Self::IncrementAndUndelegate {
+                    increase_by: payload.increase_by,
+                }
+            }
             [196, 28, 41, 206, 48, 37, 51, 167] => {
                 let pda_seeds: Vec<Vec<u8>> = Vec::<Vec<u8>>::try_from_slice(rest)?;
                 Self::Undelegate { pda_seeds }
