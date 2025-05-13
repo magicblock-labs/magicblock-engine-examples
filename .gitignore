@@ -15,4 +15,5 @@
 
 # But don't ignore the target/idl/ directory
 !**/anchor-minter/target/idl/
+!**/anchor-counter/target/idl/
 !**/anchor-minter/target/deploy/
