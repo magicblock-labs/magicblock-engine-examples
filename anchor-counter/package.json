@@ -8,8 +8,6 @@
     "@magicblock-labs/ephemeral-rollups-sdk": "^0.2.4"
   },
   "devDependencies": {
-    "@metaplex-foundation/beet": "^0.7.2",
-    "@solana/spl-token": "^0.4.8",
     "@types/bn.js": "^5.1.0",
     "@types/chai": "^5.2.2",
     "@types/mocha": "^10.0.10",

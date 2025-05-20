@@ -26,7 +26,7 @@ rustup install 1.82
 Build and deploy the program:
 
 ```bash
-cargo build-bpf
+cargo build-sbf
 solana program deploy target/deploy/rust_counter.so
 ````
 

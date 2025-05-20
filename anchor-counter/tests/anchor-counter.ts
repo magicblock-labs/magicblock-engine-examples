@@ -270,12 +270,15 @@ describe("anchor-counter-increment-commit-atomic", () => {
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Increment And Commit txHash: ${txHash}`);
 
+    // Get the commitment signature on the base layer
+    const comfirmCommitStart = Date.now();
     // Await for the commitment on the base layer
     const txCommitSgn = await GetCommitmentSignature(
       txHash,
       providerEphemeralRollup.connection
     );
-    console.log("Account commit signature:", txCommitSgn);
+    const commitDuration = Date.now() - comfirmCommitStart;
+    console.log(`${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`);
   });
 
   it("Increase the delegate counter and undelegate through CPI", async () => {
