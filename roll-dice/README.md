@@ -40,6 +40,12 @@ Build the program:
 anchor build
 ```
 
+Install dependencies
+
+```bash
+yarn
+```
+
 Run the tests:
 
 ```bash
