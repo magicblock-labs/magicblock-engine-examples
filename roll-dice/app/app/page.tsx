@@ -26,6 +26,7 @@ interface CharacterStats {
   dex: number;
   class: string;
   image: string;
+  txId?: string;  // Add transaction ID to track
 }
 
 export default function CharacterGenerator() {
@@ -36,12 +37,14 @@ export default function CharacterGenerator() {
     class: "",
     image: "/placeholder.jpg"
   })
+  const [characterHistory, setCharacterHistory] = useState<CharacterStats[]>([])
   const [isRolling, setIsRolling] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
   const [key, setKey] = useState(0)
   const programRef = useRef<anchor.Program | null>(null)
   const subscriptionIdRef = useRef<number | null>(null)
   const rollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const currentTxIdRef = useRef<string | null>(null)
   const { toast } = useToast()
 
   // Clear the rolling animation interval
@@ -139,13 +142,30 @@ export default function CharacterGenerator() {
           (accountInfo) => {
             const player = program.coder.accounts.decode("player", accountInfo.data)
             console.log("Player account changed:", player)
-            setCharacter({
+            const newCharacter: CharacterStats = {
               atk: player.atk,
               def: player.def,
               dex: player.dex,
               class: CHARACTER_CLASSES[player.characterClass].name,
-              image: CHARACTER_CLASSES[player.characterClass].image
-            })
+              image: CHARACTER_CLASSES[player.characterClass].image,
+              txId: currentTxIdRef.current || undefined
+            }
+            setCharacter(newCharacter)
+            
+            // Only add to history if we have a transaction ID and it's not already in history
+            if (currentTxIdRef.current) {
+              setCharacterHistory(prev => {
+                // Check if this transaction ID is already in history
+                const isDuplicate = prev.some(char => char.txId === currentTxIdRef.current);
+                if (isDuplicate) {
+                  return prev;
+                }
+                return [newCharacter, ...prev];
+              });
+              // Clear the transaction ID after using it
+              currentTxIdRef.current = null;
+            }
+            
             setIsRolling(false)
             clearRollInterval()
           },
@@ -244,10 +264,12 @@ export default function CharacterGenerator() {
 
     if (programRef.current) {
       try {
-        // Generate a random number between 1-100
         const roll = Math.floor(Math.random() * 100) + 1;
         const tx = await programRef.current.methods.rollDice(roll).rpc()
         console.log("Character rolled on-chain with tx:", tx)
+
+        // Store the transaction ID in the ref
+        currentTxIdRef.current = tx;
 
         toast({
           title: "Character Generated",
@@ -296,12 +318,12 @@ export default function CharacterGenerator() {
   }, [isRolling, isInitialized, toast])
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100">
-      <div className="absolute top-4 right-4 z-10">
+    <div className="flex min-h-screen bg-gray-100">
+      <div className="absolute top-4 left-4 z-10">
         <SolanaAddress onBalanceChange={handleBalanceChange} />
       </div>
 
-      <div className="flex flex-col items-center justify-center flex-grow">
+      <div className="flex flex-col items-center justify-center flex-grow p-8">
         <h1 className="text-3xl font-bold mb-8">Character Generator</h1>
         
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
@@ -339,6 +361,55 @@ export default function CharacterGenerator() {
           >
             {isRolling ? "Generating..." : !isInitialized ? "Initializing..." : "Generate Character"}
           </button>
+
+          <button
+            disabled
+            className="w-full px-6 py-3 mt-3 bg-gray-200 text-gray-500 rounded-lg font-medium shadow-md cursor-not-allowed transition-colors"
+          >
+            Mint (Coming Soon)
+          </button>
+        </div>
+      </div>
+
+      {/* Character History Column */}
+      <div className="w-80 bg-white shadow-lg p-4 overflow-y-auto max-h-screen">
+        <h2 className="text-xl font-bold mb-4">Character History</h2>
+        <div className="space-y-4">
+          {characterHistory.map((char, index) => (
+            <div key={index} className="bg-gray-50 rounded-lg p-4 shadow">
+              <div className="flex items-center space-x-4">
+                <div className="relative w-16 h-16">
+                  <Image
+                    src={char.image || "/placeholder.jpg"}
+                    alt={char.class}
+                    fill
+                    className="object-contain rounded"
+                  />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold">{char.class}</h3>
+                  <div className="flex space-x-2 mt-2">
+                    <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm">ATK: {char.atk}</span>
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">DEF: {char.def}</span>
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm">DEX: {char.dex}</span>
+                  </div>
+                  {char.txId && (
+                    <a
+                      href={`https://explorer.solana.com/tx/${char.txId}?cluster=devnet`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center mt-2 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      View on Explorer
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
