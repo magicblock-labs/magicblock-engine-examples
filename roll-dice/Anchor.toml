@@ -6,12 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-rool_dice = "8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP"
-roll-dice-delegated = "8QudyDCGXZw8jJnV7zAm5Fsr1Suztg6Nu5YCgAf2fuWj"
+rool_dice = "5AUHCWm4TzipCWK9H3EKx9JNccEA3rfNSUp4BCy2Zy2f"
 
 [programs.localnet]
-rool_dice = "8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP"
-roll-dice-delegated = "8QudyDCGXZw8jJnV7zAm5Fsr1Suztg6Nu5YCgAf2fuWj"
+rool_dice = "5AUHCWm4TzipCWK9H3EKx9JNccEA3rfNSUp4BCy2Zy2f"
 
 [registry]
 url = "https://api.apr.dev"

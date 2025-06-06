@@ -3,7 +3,7 @@ use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-declare_id!("8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP");
+declare_id!("5AUHCWm4TzipCWK9H3EKx9JNccEA3rfNSUp4BCy2Zy2f");
 
 pub const PLAYER: &[u8] = b"playerd";
 
@@ -44,10 +44,38 @@ pub mod random_dice {
         ctx: Context<CallbackRollDiceCtx>,
         randomness: [u8; 32],
     ) -> Result<()> {
-        let rnd_u8 = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 6);
-        msg!("Consuming random number: {:?}", rnd_u8);
+        let roll = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 101);
+        msg!("Roll: {}", roll);
+
+        // Determine character class based on roll
+        let (class, class_name) = if roll <= 40 {
+            (0, "Warrior")
+        } else if roll <= 70 {
+            (1, "Mage")
+        } else if roll <= 90 {
+            (2, "Rogue")
+        } else {
+            (3, "Paladin")
+        };
+
+        // Generate a random u32 and use modulo to get a 6-digit number
+        let stats_roll = ephemeral_vrf_sdk::rnd::random_u32(&randomness) % 900000 + 100000;
+        msg!("Stats roll: {}", stats_roll);
+
+        // Split the 6-digit number into three 2-digit numbers
+        let atk = ((stats_roll / 10000) % 100) as u8;
+        let def = ((stats_roll / 100) % 100) as u8;
+        let dex = (stats_roll % 100) as u8;
+
+        // Log character details
+        msg!("Class: {}, ATK: {}, DEF: {}, DEX: {}", class_name, atk, def, dex);
+
         let player = &mut ctx.accounts.player;
-        player.last_result = rnd_u8; // Update the player's last result
+        player.last_result = roll;
+        player.character_class = class;
+        player.atk = atk;
+        player.def = def;
+        player.dex = dex;
         Ok(())
     }
 }
@@ -56,7 +84,7 @@ pub mod random_dice {
 pub struct Initialize<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(init_if_needed, payer = payer, space = 8 + 1, seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
+    #[account(init_if_needed, payer = payer, space = 8 + 5, seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
     pub player: Account<'info, Player>,
     pub system_program: Program<'info, System>,
 }
@@ -86,4 +114,8 @@ pub struct CallbackRollDiceCtx<'info> {
 #[account]
 pub struct Player {
     pub last_result: u8,
+    pub character_class: u8,
+    pub atk: u8,
+    pub def: u8,
+    pub dex: u8,
 }
