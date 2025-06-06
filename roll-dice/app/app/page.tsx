@@ -13,10 +13,10 @@ const PROGRAM_ID = new anchor.web3.PublicKey("5AUHCWm4TzipCWK9H3EKx9JNccEA3rfNSU
 
 // Character classes with their probabilities (must sum to 100)
 const CHARACTER_CLASSES = [
-  { name: "Warrior", probability: 30, image: "/images/classes/warrior.gif" },
-  { name: "Mage", probability: 30, image: "/images/classes/mage.gif" },
-  { name: "Archer", probability: 30, image: "/images/classes/archer.gif", scale: 3},
-  { name: "Priest", probability: 10, image: "/images/classes/priest.gif" },
+  { name: "Warrior", probability: 32, image: "/images/classes/warrior.gif" },
+  { name: "Mage", probability: 32, image: "/images/classes/mage.gif" },
+  { name: "Archer", probability: 32, image: "/images/classes/archer.gif", scale: 3},
+  { name: "Priest", probability: 4, image: "/images/classes/priest.gif" },
 ]
 
 interface CharacterStats {
@@ -59,6 +59,8 @@ export default function CharacterGenerator() {
   const [isRolling, setIsRolling] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
   const [key, setKey] = useState(0)
+  const [hasBalance, setHasBalance] = useState(false)
+  const [isAirdropping, setIsAirdropping] = useState(false)
   const programRef = useRef<anchor.Program | null>(null)
   const subscriptionIdRef = useRef<number | null>(null)
   const rollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -86,6 +88,15 @@ export default function CharacterGenerator() {
       } else {
         keypair = Keypair.generate()
         localStorage.setItem("solanaKeypair", JSON.stringify(Array.from(keypair.secretKey)))
+        
+        // Request airdrop for new keypair
+        try {
+          const signature = await connection.requestAirdrop(keypair.publicKey, 2 * anchor.web3.LAMPORTS_PER_SOL)
+          await connection.confirmTransaction(signature)
+          console.log("Airdrop successful:", signature)
+        } catch (error) {
+          console.error("Airdrop failed:", error)
+        }
       }
 
       // Create the provider
@@ -217,6 +228,7 @@ export default function CharacterGenerator() {
 
   const handleBalanceChange = useCallback((newBalance: number) => {
     console.log("Balance changed:", newBalance)
+    setHasBalance(newBalance > 0)
 
     // If not initialized, try to initialize again or force component reload
     if (!isInitialized) {
@@ -309,9 +321,69 @@ export default function CharacterGenerator() {
 
   return (
     <div className="flex min-h-screen bg-gray-900">
-      <div className="absolute top-4 left-4 z-10">
+      <div className="absolute top-4 left-4 z-20">
         <SolanaAddress onBalanceChange={handleBalanceChange} />
+        <button
+          onClick={async () => {
+            if (isAirdropping) return
+            setIsAirdropping(true)
+            try {
+              const storedKeypair = localStorage.getItem("solanaKeypair")
+              if (!storedKeypair) return
+              
+              const secretKey = Uint8Array.from(JSON.parse(storedKeypair))
+              const keypair = Keypair.fromSecretKey(secretKey)
+              const connection = new Connection("https://api.devnet.solana.com", "confirmed")
+              
+              console.log("Requesting airdrop for:", keypair.publicKey.toString())
+              const signature = await connection.requestAirdrop(
+                keypair.publicKey,
+                2 * anchor.web3.LAMPORTS_PER_SOL
+              )
+              console.log("Airdrop requested, signature:", signature)
+              
+              const confirmation = await connection.confirmTransaction(signature)
+              if (confirmation.value.err) {
+                throw new Error(`Transaction failed: ${confirmation.value.err}`)
+              }
+              console.log("Airdrop successful:", signature)
+            } catch (error) {
+              console.error("Airdrop failed:", error)
+            } finally {
+              setIsAirdropping(false)
+            }
+          }}
+          disabled={isAirdropping}
+          className={`mt-2 w-full px-3 py-1 text-sm rounded transition-colors flex items-center justify-center ${
+            isAirdropping 
+              ? 'bg-gray-600 cursor-not-allowed' 
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+          }`}
+        >
+          {isAirdropping ? (
+            <>
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Requesting...
+            </>
+          ) : (
+            'Request Airdrop'
+          )}
+        </button>
       </div>
+
+      {!hasBalance && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-90 z-10 flex items-center justify-center">
+          <div className="bg-gray-800 p-8 rounded-lg shadow-lg max-w-md text-center">
+            <h2 className="text-2xl font-bold text-white mb-4">Welcome!</h2>
+            <p className="text-gray-300 mb-6">
+              A local devnet test wallet has been created! Please request airdrop on the top left to add SOL from the faucet.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col items-center justify-center flex-grow p-8">
         <div className="mb-8 text-center">
@@ -336,7 +408,7 @@ export default function CharacterGenerator() {
           </div>
           
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold mb-2 text-white">{character.class}</h2>
+            <h2 className={`text-2xl font-bold mb-2 ${character.class === "Priest" ? "text-orange-400" : "text-white"}`}>{character.class}</h2>
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative border-2 border-gray-600">
                 <div className="relative w-8 h-8 mb-1">
@@ -427,7 +499,7 @@ export default function CharacterGenerator() {
                   />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-white">{char.class}</h3>
+                  <h3 className={`font-semibold ${char.class === "Priest" ? "text-orange-400" : "text-white"}`}>{char.class}</h3>
                   <div className="flex items-center space-x-2 mt-2 font-bold">
                     <div className="flex items-center">
                       <div className="relative w-4 h-4 mr-1">

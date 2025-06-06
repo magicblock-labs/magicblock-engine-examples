@@ -48,14 +48,14 @@ pub mod random_dice {
         msg!("Roll: {}", roll);
 
         // Determine character class based on roll
-        let (class, class_name) = if roll <= 40 {
+        let (class, class_name) = if roll <= 32 {
             (0, "Warrior")
-        } else if roll <= 70 {
+        } else if roll <= 64 {
             (1, "Mage")
-        } else if roll <= 90 {
-            (2, "Rogue")
+        } else if roll <= 96 {
+            (2, "Archer")
         } else {
-            (3, "Paladin")
+            (3, "Priest")
         };
 
         // Generate a random u32 and use modulo to get a 6-digit number
