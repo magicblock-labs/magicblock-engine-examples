@@ -113,21 +113,39 @@ export default function CharacterGenerator() {
       }else{
         const ply = program.coder.accounts.decode("player", account.data)
         console.log("Player account:", playerPk.toBase58(), "lastResult:", ply.lastResult)
-        setCharacter(ply.lastResult)
+        setCharacter({
+          atk: ply.atk,
+          def: ply.def,
+          dex: ply.dex,
+          class: CHARACTER_CLASSES[ply.characterClass].name,
+          image: CHARACTER_CLASSES[ply.characterClass].image
+        })
+      }
+
+      // Clean up existing subscription if it exists
+      if (subscriptionIdRef.current !== null) {
+        try {
+          await connection.removeAccountChangeListener(subscriptionIdRef.current);
+        } catch (error) {
+          console.log("No existing subscription to clean up");
+        }
+        subscriptionIdRef.current = null;
       }
 
       // Subscribe to account changes
-      if (subscriptionIdRef.current !== null) {
-        await connection.removeAccountChangeListener(subscriptionIdRef.current);
-      }
-
       subscriptionIdRef.current = connection.onAccountChange(
           playerPk,
           // @ts-ignore
           (accountInfo) => {
             const player = program.coder.accounts.decode("player", accountInfo.data)
             console.log("Player account changed:", player)
-            setCharacter(player.lastResult)
+            setCharacter({
+              atk: player.atk,
+              def: player.def,
+              dex: player.dex,
+              class: CHARACTER_CLASSES[player.characterClass].name,
+              image: CHARACTER_CLASSES[player.characterClass].image
+            })
             setIsRolling(false)
             clearRollInterval()
           },
@@ -289,8 +307,8 @@ export default function CharacterGenerator() {
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
           <div className="relative w-48 h-48 mx-auto mb-6">
             <Image
-              src={character.image}
-              alt={character.class}
+              src={character.image || "/placeholder.jpg"}
+              alt={character.class || "Character"}
               fill
               className="object-contain"
             />
