@@ -138,7 +138,7 @@ pub struct DelegateInput<'info> {
 pub struct Undelegate<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut)]
+    #[account(mut, seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
     pub user: Account<'info, Player>,
 }
 
