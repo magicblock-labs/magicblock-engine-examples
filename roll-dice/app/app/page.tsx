@@ -6,7 +6,6 @@ import SolanaAddress from "@/components/solana-address"
 import * as anchor from "@coral-xyz/anchor"
 // @ts-ignore
 import {Connection, Keypair, PublicKey, Transaction, VersionedTransaction} from "@solana/web3.js"
-import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
 
 // Program ID for the dice game
@@ -30,6 +29,24 @@ interface CharacterStats {
   scale?: number;
 }
 
+// Add stat quality thresholds
+const STAT_THRESHOLDS = {
+  top1Percent: 270, // 99 * 3 = 297, using 270 as threshold
+  top10Percent: 240, // 90 * 3 = 270, using 240 as threshold
+  top30Percent: 190 // 70 * 3 = 210 as threshold
+}
+
+// Function to check if total stats are in top percentage
+const isTopStat = (atk: number, def: number, dex: number, threshold: number) => (atk + def + dex) >= threshold;
+
+// Function to get stat quality class
+const getStatQualityClass = (atk: number, def: number, dex: number) => {
+  if (isTopStat(atk, def, dex, STAT_THRESHOLDS.top1Percent)) return 'border-yellow-500';
+  if (isTopStat(atk, def, dex, STAT_THRESHOLDS.top10Percent)) return 'border-purple-500';
+  if (isTopStat(atk, def, dex, STAT_THRESHOLDS.top30Percent)) return 'border-blue-500';
+  return 'border-gray-600';
+};
+
 export default function CharacterGenerator() {
   const [character, setCharacter] = useState<CharacterStats>({
     atk: 0,
@@ -46,7 +63,6 @@ export default function CharacterGenerator() {
   const subscriptionIdRef = useRef<number | null>(null)
   const rollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const currentTxIdRef = useRef<string | null>(null)
-  const { toast } = useToast()
 
   // Clear the rolling animation interval
   const clearRollInterval = () => {
@@ -182,11 +198,6 @@ export default function CharacterGenerator() {
     } catch (error) {
       console.error("Failed to initialize program:", error)
       setIsInitialized(false)
-      toast({
-        title: "Error",
-        description: "Failed to initialize dice program",
-        variant: "destructive",
-      })
     }
   }
 
@@ -202,7 +213,7 @@ export default function CharacterGenerator() {
         connection.removeAccountChangeListener(subscriptionIdRef.current).catch(console.error)
       }
     }
-  }, [toast, key]) // Add key as dependency to re-run when key changes
+  }, [key]) // Add key as dependency to re-run when key changes
 
   const handleBalanceChange = useCallback((newBalance: number) => {
     console.log("Balance changed:", newBalance)
@@ -216,13 +227,8 @@ export default function CharacterGenerator() {
 
       // Option 2: Force component reload by changing the key
       setKey(prevKey => prevKey + 1)
-
-      toast({
-        title: "Reinitializing",
-        description: "Balance changed, attempting to reinitialize the program",
-      })
     }
-  }, [isInitialized, toast])
+  }, [isInitialized])
 
   const generateCharacterStats = (roll: number): CharacterStats => {
     // Determine class based on roll and probabilities
@@ -275,11 +281,6 @@ export default function CharacterGenerator() {
         // Store the transaction ID in the ref
         currentTxIdRef.current = tx;
 
-        toast({
-          title: "Character Generated",
-          description: `Result: TX: ${tx.slice(0, 8)}...`,
-        })
-
         // Simulate rolling animation by changing values rapidly
         rollIntervalRef.current = setInterval(() => {
           const tempRoll = Math.floor(Math.random() * 100) + 1;
@@ -292,34 +293,19 @@ export default function CharacterGenerator() {
             console.log("Rolling timeout reached (10s), stopping animation")
             setIsRolling(false)
             clearRollInterval()
-            toast({
-              title: "Notice",
-              description: "Character generation is taking longer than expected. Check transaction status in explorer.",
-              variant: "destructive",
-            })
           }
         }, 10000)
 
       } catch (error) {
         console.error("Error generating character:", error)
-        toast({
-          title: "Error",
-          description: "Failed to generate character",
-          variant: "destructive",
-        })
         setIsRolling(false)
         clearRollInterval()
       }
     } else {
       console.error("Program not initialized")
-      toast({
-        title: "Error",
-        description: "Program not initialized",
-        variant: "destructive",
-      })
       setIsRolling(false)
     }
-  }, [isRolling, isInitialized, toast])
+  }, [isRolling, isInitialized])
 
   return (
     <div className="flex min-h-screen bg-gray-900">
@@ -328,9 +314,17 @@ export default function CharacterGenerator() {
       </div>
 
       <div className="flex flex-col items-center justify-center flex-grow p-8">
-        <h1 className="text-3xl font-bold mb-8 text-white">Character Generator</h1>
-        
-        <div className="bg-gray-800 p-8 rounded-lg shadow-lg max-w-md w-full border border-gray-700">
+        <div className="mb-8 text-center">
+          <div className="max-w-2xl mx-auto text-gray-300">
+            <p className="mb-4">
+              This is a proof of concept demonstrating MagicBlock's <a href="https://github.com/magicblock-labs/ephemeral-vrf" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors">VRF(Verifiable Random Function)</a>. Each character roll is generated on-chain, 
+              in a transparent and provably fair way. To learn more,
+              <a href="https://github.com/magicblock-labs/ephemeral-vrf" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors"> click here</a>.
+            </p>
+          </div>
+        </div>
+
+        <div className={`bg-gray-800 p-16 rounded-lg shadow-lg max-w-md w-full border-2 ${getStatQualityClass(character.atk, character.def, character.dex)}`}>
           <div className="relative w-48 h-48 mx-auto mb-6 overflow-hidden">
             <Image
               src={character.image || "/images/placeholder.jpg"}
@@ -344,7 +338,7 @@ export default function CharacterGenerator() {
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold mb-2 text-white">{character.class}</h2>
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative">
+              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative border-2 border-gray-600">
                 <div className="relative w-8 h-8 mb-1">
                   <Image
                     src="/images/icons/atk.png"
@@ -358,7 +352,7 @@ export default function CharacterGenerator() {
                   Attack
                 </div>
               </div>
-              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative">
+              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative border-2 border-gray-600">
                 <div className="relative w-8 h-8 mb-1">
                   <Image
                     src="/images/icons/def.png"
@@ -372,7 +366,7 @@ export default function CharacterGenerator() {
                   Defense
                 </div>
               </div>
-              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative">
+              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative border-2 border-gray-600">
                 <div className="relative w-8 h-8 mb-1">
                   <Image
                     src="/images/icons/dex.png"
@@ -411,20 +405,30 @@ export default function CharacterGenerator() {
         <h2 className="text-xl font-bold mb-4 text-white">Character History</h2>
         <div className="space-y-4">
           {characterHistory.map((char, index) => (
-            <div key={index} className="bg-gray-700 rounded-lg p-4 shadow border border-gray-600">
+            <div key={index} className={`bg-gray-700 rounded-lg p-4 shadow border-2 ${getStatQualityClass(char.atk, char.def, char.dex)} relative`}>
+              {char.txId && (
+                <a
+                  href={`https://explorer.solana.com/tx/${char.txId}?cluster=devnet`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="absolute top-2 right-2 text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  {`${char.txId.slice(0, 4)}..${char.txId.slice(-4)}`}
+                </a>
+              )}
               <div className="flex items-center space-x-4">
                 <div className="relative w-16 h-16 overflow-hidden">
                   <Image
                     src={char.image || "/images/placeholder.jpg"}
                     alt={char.class}
                     fill
-                    className={`object-cover ${char.scale ? `scale-[${char.scale}]` : 'scale-150'} rounded`}
+                    className="object-cover rounded"
                     style={{ transform: `scale(${char.scale || 1.5})` }}
                   />
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-white">{char.class}</h3>
-                  <div className="flex items-center space-x-2 mt-2">
+                  <div className="flex items-center space-x-2 mt-2 font-bold">
                     <div className="flex items-center">
                       <div className="relative w-4 h-4 mr-1">
                         <Image
@@ -459,19 +463,6 @@ export default function CharacterGenerator() {
                       <span className="text-sm text-gray-300">{char.dex}</span>
                     </div>
                   </div>
-                  {char.txId && (
-                    <a
-                      href={`https://explorer.solana.com/tx/${char.txId}?cluster=devnet`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      View on Explorer
-                    </a>
-                  )}
                 </div>
               </div>
             </div>
