@@ -485,7 +485,7 @@ export default function CharacterGenerator() {
                   rel="noopener noreferrer"
                   className="absolute top-2 right-2 text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
                 >
-                  {`${char.txId.slice(0, 4)}..${char.txId.slice(-4)}`}
+                  {`${char.txId.slice(0, 4)}...${char.txId.slice(-4)}`}
                 </a>
               )}
               <div className="flex items-center space-x-4">
