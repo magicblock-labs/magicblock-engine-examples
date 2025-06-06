@@ -14,10 +14,10 @@ const PROGRAM_ID = new anchor.web3.PublicKey("5AUHCWm4TzipCWK9H3EKx9JNccEA3rfNSU
 
 // Character classes with their probabilities (must sum to 100)
 const CHARACTER_CLASSES = [
-  { name: "Warrior", probability: 40, image: "/placeholder.jpg" },
-  { name: "Mage", probability: 30, image: "/placeholder.jpg" },
-  { name: "Rogue", probability: 20, image: "/placeholder.jpg" },
-  { name: "Paladin", probability: 10, image: "/placeholder.jpg" },
+  { name: "Warrior", probability: 30, image: "/images/classes/warrior.gif" },
+  { name: "Mage", probability: 30, image: "/images/classes/mage.gif" },
+  { name: "Archer", probability: 30, image: "/images/classes/archer.gif", scale: 3},
+  { name: "Priest", probability: 10, image: "/images/classes/priest.gif" },
 ]
 
 interface CharacterStats {
@@ -27,6 +27,7 @@ interface CharacterStats {
   class: string;
   image: string;
   txId?: string;  // Add transaction ID to track
+  scale?: number;
 }
 
 export default function CharacterGenerator() {
@@ -35,7 +36,7 @@ export default function CharacterGenerator() {
     def: 0,
     dex: 0,
     class: "",
-    image: "/placeholder.jpg"
+    image: "/images/placeholder.jpg"
   })
   const [characterHistory, setCharacterHistory] = useState<CharacterStats[]>([])
   const [isRolling, setIsRolling] = useState(false)
@@ -121,7 +122,8 @@ export default function CharacterGenerator() {
           def: ply.def,
           dex: ply.dex,
           class: CHARACTER_CLASSES[ply.characterClass].name,
-          image: CHARACTER_CLASSES[ply.characterClass].image
+          image: CHARACTER_CLASSES[ply.characterClass].image,
+          scale: CHARACTER_CLASSES[ply.characterClass].scale
         })
       }
 
@@ -142,12 +144,14 @@ export default function CharacterGenerator() {
           (accountInfo) => {
             const player = program.coder.accounts.decode("player", accountInfo.data)
             console.log("Player account changed:", player)
+            const characterClass = CHARACTER_CLASSES[player.characterClass]
             const newCharacter: CharacterStats = {
               atk: player.atk,
               def: player.def,
               dex: player.dex,
-              class: CHARACTER_CLASSES[player.characterClass].name,
-              image: CHARACTER_CLASSES[player.characterClass].image,
+              class: characterClass.name,
+              image: characterClass.image,
+              scale: characterClass.scale,
               txId: currentTxIdRef.current || undefined
             }
             setCharacter(newCharacter)
@@ -318,38 +322,69 @@ export default function CharacterGenerator() {
   }, [isRolling, isInitialized, toast])
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-900">
       <div className="absolute top-4 left-4 z-10">
         <SolanaAddress onBalanceChange={handleBalanceChange} />
       </div>
 
       <div className="flex flex-col items-center justify-center flex-grow p-8">
-        <h1 className="text-3xl font-bold mb-8">Character Generator</h1>
+        <h1 className="text-3xl font-bold mb-8 text-white">Character Generator</h1>
         
-        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
-          <div className="relative w-48 h-48 mx-auto mb-6">
+        <div className="bg-gray-800 p-8 rounded-lg shadow-lg max-w-md w-full border border-gray-700">
+          <div className="relative w-48 h-48 mx-auto mb-6 overflow-hidden">
             <Image
-              src={character.image || "/placeholder.jpg"}
+              src={character.image || "/images/placeholder.jpg"}
               alt={character.class || "Character"}
               fill
-              className="object-contain"
+              className="object-cover rounded"
+              style={{ transform: `scale(${character.scale || 1.5})` }}
             />
           </div>
           
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold mb-2">{character.class}</h2>
+            <h2 className="text-2xl font-bold mb-2 text-white">{character.class}</h2>
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-gray-100 p-3 rounded">
-                <div className="font-bold">ATK</div>
-                <div className="text-xl">{character.atk}</div>
+              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative">
+                <div className="relative w-8 h-8 mb-1">
+                  <Image
+                    src="/images/icons/atk.png"
+                    alt="Attack"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                <div className="text-xl font-bold text-white">{character.atk}</div>
+                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-700">
+                  Attack
+                </div>
               </div>
-              <div className="bg-gray-100 p-3 rounded">
-                <div className="font-bold">DEF</div>
-                <div className="text-xl">{character.def}</div>
+              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative">
+                <div className="relative w-8 h-8 mb-1">
+                  <Image
+                    src="/images/icons/def.png"
+                    alt="Defense"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                <div className="text-xl font-bold text-white">{character.def}</div>
+                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-700">
+                  Defense
+                </div>
               </div>
-              <div className="bg-gray-100 p-3 rounded">
-                <div className="font-bold">DEX</div>
-                <div className="text-xl">{character.dex}</div>
+              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative">
+                <div className="relative w-8 h-8 mb-1">
+                  <Image
+                    src="/images/icons/dex.png"
+                    alt="Dexterity"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                <div className="text-xl font-bold text-white">{character.dex}</div>
+                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-700">
+                  Dexterity
+                </div>
               </div>
             </div>
           </div>
@@ -357,14 +392,14 @@ export default function CharacterGenerator() {
           <button
             onClick={handleRollCharacter}
             disabled={isRolling || !isInitialized}
-            className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium shadow-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {isRolling ? "Generating..." : !isInitialized ? "Initializing..." : "Generate Character"}
           </button>
 
           <button
             disabled
-            className="w-full px-6 py-3 mt-3 bg-gray-200 text-gray-500 rounded-lg font-medium shadow-md cursor-not-allowed transition-colors"
+            className="w-full px-6 py-3 mt-3 bg-gray-700 text-gray-400 rounded-lg font-medium shadow-md cursor-not-allowed transition-colors border border-gray-600"
           >
             Mint (Coming Soon)
           </button>
@@ -372,33 +407,64 @@ export default function CharacterGenerator() {
       </div>
 
       {/* Character History Column */}
-      <div className="w-80 bg-white shadow-lg p-4 overflow-y-auto max-h-screen">
-        <h2 className="text-xl font-bold mb-4">Character History</h2>
+      <div className="w-80 bg-gray-800 shadow-lg p-4 overflow-y-auto max-h-screen border-l border-gray-700">
+        <h2 className="text-xl font-bold mb-4 text-white">Character History</h2>
         <div className="space-y-4">
           {characterHistory.map((char, index) => (
-            <div key={index} className="bg-gray-50 rounded-lg p-4 shadow">
+            <div key={index} className="bg-gray-700 rounded-lg p-4 shadow border border-gray-600">
               <div className="flex items-center space-x-4">
-                <div className="relative w-16 h-16">
+                <div className="relative w-16 h-16 overflow-hidden">
                   <Image
-                    src={char.image || "/placeholder.jpg"}
+                    src={char.image || "/images/placeholder.jpg"}
                     alt={char.class}
                     fill
-                    className="object-contain rounded"
+                    className={`object-cover ${char.scale ? `scale-[${char.scale}]` : 'scale-150'} rounded`}
+                    style={{ transform: `scale(${char.scale || 1.5})` }}
                   />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold">{char.class}</h3>
-                  <div className="flex space-x-2 mt-2">
-                    <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm">ATK: {char.atk}</span>
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">DEF: {char.def}</span>
-                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm">DEX: {char.dex}</span>
+                  <h3 className="font-semibold text-white">{char.class}</h3>
+                  <div className="flex items-center space-x-2 mt-2">
+                    <div className="flex items-center">
+                      <div className="relative w-4 h-4 mr-1">
+                        <Image
+                          src="/images/icons/atk.png"
+                          alt="Attack"
+                          fill
+                          className="object-contain"
+                        />
+                      </div>
+                      <span className="text-sm text-gray-300">{char.atk}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="relative w-4 h-4 mr-1">
+                        <Image
+                          src="/images/icons/def.png"
+                          alt="Defense"
+                          fill
+                          className="object-contain"
+                        />
+                      </div>
+                      <span className="text-sm text-gray-300">{char.def}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="relative w-4 h-4 mr-1">
+                        <Image
+                          src="/images/icons/dex.png"
+                          alt="Dexterity"
+                          fill
+                          className="object-contain"
+                        />
+                      </div>
+                      <span className="text-sm text-gray-300">{char.dex}</span>
+                    </div>
                   </div>
                   {char.txId && (
                     <a
                       href={`https://explorer.solana.com/tx/${char.txId}?cluster=devnet`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center mt-2 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                      className="inline-flex items-center mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
