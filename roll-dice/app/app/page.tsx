@@ -320,7 +320,7 @@ export default function CharacterGenerator() {
   }, [isRolling, isInitialized])
 
   return (
-    <div className="flex min-h-screen bg-gray-900">
+    <div className="flex min-h-screen bg-black">
       <div className="absolute top-4 left-4 z-20">
         <SolanaAddress onBalanceChange={handleBalanceChange} />
         <button
@@ -356,7 +356,7 @@ export default function CharacterGenerator() {
           disabled={isAirdropping}
           className={`mt-2 w-full px-3 py-1 text-sm rounded transition-colors flex items-center justify-center ${
             isAirdropping 
-              ? 'bg-gray-600 cursor-not-allowed' 
+              ? 'bg-gray-800 cursor-not-allowed' 
               : 'bg-blue-600 hover:bg-blue-700 text-white'
           }`}
         >
@@ -375,8 +375,8 @@ export default function CharacterGenerator() {
       </div>
 
       {!hasBalance && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-90 z-10 flex items-center justify-center">
-          <div className="bg-gray-800 p-8 rounded-lg shadow-lg max-w-md text-center">
+        <div className="fixed inset-0 bg-black bg-opacity-95 z-10 flex items-center justify-center">
+          <div className="bg-gray-900 p-8 rounded-lg shadow-lg max-w-md text-center border border-gray-800">
             <h2 className="text-2xl font-bold text-white mb-4">Welcome!</h2>
             <p className="text-gray-300 mb-6">
               A local devnet test wallet has been created! Please request airdrop on the top left to add SOL from the faucet.
@@ -396,7 +396,7 @@ export default function CharacterGenerator() {
           </div>
         </div>
 
-        <div className={`bg-gray-800 p-16 rounded-lg shadow-lg max-w-md w-full border-2 ${getStatQualityClass(character.atk, character.def, character.dex)}`}>
+        <div className={`bg-gray-900 p-16 rounded-lg shadow-lg max-w-md w-full border-2 ${getStatQualityClass(character.atk, character.def, character.dex)}`}>
           <div className="relative w-48 h-48 mx-auto mb-6 overflow-hidden">
             <Image
               src={character.image || "/images/placeholder.jpg"}
@@ -410,7 +410,7 @@ export default function CharacterGenerator() {
           <div className="text-center mb-6">
             <h2 className={`text-2xl font-bold mb-2 ${character.class === "Priest" ? "text-orange-400" : "text-white"}`}>{character.class}</h2>
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative border-2 border-gray-600">
+              <div className="bg-gray-800 p-3 rounded flex flex-col items-center group relative border-2 border-gray-700">
                 <div className="relative w-8 h-8 mb-1">
                   <Image
                     src="/images/icons/atk.png"
@@ -420,11 +420,11 @@ export default function CharacterGenerator() {
                   />
                 </div>
                 <div className="text-xl font-bold text-white">{character.atk}</div>
-                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-700">
+                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-800">
                   Attack
                 </div>
               </div>
-              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative border-2 border-gray-600">
+              <div className="bg-gray-800 p-3 rounded flex flex-col items-center group relative border-2 border-gray-700">
                 <div className="relative w-8 h-8 mb-1">
                   <Image
                     src="/images/icons/def.png"
@@ -434,11 +434,11 @@ export default function CharacterGenerator() {
                   />
                 </div>
                 <div className="text-xl font-bold text-white">{character.def}</div>
-                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-700">
+                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-800">
                   Defense
                 </div>
               </div>
-              <div className="bg-gray-700 p-3 rounded flex flex-col items-center group relative border-2 border-gray-600">
+              <div className="bg-gray-800 p-3 rounded flex flex-col items-center group relative border-2 border-gray-700">
                 <div className="relative w-8 h-8 mb-1">
                   <Image
                     src="/images/icons/dex.png"
@@ -448,7 +448,7 @@ export default function CharacterGenerator() {
                   />
                 </div>
                 <div className="text-xl font-bold text-white">{character.dex}</div>
-                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-700">
+                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-800">
                   Dexterity
                 </div>
               </div>
@@ -465,7 +465,7 @@ export default function CharacterGenerator() {
 
           <button
             disabled
-            className="w-full px-6 py-3 mt-3 bg-gray-700 text-gray-400 rounded-lg font-medium shadow-md cursor-not-allowed transition-colors border border-gray-600"
+            className="w-full px-6 py-3 mt-3 bg-gray-800 text-gray-400 rounded-lg font-medium shadow-md cursor-not-allowed transition-colors border border-gray-700"
           >
             Mint (Coming Soon)
           </button>
@@ -473,11 +473,11 @@ export default function CharacterGenerator() {
       </div>
 
       {/* Character History Column */}
-      <div className="w-80 bg-gray-800 shadow-lg p-4 overflow-y-auto max-h-screen border-l border-gray-700">
+      <div className="w-80 bg-gray-900 shadow-lg p-4 overflow-y-auto max-h-screen border-l border-gray-800">
         <h2 className="text-xl font-bold mb-4 text-white">Character History</h2>
         <div className="space-y-4">
           {characterHistory.map((char, index) => (
-            <div key={index} className={`bg-gray-700 rounded-lg p-4 shadow border-2 ${getStatQualityClass(char.atk, char.def, char.dex)} relative`}>
+            <div key={index} className={`bg-gray-800 rounded-lg p-4 shadow border-2 ${getStatQualityClass(char.atk, char.def, char.dex)} relative`}>
               {char.txId && (
                 <a
                   href={`https://explorer.solana.com/tx/${char.txId}?cluster=devnet`}
