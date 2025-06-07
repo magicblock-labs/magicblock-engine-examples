@@ -81,7 +81,35 @@ const getStatQualityClass = (atk: number, def: number, dex: number) => {
  * - Stat quality indicators
  * - Devnet wallet integration
  */
+
+// Add this at the top of the file, after the imports
+const styles = `
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+  }
+  
+  .animate-shake {
+    animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+    animation-iteration-count: infinite;
+  }
+`;
+
 export default function CharacterGenerator() {
+  // Add this at the start of the component
+  useEffect(() => {
+    // Add the styles to the document
+    const styleSheet = document.createElement("style");
+    styleSheet.textContent = styles;
+    document.head.appendChild(styleSheet);
+    
+    // Cleanup
+    return () => {
+      document.head.removeChild(styleSheet);
+    };
+  }, []);
+
   // State management
   const [character, setCharacter] = useState<CharacterStats>({
     atk: 0,
@@ -458,7 +486,7 @@ export default function CharacterGenerator() {
           </div>
         </div>
 
-        <div className={`bg-gray-900 p-16 rounded-lg shadow-lg max-w-md w-full border-2 ${getStatQualityClass(character.atk, character.def, character.dex)}`}>
+        <div className={`bg-gray-900 p-16 rounded-lg shadow-lg max-w-md w-full border-2 ${getStatQualityClass(character.atk, character.def, character.dex)} ${isRolling ? 'animate-shake' : ''}`}>
           <div className="relative w-48 h-48 mx-auto mb-6 overflow-hidden">
             <Image
               src={character.image || "/images/placeholder.jpg"}
