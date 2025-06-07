@@ -8,6 +8,10 @@ import * as anchor from "@coral-xyz/anchor"
 import {Connection, Keypair, PublicKey, Transaction, VersionedTransaction} from "@solana/web3.js"
 import Image from "next/image"
 
+// =============================================
+// Constants and Configuration
+// =============================================
+
 // Program ID for the dice game
 const PROGRAM_ID = new anchor.web3.PublicKey("5AUHCWm4TzipCWK9H3EKx9JNccEA3rfNSUp4BCy2Zy2f")
 
@@ -19,27 +23,40 @@ const CHARACTER_CLASSES = [
   { name: "Priest", probability: 4, image: "/images/classes/priest.gif" },
 ]
 
+// Stat quality thresholds for character rarity
+const STAT_THRESHOLDS = {
+  top1Percent: 270,  
+  top10Percent: 240, 
+  top30Percent: 190 
+}
+
+// =============================================
+// Type Definitions
+// =============================================
+
 interface CharacterStats {
   atk: number;
   def: number;
   dex: number;
   class: string;
   image: string;
-  txId?: string;  // Add transaction ID to track
-  scale?: number;
+  txId?: string;  // Transaction ID for on-chain verification
+  scale?: number; // Optional scale factor for character images
 }
 
-// Add stat quality thresholds
-const STAT_THRESHOLDS = {
-  top1Percent: 270, // 99 * 3 = 297, using 270 as threshold
-  top10Percent: 240, // 90 * 3 = 270, using 240 as threshold
-  top30Percent: 190 // 70 * 3 = 210 as threshold
-}
+// =============================================
+// Utility Functions
+// =============================================
 
-// Function to check if total stats are in top percentage
-const isTopStat = (atk: number, def: number, dex: number, threshold: number) => (atk + def + dex) >= threshold;
+/**
+ * Checks if total stats meet a quality threshold
+ */
+const isTopStat = (atk: number, def: number, dex: number, threshold: number) => 
+  (atk + def + dex) >= threshold;
 
-// Function to get stat quality class
+/**
+ * Determines the border color class based on character stats quality
+ */
 const getStatQualityClass = (atk: number, def: number, dex: number) => {
   if (isTopStat(atk, def, dex, STAT_THRESHOLDS.top1Percent)) return 'border-yellow-500';
   if (isTopStat(atk, def, dex, STAT_THRESHOLDS.top10Percent)) return 'border-purple-500';
@@ -47,7 +64,25 @@ const getStatQualityClass = (atk: number, def: number, dex: number) => {
   return 'border-gray-600';
 };
 
+// =============================================
+// Main Component
+// =============================================
+
+/**
+ * CharacterGenerator Component
+ * 
+ * A React component that generates random characters using Solana blockchain
+ * for verifiable randomness. Each character has stats (ATK, DEF, DEX) and
+ * belongs to one of four classes with different probabilities.
+ * 
+ * Features:
+ * - On-chain character generation using MagicBlock's VRF
+ * - Character history tracking
+ * - Stat quality indicators
+ * - Devnet wallet integration
+ */
 export default function CharacterGenerator() {
+  // State management
   const [character, setCharacter] = useState<CharacterStats>({
     atk: 0,
     def: 0,
@@ -61,12 +96,17 @@ export default function CharacterGenerator() {
   const [key, setKey] = useState(0)
   const [hasBalance, setHasBalance] = useState(false)
   const [isAirdropping, setIsAirdropping] = useState(false)
+
+  // Refs for managing program state and subscriptions
   const programRef = useRef<anchor.Program | null>(null)
   const subscriptionIdRef = useRef<number | null>(null)
   const rollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const currentTxIdRef = useRef<string | null>(null)
 
-  // Clear the rolling animation interval
+  /**
+   * Clears the rolling animation interval
+   * Used to stop the character stat animation
+   */
   const clearRollInterval = () => {
     if (rollIntervalRef.current) {
       clearInterval(rollIntervalRef.current)
@@ -74,6 +114,14 @@ export default function CharacterGenerator() {
     }
   }
 
+  /**
+   * Initializes the Solana program connection and sets up account subscription
+   * - Creates or retrieves a keypair
+   * - Sets up the Anchor provider
+   * - Fetches the program IDL
+   * - Initializes or loads player account
+   * - Sets up account change subscription
+   */
   const initializeProgram = async () => {
     try {
       // Get or create keypair
@@ -226,6 +274,10 @@ export default function CharacterGenerator() {
     }
   }, [key]) // Add key as dependency to re-run when key changes
 
+  /**
+   * Handles balance changes from the Solana wallet
+   * Triggers reinitialization if needed
+   */
   const handleBalanceChange = useCallback((newBalance: number) => {
     console.log("Balance changed:", newBalance)
     setHasBalance(newBalance > 0)
@@ -242,6 +294,10 @@ export default function CharacterGenerator() {
     }
   }, [isInitialized])
 
+  /**
+   * Generates temporary character stats for animation
+   * Used during the rolling animation phase
+   */
   const generateCharacterStats = (roll: number): CharacterStats => {
     // Determine class based on roll and probabilities
     let classIndex = 0;
@@ -278,6 +334,12 @@ export default function CharacterGenerator() {
     };
   };
 
+  /**
+   * Main function to roll a new character
+   * - Triggers on-chain dice roll
+   * - Manages rolling animation
+   * - Updates character state
+   */
   const handleRollCharacter = useCallback(async () => {
     if (isRolling || !isInitialized) return;
 
