@@ -58,14 +58,14 @@ pub mod random_dice {
             (3, "Priest")
         };
 
-        // Generate a random u32 and use modulo to get a 6-digit number
-        let stats_roll = ephemeral_vrf_sdk::rnd::random_u32(&randomness) % 900000 + 100000;
+        // Generate a random u32 
+        let stats_roll = ephemeral_vrf_sdk::rnd::random_u32(&randomness)
         msg!("Stats roll: {}", stats_roll);
 
-        // Split the 6-digit number into three 2-digit numbers
-        let atk = ((stats_roll / 10000) % 100) as u8;
-        let def = ((stats_roll / 100) % 100) as u8;
-        let dex = (stats_roll % 100) as u8;
+        // Split the 6-digit number into three 2-digit numbers. There's slight modulo bias, but yolo. 
+        let atk = ((stats_roll >> 0)  & 0x3FF) % 100; as u8;
+        let def = ((stats_roll >> 10)  & 0x3FF) % 100; as u8;
+        let dex = ((stats_roll >> 20)  & 0x3FF) % 100; as u8;
 
         // Log character details
         msg!("Class: {}, ATK: {}, DEF: {}, DEX: {}", class_name, atk, def, dex);
