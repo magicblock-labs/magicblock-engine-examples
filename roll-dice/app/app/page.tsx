@@ -447,7 +447,7 @@ export default function CharacterGenerator() {
           className={`mt-2 w-full px-3 py-1 text-sm rounded transition-colors flex items-center justify-center ${
             isAirdropping 
               ? 'bg-gray-800 cursor-not-allowed' 
-              : 'bg-blue-600 hover:bg-blue-700 text-white'
+              : 'bg-blue-600 hover:bg-blue-700 tßext-white'
           }`}
         >
           {isAirdropping ? (
@@ -486,79 +486,120 @@ export default function CharacterGenerator() {
           </div>
         </div>
 
-        <div className={`bg-gray-900 p-16 rounded-lg shadow-lg max-w-md w-full border-2 ${getStatQualityClass(character.atk, character.def, character.dex)} ${isRolling ? 'animate-shake' : ''}`}>
-          <div className="relative w-48 h-48 mx-auto mb-6 overflow-hidden">
-            <Image
-              src={character.image || "/images/placeholder.jpg"}
-              alt={character.class || "Character"}
-              fill
-              className="object-cover rounded"
-              style={{ transform: `scale(${character.scale || 1.5})` }}
-            />
-          </div>
-          
-          <div className="text-center mb-6">
-            <h2 className={`text-2xl font-bold mb-2 ${character.class === "Priest" ? "text-orange-400" : "text-white"}`}>{character.class}</h2>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-gray-800 p-3 rounded flex flex-col items-center group relative border-2 border-gray-700">
-                <div className="relative w-8 h-8 mb-1">
-                  <Image
-                    src="/images/icons/atk.png"
-                    alt="Attack"
-                    fill
-                    className="object-contain"
-                  />
+        <div className="flex gap-8 items-start">
+          <div className={`bg-gray-900 p-16 rounded-lg shadow-lg max-w-md w-full border-2 ${getStatQualityClass(character.atk, character.def, character.dex)} ${isRolling ? 'animate-shake' : ''}`}>
+            <div className="relative w-48 h-48 mx-auto mb-6 overflow-hidden">
+              <Image
+                src={character.image || "/images/placeholder.jpg"}
+                alt={character.class || "Character"}
+                fill
+                className="object-cover rounded"
+                style={{ transform: `scale(${character.scale || 1.5})` }}
+              />
+            </div>
+            
+            <div className="text-center mb-6">
+              <h2 className={`text-2xl font-bold mb-2 ${character.class === "Priest" ? "text-orange-400" : "text-white"}`}>{character.class}</h2>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-gray-800 p-3 rounded flex flex-col items-center group relative border-2 border-gray-700">
+                  <div className="relative w-8 h-8 mb-1">
+                    <Image
+                      src="/images/icons/atk.png"
+                      alt="Attack"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                  <div className="text-xl font-bold text-white">{character.atk}</div>
+                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-800">
+                    Attack
+                  </div>
                 </div>
-                <div className="text-xl font-bold text-white">{character.atk}</div>
-                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-800">
-                  Attack
+                <div className="bg-gray-800 p-3 rounded flex flex-col items-center group relative border-2 border-gray-700">
+                  <div className="relative w-8 h-8 mb-1">
+                    <Image
+                      src="/images/icons/def.png"
+                      alt="Defense"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                  <div className="text-xl font-bold text-white">{character.def}</div>
+                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-800">
+                    Defense
+                  </div>
                 </div>
-              </div>
-              <div className="bg-gray-800 p-3 rounded flex flex-col items-center group relative border-2 border-gray-700">
-                <div className="relative w-8 h-8 mb-1">
-                  <Image
-                    src="/images/icons/def.png"
-                    alt="Defense"
-                    fill
-                    className="object-contain"
-                  />
-                </div>
-                <div className="text-xl font-bold text-white">{character.def}</div>
-                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-800">
-                  Defense
-                </div>
-              </div>
-              <div className="bg-gray-800 p-3 rounded flex flex-col items-center group relative border-2 border-gray-700">
-                <div className="relative w-8 h-8 mb-1">
-                  <Image
-                    src="/images/icons/dex.png"
-                    alt="Dexterity"
-                    fill
-                    className="object-contain"
-                  />
-                </div>
-                <div className="text-xl font-bold text-white">{character.dex}</div>
-                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-800">
-                  Dexterity
+                <div className="bg-gray-800 p-3 rounded flex flex-col items-center group relative border-2 border-gray-700">
+                  <div className="relative w-8 h-8 mb-1">
+                    <Image
+                      src="/images/icons/dex.png"
+                      alt="Dexterity"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                  <div className="text-xl font-bold text-white">{character.dex}</div>
+                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-gray-800">
+                    Dexterity
+                  </div>
                 </div>
               </div>
             </div>
+
+            <button
+              onClick={handleRollCharacter}
+              disabled={isRolling || !isInitialized}
+              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {isRolling ? "Generating..." : !isInitialized ? "Initializing..." : "Generate Character"}
+            </button>
+
+            <button
+              disabled
+              className="w-full px-6 py-3 mt-3 bg-gray-800 text-gray-400 rounded-lg font-medium shadow-md cursor-not-allowed transition-colors border border-gray-700"
+            >
+              Mint (Coming Soon)
+            </button>
           </div>
 
-          <button
-            onClick={handleRollCharacter}
-            disabled={isRolling || !isInitialized}
-            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {isRolling ? "Generating..." : !isInitialized ? "Initializing..." : "Generate Character"}
-          </button>
+          <div className="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-800">
+            <h3 className="text-lg font-semibold text-white mb-4">Character Rarity</h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded border-2 border-yellow-500"></div>
+                <span className="text-gray-300">Top 1%</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded border-2 border-purple-500"></div>
+                <span className="text-gray-300">Top 10%</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded border-2 border-blue-500"></div>
+                <span className="text-gray-300">Top 30%</span>
+              </div>
+            </div>
 
-          <button
-            disabled
-            className="w-full px-6 py-3 mt-3 bg-gray-800 text-gray-400 rounded-lg font-medium shadow-md cursor-not-allowed transition-colors border border-gray-700"
-          >
-            Mint (Coming Soon)
-          </button>
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold text-white mb-4">Character Classes</h3>
+              <div className="space-y-3">
+                {CHARACTER_CLASSES.map((charClass) => (
+                  <div key={charClass.name} className="flex items-center gap-3">
+                    <div className="relative w-6 h-6 overflow-hidden rounded">
+                      <Image
+                        src={charClass.image}
+                        alt={charClass.name}
+                        fill
+                        className="object-cover"
+                        style={{ transform: `scale(${charClass.scale || 1.5})` }}
+                      />
+                    </div>
+                    <span className={`${charClass.name === "Priest" ? "text-orange-400" : "text-gray-300"}`}>{charClass.name}</span>
+                    <span className="ml-auto text-gray-400">{charClass.probability}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
-# 🎲 Roll Dice
+# 🎲 Character Stat Roller - VRF Example
 
-Simple dice rolling application using Ephemeral Rollups to demonstrate using a verifiable random function (VRF) to generate random numbers.
+Simple application using MagicBlock VRF(Verifiable Random Function) to demonstrate generating random numbers.
 
 # Demo
 
