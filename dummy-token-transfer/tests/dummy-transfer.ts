@@ -69,25 +69,47 @@ describe("dummy-transfer", () => {
         2 * web3.LAMPORTS_PER_SOL
       );
     }
+    const ronBalanceAccount = await program.account.balance.fetch(ronBalancePda);
+    const bobBalanceAccount = await program.account.balance.fetch(bobBalancePda);
+    const fredBalanceAccount = await program.account.balance.fetch(fredBalancePda);
+    console.log("Ron Balance: ", ronBalanceAccount.balance.toString());
+    console.log("Bob Balance: ", bobBalanceAccount.balance.toString());
+    console.log("Fred Balance: ", fredBalanceAccount.balance.toString());
+    
   });
 
   it("Initializes the balance if it is not already initialized.", async () => {
     const balanceAccountInfo = await provider.connection.getAccountInfo(
       ronBalancePda
     );
+    
 
-    if (balanceAccountInfo === null) {
-      const tx = await program.methods
-        .initialize()
-        .accounts({
-          user: provider.wallet.publicKey,
-        })
-        .rpc({skipPreflight: true});
-      console.log("Init Balance Tx: ", tx);
+    // If Ron's balance is less than 10, transfer all of Bob's and Fred's balance to Ron
+    const ronBalanceAccount = await program.account.balance.fetch(ronBalancePda);
+    if (ronBalanceAccount.balance.lt(new BN(10))) {
+      const bobBalanceAccount = await program.account.balance.fetch(bobBalancePda);
+      if (bobBalanceAccount.balance.gt(new BN(0))) {
+        await program.methods
+          .transfer(bobBalanceAccount.balance)
+          .accounts({
+            payer: bob.publicKey,
+            receiver: provider.wallet.publicKey,
+          })
+          .signers([bob])
+          .rpc({ skipPreflight: true });
+      }
+      const fredBalanceAccount = await program.account.balance.fetch(fredBalancePda);
+      if (fredBalanceAccount.balance.gt(new BN(0))) {
+        await program.methods
+          .transfer(fredBalanceAccount.balance)
+          .accounts({
+            payer: fred.publicKey,
+            receiver: provider.wallet.publicKey,
+          })
+          .signers([fred])
+          .rpc({ skipPreflight: true });
+      }
     }
-
-    const balanceAccount = await program.account.balance.fetch(ronBalancePda);
-    console.log("Balance: ", balanceAccount.balance.toString());
   });
 
   it("Transfer from Ron to Bob and Fred", async () => {
@@ -115,7 +137,7 @@ describe("dummy-transfer", () => {
           })
           .instruction(),
       ])
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
     console.log("Transfer Tx: ", tx);
 
     let balanceAccount = await program.account.balance.fetch(ronBalancePda);
