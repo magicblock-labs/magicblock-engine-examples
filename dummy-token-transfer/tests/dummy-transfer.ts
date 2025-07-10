@@ -4,6 +4,33 @@ import { DummyTransfer } from "../target/types/dummy_transfer";
 import {
   DELEGATION_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { select } from "firebase-functions/params";
+
+// Helper function to print balances of all accounts
+async function printBalances(program: Program<DummyTransfer>, andyBalancePda: web3.PublicKey, bobBalancePda: web3.PublicKey) {
+  let andyBalanceAccount, bobBalanceAccount;
+  try {
+    andyBalanceAccount = await program.account.balance.fetch(andyBalancePda);
+  } catch (e) {
+    andyBalanceAccount = null;
+  }
+  try {
+    bobBalanceAccount = await program.account.balance.fetch(bobBalancePda);
+  } catch (e) {
+    bobBalanceAccount = null;
+  }
+
+  if (andyBalanceAccount) {
+    console.log("Andy Balance: ", andyBalanceAccount.balance.toString());
+  } else {
+    console.log("Andy Balance PDA not initialized");
+  }
+  if (bobBalanceAccount) {
+    console.log("Bob Balance: ", bobBalanceAccount.balance.toString());
+  } else {
+    console.log("Bob Balance PDA not initialized");
+  }
+}
 
 describe("dummy-transfer", () => {
   const provider = anchor.AnchorProvider.env();
@@ -26,18 +53,9 @@ describe("dummy-transfer", () => {
   const program = anchor.workspace.DummyTransfer as Program<DummyTransfer>;
   const ephemeralProgram = new Program(program.idl, providerEphemeralRollup);
 
-  const bob = web3.Keypair.fromSecretKey(
-    Uint8Array.from(
-      require("./fixtures/BobA5Fqyr3Yh8ie4eqCGFS9nwB1rmJhfTA8Hmtb2ifU.json")
-    )
-  );
-  const fred = web3.Keypair.fromSecretKey(
-    Uint8Array.from(
-      require("./fixtures/FredtxoSVLjNR6h4w5DovxfTxUAfQwK4xsrR6Vhm1Gqt.json")
-    )
-  );
+  const bob = web3.Keypair.generate();
 
-  const ronBalancePda = web3.PublicKey.findProgramAddressSync(
+  const andyBalancePda = web3.PublicKey.findProgramAddressSync(
     [provider.wallet.publicKey.toBuffer()],
     program.programId
   )[0];
@@ -47,115 +65,102 @@ describe("dummy-transfer", () => {
     program.programId
   )[0];
 
-  const fredBalancePda = web3.PublicKey.findProgramAddressSync(
-    [fred.publicKey.toBuffer()],
-    program.programId
-  )[0];
+  console.log("Program ID: ", program.programId.toBase58());
+  console.log("Andy Public Key: ", provider.wallet.publicKey.toBase58());
+  console.log("Bob Public Key: ", bob.publicKey.toBase58());
+  console.log("Andy Balance PDA: ", andyBalancePda.toBase58());
+  console.log("Bob Balance PDA: ", bobBalancePda.toBase58());
+
+
 
   before(async () => {
+    // If running locally, airdrop SOL to the wallet.
     if (
       provider.connection.rpcEndpoint.includes("localhost") ||
       provider.connection.rpcEndpoint.includes("127.0.0.1")
     ) {
       // Airdrop to bob
-      const bobAirdropSignature = await provider.connection.requestAirdrop(
-        bob.publicKey,
-        2 * web3.LAMPORTS_PER_SOL
-      );
-
-      // Airdrop to fred
-      const fredAirdropSignature = await provider.connection.requestAirdrop(
-        fred.publicKey,
+      const andyAirdropSignature = await provider.connection.requestAirdrop(
+        provider.wallet.publicKey,
         2 * web3.LAMPORTS_PER_SOL
       );
     }
-    const ronBalanceAccount = await program.account.balance.fetch(ronBalancePda);
-    const bobBalanceAccount = await program.account.balance.fetch(bobBalancePda);
-    const fredBalanceAccount = await program.account.balance.fetch(fredBalancePda);
-    console.log("Ron Balance: ", ronBalanceAccount.balance.toString());
-    console.log("Bob Balance: ", bobBalanceAccount.balance.toString());
-    console.log("Fred Balance: ", fredBalanceAccount.balance.toString());
-    
   });
 
-  it("Initializes the balance if it is not already initialized.", async () => {
-    const balanceAccountInfo = await provider.connection.getAccountInfo(
-      ronBalancePda
+  it("Initialize balances if not already initialized.", async () => {
+    const andyBalancePDA = await provider.connection.getAccountInfo(
+      andyBalancePda
     );
-    
+    const bobBalancePDA = await provider.connection.getAccountInfo(
+      bobBalancePda
+    );
 
-    // If Ron's balance is less than 10, transfer all of Bob's and Fred's balance to Ron
-    const ronBalanceAccount = await program.account.balance.fetch(ronBalancePda);
-    if (ronBalanceAccount.balance.lt(new BN(10))) {
-      const bobBalanceAccount = await program.account.balance.fetch(bobBalancePda);
-      if (bobBalanceAccount.balance.gt(new BN(0))) {
-        await program.methods
-          .transfer(bobBalanceAccount.balance)
-          .accounts({
-            payer: bob.publicKey,
-            receiver: provider.wallet.publicKey,
-          })
-          .signers([bob])
-          .rpc({ skipPreflight: true });
-      }
-      const fredBalanceAccount = await program.account.balance.fetch(fredBalancePda);
-      if (fredBalanceAccount.balance.gt(new BN(0))) {
-        await program.methods
-          .transfer(fredBalanceAccount.balance)
-          .accounts({
-            payer: fred.publicKey,
-            receiver: provider.wallet.publicKey,
-          })
-          .signers([fred])
-          .rpc({ skipPreflight: true });
-      }
+    if (!andyBalancePDA) {
+      await program.methods
+        .initialize()
+        .accounts({
+          user: provider.wallet.publicKey,
+        })
+        .rpc({ skipPreflight: true });
+    } else {
+      console.log("✅ Andy Balance PDA already initialized!");
     }
+
+    if (!bobBalancePDA) {
+      const transferIx = web3.SystemProgram.transfer({
+        fromPubkey: provider.wallet.publicKey,
+        toPubkey: bob.publicKey,
+        lamports: web3.LAMPORTS_PER_SOL * 0.01,
+      });
+      // Build the initialize instruction
+      const initIx = await program.methods
+        .initialize()
+        .accounts({
+          user: bob.publicKey,
+        })
+        .instruction();
+      const tx = new web3.Transaction()
+        .add(transferIx)
+        .add(initIx);
+      await provider.sendAndConfirm(tx, [bob]);
+    } else {
+      console.log("✅ Bob Balance PDA already initialized!");
+    }
+
+    await printBalances(program, andyBalancePda, bobBalancePda);
   });
 
-  it("Transfer from Ron to Bob and Fred", async () => {
+  it("Transfer on base chain from Andy to Bob", async () => {
     const balanceAccountInfo = await provider.connection.getAccountInfo(
-        ronBalancePda
+        andyBalancePda
     );
     if (
         balanceAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()
     ) {
-      console.log("Balances is are delegated");
+      console.log("❌ Cannot transfer: Balances are currently delegated");
       return;
     }
     const tx = await program.methods
-      .transfer(new BN(1))
+      .transfer(new BN(5))
       .accounts({
         payer: provider.wallet.publicKey,
         receiver: bob.publicKey,
       })
-      .postInstructions([
-        await program.methods
-          .transfer(new BN(2))
-          .accounts({
-            payer: provider.wallet.publicKey,
-            receiver: fred.publicKey,
-          })
-          .instruction(),
-      ])
       .rpc({ skipPreflight: true });
+    console.log("✅ Transfered 5 from Andy to Bob");
     console.log("Transfer Tx: ", tx);
 
-    let balanceAccount = await program.account.balance.fetch(ronBalancePda);
-    console.log("Balance Ron: ", balanceAccount.balance.toString());
-    balanceAccount = await program.account.balance.fetch(bobBalancePda);
-    console.log("Balance Bob: ", balanceAccount.balance.toString());
-    balanceAccount = await program.account.balance.fetch(fredBalancePda);
-    console.log("Balance Fred: ", balanceAccount.balance.toString());
+    await printBalances(program, andyBalancePda, bobBalancePda);
   });
 
-  it("Delegate Balances of Ron, Bob and Fred", async () => {
+  it("Delegate Balances of Andy and Bob", async () => {
     const balanceAccountInfo = await provider.connection.getAccountInfo(
-      ronBalancePda
+      andyBalancePda
     );
     if (
       balanceAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()
     ) {
-      console.log("Balance is already delegated");
+      console.log("❌ Balance is already delegated");
       return;
     }
     let tx = await program.methods
@@ -169,50 +174,42 @@ describe("dummy-transfer", () => {
           .accounts({
             payer: bob.publicKey,
           })
-          .instruction(),
-        await program.methods
-            .delegate()
-            .accounts({
-              payer: fred.publicKey,
-            })
-            .instruction(),
+          .instruction()
       ])
-      .signers([bob, fred])
+      .signers([bob])
       .rpc( {commitment: "confirmed", skipPreflight: true});
 
+    console.log("✅ Delegated Balances of Andy and Bob");
     console.log("Delegation signature", tx);
   });
 
   it("Perform transfers in the ephemeral rollup", async () => {
     let tx = await ephemeralProgram.methods
-        .transfer(new BN(1))
+        .transfer(new BN(5))
         .accounts({
           payer: provider.wallet.publicKey,
           receiver: bob.publicKey,
         })
-        .postInstructions([
-          await ephemeralProgram.methods
-              .transfer(new BN(1))
-              .accounts({
-                payer: provider.wallet.publicKey,
-                receiver: fred.publicKey,
-              })
-              .instruction(),
-        ])
-        .rpc({skipPreflight: true});
+      .rpc({skipPreflight: true});
+    console.log("✅ Transfered 5 from Andy to Bob in the ephemeral rollup");
     console.log("Transfer Tx: ", tx);
 
-    let balanceAccount = await ephemeralProgram.account.balance.fetch(ronBalancePda);
-    console.log("Balance Ron: ", balanceAccount.balance.toString());
-    balanceAccount = await ephemeralProgram.account.balance.fetch(bobBalancePda);
-    console.log("Balance Bob: ", balanceAccount.balance.toString());
-    balanceAccount = await ephemeralProgram.account.balance.fetch(fredBalancePda);
-    console.log("Balance Fred: ", balanceAccount.balance.toString());
+
+    let tx2 = await ephemeralProgram.methods
+        .transfer(new BN(15))
+        .accounts({
+          payer: bob.publicKey,
+          receiver: provider.wallet.publicKey,
+        })
+      .signers([bob])
+      .rpc({skipPreflight: true});
+    console.log("✅ Transfered 15 from Bob to Andy in the ephemeral rollup");
+    console.log("Transfer Tx: ", tx2);
   });
 
-  it("Undelegate Balances of Ron, Bob and Fred", async () => {
+  it("Undelegate Balances of Andy and Bob", async () => {
     const balanceAccountInfo = await provider.connection.getAccountInfo(
-      ronBalancePda
+      andyBalancePda
     );
     if (
       balanceAccountInfo.owner.toBase58() != DELEGATION_PROGRAM_ID.toBase58()
@@ -232,15 +229,13 @@ describe("dummy-transfer", () => {
             payer: bob.publicKey,
           })
           .instruction(),
-        await program.methods
-            .undelegate()
-            .accounts({
-              payer: fred.publicKey,
-            })
-            .instruction(),
       ])
-      .signers([bob, fred])
+      .signers([bob])
       .rpc({skipPreflight: true});
-  });
-
+    
+    console.log("✅ Undelegated Balances of Andy and Bob");
+    // We wait here for the transaction to be confirmed on the base chain
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    await printBalances(program, andyBalancePda, bobBalancePda);
+  });  
 });

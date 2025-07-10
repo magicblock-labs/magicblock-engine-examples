@@ -2,6 +2,31 @@
 
 Demo program for implementing a token transfer that can delegate and execute both on-chain and in the ephemeral rollup.
 
+## Software Packages
+
+This program has utilized the following sofware packages.
+
+| Software   | Version | Installation Guide                                              |
+| ---------- | ------- | --------------------------------------------------------------- |
+| **Solana** | 2.1.0  | [Install Solana](https://docs.anza.xyz/cli/install)             |
+| **Rust**   | 1.82    | [Install Rust](https://www.rust-lang.org/tools/install)         |
+| **Anchor** | 0.31.1  | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
+
+```sh
+# Check and initialize your Solana version
+agave-install list
+agave-install init 2.1.21
+
+# Check and initialize your Rust version
+rustup show
+rustup install 1.82
+
+# Check and initialize your Anchor version
+avm list
+avm use 0.31.1
+```
+
+
 ## Running Tests on Devnet
 
 To run tests on the devnet, use the following command:
@@ -9,6 +34,8 @@ To run tests on the devnet, use the following command:
 ```bash
 anchor test --skip-local-validator --skip-build --skip-deploy
 ```
+
+> **⚠️ Note:** Make sure you have devnet SOL in your local wallet.
 
 ## Running tests with a Local Ephemeral Rollup and Devnet
 
