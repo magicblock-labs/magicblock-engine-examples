@@ -123,6 +123,7 @@ describe("dummy-transfer", () => {
         .add(transferIx)
         .add(initIx);
       await provider.sendAndConfirm(tx, [bob]);
+      console.log("✅ Initialized Bob Balance PDA!");
     } else {
       console.log("✅ Bob Balance PDA already initialized!");
     }
@@ -222,14 +223,13 @@ describe("dummy-transfer", () => {
       .accounts({
         payer: provider.wallet.publicKey,
       })
-      .postInstructions([
-        await program.methods
-          .undelegate()
-          .accounts({
-            payer: bob.publicKey,
-          })
-          .instruction(),
-      ])
+      .rpc({skipPreflight: true});
+      
+      let tx2 = await ephemeralProgram.methods
+      .undelegate()
+      .accounts({
+        payer: bob.publicKey,
+      })
       .signers([bob])
       .rpc({skipPreflight: true});
     
