@@ -22,8 +22,8 @@ describe("anchor-counter", () => {
     ),
     anchor.Wallet.local()
   );
-  console.log("Base Layer Connection: ", provider.connection._rpcEndpoint);
-  console.log("Ephemeral Rollup Connection: ", providerEphemeralRollup.connection._rpcEndpoint);
+  console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
+  console.log("Ephemeral Rollup Connection: ", providerEphemeralRollup.connection.rpcEndpoint);
   console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`)
 
   before(async function () {
