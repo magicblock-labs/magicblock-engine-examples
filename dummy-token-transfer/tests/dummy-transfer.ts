@@ -4,8 +4,8 @@ import { DummyTransfer } from "../target/types/dummy_transfer";
 import {
   DELEGATION_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { sendMagicTransaction, getClosestValidator } from "magic-router-sdk";
-import { Transaction, Connection, PublicKey } from "@solana/web3.js";
+import { getClosestValidator, sendMagicTransaction } from "magic-router-sdk";
+import { Transaction} from "@solana/web3.js";
 
 // Helper function to print balances of all accounts
 async function printBalances(program: Program<DummyTransfer>, andyBalancePda: web3.PublicKey, bobBalancePda: web3.PublicKey) {
@@ -32,24 +32,6 @@ async function printBalances(program: Program<DummyTransfer>, andyBalancePda: we
     console.log("Bob Balance PDA not initialized");
   }
 }
-
-// async function getNearestERPubkey(routerConnection: Connection) {
-//   const response = await fetch(routerConnection.rpcEndpoint, {
-//     method: 'POST',
-//     headers: { 'Content-Type': 'application/json' },
-//     body: JSON.stringify({
-//       jsonrpc: '2.0',
-//       id: 1,
-//       method: 'getIdentity',
-//       params: []
-//     })
-//   });
-
-//   const identityData = await response.json() as any;
-//   const validatorKey = new PublicKey(identityData.result.identity);
-
-//   return validatorKey;
-// }
 
 describe("dummy-transfer", () => {
   const provider = anchor.AnchorProvider.env();
@@ -225,9 +207,11 @@ describe("dummy-transfer", () => {
       [provider.wallet.payer, bob]
     );
 
+    // Naive wait for the transaction to be confirmed on the base chain. Better pattern incoming soon.
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
     console.log("✅ Delegated Balances of Andy and Bob");
     console.log("Delegation signature", signature);
-    await new Promise(resolve => setTimeout(resolve, 5000));
   });
 
   it("Perform transfers in the ephemeral rollup", async () => {
@@ -240,7 +224,7 @@ describe("dummy-transfer", () => {
       console.log("Balance is not delegated");
       return;
     }
-    
+
     const tx1 = await program.methods
       .transfer(new BN(5))
       .accounts({
@@ -313,8 +297,8 @@ describe("dummy-transfer", () => {
 
     console.log("✅ Undelegated Balances of Andy and Bob");
     console.log("Undelegation signatures:", signature1, signature2);
-    // We wait here for the transaction to be confirmed on the base chain
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // Naive wait for the transaction to be confirmed on the base chain. Better pattern incoming soon.
+    await new Promise(resolve => setTimeout(resolve, 5000)); 
     await printBalances(program, andyBalancePda, bobBalancePda);
   });
 });
