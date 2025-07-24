@@ -4,7 +4,8 @@ import { DummyTransfer } from "../target/types/dummy_transfer";
 import {
   DELEGATION_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { select } from "firebase-functions/params";
+import { getClosestValidator, sendMagicTransaction } from "magic-router-sdk";
+import { Transaction} from "@solana/web3.js";
 
 // Helper function to print balances of all accounts
 async function printBalances(program: Program<DummyTransfer>, andyBalancePda: web3.PublicKey, bobBalancePda: web3.PublicKey) {
@@ -36,22 +37,17 @@ describe("dummy-transfer", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  // Configure the ephemeral rollup endpoint.
-  const providerEphemeralRollup = new anchor.AnchorProvider(
-    new anchor.web3.Connection(
-      process.env.PROVIDER_ENDPOINT || "https://devnet.magicblock.app/",
-      {
-        wsEndpoint: process.env.WS_ENDPOINT || "wss://devnet.magicblock.app/",
-      }
-    ),
-    anchor.Wallet.local()
+  // Configure the router endpoint for Magic Router
+  const routerConnection = new web3.Connection(
+    process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app",
+    {
+      wsEndpoint: process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app",
+    }
   );
 
-  console.log("Provider Endpoint: ", providerEphemeralRollup.connection._rpcEndpoint)
-  console.log("Provider WS Endpoint: ", providerEphemeralRollup.connection._rpcWsEndpoint)
+  console.log("Router Endpoint: ", routerConnection.rpcEndpoint)
 
   const program = anchor.workspace.DummyTransfer as Program<DummyTransfer>;
-  const ephemeralProgram = new Program(program.idl, providerEphemeralRollup);
 
   const bob = web3.Keypair.generate();
 
@@ -70,8 +66,6 @@ describe("dummy-transfer", () => {
   console.log("Bob Public Key: ", bob.publicKey.toBase58());
   console.log("Andy Balance PDA: ", andyBalancePda.toBase58());
   console.log("Bob Balance PDA: ", bobBalancePda.toBase58());
-
-
 
   before(async () => {
     // If running locally, airdrop SOL to the wallet.
@@ -95,14 +89,22 @@ describe("dummy-transfer", () => {
       bobBalancePda
     );
 
-    if (!andyBalancePDA) {
-      await program.methods
-        .initialize()
-        .accounts({
-          user: provider.wallet.publicKey,
-        })
-        .rpc({ skipPreflight: true });
-    } else {
+    if(!andyBalancePDA) {
+    const tx = await program.methods
+      .initialize()
+      .accounts({
+        user: provider.wallet.publicKey,
+      })
+      .transaction() as Transaction;
+
+    const signature = await sendMagicTransaction(
+      routerConnection,
+      tx,
+      [provider.wallet.payer]
+    );
+    console.log("✅ Initialized Andy Balance PDA! Signature:", signature);
+    } 
+    else {
       console.log("✅ Andy Balance PDA already initialized!");
     }
 
@@ -122,8 +124,13 @@ describe("dummy-transfer", () => {
       const tx = new web3.Transaction()
         .add(transferIx)
         .add(initIx);
-      await provider.sendAndConfirm(tx, [bob]);
-      console.log("✅ Initialized Bob Balance PDA!");
+
+      const signature = await sendMagicTransaction(
+        routerConnection,
+        tx,
+        [provider.wallet.payer, bob]
+      );
+      console.log("✅ Initialized Bob Balance PDA! Signature:", signature);
     } else {
       console.log("✅ Bob Balance PDA already initialized!");
     }
@@ -133,23 +140,30 @@ describe("dummy-transfer", () => {
 
   it("Transfer on base chain from Andy to Bob", async () => {
     const balanceAccountInfo = await provider.connection.getAccountInfo(
-        andyBalancePda
+      andyBalancePda
     );
     if (
-        balanceAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()
+      balanceAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()
     ) {
       console.log("❌ Cannot transfer: Balances are currently delegated");
       return;
     }
+
     const tx = await program.methods
       .transfer(new BN(5))
       .accounts({
         payer: provider.wallet.publicKey,
         receiver: bob.publicKey,
       })
-      .rpc({ skipPreflight: true });
+      .transaction();
+
+    const signature = await sendMagicTransaction(
+      routerConnection,
+      tx,
+      [provider.wallet.payer]
+    );
     console.log("✅ Transfered 5 from Andy to Bob");
-    console.log("Transfer Tx: ", tx);
+    console.log("Transfer Tx: ", signature);
 
     await printBalances(program, andyBalancePda, bobBalancePda);
   });
@@ -164,48 +178,84 @@ describe("dummy-transfer", () => {
       console.log("❌ Balance is already delegated");
       return;
     }
-    let tx = await program.methods
-      .delegate()
+
+    const validatorKey = await getClosestValidator(routerConnection);
+    const tx = await program.methods
+      .delegate({
+        commitFrequencyMs: 30000,
+        validator: validatorKey,
+      })
       .accounts({
         payer: provider.wallet.publicKey,
       })
       .postInstructions([
         await program.methods
-          .delegate()
+          .delegate({
+        commitFrequencyMs: 30000,
+        validator: validatorKey,
+      })
           .accounts({
             payer: bob.publicKey,
           })
           .instruction()
       ])
-      .signers([bob])
-      .rpc( {commitment: "confirmed", skipPreflight: true});
+      .transaction();
+
+    const signature = await sendMagicTransaction(
+      routerConnection,
+      tx,
+      [provider.wallet.payer, bob]
+    );
+
+    // Naive wait for the transaction to be confirmed on the base chain. Better pattern incoming soon.
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     console.log("✅ Delegated Balances of Andy and Bob");
-    console.log("Delegation signature", tx);
+    console.log("Delegation signature", signature);
   });
 
   it("Perform transfers in the ephemeral rollup", async () => {
-    let tx = await ephemeralProgram.methods
-        .transfer(new BN(5))
-        .accounts({
-          payer: provider.wallet.publicKey,
-          receiver: bob.publicKey,
-        })
-      .rpc({skipPreflight: true});
+    const balanceAccountInfo = await provider.connection.getAccountInfo(
+      andyBalancePda
+    );
+    if (
+      balanceAccountInfo.owner.toBase58() != DELEGATION_PROGRAM_ID.toBase58()
+    ) {
+      console.log("Balance is not delegated");
+      return;
+    }
+
+    const tx1 = await program.methods
+      .transfer(new BN(5))
+      .accounts({
+        payer: provider.wallet.publicKey,
+        receiver: bob.publicKey,
+      })
+      .transaction();
+
+    const signature1 = await sendMagicTransaction(
+      routerConnection,
+      tx1,
+      [provider.wallet.payer]
+    );
     console.log("✅ Transfered 5 from Andy to Bob in the ephemeral rollup");
-    console.log("Transfer Tx: ", tx);
+    console.log("Transfer Tx: ", signature1);
 
+    const tx2 = await program.methods
+      .transfer(new BN(15))
+      .accounts({
+        payer: bob.publicKey,
+        receiver: provider.wallet.publicKey,
+      })
+      .transaction();
 
-    let tx2 = await ephemeralProgram.methods
-        .transfer(new BN(15))
-        .accounts({
-          payer: bob.publicKey,
-          receiver: provider.wallet.publicKey,
-        })
-      .signers([bob])
-      .rpc({skipPreflight: true});
+    const signature2 = await sendMagicTransaction(
+      routerConnection,
+      tx2,
+      [bob]
+    );
     console.log("✅ Transfered 15 from Bob to Andy in the ephemeral rollup");
-    console.log("Transfer Tx: ", tx2);
+    console.log("Transfer Tx: ", signature2);
   });
 
   it("Undelegate Balances of Andy and Bob", async () => {
@@ -218,24 +268,37 @@ describe("dummy-transfer", () => {
       console.log("Balance is not delegated");
       return;
     }
-    let tx = await ephemeralProgram.methods
+
+    const tx1 = await program.methods
       .undelegate()
       .accounts({
         payer: provider.wallet.publicKey,
       })
-      .rpc({skipPreflight: true});
-      
-      let tx2 = await ephemeralProgram.methods
+      .transaction();
+
+    const signature1 = await sendMagicTransaction(
+      routerConnection,
+      tx1,
+      [provider.wallet.payer]
+    );
+
+    const tx2 = await program.methods
       .undelegate()
       .accounts({
         payer: bob.publicKey,
       })
-      .signers([bob])
-      .rpc({skipPreflight: true});
-    
+      .transaction();
+
+    const signature2 = await sendMagicTransaction(
+      routerConnection,
+      tx2,
+      [bob]
+    );
+
     console.log("✅ Undelegated Balances of Andy and Bob");
-    // We wait here for the transaction to be confirmed on the base chain
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    console.log("Undelegation signatures:", signature1, signature2);
+    // Naive wait for the transaction to be confirmed on the base chain. Better pattern incoming soon.
+    await new Promise(resolve => setTimeout(resolve, 5000)); 
     await printBalances(program, andyBalancePda, bobBalancePda);
-  });  
+  });
 });
