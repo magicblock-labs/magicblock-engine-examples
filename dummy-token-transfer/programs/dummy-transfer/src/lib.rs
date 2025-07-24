@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_and_undelegate_accounts};
 
-declare_id!("58yUmvFtbxoV9dRmv3mbrmKCviJmQLY2MzECCa5cWR6j");
+declare_id!("Ckyvyxw2rrFmhAKxDa7qjfTridciYHRTetS1WPGmKdpo");
 
 #[ephemeral]
 #[program]
@@ -18,11 +18,16 @@ pub mod dummy_transfer {
     }
 
     /// Delegate the balance
-    pub fn delegate(ctx: Context<DelegateBalance>) -> Result<()> {
+    pub fn delegate(ctx: Context<DelegateBalance>, params: DelegateParams) -> Result<()> {
+        let config = DelegateConfig {
+            commit_frequency_ms: params.commit_frequency_ms,
+            validator: params.validator,
+        };
+
         ctx.accounts.delegate_balance(
             &ctx.accounts.payer,
             &[ctx.accounts.payer.key.as_ref()],
-            DelegateConfig::default(),
+            config,
         )?;
         Ok(())
     }
@@ -101,4 +106,10 @@ pub struct Balance {
 pub enum ErrorCode {
     #[msg("Insufficient balance for transfer")]
     InsufficientBalance,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct DelegateParams {
+    pub commit_frequency_ms: u32,
+    pub validator: Option<Pubkey>,
 }
