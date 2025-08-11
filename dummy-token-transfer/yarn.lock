@@ -375,6 +375,11 @@ base-x@^3.0.2:
   dependencies:
     safe-buffer "^5.0.1"
 
+base-x@^5.0.0:
+  version "5.0.1"
+  resolved "https://registry.npmjs.org/base-x/-/base-x-5.0.1.tgz"
+  integrity sha512-M7uio8Zt++eg3jPj+rHMfCC+IuygQHHCOU+IYsVtik6FWjuYpVt/+MRKcgsAMHh8mMFAwnB+Bs+mTrFiXjMzKg==
+
 base64-js@^1.3.1:
   version "1.5.1"
   resolved "https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz"
@@ -444,6 +449,13 @@ bs58@^4.0.0, bs58@^4.0.1:
   integrity sha512-Ok3Wdf5vOIlBrgCvTq96gBkJw+JUEzdBgyaza5HLtPm7yTHkjRy8+JzNyHF7BHa0bNWOQIp3m5YF0nnFcOIKLw==
   dependencies:
     base-x "^3.0.2"
+
+bs58@^6.0.0:
+  version "6.0.0"
+  resolved "https://registry.npmjs.org/bs58/-/bs58-6.0.0.tgz"
+  integrity sha512-PD0wEnEYg6ijszw/u8s+iI3H17cTymlrwkKhDhPZq+Sokl3AU4htyBFTjAeNAlCCmg0f53g6ih3jATyCKftTfw==
+  dependencies:
+    base-x "^5.0.0"
 
 buffer-from@^1.0.0, buffer-from@^1.1.0:
   version "1.1.2"
@@ -1079,12 +1091,13 @@ loupe@^2.3.6:
   dependencies:
     get-func-name "^2.0.1"
 
-magic-router-sdk@^1.0.8:
-  version "1.0.8"
-  resolved "https://registry.npmjs.org/magic-router-sdk/-/magic-router-sdk-1.0.8.tgz"
-  integrity sha512-60XJWr3tgREkhg6NDVaLN8NP9XXDCZXUm0UGhYwDG5nLUgYQCqDU+/XfAN/KTQ5rwNam9kU/Q8E7UOVKWQOwmA==
+magic-router-sdk@^1.0.10:
+  version "1.0.10"
+  resolved "https://registry.npmjs.org/magic-router-sdk/-/magic-router-sdk-1.0.10.tgz"
+  integrity sha512-N06E03QfRes2U/04yc1hRUJd24T3dSKAsEozifvwr3vtPxwDaiYsfWCMI14nRWHB24Hf+muvGlK/aSt3IUeA6A==
   dependencies:
     "@solana/web3.js" "^1.98.2"
+    bs58 "^6.0.0"
 
 make-error@^1.1.1:
   version "1.3.6"

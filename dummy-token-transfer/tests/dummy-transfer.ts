@@ -4,7 +4,7 @@ import { DummyTransfer } from "../target/types/dummy_transfer";
 import {
   DELEGATION_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { getClosestValidator, sendMagicTransaction } from "magic-router-sdk";
+import { getClosestValidator, sendMagicTransaction, getDelegationStatus } from "magic-router-sdk";
 import { Transaction} from "@solana/web3.js";
 
 // Helper function to print balances of all accounts
@@ -139,13 +139,9 @@ describe("dummy-transfer", () => {
   });
 
   it("Transfer on base chain from Andy to Bob", async () => {
-    const balanceAccountInfo = await provider.connection.getAccountInfo(
-      andyBalancePda
-    );
-    if (
-      balanceAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()
-    ) {
-      console.log("❌ Cannot transfer: Balances are currently delegated");
+    const isDelegated = (await getDelegationStatus(routerConnection, andyBalancePda)).isDelegated;
+    if (isDelegated == true) {
+      console.log("❌ Balance is already delegated");
       return;
     }
 
@@ -169,12 +165,8 @@ describe("dummy-transfer", () => {
   });
 
   it("Delegate Balances of Andy and Bob", async () => {
-    const balanceAccountInfo = await provider.connection.getAccountInfo(
-      andyBalancePda
-    );
-    if (
-      balanceAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()
-    ) {
+    const isDelegated = (await getDelegationStatus(routerConnection, andyBalancePda)).isDelegated;
+    if (isDelegated == true) {
       console.log("❌ Balance is already delegated");
       return;
     }
@@ -215,13 +207,9 @@ describe("dummy-transfer", () => {
   });
 
   it("Perform transfers in the ephemeral rollup", async () => {
-    const balanceAccountInfo = await provider.connection.getAccountInfo(
-      andyBalancePda
-    );
-    if (
-      balanceAccountInfo.owner.toBase58() != DELEGATION_PROGRAM_ID.toBase58()
-    ) {
-      console.log("Balance is not delegated");
+    const isDelegated = (await getDelegationStatus(routerConnection, andyBalancePda)).isDelegated;
+    if (isDelegated == false) {
+      console.log("❌ Balance is not delegated");
       return;
     }
 
@@ -259,13 +247,9 @@ describe("dummy-transfer", () => {
   });
 
   it("Undelegate Balances of Andy and Bob", async () => {
-    const balanceAccountInfo = await provider.connection.getAccountInfo(
-      andyBalancePda
-    );
-    if (
-      balanceAccountInfo.owner.toBase58() != DELEGATION_PROGRAM_ID.toBase58()
-    ) {
-      console.log("Balance is not delegated");
+    const isDelegated = (await getDelegationStatus(routerConnection, andyBalancePda)).isDelegated;
+    if (isDelegated == false) {
+      console.log("❌ Balance is not delegated");
       return;
     }
 
