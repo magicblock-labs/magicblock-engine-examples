@@ -383,6 +383,52 @@
       "args": []
     },
     {
+      "name": "increment_with_account",
+      "docs": [
+        "Increment and read account"
+      ],
+      "discriminator": [
+        63,
+        19,
+        38,
+        200,
+        223,
+        96,
+        190,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  115,
+                  116,
+                  45,
+                  112,
+                  100,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "external",
+          "docs": [
+            "CHECK The account to read"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initialize",
       "docs": [
         "Initialize the counter."

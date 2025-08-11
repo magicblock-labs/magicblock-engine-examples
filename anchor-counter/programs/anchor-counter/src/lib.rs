@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("6AfF3o9bMCaJuCV4oRu2yHunpiWYsYqivr7rYPNycYdf");
+declare_id!("9H58LsS7LXpe7XYuHRhfEDWk8YS7pvQjK3L28gPoLiqF");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 
@@ -28,6 +28,18 @@ pub mod anchor_counter {
             counter.count = 0;
         }
         msg!("PDA {} count: {}", counter.key(), counter.count);
+        Ok(())
+    }
+
+    /// Increment and read account
+    pub fn increment_with_account(ctx: Context<IncrementWithAccount>) -> Result<()> {
+        let counter = &mut ctx.accounts.counter;
+        counter.count += 1;
+        if counter.count > 1000 {
+            counter.count = 0;
+        }
+        msg!("PDA {} count: {}", counter.key(), counter.count);
+        msg!("External account {}", ctx.accounts.external.key());
         Ok(())
     }
 
@@ -117,6 +129,14 @@ pub struct DelegateInput<'info> {
 pub struct Increment<'info> {
     #[account(mut, seeds = [TEST_PDA_SEED], bump)]
     pub counter: Account<'info, Counter>,
+}
+
+#[derive(Accounts)]
+pub struct IncrementWithAccount<'info> {
+    #[account(mut, seeds = [TEST_PDA_SEED], bump)]
+    pub counter: Account<'info, Counter>,
+    /// CHECK The account to read
+    pub external: AccountInfo<'info>,
 }
 
 /// Account for the increment instruction + manual commit.
