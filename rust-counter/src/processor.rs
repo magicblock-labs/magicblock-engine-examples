@@ -5,10 +5,10 @@ use solana_program::{
     msg,
     program::invoke_signed,
     program_error::ProgramError,
+    pubkey,
     pubkey::Pubkey,
     system_instruction,
-    sysvar::rent::Rent,
-    sysvar::Sysvar,
+    sysvar::{rent::Rent, Sysvar},
 };
 
 use ephemeral_rollups_sdk::cpi::{
@@ -200,7 +200,10 @@ pub fn process_delegate(_program_id: &Pubkey, accounts: &[AccountInfo]) -> Progr
 
     let delegate_config = DelegateConfig {
         commit_frequency_ms: 30_000,
-        validator: None,
+        // Europe ER validator
+        validator: Some(pubkey!("EUhi4xecUqEUmGgBCoGomeEiUprwu2D2oM2QmwMjzM75")),
+        // validator: Some(pubkey!("ASLxD38WUHStVbUGm4BW7WZNSThwzZYTr6Qz4eohf3Xp")), // Asia ER validator
+        // validator: Some(pubkey!("USQT2zbsRiK7dZqVzCktauygDXVAdAgWZbnHJyQo4TV")), // US ER validator
     };
 
     delegate_account(delegate_accounts, pda_seeds, delegate_config)?;

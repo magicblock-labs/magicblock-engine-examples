@@ -36,7 +36,12 @@ pub mod anchor_counter {
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
             &[TEST_PDA_SEED],
-            DelegateConfig::default(),
+            DelegateConfig {
+                commit_frequency_ms: 30_000,
+                validator: Some(pubkey!("EUhi4xecUqEUmGgBCoGomeEiUprwu2D2oM2QmwMjzM75")), // Europe ER validator
+                                                                                          // validator: Some(pubkey!("ASLxD38WUHStVbUGm4BW7WZNSThwzZYTr6Qz4eohf3Xp")), // Asia ER validator
+                                                                                          // validator: Some(pubkey!("USQT2zbsRiK7dZqVzCktauygDXVAdAgWZbnHJyQo4TV")), // US ER validator
+            }, // DelegateConfig::default(),
         )?;
         Ok(())
     }
