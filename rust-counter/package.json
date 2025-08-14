@@ -9,7 +9,8 @@
     "@solana/web3.js": "^1.98.2",
     "borsh": "0.7.0",
     "dotenv": "^16.5.0",
-    "fs": "0.0.2"
+    "fs": "0.0.2",
+    "magic-router-sdk": "^1.0.9"
   },
   "scripts": {
     "test": "NODE_OPTIONS='--no-deprecation' yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
@@ -17,6 +18,7 @@
   "devDependencies": {
     "@types/chai": "^5.2.2",
     "@types/mocha": "^10.0.10",
+    "bs58": "^6.0.0",
     "chai": "^5.2.0",
     "mocha": "^11.2.2",
     "prettier": "^3.5.3",
