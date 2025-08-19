@@ -9,7 +9,6 @@ import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegat
  } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 import dotenv from 'dotenv'
-// import { sendAndConfirmMagicTransaction, getClosestValidator } from "./magic-router";
 
 import { getClosestValidator, sendAndConfirmMagicTransaction } from "magic-router-sdk";
 dotenv.config()
