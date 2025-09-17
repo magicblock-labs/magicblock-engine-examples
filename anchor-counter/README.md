@@ -4,7 +4,7 @@ Simple counter program using Anchor and Ephemeral Rollups.
 
 ## Software Packages
 
-This program has utilized the following sofware packages.
+This program has utilized the following software packages.
 
 | Software   | Version | Installation Guide                                              |
 | ---------- | ------- | --------------------------------------------------------------- |
