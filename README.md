@@ -7,6 +7,8 @@ Scaling solution for performant, composable games and applications.
 This repository contains examples of how delegate/undelegate accounts and run transactions in an Ephemeral Rollups.
 Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRollups/ephemeral_rollups).
 
+> To view integrated demos for specific usecases, please look at [MagicBlock Starter Kits](https://github.com/magicblock-labs/starter-kits).
+
 ## 👷Examples
 
 - [Anchor Counter](./anchor-counter/README.md) - A simple counter that can be incremented. Tests use the ts sdk to delegate/undelegate accounts and run transactions.
