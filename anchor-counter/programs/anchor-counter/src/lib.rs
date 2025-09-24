@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("9H58LsS7LXpe7XYuHRhfEDWk8YS7pvQjK3L28gPoLiqF");
+declare_id!("5v6dScEEoLazR8BA2DnTJAYFUAcpevQVQZ5cPiJTPZ2e");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 
@@ -50,9 +50,11 @@ pub mod anchor_counter {
             &[TEST_PDA_SEED],
             DelegateConfig {
                 commit_frequency_ms: 30_000,
-                validator: Some(pubkey!("EUhi4xecUqEUmGgBCoGomeEiUprwu2D2oM2QmwMjzM75")), // Europe ER validator
-                                                                                          // validator: Some(pubkey!("ASLxD38WUHStVbUGm4BW7WZNSThwzZYTr6Qz4eohf3Xp")), // Asia ER validator
-                                                                                          // validator: Some(pubkey!("USQT2zbsRiK7dZqVzCktauygDXVAdAgWZbnHJyQo4TV")), // US ER validator
+                validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")), // Set delegating ER validator
+                                                                                         // MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57 // Asia ER validator
+                                                                                         // MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e // EU ER validator
+                                                                                         // MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd // US ER validator
+                                                                                         // mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev // Local ER validator
             }, // DelegateConfig::default(),
         )?;
         Ok(())

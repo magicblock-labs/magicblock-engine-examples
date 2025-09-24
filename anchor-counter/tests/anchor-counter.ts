@@ -14,11 +14,7 @@ describe("anchor-counter", () => {
   anchor.setProvider(provider);
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
-    new anchor.web3.Connection(
-      process.env.PROVIDER_ENDPOINT || "https://devnet-eu.magicblock.app/",
-      {
-        wsEndpoint: process.env.WS_ENDPOINT || "wss://devnet-eu.magicblock.app/",
-      }
+    new anchor.web3.Connection(process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/", {wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet.magicblock.app/"}
     ),
     anchor.Wallet.local()
   );
@@ -191,9 +187,9 @@ describe("anchor-counter-increment-commit-atomic", () => {
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
     new anchor.web3.Connection(
-      process.env.PROVIDER_ENDPOINT || "https://devnet-eu.magicblock.app/",
+      process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/",
       {
-        wsEndpoint: process.env.WS_ENDPOINT || "wss://devnet-eu.magicblock.app/",
+        wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
       }
     ),
     anchor.Wallet.local()
