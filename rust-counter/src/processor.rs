@@ -200,10 +200,11 @@ pub fn process_delegate(_program_id: &Pubkey, accounts: &[AccountInfo]) -> Progr
 
     let delegate_config = DelegateConfig {
         commit_frequency_ms: 30_000,
-        // Europe ER validator
-        validator: Some(pubkey!("EUhi4xecUqEUmGgBCoGomeEiUprwu2D2oM2QmwMjzM75")),
-        // validator: Some(pubkey!("ASLxD38WUHStVbUGm4BW7WZNSThwzZYTr6Qz4eohf3Xp")), // Asia ER validator
-        // validator: Some(pubkey!("USQT2zbsRiK7dZqVzCktauygDXVAdAgWZbnHJyQo4TV")), // US ER validator
+        validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")), // Set delegating ER validator
+                                                                                 // MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57 // Asia ER validator
+                                                                                 // MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e // EU ER validator
+                                                                                 // MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd // US ER validator
+                                                                                 // mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev // Local ER validator
     };
 
     delegate_account(delegate_accounts, pda_seeds, delegate_config)?;

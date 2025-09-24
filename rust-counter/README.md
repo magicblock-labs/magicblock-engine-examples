@@ -213,35 +213,3 @@ const txHash = await web3.sendAndConfirmTransaction(
 );
 console.log("txId:", txHash);
 ```
-
-## Local Ephemeral Validator
-
-To run tests using a local ephemeral validator, follow these steps:
-
-### 1. Install the Local Validator
-
-Ensure you have the ephemeral validator installed globally:
-
-```bash
-npm install -g @magicblock-labs/ephemeral-validator
-```
-
-### 2. Start the Local Validator
-
-Run the local validator with the appropriate environment variables:
-
-```bash
-ACCOUNTS_REMOTE=https://rpc.magicblock.app/devnet ACCOUNTS_LIFECYCLE=ephemeral ephemeral-validator
-```
-
-`ACCOUNTS_REMOTE` point to the reference RPC endpoint, and `ACCOUNTS_LIFECYCLE` should be set to `ephemeral`.
-
-### 3. Run the Tests with the Local Validator
-
-Execute the tests while pointing to the local validator:
-
-```bash
-PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=ws://localhost:8900 yarn test
-```
-
-This setup ensures tests run efficiently on a local ephemeral rollup while connecting to the devnet.

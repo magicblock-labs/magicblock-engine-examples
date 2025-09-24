@@ -16,7 +16,7 @@ dummy_transfer = "58yUmvFtbxoV9dRmv3mbrmKCviJmQLY2MzECCa5cWR6j"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "https://devnet-router.magicblock.app/"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
