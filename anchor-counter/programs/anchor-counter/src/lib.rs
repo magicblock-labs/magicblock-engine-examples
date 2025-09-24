@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("5v6dScEEoLazR8BA2DnTJAYFUAcpevQVQZ5cPiJTPZ2e");
+declare_id!("4Q3f1S8ucWxs9LSAZUpr57UHTf1DdeYmKvY6a12H8r8Y");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 

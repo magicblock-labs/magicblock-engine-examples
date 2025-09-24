@@ -1,5 +1,5 @@
 {
-  "address": "5v6dScEEoLazR8BA2DnTJAYFUAcpevQVQZ5cPiJTPZ2e",
+  "address": "4Q3f1S8ucWxs9LSAZUpr57UHTf1DdeYmKvY6a12H8r8Y",
   "metadata": {
     "name": "anchor_counter",
     "version": "0.1.0",
@@ -105,38 +105,38 @@
             "program": {
               "kind": "const",
               "value": [
+                50,
+                122,
+                107,
+                247,
+                147,
+                165,
+                217,
+                29,
+                106,
+                198,
+                121,
+                48,
+                106,
+                246,
+                213,
+                51,
+                51,
                 73,
-                8,
-                228,
-                255,
-                194,
-                39,
-                27,
-                45,
-                2,
-                112,
-                162,
-                94,
-                120,
+                213,
                 55,
-                227,
-                137,
-                189,
-                119,
-                90,
-                168,
-                189,
-                200,
-                85,
-                100,
-                243,
-                93,
-                186,
-                72,
-                186,
+                214,
+                175,
+                165,
+                7,
+                176,
+                40,
+                188,
                 192,
-                241,
-                207
+                249,
+                171,
+                108,
+                209
               ]
             }
           }
@@ -221,7 +221,7 @@
         },
         {
           "name": "owner_program",
-          "address": "5v6dScEEoLazR8BA2DnTJAYFUAcpevQVQZ5cPiJTPZ2e"
+          "address": "4Q3f1S8ucWxs9LSAZUpr57UHTf1DdeYmKvY6a12H8r8Y"
         },
         {
           "name": "delegation_program",
