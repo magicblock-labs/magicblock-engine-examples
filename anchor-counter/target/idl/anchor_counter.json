@@ -1,5 +1,5 @@
 {
-  "address": "6AfF3o9bMCaJuCV4oRu2yHunpiWYsYqivr7rYPNycYdf",
+  "address": "9javwxMaxnEb7gguTnTr6Bgb8HRNxWvBNKAUjg3SiXMV",
   "metadata": {
     "name": "anchor_counter",
     "version": "0.1.0",
@@ -105,38 +105,38 @@
             "program": {
               "kind": "const",
               "value": [
-                76,
-                195,
-                231,
-                11,
-                116,
-                154,
-                154,
-                134,
+                129,
+                198,
                 65,
-                209,
-                53,
-                119,
-                255,
-                63,
-                12,
-                6,
-                229,
-                150,
-                75,
-                148,
-                196,
-                184,
-                136,
-                81,
-                40,
-                250,
+                26,
+                139,
+                105,
+                17,
                 231,
-                128,
-                196,
-                27,
-                172,
-                194
+                108,
+                62,
+                85,
+                164,
+                212,
+                171,
+                18,
+                229,
+                13,
+                62,
+                59,
+                149,
+                88,
+                250,
+                28,
+                33,
+                253,
+                133,
+                245,
+                174,
+                242,
+                50,
+                82,
+                212
               ]
             }
           }
@@ -221,7 +221,7 @@
         },
         {
           "name": "owner_program",
-          "address": "6AfF3o9bMCaJuCV4oRu2yHunpiWYsYqivr7rYPNycYdf"
+          "address": "9javwxMaxnEb7gguTnTr6Bgb8HRNxWvBNKAUjg3SiXMV"
         },
         {
           "name": "delegation_program",
@@ -272,7 +272,16 @@
           }
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "val",
+          "type": "i64"
+        },
+        {
+          "name": "_unique",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "increment_and_commit",

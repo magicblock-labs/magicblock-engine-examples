@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("9H58LsS7LXpe7XYuHRhfEDWk8YS7pvQjK3L28gPoLiqF");
+declare_id!("9javwxMaxnEb7gguTnTr6Bgb8HRNxWvBNKAUjg3SiXMV");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 
@@ -15,17 +15,26 @@ pub mod anchor_counter {
     /// Initialize the counter.
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
-        counter.count = 0;
+        counter.count = 959;
         msg!("PDA {} count: {}", counter.key(), counter.count);
         Ok(())
     }
 
     /// Increment the counter.
-    pub fn increment(ctx: Context<Increment>) -> Result<()> {
+    pub fn increment(ctx: Context<Increment>, val: i64, _unique: u64) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
-        counter.count += 1;
-        if counter.count > 1000 {
-            counter.count = 0;
+        if val >= 0 {
+            counter.count += 1;
+            if counter.count > 1000 {
+                counter.count = 0;
+            }
+        } else {
+            let count = counter.count as i64 + val; // val is negative
+            if count < 0 {
+                counter.count = 0;
+            } else {
+                counter.count = count as u64;
+            }
         }
         msg!("PDA {} count: {}", counter.key(), counter.count);
         Ok(())
