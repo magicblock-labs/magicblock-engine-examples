@@ -27,7 +27,7 @@ export function initializeSolSignerKeypair(): web3.Keypair {
 
 export async function airdropSolIfNeeded(connection: web3.Connection, pubkey: web3.PublicKey, amount: number, threshold: number) {
 
-    if (connection.rpcEndpoint.includes('dev') || connection.rpcEndpoint.includes('test')) {
+    if (connection.rpcEndpoint.includes('dev') || connection.rpcEndpoint.includes('test') || connection.rpcEndpoint.includes('local') || connection.rpcEndpoint.includes('http://')) {
         const balance = await connection.getBalance(pubkey)
         console.log('Current balance is', balance / web3.LAMPORTS_PER_SOL, ' SOL','\n')
         if (balance < threshold * web3.LAMPORTS_PER_SOL) {
