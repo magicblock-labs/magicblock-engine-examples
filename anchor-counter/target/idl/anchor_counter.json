@@ -8,6 +8,35 @@
   },
   "instructions": [
     {
+      "name": "close_counter",
+      "discriminator": [
+        4,
+        236,
+        52,
+        248,
+        107,
+        146,
+        187,
+        49
+      ],
+      "accounts": [
+        {
+          "name": "counter",
+          "writable": true
+        },
+        {
+          "name": "destination",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "commit",
       "docs": [
         "Manual commit the account in the ER."

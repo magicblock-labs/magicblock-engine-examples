@@ -59,7 +59,8 @@ pub mod anchor_counter {
             &[TEST_PDA_SEED],
             DelegateConfig {
                 commit_frequency_ms: 30_000,
-                validator: Some(pubkey!("EUhi4xecUqEUmGgBCoGomeEiUprwu2D2oM2QmwMjzM75")), // Europe ER validator
+                //validator: Some(pubkey!("EUhi4xecUqEUmGgBCoGomeEiUprwu2D2oM2QmwMjzM75")), // Europe ER validator
+                validator: Some(pubkey!("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev")), // Europe ER validator
                                                                                           // validator: Some(pubkey!("ASLxD38WUHStVbUGm4BW7WZNSThwzZYTr6Qz4eohf3Xp")), // Asia ER validator
                                                                                           // validator: Some(pubkey!("USQT2zbsRiK7dZqVzCktauygDXVAdAgWZbnHJyQo4TV")), // US ER validator
             }, // DelegateConfig::default(),
@@ -118,6 +119,19 @@ pub mod anchor_counter {
         )?;
         Ok(())
     }
+
+    pub fn close_counter(_ctx: Context<CloseCounter>) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct CloseCounter<'info> {
+    #[account(mut, close = destination)]
+    pub counter: Account<'info, Counter>,
+    #[account(mut)]
+    pub destination: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
