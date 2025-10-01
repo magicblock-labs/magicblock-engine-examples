@@ -84,7 +84,6 @@ describe("Running tests:", async function () {
                 commitment: "confirmed"
             }
         ); 
-                console.log("Sent Initialize Transaction...");
         const duration = Date.now() - start;
         console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
 
