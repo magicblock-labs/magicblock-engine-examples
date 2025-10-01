@@ -6,6 +6,7 @@ use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accoun
 declare_id!("27bYc6G5sNWxKGwj7A9cgKwLp3kfkWbViKT9M4JZXCxw");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
+pub const LEADERBOARD_SEED: &[u8] = b"leaderboard";
 
 #[ephemeral]
 #[program]
@@ -15,6 +16,8 @@ pub mod magic_actions {
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count = 0;
+        let leaderboard = &mut ctx.accounts.leaderboard;
+        leaderboard.high_score = 0;
 
         msg!("Counter Initialized!");
         Ok(())
@@ -27,28 +30,26 @@ pub mod magic_actions {
         Ok(())
     }
 
-    pub fn delegate(ctx: Context<DelegateCounter>) -> Result<()> {
-        // let config = DelegateConfig {
-        //     commit_frequency_ms: params.commit_frequency_ms,
-        //     validator: params.validator,
-        // };
+    pub fn update_leaderboard(ctx: Context<UpdateLeaderboard>) -> Result<()> {
+        let leaderboard = &mut ctx.accounts.leaderboard;
+        let counter = &mut ctx.accounts.counter;
 
-        // ctx.accounts.delegate_pda(
-        //     &ctx.accounts.payer,
-        //     &[TEST_PDA_SEED],
-        //     config,
-        // )?;
+        if counter.count > leaderboard.high_score {
+            leaderboard.high_score = counter.count;
+        }
+
+        msg!("Leaderboard updated! High score: {}", leaderboard.high_score);
+        Ok(())
+    }
+
+    pub fn delegate(ctx: Context<DelegateCounter>) -> Result<()> {
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
             &[TEST_PDA_SEED],
             DelegateConfig {
                 commit_frequency_ms: 30_000,
-                validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")), // Set delegating ER validator
-                                                                                         // MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57 // Asia ER validator
-                                                                                         // MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e // EU ER validator
-                                                                                         // MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd // US ER validator
-                                                                                         // mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev // Local ER validator
-            }, // DelegateConfig::default(),
+                validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")),
+            },
         )?;
         Ok(())
     }
@@ -68,6 +69,8 @@ pub mod magic_actions {
 pub struct Initialize<'info> {
     #[account(init_if_needed, payer = user, space = 8 + 8, seeds = [TEST_PDA_SEED], bump)]
     pub counter: Account<'info, Counter>,
+    #[account(init_if_needed, payer = user, space = 8 + 8, seeds = [LEADERBOARD_SEED], bump)]
+    pub leaderboard: Account<'info, Leaderboard>,
     #[account(mut)]
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -76,6 +79,14 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 pub struct Increment<'info> {
     #[account(mut, seeds = [TEST_PDA_SEED], bump)]
+    pub counter: Account<'info, Counter>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateLeaderboard<'info> {
+    #[account(mut)]
+    pub leaderboard: Account<'info, Leaderboard>,
+    pub user: Signer<'info>,
     pub counter: Account<'info, Counter>,
 }
 
@@ -100,4 +111,9 @@ pub struct UndelegateCounter<'info> {
 #[account]
 pub struct Counter {
     pub count: u64,
+}
+
+#[account]
+pub struct Leaderboard {
+    pub high_score: u64,
 }
