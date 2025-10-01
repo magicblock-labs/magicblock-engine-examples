@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
+use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_rollups_sdk::ephem::{MagicInstructionBuilder, MagicAction, CallHandler, CommitType};
 use ephemeral_rollups_sdk::ActionArgs;
 
@@ -67,31 +67,30 @@ pub mod magic_actions {
     }
 
     pub fn commit_and_update_leaderboard(ctx: Context<CommitAndUpdateLeaderboard>) -> Result<()> {
-        // Serialize the instruction data for update_leaderboard
         let instruction_data = anchor_lang::InstructionData::data(
             &crate::instruction::UpdateLeaderboard {}
         );
     
-        // Create ActionArgs with the correct fields
         let action_args = ActionArgs {
-            escrow_index: 0, // This will be set properly by the MagicInstructionBuilder
+            escrow_index: 0,
             data: instruction_data,
         };
-    
-        // Create CallHandler
+
+        let mut leaderboard_writable = ctx.accounts.leaderboard.to_account_info();
+        leaderboard_writable.is_writable = true;
+
         let call_handler = CallHandler {
             args: action_args,
             compute_units: 200_000,
             escrow_authority: ctx.accounts.payer.to_account_info(),
             destination_program: ctx.accounts.program_id.to_account_info(),
             accounts: vec![
-                ctx.accounts.leaderboard.to_account_info(),
+                leaderboard_writable,
                 ctx.accounts.payer.to_account_info(),
                 ctx.accounts.counter.to_account_info(),
             ],
         };
     
-        // Build magic instruction
         let magic_builder = MagicInstructionBuilder {
             payer: ctx.accounts.payer.to_account_info(),
             magic_context: ctx.accounts.magic_context.to_account_info(),
@@ -158,9 +157,10 @@ pub struct CommitAndUpdateLeaderboard<'info> {
     
     #[account(mut, seeds = [TEST_PDA_SEED], bump)]
     pub counter: Account<'info, Counter>,
-    
+
+    /// CHECK: Leaderboard PDA - not mut here, writable set in handler
     #[account(seeds = [LEADERBOARD_SEED], bump)]
-    pub leaderboard: Account<'info, Leaderboard>,
+    pub leaderboard: UncheckedAccount<'info>,
 
     /// CHECK: Your program ID
     pub program_id: AccountInfo<'info>,
