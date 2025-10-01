@@ -538,22 +538,25 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.2.7"
-source = "git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?rev=54fe6f8#54fe6f84350d869294e6b5620f263880445b7127"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eac9fecc3aa5829ccb0101e0352d3de7f2f19b87754f896b3f1cad15bc7093db"
 dependencies = [
+ "anchor-lang",
  "borsh 1.5.7",
  "ephemeral-rollups-sdk-attribute-commit",
  "ephemeral-rollups-sdk-attribute-delegate",
  "ephemeral-rollups-sdk-attribute-ephemeral",
- "magicblock-core",
  "magicblock-delegation-program",
+ "magicblock-magic-program-api",
  "solana-program",
 ]
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.2.7"
-source = "git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?rev=54fe6f8#54fe6f84350d869294e6b5620f263880445b7127"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "514e1c95cd0b16b2bb43ff3d066046b50008aea5c424d606997ac3b7318f0c22"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -561,8 +564,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.2.7"
-source = "git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?rev=54fe6f8#54fe6f84350d869294e6b5620f263880445b7127"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2c960a0c8062e08a230515086c50c69cf86873e5fc784d35b1b34540993ad07"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -571,8 +575,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.2.7"
-source = "git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?rev=54fe6f8#54fe6f84350d869294e6b5620f263880445b7127"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "673a968e5dc3e12dc5c1cc83eb7481c06c8e5ec542d345dcf4afb4e949e3b5c2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -803,20 +808,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "magicblock-core"
-version = "0.1.7"
-source = "git+https://github.com/magicblock-labs/magicblock-validator.git?rev=aa010d3#aa010d3ca3aaee780bbffb1a2281caafaa4b21f5"
-dependencies = [
- "bincode",
- "serde",
- "solana-account 2.2.1 (git+https://github.com/magicblock-labs/solana-account.git?rev=176540a)",
- "solana-program",
-]
-
-[[package]]
 name = "magicblock-delegation-program"
-version = "1.0.0"
-source = "git+https://github.com/magicblock-labs/delegation-program.git?rev=5fb8d20#5fb8d20f3567113dc75c2c8047a80129f792c5bb"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8dd321b31bda8396e214ea675460f57e9e1770a69ea783ab63c0646666d9c410"
 dependencies = [
  "bincode",
  "borsh 1.5.7",
@@ -827,6 +822,17 @@ dependencies = [
  "solana-program",
  "solana-security-txt",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "magicblock-magic-program-api"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "783b8b157d4cf81108131afff0bd60d322e2d51deed7dae2d1e3d6bffc8a4b10"
+dependencies = [
+ "bincode",
+ "serde",
+ "solana-program",
 ]
 
 [[package]]
@@ -980,17 +986,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "qualifier_attr"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e2e25ee72f5b24d773cae88422baddefff7714f97aab68d96fe2b6fc4a28fb2"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.106",
 ]
 
 [[package]]
@@ -1266,24 +1261,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-account"
-version = "2.2.1"
-source = "git+https://github.com/magicblock-labs/solana-account.git?rev=176540a#176540ae8445a3161b2e8d5ab97a4d48bab35679"
-dependencies = [
- "bincode",
- "qualifier_attr",
- "serde",
- "serde_bytes",
- "serde_derive",
- "solana-account-info",
- "solana-clock",
- "solana-instruction",
- "solana-pubkey",
- "solana-sdk-ids",
- "solana-sysvar",
-]
-
-[[package]]
 name = "solana-account-info"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1479,7 +1456,7 @@ dependencies = [
  "bincode",
  "serde",
  "serde_derive",
- "solana-account 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-account",
  "solana-account-info",
  "solana-instruction",
  "solana-program-error",

@@ -25,6 +25,13 @@ describe("magic-actions", () => {
     }
   );
 
+  const ephemeralConnection = new web3.Connection(
+    process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/",
+    {
+      wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
+    }
+  );
+
   const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(SEED_TEST_PDA)],
     program.programId
@@ -135,21 +142,30 @@ describe("magic-actions", () => {
   });
 
   it("Update Leaderboard While Delegated!", async () => {
-    // const tx = await program.methods
-    //   .commitAndUpdateLeaderboard()
-    //   .accounts({
-    //     payer: anchor.Wallet.local().publicKey,
-    //   })
-    //   .transaction();
+    const tx = await program.methods
+      .commitAndUpdateLeaderboard()
+      .accounts({
+        payer: anchor.Wallet.local().publicKey,
+        programId: program.programId,
+      })
+      .transaction();
 
-    //   const signature = await sendMagicTransaction(
-    //     routerConnection,
-    //     tx,
-    //     [anchor.Wallet.local().payer]
-    //   );
+      tx.recentBlockhash = (await ephemeralConnection.getLatestBlockhash()).blockhash;
+      tx.feePayer = anchor.Wallet.local().publicKey;
+      tx.sign(anchor.Wallet.local().payer);
+  
+      const signature = await ephemeralConnection.sendRawTransaction(tx.serialize());
+      await ephemeralConnection.confirmTransaction(signature);
 
-    //   console.log("✅ Updated Leaderboard While Delegated! Signature:", signature);
-    //   await printCounter(program, pda, leaderboard_pda, routerConnection);
+      // const signature = await sendMagicTransaction(
+      //   routerConnection,
+      //   tx,
+      //   [anchor.Wallet.local().payer]
+      // );
+
+      // console.log("✅ Updated Leaderboard While Delegated! Signature:", signature);
+      await sleepWithAnimation(5);
+      await printCounter(program, pda, leaderboard_pda, routerConnection);
   });
 
   it("Undelegate Counter!", async () => {
@@ -182,7 +198,8 @@ async function printCounter(program: Program<MagicActions>, counter_pda: web3.Pu
 
   if (delegationStatus.isDelegated) {
     const counterAccountER = await routerConnection.getAccountInfo(counter_pda);
-    counterER = counterAccountER?.lamports.toString();
+    const countValue = counterAccountER?.data.readBigUInt64LE(8);
+    counterER = countValue?.toString() || "0";
     counterBase = "<Delegated>";
     delegationStatusMsg = "✅ Delegated";
   } else {
@@ -194,7 +211,7 @@ async function printCounter(program: Program<MagicActions>, counter_pda: web3.Pu
 
 
   console.log("--------------------------------");
-  console.log("| Is Delegated?: " + delegationStatusMsg + "");
+  console.log("| "+delegationStatusMsg);
   console.log("--------------------------------");
   console.log("| Counter (Base): ", counterBase);
   console.log("| Counter (ER): ", counterER);
@@ -203,7 +220,6 @@ async function printCounter(program: Program<MagicActions>, counter_pda: web3.Pu
 
 }
 
-// Helper function to sleep with animated waiting message
 async function sleepWithAnimation(seconds: number): Promise<void> {
   const totalMs = seconds * 1000;
   const interval = 500; // Update every 500ms
