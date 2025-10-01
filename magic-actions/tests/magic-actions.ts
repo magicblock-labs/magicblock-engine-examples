@@ -4,7 +4,7 @@ import { MagicActions } from "../target/types/magic_actions";
 import {
   getDelegationStatus, DELEGATION_PROGRAM_ID, getClosestValidator, sendMagicTransaction, getLatestBlockhashForMagicTransaction
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { Transaction } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 
 const SEED_TEST_PDA = "test-pda";
 const SEED_LEADERBOARD = "leaderboard";
@@ -56,7 +56,6 @@ describe("magic-actions", () => {
       [anchor.Wallet.local().payer]
     );
     console.log("✅ Initialized Counter PDA! Signature:", signature);
-    await sleepWithAnimation(5);
     await printCounter(program, pda, leaderboard_pda, routerConnection);
   });
 
@@ -74,7 +73,6 @@ describe("magic-actions", () => {
       [anchor.Wallet.local().payer]
     );
     console.log("✅ Incremented Counter PDA! Signature:", signature);
-    await printCounter(program, pda, leaderboard_pda, routerConnection);
   });
 
   it("Update Leaderboard!", async () => {
@@ -113,9 +111,8 @@ describe("magic-actions", () => {
       tx,
       [anchor.Wallet.local().payer]
     );
-    console.log("✅ Delegated Counter PDA! Signature:", signature);
     await sleepWithAnimation(5);
-    await printCounter(program, pda, leaderboard_pda, routerConnection);
+    console.log("✅ Delegated Counter PDA! Signature:", signature);
   });
 
 
@@ -135,6 +132,24 @@ describe("magic-actions", () => {
 
     console.log("✅ Incremented Counter PDA! Signature:", signature);
     await printCounter(program, pda, leaderboard_pda, routerConnection);
+  });
+
+  it("Update Leaderboard While Delegated!", async () => {
+    // const tx = await program.methods
+    //   .commitAndUpdateLeaderboard()
+    //   .accounts({
+    //     payer: anchor.Wallet.local().publicKey,
+    //   })
+    //   .transaction();
+
+    //   const signature = await sendMagicTransaction(
+    //     routerConnection,
+    //     tx,
+    //     [anchor.Wallet.local().payer]
+    //   );
+
+    //   console.log("✅ Updated Leaderboard While Delegated! Signature:", signature);
+    //   await printCounter(program, pda, leaderboard_pda, routerConnection);
   });
 
   it("Undelegate Counter!", async () => {
@@ -159,23 +174,30 @@ describe("magic-actions", () => {
 // Helper function to print the current value of the counter on base layer and ER.
 async function printCounter(program: Program<MagicActions>, counter_pda: web3.PublicKey, leaderboard_pda: web3.PublicKey, routerConnection: web3.Connection) {
   const delegationStatus = await getDelegationStatus(routerConnection, counter_pda);
-  const counterAccount = await program.account.counter.fetch(counter_pda); // Fetchs on Devnet
   const leaderboardAccount = await program.account.leaderboard.fetch(leaderboard_pda);
+
   var counterER = "";
+  var counterBase = "";
+  var delegationStatusMsg = "";
+
   if (delegationStatus.isDelegated) {
     const counterAccountER = await routerConnection.getAccountInfo(counter_pda);
     counterER = counterAccountER?.lamports.toString();
+    counterBase = "<Delegated>";
+    delegationStatusMsg = "✅ Delegated";
   } else {
-    counterER = "Not Delegated";
+    counterER = "<Not Delegated>";
+    const counterAccount = await program.account.counter.fetch(counter_pda); // Fetchs on Devnet
+    counterBase = counterAccount.count.toNumber().toString();
+    delegationStatusMsg = "❌ Not Delegated";
   }
 
 
   console.log("--------------------------------");
-  console.log("|             Status");
+  console.log("| Is Delegated?: " + delegationStatusMsg + "");
   console.log("--------------------------------");
-  console.log("| Is Delegated: ", delegationStatus.isDelegated);
-  console.log("| Counter Value: ", counterAccount.count.toNumber());
-  console.log("| Counter Value on ER: ", counterER);
+  console.log("| Counter (Base): ", counterBase);
+  console.log("| Counter (ER): ", counterER);
   console.log("| High Score: ", leaderboardAccount.highScore.toNumber());
   console.log("--------------------------------");
 
@@ -186,13 +208,13 @@ async function sleepWithAnimation(seconds: number): Promise<void> {
   const totalMs = seconds * 1000;
   const interval = 500; // Update every 500ms
   const iterations = Math.floor(totalMs / interval);
-  
+
   for (let i = 0; i < iterations; i++) {
     const dots = '.'.repeat((i % 3) + 1);
-    process.stdout.write(`\rwaiting${dots}   `);
+    process.stdout.write(`\rWaiting${dots}   `);
     await new Promise(resolve => setTimeout(resolve, interval));
   }
-  
+
   // Clear the line
   process.stdout.write('\r\x1b[K');
 }
