@@ -2,10 +2,9 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
 import { MagicActions } from "../target/types/magic_actions";
 import {
-  DELEGATION_PROGRAM_ID, getClosestValidator, getLatestBlockhashForMagicTransaction
+  getDelegationStatus, DELEGATION_PROGRAM_ID, getClosestValidator, sendMagicTransaction, getLatestBlockhashForMagicTransaction
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { Transaction } from "@solana/web3.js";
-import { sendMagicTransaction } from "magic-router-sdk";
 
 const SEED_TEST_PDA = "test-pda";
 
@@ -17,7 +16,7 @@ describe("magic-actions", () => {
 
    // Configure the router endpoint for Magic Router
    const routerConnection = new web3.Connection(
-    process.env.ROUTER_ENDPOINT || "http://127.0.0.1:8080",
+    process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app",
     {
       wsEndpoint: process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app",
     }
@@ -42,18 +41,13 @@ describe("magic-actions", () => {
       systemProgram: anchor.web3.SystemProgram.programId,
     })
     .transaction() as Transaction;
-
-    // console.log("Getting blockhash for tx");
-    // const blockhash = await getLatestBlockhashForMagicTransaction(routerConnection, tx);
-    // console.log("Blockhash: ", blockhash);
-
-    await sendMagicTransaction(
+    const signature = await sendMagicTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
     );
-    // console.log("✅ Initialized Counter PDA! Signature:", signature);
-    await printCounter(program, pda);
+    console.log("✅ Initialized Counter PDA! Signature:", signature);
+    await printCounter(program, pda, routerConnection);
   });
 
   it("Increment Counter!", async () => {
@@ -64,18 +58,82 @@ describe("magic-actions", () => {
       })
       .transaction() as Transaction;
 
-    await sendMagicTransaction(
+    const signature = await sendMagicTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
     );
-    // console.log("✅ Incremented Counter PDA! Signature:", signature);
-    await printCounter(program, pda);
+    console.log("✅ Incremented Counter PDA! Signature:", signature);
+    await printCounter(program, pda, routerConnection);
+  });
+
+  it("Delegate Counter to ER!", async () => {
+    const validatorKey = await getClosestValidator(routerConnection);
+    console.log("Delegating to closest validator: ", validatorKey.toString());
+    
+    const tx = await program.methods
+    .delegate()
+    .accounts({
+      payer: anchor.Wallet.local().publicKey,
+      pda: pda,
+    })
+    .transaction();
+
+  const signature = await sendMagicTransaction(
+    routerConnection,
+    tx,
+    [anchor.Wallet.local().payer]
+  );
+  console.log("✅ Delegated Counter PDA! Signature:", signature);
+  await printCounter(program, pda, routerConnection);
+  });
+
+
+  it("Increment Counter on ER!", async () => {
+    const tx = await program.methods
+      .increment()
+      .accounts({
+        counter: pda,
+      })
+      .transaction();
+
+    const signature = await sendMagicTransaction(
+      routerConnection,
+      tx,
+      [anchor.Wallet.local().payer]
+    );
+
+    console.log("✅ Incremented Counter PDA! Signature:", signature);
+    await printCounter(program, pda, routerConnection);
+  });
+
+  it("Undelegate Counter!", async () => {
+    const tx = await program.methods
+      .undelegate()
+      .accounts({
+        payer: anchor.Wallet.local().publicKey,
+      })
+      .transaction();
+
+    const signature = await sendMagicTransaction(
+      routerConnection,
+      tx,
+      [anchor.Wallet.local().payer]
+    );
+    console.log("✅ Undelegated Counter PDA! Signature:", signature);
+    await printCounter(program, pda, routerConnection);
   });
 });
 
 // Helper function to print the current value of the counter on base layer and ER.
-async function printCounter(program: Program<MagicActions>, pda: web3.PublicKey){
-  const counterAccount = await program.account.counter.fetch(pda);
-  console.log("Counter Value: ", counterAccount.count);
+async function printCounter(program: Program<MagicActions>, pda: web3.PublicKey, routerConnection: web3.Connection){
+  console.log("--------------------------------");
+  console.log("|             Status");
+  console.log("--------------------------------");
+  const delegationStatus = await getDelegationStatus(routerConnection, pda);
+  console.log("| Is Delegated: ", delegationStatus.isDelegated);
+  const counterAccount = await program.account.counter.fetch(pda); // Fetchs on Devnet
+  console.log("| Counter Value: ", counterAccount.count.toNumber());
+  console.log("--------------------------------");
+
 }

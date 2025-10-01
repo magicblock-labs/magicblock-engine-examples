@@ -12,7 +12,7 @@ magic_actions = "27bYc6G5sNWxKGwj7A9cgKwLp3kfkWbViKT9M4JZXCxw"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

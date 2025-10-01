@@ -28,13 +28,27 @@ pub mod magic_actions {
     }
 
     pub fn delegate(ctx: Context<DelegateCounter>) -> Result<()> {
+        // let config = DelegateConfig {
+        //     commit_frequency_ms: params.commit_frequency_ms,
+        //     validator: params.validator,
+        // };
+
+        // ctx.accounts.delegate_pda(
+        //     &ctx.accounts.payer,
+        //     &[TEST_PDA_SEED],
+        //     config,
+        // )?;
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
             &[TEST_PDA_SEED],
             DelegateConfig {
                 commit_frequency_ms: 30_000,
-                validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")),
-            },
+                validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")), // Set delegating ER validator
+                                                                                         // MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57 // Asia ER validator
+                                                                                         // MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e // EU ER validator
+                                                                                         // MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd // US ER validator
+                                                                                         // mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev // Local ER validator
+            }, // DelegateConfig::default(),
         )?;
         Ok(())
     }
