@@ -44,18 +44,15 @@ pub mod anchor_counter {
     }
 
     /// Delegate the account to the delegation program
+    /// Set specific validator based on ER, see https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup
     pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
             &[TEST_PDA_SEED],
             DelegateConfig {
                 commit_frequency_ms: 30_000,
-                validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")), // Set delegating ER validator
-                                                                                         // MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57 // Asia ER validator
-                                                                                         // MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e // EU ER validator
-                                                                                         // MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd // US ER validator
-                                                                                         // mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev // Local ER validator
-            }, // DelegateConfig::default(),
+                validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")),
+            },
         )?;
         Ok(())
     }
@@ -122,6 +119,7 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// Add delegate function to the context
 #[delegate]
 #[derive(Accounts)]
 pub struct DelegateInput<'info> {
