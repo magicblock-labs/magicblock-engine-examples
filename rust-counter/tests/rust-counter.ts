@@ -12,7 +12,8 @@ dotenv.config()
 
 describe("Running tests:", async function () {
     this.timeout(60000);  // Set timeout for the test
-  
+    console.log("rust-counter.ts")
+
     // Get programId from target folder
     const keypairPath = "target/deploy/rust_counter-keypair.json";
     const secretKeyArray = Uint8Array.from(JSON.parse(fs.readFileSync(keypairPath, "utf8")));
@@ -435,7 +436,7 @@ describe("rust-counter-increment-commit-atomic", () => {
     it("Initialize counter on Solana", async function () {
         const start = Date.now();
 
-        // 1: IncreaseCounter
+        // 1: InitializeCounter
         // Create, send and confirm transaction
         const tx = new Transaction();
         const keys = [

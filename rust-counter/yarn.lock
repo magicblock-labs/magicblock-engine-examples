@@ -44,10 +44,10 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
-"@magicblock-labs/ephemeral-rollups-sdk@^0.2.11":
-  version "0.2.11"
-  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.2.11.tgz#6347a8e37440e438c4d8717f454f5e922cf94e13"
-  integrity sha512-I9pqYBsWhkUpndt9b4P6jqpVhAKaMdyyiBuxEX+Y2VdWeXuRpF0qXngyn26i1oKCVvbPNQYLu033LpNeSB4BKg==
+"@magicblock-labs/ephemeral-rollups-sdk@^0.3.1":
+  version "0.3.1"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.3.1.tgz#1c19217a04892235507b1f5c17b3a5384ce2f299"
+  integrity sha512-DpOM0l+B1ZmDfJxSHH96cZYeCo2V3QZTjQhRvIBv+ERTJ90zeQPzL60IAchIgTJGriGq7NNqCCdDRGz11fuphw==
   dependencies:
     "@metaplex-foundation/beet" "^0.7.2"
     "@phala/dcap-qvl-web" "^0.2.7"
