@@ -1,42 +1,51 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import { Program, web3 } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import {
-  GetCommitmentSignature,
-} from "@magicblock-labs/ephemeral-rollups-sdk";
+import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
-const SEED_TEST_PDA = "test-pda"; // 5RgeA5P8bRaynJovch3zQURfJxXL3QK2JYg1YamSvyLb
+const SEED_TEST_PDA = "test-pda"; // GS5bf2RCq8AEtSGURYUnHVqDi2iWceg78DTQFZ5q1Wzv
 
 describe("anchor-counter", () => {
-  console.log("anchor-counter.ts")
+  console.log("anchor-counter.ts");
 
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
-    new anchor.web3.Connection(process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/", {wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet.magicblock.app/"}
+    new anchor.web3.Connection(
+      process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
+        "https://devnet-as.magicblock.app/",
+      {
+        wsEndpoint:
+          process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet.magicblock.app/",
+      },
     ),
-    anchor.Wallet.local()
+    anchor.Wallet.local(),
   );
-  console.log("Base Layer Connection: ", provider.connection._rpcEndpoint);
-  console.log("Ephemeral Rollup Connection: ", providerEphemeralRollup.connection._rpcEndpoint);
-  console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`)
+  console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
+  console.log(
+    "Ephemeral Rollup Connection: ",
+    providerEphemeralRollup.connection.rpcEndpoint,
+  );
+  console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`);
 
   before(async function () {
-    const balance = await provider.connection.getBalance(anchor.Wallet.local().publicKey)
-    console.log('Current balance is', balance / LAMPORTS_PER_SOL, ' SOL','\n')
-  })
+    const balance = await provider.connection.getBalance(
+      anchor.Wallet.local().publicKey,
+    );
+    console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
+  });
 
   const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
   const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(SEED_TEST_PDA)],
-    program.programId
+    program.programId,
   );
 
-  console.log("Program ID: ", program.programId.toString())
-  console.log("Counter PDA: ", pda.toString())
+  console.log("Program ID: ", program.programId.toString());
+  console.log("Counter PDA: ", pda.toString());
 
   it("Initialize counter on Solana", async () => {
     const start = Date.now();
@@ -60,7 +69,6 @@ describe("anchor-counter", () => {
     });
     const duration = Date.now() - start;
     console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
-
   });
 
   it("Increase counter on Solana", async () => {
@@ -86,12 +94,27 @@ describe("anchor-counter", () => {
 
   it("Delegate counter to ER", async () => {
     const start = Date.now();
+    // Add local validator identity to the remaining accounts if running on localnet
+    const remainingAccounts =
+      provider.connection.rpcEndpoint.includes("localhost") ||
+      provider.connection.rpcEndpoint.includes("127.0.0.1")
+        ? [
+            {
+              pubkey: new web3.PublicKey(
+                "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev",
+              ),
+              isSigner: false,
+              isWritable: false,
+            },
+          ]
+        : [];
     let tx = await program.methods
       .delegate()
       .accounts({
         payer: provider.wallet.publicKey,
         pda: pda,
       })
+      .remainingAccounts(remainingAccounts)
       .transaction();
     tx.feePayer = provider.wallet.publicKey;
     tx.recentBlockhash = (
@@ -106,7 +129,7 @@ describe("anchor-counter", () => {
     console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
   });
 
-  it("Increase counter on ER (1)", async () => {
+  it("Increase counter on ER", async () => {
     const start = Date.now();
     let tx = await program.methods
       .increment()
@@ -130,8 +153,6 @@ describe("anchor-counter", () => {
       .commit()
       .accounts({
         payer: providerEphemeralRollup.wallet.publicKey,
-        // @ts-ignore
-        counter: pda,
       })
       .transaction();
     tx.feePayer = providerEphemeralRollup.wallet.publicKey;
@@ -150,20 +171,20 @@ describe("anchor-counter", () => {
     const comfirmCommitStart = Date.now();
     // Await for the commitment on the base layer
     const txCommitSgn = await GetCommitmentSignature(
-        txHash,
-        providerEphemeralRollup.connection
+      txHash,
+      providerEphemeralRollup.connection,
     );
     const commitDuration = Date.now() - comfirmCommitStart;
-    console.log(`${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`);
+    console.log(
+      `${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`,
+    );
   });
 
-  it("Increase counter on ER (2)", async () => {
+  it("Increase counter on ER and commit", async () => {
     const start = Date.now();
     let tx = await program.methods
-      .increment()
-      .accounts({
-        counter: pda,
-      })
+      .incrementAndCommit()
+      .accounts({})
       .transaction();
     tx.feePayer = providerEphemeralRollup.wallet.publicKey;
     tx.recentBlockhash = (
@@ -175,14 +196,12 @@ describe("anchor-counter", () => {
     console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
   });
 
-  it("Commit and undelegate counter on ER to Solana", async () => {
+  it("Increment and undelegate counter on ER to Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
       .incrementAndUndelegate()
       .accounts({
         payer: providerEphemeralRollup.wallet.publicKey,
-        // @ts-ignore
-        counter: pda,
       })
       .transaction();
     tx.feePayer = provider.wallet.publicKey;
@@ -195,5 +214,4 @@ describe("anchor-counter", () => {
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Undelegate txHash: ${txHash}`);
   });
-
 });
