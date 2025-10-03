@@ -3,7 +3,7 @@ import {Program} from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { RandomDiceDelegated } from "../target/types/random_dice_delegated";
 
-describe.only("roll-dice-delegated", () => {
+describe("roll-dice-delegated", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);

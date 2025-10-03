@@ -1,17 +1,16 @@
-import { sendAndConfirmTransaction, Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { initializeSolSignerKeypair, airdropSolIfNeeded } from "./initializeKeypair";  // Import the functions
 import * as borsh from "borsh";
 import * as fs from "fs";
-import { Suite } from 'mocha'; 
 import { CounterInstruction, IncreaseCounterPayload } from "./schema";
-import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, GetCommitmentSignature, getLatestBlockhashForMagicTransaction, getClosestValidator
+import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, GetCommitmentSignature, sendAndConfirmMagicTransaction, getClosestValidator
  } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 import dotenv from 'dotenv'
-import { error } from "console";
 dotenv.config()
 
-describe.only("magic-router-test", () => {
+describe("magic-router-and-multiple-atomic-ixs", () => {
+    console.log("advanced-magic.ts")
 
     // Get programId from target folder
     const keypairPath = "target/deploy/rust_counter-keypair.json";
@@ -35,24 +34,27 @@ describe.only("magic-router-test", () => {
     const userKeypair = initializeSolSignerKeypair();  // Use the keypair management function
 
     // Run this once before all tests
+    let ephemeralValidator
     before(async function () {
         console.log("Endpoint:", connection._rpcEndpoint.toString());
-        console.log("Detected validator identity:", (await getClosestValidator(connection)).toString());
+        ephemeralValidator = await getClosestValidator(connection)
+        console.log("Detected validator identity:", ephemeralValidator);
         await airdropSolIfNeeded(connection, userKeypair.publicKey, 2, 0.05);
     });
-
-
   
     // Get pda of counter_account
     let [counterPda, bump] = PublicKey.findProgramAddressSync(
         [Buffer.from("counter_account"), userKeypair.publicKey.toBuffer()],
         PROGRAM_ID
     );
+
+    console.log("Program ID: ", PROGRAM_ID.toString())
+    console.log("Counter PDA: ", counterPda.toString())
   
     it("Initialize counter on Solana", async function () {
         const start = Date.now();
 
-        // 1: IncreaseCounter
+        // 1: InitializeCounter
         // Create, send and confirm transaction
         let tx = new Transaction();
         const keys = [
@@ -220,16 +222,19 @@ describe.only("magic-router-test", () => {
         const duration = Date.now() - start;
         console.log(`${duration}ms (ER) Increment And Commit txHash: ${txHash}`);
     
+        // Get the commitment signature on the base layer
+        const comfirmCommitStart = Date.now();
         // Await for the commitment on the base layer
         const txCommitSgn = await GetCommitmentSignature(
-          txHash,
-          connection
+            txHash,
+            new Connection(ephemeralValidator.fqdn)
         );
-        console.log("Account commit signature:", txCommitSgn);
+        const commitDuration = Date.now() - comfirmCommitStart;
+        console.log(`${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`);
 
     });
   
-    it("Increase the delegate counter and undelegate through CPI", async function () {
+    it("Increase delegated counter and undelegate through CPI", async function () {
 
         const start = Date.now();
 
@@ -286,7 +291,7 @@ describe.only("magic-router-test", () => {
         // Await for the commitment on the base layer
         const txCommitSgn = await GetCommitmentSignature(
             txHash,
-            connection
+            new Connection(ephemeralValidator.fqdn)
         );
         const commitDuration = Date.now() - comfirmCommitStart;
         console.log(`${commitDuration}ms (Base Layer) Undelegate txHash: ${txCommitSgn}`);
@@ -294,36 +299,3 @@ describe.only("magic-router-test", () => {
     });
   
 });
-
-
-
-const sendAndConfirmMagicTransaction = async (
-    connection: Connection,
-    transaction: Transaction,
-    signers: Keypair[],
-    options?: {
-      skipPreflight?: boolean;
-      commitment?: "processed" | "confirmed" | "finalized";
-    }
-  ): Promise<string> => {
-
-    const latestBlockhash = await getLatestBlockhashForMagicTransaction(connection, transaction, options)
-    console.log("latestBlockhash:", latestBlockhash);
-
-
-    const devcon = new Connection("https://devnet.helius-rpc.com/?api-key=d361db0b-e072-43fd-908f-5f81baf9226a");
-    const latestBlockhashDevcon = await devcon.getLatestBlockhash("finalized");
-    console.log("latestBlockhashDevcon:", latestBlockhashDevcon);
-
-
-    transaction.lastValidBlockHeight = latestBlockhashDevcon.lastValidBlockHeight;
-    transaction.recentBlockhash = latestBlockhashDevcon.blockhash;
-
-    const txHash = await sendAndConfirmTransaction(
-      connection,
-      transaction,
-      signers,
-      options
-    );
-    return txHash;
-  }     
