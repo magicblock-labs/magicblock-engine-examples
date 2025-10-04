@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("4Q3f1S8ucWxs9LSAZUpr57UHTf1DdeYmKvY6a12H8r8Y");
+declare_id!("9BAQP9pBBFEcVxMJMgmSjBq9AeBELjowMA7twzMcXtXk");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 
@@ -31,18 +31,6 @@ pub mod anchor_counter {
         Ok(())
     }
 
-    /// Increment and read account
-    pub fn increment_with_account(ctx: Context<IncrementWithAccount>) -> Result<()> {
-        let counter = &mut ctx.accounts.counter;
-        counter.count += 1;
-        if counter.count > 1000 {
-            counter.count = 0;
-        }
-        msg!("PDA {} count: {}", counter.key(), counter.count);
-        msg!("External account {}", ctx.accounts.external.key());
-        Ok(())
-    }
-
     /// Delegate the account to the delegation program
     /// Set specific validator based on ER, see https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup
     pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
@@ -50,8 +38,9 @@ pub mod anchor_counter {
             &ctx.accounts.payer,
             &[TEST_PDA_SEED],
             DelegateConfig {
-                commit_frequency_ms: 30_000,
-                validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")),
+                // Optionally set a specific validator from the first remaining account
+                validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
+                ..Default::default()
             },
         )?;
         Ok(())
@@ -134,14 +123,6 @@ pub struct DelegateInput<'info> {
 pub struct Increment<'info> {
     #[account(mut, seeds = [TEST_PDA_SEED], bump)]
     pub counter: Account<'info, Counter>,
-}
-
-#[derive(Accounts)]
-pub struct IncrementWithAccount<'info> {
-    #[account(mut, seeds = [TEST_PDA_SEED], bump)]
-    pub counter: Account<'info, Counter>,
-    /// CHECK The account to read
-    pub external: AccountInfo<'info>,
 }
 
 /// Account for the increment instruction + manual commit.

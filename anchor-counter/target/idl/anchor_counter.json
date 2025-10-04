@@ -1,5 +1,5 @@
 {
-  "address": "4Q3f1S8ucWxs9LSAZUpr57UHTf1DdeYmKvY6a12H8r8Y",
+  "address": "9BAQP9pBBFEcVxMJMgmSjBq9AeBELjowMA7twzMcXtXk",
   "metadata": {
     "name": "anchor_counter",
     "version": "0.1.0",
@@ -64,7 +64,8 @@
     {
       "name": "delegate",
       "docs": [
-        "Delegate the account to the delegation program"
+        "Delegate the account to the delegation program",
+        "Set specific validator based on ER, see https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup"
       ],
       "discriminator": [
         90,
@@ -105,38 +106,38 @@
             "program": {
               "kind": "const",
               "value": [
-                50,
-                122,
-                107,
-                247,
-                147,
-                165,
-                217,
-                29,
-                106,
-                198,
                 121,
+                119,
+                239,
+                135,
+                142,
+                59,
+                97,
                 48,
-                106,
-                246,
-                213,
-                51,
-                51,
-                73,
-                213,
-                55,
-                214,
-                175,
-                165,
-                7,
-                176,
-                40,
+                236,
+                69,
+                231,
+                23,
+                169,
                 188,
-                192,
+                214,
+                225,
+                202,
+                161,
+                203,
+                148,
+                12,
+                118,
+                124,
+                80,
+                152,
                 249,
-                171,
-                108,
-                209
+                164,
+                132,
+                34,
+                70,
+                61,
+                195
               ]
             }
           }
@@ -221,7 +222,7 @@
         },
         {
           "name": "owner_program",
-          "address": "4Q3f1S8ucWxs9LSAZUpr57UHTf1DdeYmKvY6a12H8r8Y"
+          "address": "9BAQP9pBBFEcVxMJMgmSjBq9AeBELjowMA7twzMcXtXk"
         },
         {
           "name": "delegation_program",
@@ -378,52 +379,6 @@
           "name": "magic_context",
           "writable": true,
           "address": "MagicContext1111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "increment_with_account",
-      "docs": [
-        "Increment and read account"
-      ],
-      "discriminator": [
-        63,
-        19,
-        38,
-        200,
-        223,
-        96,
-        190,
-        103
-      ],
-      "accounts": [
-        {
-          "name": "counter",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  116,
-                  101,
-                  115,
-                  116,
-                  45,
-                  112,
-                  100,
-                  97
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "external",
-          "docs": [
-            "CHECK The account to read"
-          ]
         }
       ],
       "args": []
