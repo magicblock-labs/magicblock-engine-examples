@@ -9,8 +9,8 @@ import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegat
 import dotenv from 'dotenv'
 dotenv.config()
 
-describe.only("2-magic-router-and-multiple-atomic-ixs", () => {
-    console.log("m-test.ts")
+describe("magic-router-and-multiple-atomic-ixs", () => {
+    console.log("magic-router-and-multiple-atomic-ixs")
 
     // Get programId from target folder
     const keypairPath = "target/deploy/rust_counter-keypair.json";

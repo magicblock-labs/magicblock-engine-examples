@@ -7,7 +7,7 @@ import { Connection, GetCommitmentSignature
 
 const SEED_TEST_PDA = "test-pda"; // GS5bf2RCq8AEtSGURYUnHVqDi2iWceg78DTQFZ5q1Wzv
 
-describe.only("magic-router-and-multiple-atomic-ixs", () => {
+describe("magic-router-and-multiple-atomic-ixs", () => {
     console.log("advanced-magic.ts")
     
     const connection = new anchor.web3.Connection(
@@ -23,38 +23,17 @@ describe.only("magic-router-and-multiple-atomic-ixs", () => {
     [Buffer.from(SEED_TEST_PDA)],
     program.programId,
   );
-
-    before(async function () {
-        const balance = await connection.getBalance(anchor.Wallet.local().publicKey)
-        console.log('Current balance is', balance / LAMPORTS_PER_SOL, ' SOL','\n')
-    })
+  console.log("Program ID: ", program.programId.toString())
+  console.log("Counter PDA: ", pda.toString())
 
   // Run this once before all tests
   let ephemeralValidator;
   before(async function () {
-    console.log("Endpoint:", providerMagic.connection.rpcEndpoint.toString());
-    ephemeralValidator = await connection.getClosestValidator(providerMagic.connection);
-    console.log("Detected validator identity:", ephemeralValidator);
-    const balance = await providerMagic.connection.getBalance(
-      anchor.Wallet.local().publicKey,
-    );
-    console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
-  });
-
-    console.log("Program ID: ", program.programId.toString())
-    console.log("Counter PDA: ", pda.toString())
-
-
-    // Run this once before all tests
-    let ephemeralValidator 
-    before(async function () {
-        console.log("Endpoint:", connection.rpcEndpoint.toString());
-        ephemeralValidator = await connection.getClosestValidator() // Get ER validator endpoint connection
-        console.log("Detected validator identity:", ephemeralValidator);
-        const balance = await connection.getBalance(anchor.Wallet.local().publicKey)
-        console.log('Current balance is', balance / LAMPORTS_PER_SOL, ' SOL','\n')
-    });
-
+      console.log("Endpoint:", connection.rpcEndpoint.toString());
+      ephemeralValidator = await connection.getClosestValidator();
+      const balance = await connection.getBalance(anchor.Wallet.local().publicKey)
+      console.log('Current balance is', balance / LAMPORTS_PER_SOL, ' SOL','\n')
+  })
   
   it("Initialize counter on Solana", async () => {
     const start = Date.now();
