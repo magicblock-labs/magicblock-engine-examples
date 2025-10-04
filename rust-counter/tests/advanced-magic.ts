@@ -1,16 +1,16 @@
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { initializeSolSignerKeypair, airdropSolIfNeeded } from "./initializeKeypair";  // Import the functions
 import * as borsh from "borsh";
 import * as fs from "fs";
 import { CounterInstruction, IncreaseCounterPayload } from "./schema";
-import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, GetCommitmentSignature, sendAndConfirmMagicTransaction, getClosestValidator
+import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, GetCommitmentSignature, Connection
  } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 import dotenv from 'dotenv'
 dotenv.config()
 
-describe("magic-router-and-multiple-atomic-ixs", () => {
-    console.log("advanced-magic.ts")
+describe.only("2-magic-router-and-multiple-atomic-ixs", () => {
+    console.log("m-test.ts")
 
     // Get programId from target folder
     const keypairPath = "target/deploy/rust_counter-keypair.json";
@@ -36,8 +36,8 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
     // Run this once before all tests
     let ephemeralValidator
     before(async function () {
-        console.log("Endpoint:", connection._rpcEndpoint.toString());
-        ephemeralValidator = await getClosestValidator(connection)
+        console.log("Endpoint:", connection.rpcEndpoint.toString());
+        ephemeralValidator = await connection.getClosestValidator()
         console.log("Detected validator identity:", ephemeralValidator);
         await airdropSolIfNeeded(connection, userKeypair.publicKey, 2, 0.05);
     });
@@ -86,7 +86,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
             data: serializedInstructionData
         });
         tx.add(initializeIx);
-        const txHash = await sendAndConfirmMagicTransaction(connection, tx, [userKeypair],
+        const txHash = await connection.sendAndConfirmTransaction(tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"
@@ -160,7 +160,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
             data: serializedInstructionData
         });
         tx.add(delegateIx);
-        const txHash = await sendAndConfirmMagicTransaction(connection, tx, [userKeypair],
+        const txHash = await connection.sendAndConfirmTransaction(tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"
@@ -213,7 +213,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
             data: serializedInstructionData
         });
         tx.add(IncrementAndCommitIx);
-        const txHash = await sendAndConfirmMagicTransaction(connection, tx, [userKeypair],
+        const txHash = await connection.sendAndConfirmTransaction(tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"
@@ -277,7 +277,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
             data: serializedInstructionData
         });
         tx.add(IncreamentAndUndelegateIx);
-        const txHash = await sendAndConfirmMagicTransaction(connection, tx, [userKeypair],
+        const txHash = await connection.sendAndConfirmTransaction(tx, [userKeypair],
             {
                 skipPreflight: true,
                 commitment: "confirmed"

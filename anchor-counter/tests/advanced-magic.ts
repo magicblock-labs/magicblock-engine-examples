@@ -1,37 +1,22 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
-import { Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import {
-  getClosestValidator,
-  GetCommitmentSignature,
-  sendAndConfirmMagicTransaction,
-} from "@magicblock-labs/ephemeral-rollups-sdk";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Connection, GetCommitmentSignature
+ } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const SEED_TEST_PDA = "test-pda"; // GS5bf2RCq8AEtSGURYUnHVqDi2iWceg78DTQFZ5q1Wzv
 
-describe("magic-router-and-multiple-atomic-ixs", () => {
-  console.log("advanced-magic.ts");
-
-  const providerMagic = new anchor.AnchorProvider(
-    new anchor.web3.Connection(
-      process.env.EPHEMERAL_ROUTER_ENDPOINT ||
-        "https://devnet-router.magicblock.app/",
-      {
-        wsEndpoint:
-          process.env.EPHEMERAL_ROUTER_ENDPOINT ||
-          "wss://devnet-router.magicblock.app/",
-      },
-    ),
-    anchor.Wallet.local(),
-  );
-
-  before(async function () {
-    const balance = await providerMagic.connection.getBalance(
-      anchor.Wallet.local().publicKey,
-    );
-    console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
-  });
+describe.only("magic-router-and-multiple-atomic-ixs", () => {
+    console.log("advanced-magic.ts")
+    
+    const connection = new anchor.web3.Connection(
+        process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-router.magicblock.app/", 
+        {
+          wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-router.magicblock.app/"
+        }
+    )
+    const providerMagic = new anchor.AnchorProvider(connection,anchor.Wallet.local());
 
   const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
   const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -39,14 +24,16 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
     program.programId,
   );
 
-  console.log("Program ID: ", program.programId.toString());
-  console.log("Counter PDA: ", pda.toString());
+    before(async function () {
+        const balance = await connection.getBalance(anchor.Wallet.local().publicKey)
+        console.log('Current balance is', balance / LAMPORTS_PER_SOL, ' SOL','\n')
+    })
 
   // Run this once before all tests
   let ephemeralValidator;
   before(async function () {
     console.log("Endpoint:", providerMagic.connection.rpcEndpoint.toString());
-    ephemeralValidator = await getClosestValidator(providerMagic.connection);
+    ephemeralValidator = await connection.getClosestValidator(providerMagic.connection);
     console.log("Detected validator identity:", ephemeralValidator);
     const balance = await providerMagic.connection.getBalance(
       anchor.Wallet.local().publicKey,
@@ -54,6 +41,21 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
     console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
   });
 
+    console.log("Program ID: ", program.programId.toString())
+    console.log("Counter PDA: ", pda.toString())
+
+
+    // Run this once before all tests
+    let ephemeralValidator 
+    before(async function () {
+        console.log("Endpoint:", connection.rpcEndpoint.toString());
+        ephemeralValidator = await connection.getClosestValidator() // Get ER validator endpoint connection
+        console.log("Detected validator identity:", ephemeralValidator);
+        const balance = await connection.getBalance(anchor.Wallet.local().publicKey)
+        console.log('Current balance is', balance / LAMPORTS_PER_SOL, ' SOL','\n')
+    });
+
+  
   it("Initialize counter on Solana", async () => {
     const start = Date.now();
     const tx = await program.methods
@@ -65,15 +67,10 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .transaction();
-    const txHash = await sendAndConfirmMagicTransaction(
-      providerMagic.connection,
-      tx,
-      [providerMagic.wallet.payer],
-      {
-        skipPreflight: true,
-        commitment: "confirmed",
-      },
-    );
+    const txHash = await connection.sendAndConfirmTransaction(tx, [providerMagic.wallet.payer], {
+      skipPreflight: true,
+      commitment: "confirmed"
+    });
     const duration = Date.now() - start;
     console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
   });
@@ -87,15 +84,10 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         pda: pda,
       })
       .transaction();
-    const txHash = await sendAndConfirmMagicTransaction(
-      providerMagic.connection,
-      tx,
-      [providerMagic.wallet.payer],
-      {
-        skipPreflight: true,
-        commitment: "confirmed",
-      },
-    );
+    const txHash = await connection.sendAndConfirmTransaction(tx, [providerMagic.wallet.payer], {
+      skipPreflight: true,
+      commitment: "confirmed"
+    });
     const duration = Date.now() - start;
     console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
   });
@@ -110,14 +102,9 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         counter: pda,
       })
       .transaction();
-    const txHash = await sendAndConfirmMagicTransaction(
-      providerMagic.connection,
-      tx,
-      [providerMagic.wallet.payer],
-      {
-        skipPreflight: true,
-      },
-    );
+    const txHash = await connection.sendAndConfirmTransaction(tx, [providerMagic.wallet.payer], {
+      skipPreflight: true,
+    });
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Increment And Commit txHash: ${txHash}`);
 
@@ -144,14 +131,9 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         counter: pda,
       })
       .transaction();
-    const txHash = await sendAndConfirmMagicTransaction(
-      providerMagic.connection,
-      tx,
-      [providerMagic.wallet.payer],
-      {
-        skipPreflight: true,
-      },
-    );
+    const txHash = await connection.sendAndConfirmTransaction(tx, [providerMagic.wallet.payer], {
+      skipPreflight: true,
+    });
     const duration = Date.now() - start;
     console.log(
       `${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`,
