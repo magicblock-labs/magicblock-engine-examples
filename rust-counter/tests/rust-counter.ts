@@ -1,8 +1,7 @@
-import { sendAndConfirmTransaction, Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
-import { initializeSolSignerKeypair, airdropSolIfNeeded } from "./initializeKeypair";  // Import the functions
+import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, Connection, sendAndConfirmTransaction } from "@solana/web3.js";
+import { initializeSolSignerKeypair, airdropSolIfNeeded } from "./initializeKeypair"; 
 import * as borsh from "borsh";
 import * as fs from "fs";
-import { Suite } from 'mocha'; 
 import { CounterInstruction, IncreaseCounterPayload } from "./schema";
 import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, GetCommitmentSignature
  } from "@magicblock-labs/ephemeral-rollups-sdk";
@@ -23,8 +22,8 @@ describe("basic-test", async function () {
     // Set up a connection to blockchain cluster
     const connectionBaseLayer = new Connection(process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com", {wsEndpoint:process.env.WS_ENDPOINT || "wss://api.devnet.solana.com"});
     const connectionEphemeralRollup = new Connection(process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/", {wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/"});
-    console.log("Base Layer Connection: ", connectionBaseLayer._rpcEndpoint);
-    console.log("Ephemeral Rollup Connection: ", connectionEphemeralRollup._rpcEndpoint);
+    console.log("Base Layer Connection: ", connectionBaseLayer.rpcEndpoint);
+    console.log("Ephemeral Rollup Connection: ", connectionEphemeralRollup.rpcEndpoint);
 
 
   

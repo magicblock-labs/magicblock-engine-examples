@@ -1,16 +1,17 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { Connection, GetCommitmentSignature
+import { LAMPORTS_PER_SOL, sendAndConfirmTransaction } from "@solana/web3.js";
+import { ConnectionMagicRouter, GetCommitmentSignature
  } from "@magicblock-labs/ephemeral-rollups-sdk";
+
 
 const SEED_TEST_PDA = "test-pda"; // GS5bf2RCq8AEtSGURYUnHVqDi2iWceg78DTQFZ5q1Wzv
 
 describe("magic-router-and-multiple-atomic-ixs", () => {
     console.log("advanced-magic.ts")
     
-    const connection = new anchor.web3.Connection(
+    const connection = new ConnectionMagicRouter(
         process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-router.magicblock.app/", 
         {
           wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-router.magicblock.app/"
@@ -31,6 +32,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
   before(async function () {
       console.log("Endpoint:", connection.rpcEndpoint.toString());
       ephemeralValidator = await connection.getClosestValidator();
+      console.log("Detected validator identity:", ephemeralValidator);
       const balance = await connection.getBalance(anchor.Wallet.local().publicKey)
       console.log('Current balance is', balance / LAMPORTS_PER_SOL, ' SOL','\n')
   })
@@ -46,7 +48,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .transaction();
-    const txHash = await connection.sendAndConfirmTransaction(tx, [providerMagic.wallet.payer], {
+    const txHash = await sendAndConfirmTransaction(connection, tx, [providerMagic.wallet.payer], {
       skipPreflight: true,
       commitment: "confirmed"
     });
@@ -63,7 +65,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         pda: pda,
       })
       .transaction();
-    const txHash = await connection.sendAndConfirmTransaction(tx, [providerMagic.wallet.payer], {
+    const txHash = await sendAndConfirmTransaction(connection, tx, [providerMagic.wallet.payer], {
       skipPreflight: true,
       commitment: "confirmed"
     });
@@ -81,7 +83,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         counter: pda,
       })
       .transaction();
-    const txHash = await connection.sendAndConfirmTransaction(tx, [providerMagic.wallet.payer], {
+    const txHash = await sendAndConfirmTransaction(connection, tx, [providerMagic.wallet.payer], {
       skipPreflight: true,
     });
     const duration = Date.now() - start;
@@ -92,7 +94,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
     // Await for the commitment on the base layer
     const txCommitSgn = await GetCommitmentSignature(
       txHash,
-      new Connection(ephemeralValidator.fqdn),
+      new anchor.web3.Connection(ephemeralValidator.fqdn),
     );
     const commitDuration = Date.now() - comfirmCommitStart;
     console.log(
@@ -110,7 +112,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         counter: pda,
       })
       .transaction();
-    const txHash = await connection.sendAndConfirmTransaction(tx, [providerMagic.wallet.payer], {
+    const txHash = await sendAndConfirmTransaction(connection, tx, [providerMagic.wallet.payer], {
       skipPreflight: true,
     });
     const duration = Date.now() - start;
@@ -123,7 +125,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
     // Await for the commitment on the base layer
     const txCommitSgn = await GetCommitmentSignature(
       txHash,
-      new Connection(ephemeralValidator.fqdn),
+      new anchor.web3.Connection(ephemeralValidator.fqdn),
     );
     const commitDuration = Date.now() - comfirmCommitStart;
     console.log(
