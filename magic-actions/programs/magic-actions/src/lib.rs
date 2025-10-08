@@ -3,7 +3,9 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_rollups_sdk::ephem::{MagicInstructionBuilder, MagicAction, CallHandler, CommitType};
-use ephemeral_rollups_sdk::ActionArgs;
+use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
+use anchor_lang::Discriminator;
+use anchor_lang::solana_program::hash::hash;
 
 declare_id!("27bYc6G5sNWxKGwj7A9cgKwLp3kfkWbViKT9M4JZXCxw");
 
@@ -70,25 +72,39 @@ pub mod magic_actions {
         let instruction_data = anchor_lang::InstructionData::data(
             &crate::instruction::UpdateLeaderboard {}
         );
+
+        // Approach 2: 
+        // let discriminator = &hash(b"global:commit_and_update_leaderboard").to_bytes()[..8];
+        
+        // let mut instruction_data = Vec::with_capacity(8);
+        // instruction_data.extend_from_slice(discriminator);
     
         let action_args = ActionArgs {
             escrow_index: 0,
             data: instruction_data,
         };
-
-        let mut leaderboard_writable = ctx.accounts.leaderboard.to_account_info();
-        leaderboard_writable.is_writable = true;
+        
+        let accounts = vec![
+            ShortAccountMeta {
+                pubkey: ctx.accounts.leaderboard.key(),
+                is_writable: true,
+            },
+            ShortAccountMeta {
+                pubkey: ctx.accounts.payer.key(),
+                is_writable: false,
+            },
+            ShortAccountMeta {
+                pubkey: ctx.accounts.counter.key(),
+                is_writable: false,
+            },
+        ];
 
         let call_handler = CallHandler {
             args: action_args,
             compute_units: 200_000,
             escrow_authority: ctx.accounts.payer.to_account_info(),
-            destination_program: ctx.accounts.program_id.to_account_info(),
-            accounts: vec![
-                leaderboard_writable,
-                ctx.accounts.payer.to_account_info(),
-                ctx.accounts.counter.to_account_info(),
-            ],
+            destination_program: crate::ID,
+            accounts,
         };
     
         let magic_builder = MagicInstructionBuilder {
