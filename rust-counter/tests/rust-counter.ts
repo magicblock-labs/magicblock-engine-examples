@@ -9,7 +9,7 @@ import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegat
 import dotenv from 'dotenv'
 dotenv.config()
 
-describe("basic-test", async function () {
+describe.only("basic-test", async function () {
     this.timeout(60000);  // Set timeout for the test
     console.log("rust-counter.ts")
 

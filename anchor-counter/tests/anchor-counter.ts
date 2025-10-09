@@ -6,7 +6,7 @@ import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const SEED_TEST_PDA = "test-pda"; // GS5bf2RCq8AEtSGURYUnHVqDi2iWceg78DTQFZ5q1Wzv
 
-describe("anchor-counter", () => {
+describe.only("anchor-counter", () => {
   console.log("anchor-counter.ts");
 
   // Configure the client to use the local cluster.
@@ -19,7 +19,7 @@ describe("anchor-counter", () => {
         "https://devnet-as.magicblock.app/",
       {
         wsEndpoint:
-          process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet.magicblock.app/",
+          process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
       },
     ),
     anchor.Wallet.local(),
@@ -96,8 +96,8 @@ describe("anchor-counter", () => {
     const start = Date.now();
     // Add local validator identity to the remaining accounts if running on localnet
     const remainingAccounts =
-      provider.connection.rpcEndpoint.includes("localhost") ||
-      provider.connection.rpcEndpoint.includes("127.0.0.1")
+      providerEphemeralRollup.connection.rpcEndpoint.includes("localhost") ||
+      providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1")
         ? [
             {
               pubkey: new web3.PublicKey(
@@ -193,7 +193,7 @@ describe("anchor-counter", () => {
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
     const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
     const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
+    console.log(`${duration}ms (ER) Increment and Commit txHash: ${txHash}`);
   });
 
   it("Increment and undelegate counter on ER to Solana", async () => {
@@ -212,6 +212,6 @@ describe("anchor-counter", () => {
 
     const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
     const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Undelegate txHash: ${txHash}`);
+    console.log(`${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`);
   });
 });

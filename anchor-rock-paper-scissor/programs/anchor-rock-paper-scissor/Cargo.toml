@@ -1,0 +1,22 @@
+[package]
+name = "anchor-rock-paper-scissor"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "anchor_rock_paper_scissor"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+ephemeral-rollups-sdk = { version = "0.2.12", features = ["anchor"] }
+magicblock-permission-client = { path = "../../rust" }
