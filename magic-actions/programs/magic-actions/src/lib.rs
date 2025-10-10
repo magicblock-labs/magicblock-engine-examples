@@ -5,7 +5,8 @@ use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_rollups_sdk::ephem::{MagicInstructionBuilder, MagicAction, CallHandler, CommitType};
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 use anchor_lang::Discriminator;
-use anchor_lang::solana_program::hash::hash;
+use ephemeral_rollups_sdk::consts::EXTERNAL_CALL_HANDLER_DISCRIMINATOR;
+// use anchor_lang::solana_program::hash::hash;
 
 declare_id!("27bYc6G5sNWxKGwj7A9cgKwLp3kfkWbViKT9M4JZXCxw");
 
@@ -34,6 +35,7 @@ pub mod magic_actions {
         Ok(())
     }
 
+    #[instruction(discriminator = &EXTERNAL_CALL_HANDLER_DISCRIMINATOR)]
     pub fn update_leaderboard(ctx: Context<UpdateLeaderboard>) -> Result<()> {
         let leaderboard = &mut ctx.accounts.leaderboard;
         let counter = &mut ctx.accounts.counter;
@@ -73,14 +75,8 @@ pub mod magic_actions {
             &crate::instruction::UpdateLeaderboard {}
         );
 
-        // Approach 2: 
-        // let discriminator = &hash(b"global:commit_and_update_leaderboard").to_bytes()[..8];
-        
-        // let mut instruction_data = Vec::with_capacity(8);
-        // instruction_data.extend_from_slice(discriminator);
-    
         let action_args = ActionArgs {
-            escrow_index: 0,
+            escrow_index: 1,
             data: instruction_data,
         };
         
@@ -88,10 +84,6 @@ pub mod magic_actions {
             ShortAccountMeta {
                 pubkey: ctx.accounts.leaderboard.key(),
                 is_writable: true,
-            },
-            ShortAccountMeta {
-                pubkey: ctx.accounts.payer.key(),
-                is_writable: false,
             },
             ShortAccountMeta {
                 pubkey: ctx.accounts.counter.key(),
@@ -142,8 +134,12 @@ pub struct Increment<'info> {
 #[derive(Accounts)]
 pub struct UpdateLeaderboard<'info> {
     #[account(mut)]
+    /// CHECK: the correct pda
+    pub wtf: UncheckedAccount<'info>,
+    /// CHECK: the correct pda
+    pub wtf2: UncheckedAccount<'info>,
+    #[account(mut, seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: Account<'info, Leaderboard>,
-    pub user: Signer<'info>,
     pub counter: Account<'info, Counter>,
 }
 

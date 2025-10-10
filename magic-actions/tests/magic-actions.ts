@@ -86,8 +86,9 @@ describe("magic-actions", () => {
     const tx = await program.methods
       .updateLeaderboard()
       .accounts({
-        leaderboard: leaderboard_pda,
-        user: anchor.Wallet.local().publicKey,
+        wtf: leaderboard_pda,
+        wtf2: leaderboard_pda,
+        // leaderboard: leaderboard_pda, // removed bc its pda, not passed
         counter: pda,
       })
       .transaction();
@@ -118,7 +119,7 @@ describe("magic-actions", () => {
       tx,
       [anchor.Wallet.local().payer]
     );
-    await sleepWithAnimation(5);
+    await sleepWithAnimation(8);
     console.log("✅ Delegated Counter PDA! Signature:", signature);
   });
 

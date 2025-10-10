@@ -20,4 +20,3 @@ idl-build = ["anchor-lang/idl-build"]
 [dependencies]
 anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
 ephemeral-rollups-sdk = { version = "0.3.4", features = ["anchor"] }
-# ephemeral-rollups-sdk = { git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git", rev = "54fe6f8" }
