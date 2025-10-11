@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import { Program, web3 } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
 import { LAMPORTS_PER_SOL, sendAndConfirmTransaction } from "@solana/web3.js";
 import { ConnectionMagicRouter, GetCommitmentSignature
@@ -7,6 +7,8 @@ import { ConnectionMagicRouter, GetCommitmentSignature
 
 
 const SEED_TEST_PDA = "test-pda"; // GS5bf2RCq8AEtSGURYUnHVqDi2iWceg78DTQFZ5q1Wzv
+const ER_VALIDATOR = new web3.PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"); // Asia ER Validator
+
 
 describe("magic-router-and-multiple-atomic-ixs", () => {
     console.log("advanced-magic.ts")
@@ -62,6 +64,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
       .delegate()
       .accounts({
         payer: providerMagic.wallet.publicKey,
+        validator: ER_VALIDATOR,
         pda: pda,
       })
       .transaction();

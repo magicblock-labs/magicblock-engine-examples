@@ -181,6 +181,14 @@ pub fn process_delegate(_program_id: &Pubkey, accounts: &[AccountInfo]) -> Progr
     let delegation_record = next_account_info(account_info_iter)?;
     let delegation_metadata = next_account_info(account_info_iter)?;
     let delegation_program = next_account_info(account_info_iter)?;
+    let validator_account = account_info_iter.next();
+
+    // Optional: client-provided validator or default validator
+    let default_validator = pubkey!("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"); // Local ER validator
+    let validator_pubkey = match validator_account {
+        Some(acc_info) => acc_info.key.clone(),
+        None => default_validator,
+    };
 
     // Prepare counter pda seeds
     let seed_1 = b"counter_account";
@@ -200,11 +208,7 @@ pub fn process_delegate(_program_id: &Pubkey, accounts: &[AccountInfo]) -> Progr
 
     let delegate_config = DelegateConfig {
         commit_frequency_ms: 30_000,
-        validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")), // Set delegating ER validator
-                                                                                 // MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57 // Asia ER validator
-                                                                                 // MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e // EU ER validator
-                                                                                 // MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd // US ER validator
-                                                                                 // mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev // Local ER validator
+        validator: Some(validator_pubkey), // Set delegating ER validator
     };
 
     delegate_account(delegate_accounts, pda_seeds, delegate_config)?;

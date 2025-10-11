@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("9BAQP9pBBFEcVxMJMgmSjBq9AeBELjowMA7twzMcXtXk");
+declare_id!("4pfYuQkFmGXPFMjBNmYUstnC3jjgjxcBS8rSk8qcUUnE");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 
@@ -113,6 +113,8 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 pub struct DelegateInput<'info> {
     pub payer: Signer<'info>,
+    /// CHECK: Checked by the delegate program
+    pub validator: Option<AccountInfo<'info>>,
     /// CHECK The pda to delegate
     #[account(mut, del)]
     pub pda: AccountInfo<'info>,

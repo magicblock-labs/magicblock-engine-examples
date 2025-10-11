@@ -5,6 +5,7 @@ import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const SEED_TEST_PDA = "test-pda"; // GS5bf2RCq8AEtSGURYUnHVqDi2iWceg78DTQFZ5q1Wzv
+const ER_VALIDATOR = new web3.PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"); // Asia ER Validator
 
 describe.only("anchor-counter", () => {
   console.log("anchor-counter.ts");
@@ -112,6 +113,7 @@ describe.only("anchor-counter", () => {
       .delegate()
       .accounts({
         payer: provider.wallet.publicKey,
+        validator: ER_VALIDATOR,
         pda: pda,
       })
       .remainingAccounts(remainingAccounts)

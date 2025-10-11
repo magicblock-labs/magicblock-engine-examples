@@ -12,6 +12,10 @@ dotenv.config()
 describe("magic-router-and-multiple-atomic-ixs", () => {
     console.log("advanced-magic.ts")
 
+    // Set ER validator
+    const ER_VALIDATOR = new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"); // Asia ER Validator
+    console.log("ER Validator: ", ER_VALIDATOR.toString())
+
     // Get programId from target folder
     const keypairPath = "target/deploy/rust_counter-keypair.json";
     const secretKeyArray = Uint8Array.from(JSON.parse(fs.readFileSync(keypairPath, "utf8")));
@@ -152,6 +156,12 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
                 isSigner: false,
                 isWritable: false,
             },
+            // ER Validator
+            {
+                pubkey: ER_VALIDATOR,
+                isSigner: false,
+                isWritable: false,
+            }
         ]
         const serializedInstructionData =  Buffer.from(CounterInstruction.Delegate, 'hex')
         const delegateIx = new TransactionInstruction({

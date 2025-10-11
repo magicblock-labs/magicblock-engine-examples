@@ -1,6 +1,9 @@
-import { Keypair } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
+
+
+
 
 export async function getAuthToken(endpoint: string, keypair: Keypair): Promise<string> {
     const challengeUrl = new URL("/auth/challenge", endpoint).toString();
@@ -26,4 +29,12 @@ export async function getAuthToken(endpoint: string, keypair: Keypair): Promise<
   }
   const data = await authResponse.json();
   return data.token;
+}
+
+export async function checkPermissionAccount(pda: string, endpoint: string = "https://tee.magicblock.app/permission") {
+    const response = await fetch(`${endpoint}?pubkey=${pda}`);
+    if (!response.ok) {
+      throw new Error(`Permission account check failed: ${response.statusText}`);
+    }
+    return response;
 }

@@ -9,7 +9,7 @@ import {
   PERMISSION_PROGRAM_ID,
   permissionPdaFromAccount
 } from "@magicblock-labs/ephemeral-rollups-sdk/privacy";
-import { getAuthToken } from "./tee-getAuthToken";
+import { checkPermissionAccount, getAuthToken } from "./tee-getAuthToken";
 
 
 describe("anchor-rock-paper-scissor", () => {
@@ -22,7 +22,7 @@ describe("anchor-rock-paper-scissor", () => {
   console.log("Program ID: ", program.programId.toString());
 
 
-  const ER_VALIDATOR = new anchor.web3.PublicKey("FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySXA");
+  const ER_VALIDATOR = new anchor.web3.PublicKey("FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySXA"); // TEE ER Validator
   const player1 = provider.wallet.payer;
   const player2 = anchor.web3.Keypair.generate();
 
@@ -45,7 +45,6 @@ describe("anchor-rock-paper-scissor", () => {
 
   // Random game ID (u64)
   const gameId = new BN(Date.now());
-  // const gameId = new BN(1759884051485);
   console.log("Game ID (u64):", gameId.toString());
 
   // PDA seeds
@@ -310,17 +309,26 @@ describe("anchor-rock-paper-scissor", () => {
   });
 
   it("Sneak Player 1 Choice"  , async () => {
+    await checkPermissionAccount(player1ChoicePda.toString())
     const accountInfo = await (authTokenPlayer2 ? providerTeePlayer2 : provider).connection.getAccountInfo(player1ChoicePda);
-    const player1ChoiceData = accountInfo.data;
-    const player1ChoiceAccount = program.account.playerChoice.coder.accounts.decode("playerChoice", player1ChoiceData);
-    console.log("👀 Check Player 1 Choice:", player1ChoiceAccount.choice);
+    if (accountInfo === null) {
+      console.log("✅ Player 1 choice account not found — as expected.");
+      return; // test passes
+    }
+    // You can optionally fail if account *shouldn't* exist:
+    throw new Error("❌ Player 1 choice account exists unexpectedly!");
   });
 
   it("Sneak Player 2 Choice"  , async () => {
+    await checkPermissionAccount(player2ChoicePda.toString())
     const accountInfo = await (authTokenPlayer1 ? providerTeePlayer1 : provider).connection.getAccountInfo(player2ChoicePda);
-    const player2ChoiceData = accountInfo.data;
-    const player2ChoiceAccount = program.account.playerChoice.coder.accounts.decode("playerChoice", player2ChoiceData);
-    console.log("👀 Check Player 2 Choice:", player2ChoiceAccount.choice);
+      // Assert that accountInfo is null (account not found)
+    if (accountInfo === null) {
+      console.log("✅ Player 2 choice account not found — as expected.");
+      return; // test passes
+    }
+    // You can optionally fail if account *shouldn't* exist:
+    throw new Error("❌ Player 2 choice account exists unexpectedly!");
   });
 
 
