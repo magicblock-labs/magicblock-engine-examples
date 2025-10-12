@@ -73,6 +73,7 @@ pub mod anchor_counter {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
         msg!("PDA {} count: {}", counter.key(), counter.count);
+        counter.exit(&crate::ID)?;
         commit_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.counter.to_account_info()],
@@ -113,8 +114,6 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 pub struct DelegateInput<'info> {
     pub payer: Signer<'info>,
-    /// CHECK: Checked by the delegate program
-    pub validator: Option<AccountInfo<'info>>,
     /// CHECK The pda to delegate
     #[account(mut, del)]
     pub pda: AccountInfo<'info>,

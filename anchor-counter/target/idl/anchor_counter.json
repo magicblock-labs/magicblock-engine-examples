@@ -83,10 +83,6 @@
           "signer": true
         },
         {
-          "name": "validator",
-          "optional": true
-        },
-        {
           "name": "buffer_pda",
           "writable": true,
           "pda": {

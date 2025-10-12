@@ -2,8 +2,9 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
 import { LAMPORTS_PER_SOL, sendAndConfirmTransaction } from "@solana/web3.js";
-import { ConnectionMagicRouter, GetCommitmentSignature
- } from "@magicblock-labs/ephemeral-rollups-sdk";
+import {
+    ConnectionMagicRouter, GetCommitmentSignature
+} from "@magicblock-labs/ephemeral-rollups-sdk";
 
 
 const SEED_TEST_PDA = "test-pda"; // GS5bf2RCq8AEtSGURYUnHVqDi2iWceg78DTQFZ5q1Wzv
@@ -44,10 +45,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
     const tx = await program.methods
       .initialize()
       .accounts({
-        // @ts-ignore
-        counter: pda,
         user: providerMagic.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .transaction();
     const txHash = await sendAndConfirmTransaction(connection, tx, [providerMagic.wallet.payer], {
@@ -82,8 +80,6 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
       .incrementAndCommit()
       .accounts({
         payer: providerMagic.wallet.publicKey,
-        // @ts-ignore
-        counter: pda,
       })
       .transaction();
     const txHash = await sendAndConfirmTransaction(connection, tx, [providerMagic.wallet.payer], {
@@ -111,8 +107,6 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
       .incrementAndUndelegate()
       .accounts({
         payer: providerMagic.wallet.publicKey,
-        // @ts-ignore
-        counter: pda,
       })
       .transaction();
     const txHash = await sendAndConfirmTransaction(connection, tx, [providerMagic.wallet.payer], {
