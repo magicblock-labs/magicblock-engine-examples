@@ -30,6 +30,7 @@ jobs:
         cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
         avm install 0.31.1
         avm use 0.31.1
+        echo "$HOME/.avm/bin" >> $GITHUB_PATH
     
     - name: Install MagicBlock Ephemeral Validator
       run: |
