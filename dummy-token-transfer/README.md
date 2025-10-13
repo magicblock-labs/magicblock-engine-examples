@@ -4,7 +4,7 @@ Demo program for implementing a token transfer that can delegate and execute bot
 
 ## Software Packages
 
-This program has utilized the following sofware packages.
+This program has utilized the following software packages.
 
 | Software   | Version | Installation Guide                                              |
 | ---------- | ------- | --------------------------------------------------------------- |
