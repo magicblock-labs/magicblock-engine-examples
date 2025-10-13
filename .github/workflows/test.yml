@@ -1,0 +1,149 @@
+name: Test Programs
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: '1.82'
+        override: true
+    
+    - name: Install Solana CLI
+      run: |
+        sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+        echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+    
+    - name: Install Anchor CLI
+      run: |
+        cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+        avm install 0.31.1
+        avm use 0.31.1
+        echo "$HOME/.avm/bin" >> $GITHUB_PATH
+    
+    - name: Install MagicBlock Ephemeral Validator
+      run: |
+        npm install -g @magicblock-labs/ephemeral-validator@latest
+    
+    - name: Configure Solana
+      run: |
+        solana config set --url localhost
+        solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
+    
+    - name: Start Solana Test Validator
+      run: |
+        solana-test-validator \
+          --ledger ./my-ledger-1 \
+          --reset \
+          --clone mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev \
+          --clone EpJnX7ueXk7fKojBymqmVuCuwyhDQsYcLVL1XMsBbvDX \
+          --clone 7JrkjmZPprHwtuvtuGTXp9hwfGYFAQLnLeFM52kqAgXg \
+          --clone noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV \
+          --clone-upgradeable-program DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh \
+          --clone Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh \
+          --clone 5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc \
+          --clone F72HqCR8nwYsVyeVd38pgKkjXmXFzVAM8rjZZsXWbdE \
+          --clone vrfkfM4uoisXZQPrFiS2brY4oMkU9EWjyvmvqaFd5AS \
+          --clone-upgradeable-program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz \
+          --clone-upgradeable-program BTWAqWNBmF2TboMh3fxMJfgR16xGHYD7Kgr2dPwbRPBi \
+          --url https://api.devnet.solana.com &
+        
+        # Wait for validator to be ready
+        timeout 30 bash -c 'until solana cluster-version --url http://localhost:8899 >/dev/null 2>&1; do sleep 1; done'
+    
+    - name: Start MagicBlock Ephemeral Validator
+      run: |
+        RUST_LOG=info ephemeral-validator \
+          --accounts-lifecycle ephemeral \
+          --remote-cluster development \
+          --remote-url http://127.0.0.1:8899 \
+          --remote-ws-url ws://127.0.0.1:8900 \
+          --rpc-port 7799 &
+        
+        # Wait for validator to be ready
+        timeout 20 bash -c 'until curl -s http://localhost:7799 >/dev/null 2>&1; do sleep 1; done'
+    
+    - name: Build and Deploy anchor-counter
+      run: |
+        cd anchor-counter
+        anchor build && anchor deploy --provider.cluster localnet
+
+    - name: Test anchor-counter
+      run: |
+        cd anchor-counter
+        EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+        EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+        PROVIDER_ENDPOINT=http://localhost:8899 \
+        WS_ENDPOINT=http://localhost:8900 \
+        anchor test
+    
+    # - name: Test anchor-minter
+    #   run: |
+    #     cd anchor-minter
+    #     yarn install
+    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+    #     PROVIDER_ENDPOINT=http://localhost:8899 \
+    #     WS_ENDPOINT=http://localhost:8900 \
+    #     anchor test
+    
+    # - name: Test anchor-rock-paper-scissor
+    #   run: |
+    #     cd anchor-rock-paper-scissor
+    #     yarn install
+    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+    #     PROVIDER_ENDPOINT=http://localhost:8899 \
+    #     WS_ENDPOINT=http://localhost:8900 \
+    #     anchor test
+    
+    # - name: Test bolt-counter
+    #   run: |
+    #     cd bolt-counter
+    #     yarn install
+    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+    #     PROVIDER_ENDPOINT=http://localhost:8899 \
+    #     WS_ENDPOINT=http://localhost:8900 \
+    #     yarn test
+    
+    # - name: Test dummy-token-transfer
+    #   run: |
+    #     cd dummy-token-transfer
+    #     yarn install
+    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+    #     PROVIDER_ENDPOINT=http://localhost:8899 \
+    #     WS_ENDPOINT=http://localhost:8900 \
+    #     anchor test
+    
+    # - name: Test roll-dice
+    #   run: |
+    #     cd roll-dice
+    #     yarn install
+    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+    #     PROVIDER_ENDPOINT=http://localhost:8899 \
+    #     WS_ENDPOINT=http://localhost:8900 \
+    #     anchor test
+    
+    # - name: Test rust-counter
+    #   run: |
+    #     cd rust-counter
+    #     yarn install
+    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+    #     PROVIDER_ENDPOINT=http://localhost:8899 \
+    #     WS_ENDPOINT=http://localhost:8900 \
+    #     yarn test
