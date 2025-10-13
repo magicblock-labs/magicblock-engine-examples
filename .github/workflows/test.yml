@@ -1,4 +1,4 @@
-name: Test Programs
+name: Test Examples
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  Build and Test:
     runs-on: ubuntu-latest
     
     steps:
@@ -64,6 +64,9 @@ jobs:
     
     - name: Start MagicBlock Ephemeral Validator
       run: |
+        # Increase file descriptor limit for the current session
+        ulimit -n 1000000
+        
         RUST_LOG=info ephemeral-validator \
           --accounts-lifecycle ephemeral \
           --remote-cluster development \
