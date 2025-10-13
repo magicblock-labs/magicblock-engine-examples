@@ -20,17 +20,15 @@ jobs:
         toolchain: '1.82'
         override: true
     
-    - name: Install Solana CLI
+    - name: Install Solana 
       run: |
-        sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
-        echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+        sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.21/install)"
     
-    - name: Install Anchor CLI
+    - name: Install Anchor
       run: |
         cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
         avm install 0.31.1
         avm use 0.31.1
-        echo "$HOME/.avm/bin" >> $GITHUB_PATH
     
     - name: Install MagicBlock Ephemeral Validator
       run: |
@@ -61,12 +59,13 @@ jobs:
         
         # Wait for validator to be ready
         timeout 30 bash -c 'until solana cluster-version --url http://localhost:8899 >/dev/null 2>&1; do sleep 1; done'
-    
-    - name: Start MagicBlock Ephemeral Validator
+
+    - name: Increase file descriptor limit
       run: |
-        # Increase file descriptor limit for the current session
         ulimit -n 1000000
         
+    - name: Start MagicBlock Ephemeral Validator
+      run: |
         RUST_LOG=info ephemeral-validator \
           --accounts-lifecycle ephemeral \
           --remote-cluster development \
