@@ -5,7 +5,6 @@ import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const SEED_TEST_PDA = "test-pda"; // 5fSfSTkNZ4czi3w5bRyDaC8dLretQv9Zy77KRBXQ7ZzB
-const LOCAL_ER_VALIDATOR = new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"); // Local ER Validator
 
 describe.only("anchor-counter", () => {
   console.log("anchor-counter.ts");
@@ -98,7 +97,7 @@ describe.only("anchor-counter", () => {
       providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1")
         ? [
             {
-              pubkey: LOCAL_ER_VALIDATOR,
+              pubkey: new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
               isSigner: false,
               isWritable: false,
             },
