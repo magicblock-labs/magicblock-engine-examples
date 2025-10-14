@@ -6,6 +6,7 @@
   "dependencies": {
     "@magicblock-labs/ephemeral-rollups-sdk": "^0.3.4",
     "@solana/buffer-layout": "^4.0.1",
+    "@solana/kit": "^4.0.0",
     "@solana/web3.js": "^1.98.2",
     "borsh": "0.7.0",
     "dotenv": "^16.5.0",
@@ -23,6 +24,7 @@
     "prettier": "^3.5.3",
     "ts-mocha": "^11.1.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   }
 }

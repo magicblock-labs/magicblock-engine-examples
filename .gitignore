@@ -17,3 +17,6 @@
 !**/anchor-minter/target/idl/
 !**/anchor-counter/target/idl/
 !**/anchor-minter/target/deploy/
+
+# 
+**/tests-kit

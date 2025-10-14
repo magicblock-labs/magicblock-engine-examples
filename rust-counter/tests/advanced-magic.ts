@@ -1,5 +1,5 @@
 import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, Connection, sendAndConfirmTransaction } from "@solana/web3.js";
-import { initializeSolSignerKeypair, airdropSolIfNeeded } from "./initializeKeypair";  // Import the functions
+import { initializeSolSignerKeypair, airdropSolIfNeeded } from "./initializeKeypair";
 import * as borsh from "borsh";
 import * as fs from "fs";
 import { CounterInstruction, IncreaseCounterPayload } from "./schema";
@@ -11,10 +11,6 @@ dotenv.config()
 
 describe("magic-router-and-multiple-atomic-ixs", () => {
     console.log("advanced-magic.ts")
-
-    // Set ER validator
-    const ER_VALIDATOR = new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"); // Asia ER Validator
-    console.log("ER Validator: ", ER_VALIDATOR.toString())
 
     // Get programId from target folder
     const keypairPath = "target/deploy/rust_counter-keypair.json";
@@ -153,12 +149,6 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
             // Delegation Program
             {
                 pubkey: DELEGATION_PROGRAM_ID,
-                isSigner: false,
-                isWritable: false,
-            },
-            // ER Validator
-            {
-                pubkey: ER_VALIDATOR,
                 isSigner: false,
                 isWritable: false,
             }

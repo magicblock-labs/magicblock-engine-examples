@@ -207,8 +207,8 @@ pub fn process_delegate(_program_id: &Pubkey, accounts: &[AccountInfo]) -> Progr
     };
 
     let delegate_config = DelegateConfig {
-        commit_frequency_ms: 30_000,
         validator: Some(validator_pubkey), // Set delegating ER validator
+        ..Default::default()
     };
 
     delegate_account(delegate_accounts, pda_seeds, delegate_config)?;

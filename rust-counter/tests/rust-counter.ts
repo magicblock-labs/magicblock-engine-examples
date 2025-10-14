@@ -11,13 +11,9 @@ dotenv.config()
 
 
 
-describe.only("basic-test", async function () {
+describe("basic-test", async function () {
     this.timeout(60000);  // Set timeout for the test
     console.log("rust-counter.ts")
-
-    // Set ER validator
-    const ER_VALIDATOR = new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"); // Asia ER Validator
-    console.log("ER Validator: ", ER_VALIDATOR.toString())
 
     // Get programId from target folder
     const keypairPath = "target/deploy/rust_counter-keypair.json";
@@ -137,6 +133,19 @@ describe.only("basic-test", async function () {
     it("Delegate counter to ER", async function () {
         const start = Date.now();
 
+        // Add local validator identity to the remaining accounts if running on localnet
+        const remainingAccounts =
+        connectionEphemeralRollup.rpcEndpoint.includes("localhost") ||
+        connectionEphemeralRollup.rpcEndpoint.includes("127.0.0.1")
+            ? [
+                {
+                pubkey: new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+                isSigner: false,
+                isWritable: false,
+                },
+            ]
+        : [];
+
         // 2: Delegate
         // Create, send and confirm transaction
         const tx = new Transaction();
@@ -190,11 +199,7 @@ describe.only("basic-test", async function () {
                 isWritable: false,
             },
             // ER Validator
-            {
-                pubkey: ER_VALIDATOR,
-                isSigner: false,
-                isWritable: false,
-            }
+            ...remainingAccounts
         ]
         const serializedInstructionData =  Buffer.from(CounterInstruction.Delegate, 'hex')
         const delegateIx = new TransactionInstruction({
