@@ -12,23 +12,13 @@ const SEED_LEADERBOARD = "leaderboard";
 
 
 describe("magic-actions", () => {
-  // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
   const program = anchor.workspace.magicActions as Program<MagicActions>;
 
-
-  // Configure the router endpoint for Magic Router
   const routerConnection = new web3.Connection(
     process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app",
     {
       wsEndpoint: process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app",
-    }
-  );
-
-  const ephemeralConnection = new web3.Connection(
-    process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/",
-    {
-      wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
     }
   );
 
@@ -149,13 +139,6 @@ describe("magic-actions", () => {
       })
       .transaction();
 
-      // tx.recentBlockhash = (await ephemeralConnection.getLatestBlockhash()).blockhash;
-      // tx.feePayer = anchor.Wallet.local().publicKey;
-      // tx.sign(anchor.Wallet.local().payer);
-  
-      // const signature = await ephemeralConnection.sendRawTransaction(tx.serialize());
-      // await ephemeralConnection.confirmTransaction(signature);
-
       const signature = await sendMagicTransaction(
         routerConnection,
         tx,
@@ -184,7 +167,6 @@ describe("magic-actions", () => {
   });
 });
 
-// Helper function to print the current value of the counter on base layer and ER.
 async function printCounter(program: Program<MagicActions>, counter_pda: web3.PublicKey, leaderboard_pda: web3.PublicKey, routerConnection: web3.Connection, signature: string, message: string) {
   console.log(message+" Signature: ", signature);
   const delegationStatus = await getDelegationStatus(routerConnection, counter_pda);
