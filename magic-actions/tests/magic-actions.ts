@@ -62,8 +62,7 @@ describe("magic-actions", () => {
       tx,
       [anchor.Wallet.local().payer]
     );
-    console.log("✅ Initialized Counter PDA! Signature:", signature);
-    await printCounter(program, pda, leaderboard_pda, routerConnection);
+    await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Initialized Counter PDA!");
   });
 
   it("Increment Counter!", async () => {
@@ -86,9 +85,8 @@ describe("magic-actions", () => {
     const tx = await program.methods
       .updateLeaderboard()
       .accounts({
-        wtf: leaderboard_pda,
-        wtf2: leaderboard_pda,
-        // leaderboard: leaderboard_pda, // removed bc its pda, not passed
+        escrow: leaderboard_pda, // unused - filler account
+        escrowAuth: leaderboard_pda, // unused - filler account
         counter: pda,
       })
       .transaction();
@@ -98,8 +96,8 @@ describe("magic-actions", () => {
       tx,
       [anchor.Wallet.local().payer]
     );
-    console.log("✅ Updated Leaderboard! Signature:", signature);
-    await printCounter(program, pda, leaderboard_pda, routerConnection);
+
+    await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Updated Leaderboard!");
   });
 
   it("Delegate Counter to ER!", async () => {
@@ -119,7 +117,8 @@ describe("magic-actions", () => {
       tx,
       [anchor.Wallet.local().payer]
     );
-    await sleepWithAnimation(8);
+
+    await sleepWithAnimation(10); // ensure the delegation is processed
     console.log("✅ Delegated Counter PDA! Signature:", signature);
   });
 
@@ -138,8 +137,7 @@ describe("magic-actions", () => {
       [anchor.Wallet.local().payer]
     );
 
-    console.log("✅ Incremented Counter PDA! Signature:", signature);
-    await printCounter(program, pda, leaderboard_pda, routerConnection);
+    await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Incremented Counter PDA!");
   });
 
   it("Update Leaderboard While Delegated!", async () => {
@@ -151,22 +149,21 @@ describe("magic-actions", () => {
       })
       .transaction();
 
-      tx.recentBlockhash = (await ephemeralConnection.getLatestBlockhash()).blockhash;
-      tx.feePayer = anchor.Wallet.local().publicKey;
-      tx.sign(anchor.Wallet.local().payer);
+      // tx.recentBlockhash = (await ephemeralConnection.getLatestBlockhash()).blockhash;
+      // tx.feePayer = anchor.Wallet.local().publicKey;
+      // tx.sign(anchor.Wallet.local().payer);
   
-      const signature = await ephemeralConnection.sendRawTransaction(tx.serialize());
-      await ephemeralConnection.confirmTransaction(signature);
+      // const signature = await ephemeralConnection.sendRawTransaction(tx.serialize());
+      // await ephemeralConnection.confirmTransaction(signature);
 
-      // const signature = await sendMagicTransaction(
-      //   routerConnection,
-      //   tx,
-      //   [anchor.Wallet.local().payer]
-      // );
+      const signature = await sendMagicTransaction(
+        routerConnection,
+        tx,
+        [anchor.Wallet.local().payer]
+      );
 
-      // console.log("✅ Updated Leaderboard While Delegated! Signature:", signature);
       await sleepWithAnimation(5);
-      await printCounter(program, pda, leaderboard_pda, routerConnection);
+      await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Updated Leaderboard While Delegated!");
   });
 
   it("Undelegate Counter!", async () => {
@@ -182,14 +179,14 @@ describe("magic-actions", () => {
       tx,
       [anchor.Wallet.local().payer]
     );
-    console.log("✅ Undelegated Counter PDA! Signature:", signature);
     await sleepWithAnimation(5);
-    await printCounter(program, pda, leaderboard_pda, routerConnection);
+    await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Undelegated Counter PDA!");
   });
 });
 
 // Helper function to print the current value of the counter on base layer and ER.
-async function printCounter(program: Program<MagicActions>, counter_pda: web3.PublicKey, leaderboard_pda: web3.PublicKey, routerConnection: web3.Connection) {
+async function printCounter(program: Program<MagicActions>, counter_pda: web3.PublicKey, leaderboard_pda: web3.PublicKey, routerConnection: web3.Connection, signature: string, message: string) {
+  console.log(message+" Signature: ", signature);
   const delegationStatus = await getDelegationStatus(routerConnection, counter_pda);
   const leaderboardAccount = await program.account.leaderboard.fetch(leaderboard_pda);
 

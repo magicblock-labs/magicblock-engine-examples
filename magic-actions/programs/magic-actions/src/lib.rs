@@ -6,7 +6,6 @@ use ephemeral_rollups_sdk::ephem::{MagicInstructionBuilder, MagicAction, CallHan
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 use anchor_lang::Discriminator;
 use ephemeral_rollups_sdk::consts::EXTERNAL_CALL_HANDLER_DISCRIMINATOR;
-// use anchor_lang::solana_program::hash::hash;
 
 declare_id!("27bYc6G5sNWxKGwj7A9cgKwLp3kfkWbViKT9M4JZXCxw");
 
@@ -35,15 +34,18 @@ pub mod magic_actions {
         Ok(())
     }
 
+    // Since this is an unchecked account, we need to manually deserialize the counter account.
     #[instruction(discriminator = &EXTERNAL_CALL_HANDLER_DISCRIMINATOR)]
     pub fn update_leaderboard(ctx: Context<UpdateLeaderboard>) -> Result<()> {
         let leaderboard = &mut ctx.accounts.leaderboard;
-        let counter = &mut ctx.accounts.counter;
-
+        let counter_info = &mut ctx.accounts.counter.to_account_info();
+        let mut data: &[u8] = &counter_info.try_borrow_data()?;
+        let counter = Counter::try_deserialize(&mut data)?;
+    
         if counter.count > leaderboard.high_score {
             leaderboard.high_score = counter.count;
         }
-
+    
         msg!("Leaderboard updated! High score: {}", leaderboard.high_score);
         Ok(())
     }
@@ -134,13 +136,14 @@ pub struct Increment<'info> {
 #[derive(Accounts)]
 pub struct UpdateLeaderboard<'info> {
     #[account(mut)]
-    /// CHECK: the correct pda
-    pub wtf: UncheckedAccount<'info>,
-    /// CHECK: the correct pda
-    pub wtf2: UncheckedAccount<'info>,
+    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
+    pub escrow: UncheckedAccount<'info>,
+    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
+    pub escrow_auth: UncheckedAccount<'info>,
     #[account(mut, seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: Account<'info, Leaderboard>,
-    pub counter: Account<'info, Counter>,
+    /// CHECK: Your program ID
+    pub counter: UncheckedAccount<'info>,
 }
 
 #[delegate]
