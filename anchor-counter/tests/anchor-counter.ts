@@ -4,8 +4,8 @@ import { AnchorCounter } from "../target/types/anchor_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
-const SEED_TEST_PDA = "test-pda"; // GS5bf2RCq8AEtSGURYUnHVqDi2iWceg78DTQFZ5q1Wzv
-const LOCAL_ER_VALIDATOR = new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"); // Asia ER Validator
+const SEED_TEST_PDA = "test-pda"; // 5fSfSTkNZ4czi3w5bRyDaC8dLretQv9Zy77KRBXQ7ZzB
+const LOCAL_ER_VALIDATOR = new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"); // Local ER Validator
 
 describe.only("anchor-counter", () => {
   console.log("anchor-counter.ts");
