@@ -8,6 +8,9 @@ skip-lint = false
 [programs.localnet]
 magic_actions = "27bYc6G5sNWxKGwj7A9cgKwLp3kfkWbViKT9M4JZXCxw"
 
+[programs.devnet]
+magic_actions = "27bYc6G5sNWxKGwj7A9cgKwLp3kfkWbViKT9M4JZXCxw"
+
 [registry]
 url = "https://api.apr.dev"
 

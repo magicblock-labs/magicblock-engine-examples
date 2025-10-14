@@ -2,9 +2,9 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
 import { MagicActions } from "../target/types/magic_actions";
 import {
-  getDelegationStatus, DELEGATION_PROGRAM_ID, getClosestValidator, sendMagicTransaction, getLatestBlockhashForMagicTransaction
+  getDelegationStatus, getClosestValidator, sendMagicTransaction
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { Transaction } from "@solana/web3.js";
 
 const SEED_TEST_PDA = "test-pda";
 const SEED_LEADERBOARD = "leaderboard";

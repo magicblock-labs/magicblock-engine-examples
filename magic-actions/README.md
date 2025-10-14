@@ -4,7 +4,7 @@ Demonstrates using Magic Actions to execute automatic on-chain handlers when com
 
 ## Software Packages
 
-This program has utilized the following sofware packages.
+This program has utilized the following software packages.
 
 | Software   | Version | Installation Guide                                              |
 | ---------- | ------- | --------------------------------------------------------------- |
