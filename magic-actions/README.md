@@ -1,6 +1,6 @@
-# ➕ Magic Actions
+# ✨ Magic Actions
 
-Simple program to demonstrate magic actions.
+Demonstrates using Magic Actions to execute automatic on-chain handlers when committing accounts from Ephemeral Rollups to the base layer.
 
 ## Software Packages
 
@@ -25,4 +25,22 @@ rustup install 1.82
 # Check and initialize your Anchor version
 avm list
 avm use 0.31.1
+```
+
+## Build and Test
+
+Run the tests with existing program:
+
+```bash
+anchor test --skip-deploy --skip-build --skip-local-validator
+```
+
+Build, deploy and run the tests with new program (note: delete keypairs in `/target/deploy` folder):
+
+```bash
+# Delete keypairs in the deploy folder
+rm -rf /target/deploy/*.keypair
+
+# Build, deploy and test program
+anchor test
 ```
