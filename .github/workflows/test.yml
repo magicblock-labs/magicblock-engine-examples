@@ -87,6 +87,7 @@ jobs:
     - name: Test anchor-counter
       run: |
         cd anchor-counter
+        yarn install
         EPHEMERAL_PROVIDER_ENDPOINT="http://localhost:7799" \
         EPHEMERAL_WS_ENDPOINT="ws://localhost:7800" \
         anchor test \
