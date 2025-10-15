@@ -43,6 +43,11 @@ jobs:
     
     - name: Start Solana Test Validator
       run: |
+        # Increase resource limits BEFORE starting the validator
+        sudo prlimit --pid $$ --nofile=1048576:1048576
+        sudo sysctl fs.inotify.max_user_instances=1280
+        sudo sysctl fs.inotify.max_user_watches=655360
+        
         solana-test-validator \
           --ledger ./my-ledger-1 \
           --reset \
@@ -61,13 +66,10 @@ jobs:
         
         # Wait for validator to be ready
         timeout 30 bash -c 'until solana cluster-version --url http://localhost:8899 >/dev/null 2>&1; do sleep 1; done'
+        
     - name: Start MagicBlock Ephemeral Validator
       run: |
-          sudo prlimit --pid $$ --nofile=1048576:1048576
-          sudo sysctl fs.inotify.max_user_instances=1280
-          sudo sysctl fs.inotify.max_user_watches=655360
-          
-          RUST_LOG=info ephemeral-validator \
+        RUST_LOG=info ephemeral-validator \
           --accounts-lifecycle ephemeral \
           --remote-cluster development \
           --remote-url http://127.0.0.1:8899 \
@@ -90,63 +92,3 @@ jobs:
         PROVIDER_ENDPOINT=http://localhost:8899 \
         WS_ENDPOINT=http://localhost:8900 \
         anchor test
-    
-    # - name: Test anchor-minter
-    #   run: |
-    #     cd anchor-minter
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     anchor test
-    
-    # - name: Test anchor-rock-paper-scissor
-    #   run: |
-    #     cd anchor-rock-paper-scissor
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     anchor test
-    
-    # - name: Test bolt-counter
-    #   run: |
-    #     cd bolt-counter
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     yarn test
-    
-    # - name: Test dummy-token-transfer
-    #   run: |
-    #     cd dummy-token-transfer
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     anchor test
-    
-    # - name: Test roll-dice
-    #   run: |
-    #     cd roll-dice
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     anchor test
-    
-    # - name: Test rust-counter
-    #   run: |
-    #     cd rust-counter
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     yarn test
