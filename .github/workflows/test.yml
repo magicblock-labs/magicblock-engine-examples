@@ -62,13 +62,13 @@ jobs:
         # Wait for validator to be ready
         timeout 30 bash -c 'until solana cluster-version --url http://localhost:8899 >/dev/null 2>&1; do sleep 1; done'
 
-    - name: Increase file descriptor limit
-      run: |
-        ulimit -n 1000000
-        
     - name: Start MagicBlock Ephemeral Validator
       run: |
-        RUST_LOG=info ephemeral-validator \
+          sudo prlimit --pid $$ --nofile=1048576:1048576
+          sudo sysctl fs.inotify.max_user_instances=1280
+          sudo sysctl fs.inotify.max_user_watches=655360
+          
+          RUST_LOG=info ephemeral-validator \
           --accounts-lifecycle ephemeral \
           --remote-cluster development \
           --remote-url http://127.0.0.1:8899 \
