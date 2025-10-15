@@ -74,7 +74,7 @@ jobs:
           --remote-cluster development \
           --remote-url http://127.0.0.1:8899 \
           --remote-ws-url ws://127.0.0.1:8900 \
-          --rpc-port 7799
+          --rpc-port 7799 &
         
         # Wait for validator to be ready
         timeout 20 bash -c 'until curl -s http://localhost:7799 >/dev/null 2>&1; do sleep 1; done'
