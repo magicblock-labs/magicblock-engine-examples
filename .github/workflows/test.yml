@@ -61,7 +61,6 @@ jobs:
         
         # Wait for validator to be ready
         timeout 30 bash -c 'until solana cluster-version --url http://localhost:8899 >/dev/null 2>&1; do sleep 1; done'
-
     - name: Start MagicBlock Ephemeral Validator
       run: |
           sudo prlimit --pid $$ --nofile=1048576:1048576
