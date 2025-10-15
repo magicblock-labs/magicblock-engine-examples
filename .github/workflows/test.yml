@@ -78,43 +78,36 @@ jobs:
         
         # Wait for validator to be ready
         timeout 20 bash -c 'until curl -s http://localhost:7799 >/dev/null 2>&1; do sleep 1; done'
-    
-    - name: Build and Deploy anchor-counter
-      run: |
-        cd anchor-counter
-        anchor build && anchor deploy --provider.cluster localnet
 
     - name: Test anchor-counter
       run: |
         cd anchor-counter
+        anchor build && anchor deploy --provider.cluster localnet
         yarn install
         EPHEMERAL_PROVIDER_ENDPOINT="http://localhost:7799" \
         EPHEMERAL_WS_ENDPOINT="ws://localhost:7800" \
+        PROVIDER_ENDPOINT=http://localhost:8899 \
+        WS_ENDPOINT=http://localhost:8900 \
         anchor test \
         --provider.cluster localnet \
         --skip-local-validator \
-        --skip-build \
         --skip-deploy
 
-    # - name: Test anchor-minter
-    #   run: |
-    #     cd anchor-minter
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     anchor test
+    - name: Test anchor-minter
+      run: |
+        cd anchor-minter
+        anchor build && anchor deploy --provider.cluster localnet
+        yarn install
+        anchor test \
+        --skip-deploy
     
-    # - name: Test anchor-rock-paper-scissor
-    #   run: |
-    #     cd anchor-rock-paper-scissor
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     anchor test
+    - name: Test anchor-rock-paper-scissor
+      run: |
+        cd anchor-rock-paper-scissor
+        anchor build
+        yarn install
+        anchor test \
+        --skip-deploy
     
     # - name: Test bolt-counter
     #   run: |
