@@ -64,6 +64,7 @@ jobs:
         
     - name: Start MagicBlock Ephemeral Validator
       run: |
+        # Magic voodoo to increase resource limits
         sudo prlimit --pid $$ --nofile=1048576:1048576
         sudo sysctl fs.inotify.max_user_instances=1280
         sudo sysctl fs.inotify.max_user_watches=655360
@@ -90,4 +91,4 @@ jobs:
         EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
         PROVIDER_ENDPOINT=http://localhost:8899 \
         WS_ENDPOINT=http://localhost:8900 \
-        anchor test
+        anchor test --provider.cluster localnet
