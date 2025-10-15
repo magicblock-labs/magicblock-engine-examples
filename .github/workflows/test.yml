@@ -43,11 +43,6 @@ jobs:
     
     - name: Start Solana Test Validator
       run: |
-        # Increase resource limits BEFORE starting the validator
-        sudo prlimit --pid $$ --nofile=1048576:1048576
-        sudo sysctl fs.inotify.max_user_instances=1280
-        sudo sysctl fs.inotify.max_user_watches=655360
-        
         solana-test-validator \
           --ledger ./my-ledger-1 \
           --reset \
@@ -69,6 +64,10 @@ jobs:
         
     - name: Start MagicBlock Ephemeral Validator
       run: |
+        sudo prlimit --pid $$ --nofile=1048576:1048576
+        sudo sysctl fs.inotify.max_user_instances=1280
+        sudo sysctl fs.inotify.max_user_watches=655360
+
         RUST_LOG=info ephemeral-validator \
           --accounts-lifecycle ephemeral \
           --remote-cluster development \
