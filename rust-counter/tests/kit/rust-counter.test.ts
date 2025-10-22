@@ -18,7 +18,19 @@ import {
   MAGIC_CONTEXT_ID,
   MAGIC_PROGRAM_ID 
 } from "@magicblock-labs/ephemeral-rollups-kit";
-import { Instruction, getAddressEncoder, getProgramDerivedAddress, AccountRole, createKeyPairFromBytes, getAddressFromPublicKey, address, createTransactionMessage,appendTransactionMessageInstructions, pipe, setTransactionMessageFeePayer } from '@solana/kit';
+import { 
+  Instruction,
+  getAddressEncoder,
+  getProgramDerivedAddress, 
+  AccountRole, 
+  createKeyPairFromBytes, 
+  getAddressFromPublicKey, 
+  address, 
+  createTransactionMessage,
+  appendTransactionMessageInstructions, 
+  pipe, 
+  setTransactionMessageFeePayer 
+} from '@solana/kit';
 import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system"
 import { describe, it, beforeAll, expect } from "vitest";
 

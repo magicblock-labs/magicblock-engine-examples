@@ -1,10 +1,25 @@
-import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, Connection, sendAndConfirmTransaction } from "@solana/web3.js";
+import { 
+    Keypair,
+    PublicKey,
+    SystemProgram,
+    Transaction,
+    TransactionInstruction,
+    Connection,
+    sendAndConfirmTransaction 
+} from "@solana/web3.js";
 import { initializeSolSignerKeypair, airdropSolIfNeeded } from "./initializeKeypair"; 
 import * as borsh from "borsh";
 import * as fs from "fs";
 import { CounterInstruction, IncreaseCounterPayload } from "./schema";
-import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, GetCommitmentSignature
- } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { 
+    DELEGATION_PROGRAM_ID, 
+    delegationRecordPdaFromDelegatedAccount, 
+    delegationMetadataPdaFromDelegatedAccount, 
+    delegateBufferPdaFromDelegatedAccountAndOwnerProgram, 
+    MAGIC_CONTEXT_ID, 
+    MAGIC_PROGRAM_ID, 
+    GetCommitmentSignature
+} from "@magicblock-labs/ephemeral-rollups-sdk";
 
 import { describe, it, beforeAll, expect } from "vitest";
 
@@ -24,15 +39,21 @@ describe.only("basic-test", async () => {
     const PROGRAM_ID = keypair.publicKey;
   
     // Set up a connection to blockchain cluster
-    const connectionBaseLayer = new Connection(process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com", {wsEndpoint:process.env.WS_ENDPOINT || "wss://api.devnet.solana.com"});
-    const connectionEphemeralRollup = new Connection(process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/", {wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/"});
+    const connectionBaseLayer = new Connection(
+        process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com", 
+        {wsEndpoint:process.env.WS_ENDPOINT || "wss://api.devnet.solana.com"}
+    );
+    const connectionEphemeralRollup = new Connection(
+        process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/",
+        {wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/"}
+    );
     console.log("Base Layer Connection: ", connectionBaseLayer.rpcEndpoint);
     console.log("Ephemeral Rollup Connection: ", connectionEphemeralRollup.rpcEndpoint);
 
 
   
     // Create user keypair and airdrop SOL if needed
-    const userKeypair = initializeSolSignerKeypair();  // Use the keypair management function
+    const userKeypair = initializeSolSignerKeypair(); 
   
     // Run this once before all tests
     beforeAll( async () => {
