@@ -184,11 +184,7 @@ pub fn process_delegate(_program_id: &Pubkey, accounts: &[AccountInfo]) -> Progr
     let validator_account = account_info_iter.next();
 
     // Optional: client-provided validator or default validator
-    let default_validator = pubkey!("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"); // Local ER validator
-    let validator_pubkey = match validator_account {
-        Some(acc_info) => acc_info.key.clone(),
-        None => default_validator,
-    };
+    let validator_pubkey: Option<Pubkey> = validator_account.map(|acc_info| acc_info.key.clone());
 
     // Prepare counter pda seeds
     let seed_1 = b"counter_account";
@@ -207,7 +203,7 @@ pub fn process_delegate(_program_id: &Pubkey, accounts: &[AccountInfo]) -> Progr
     };
 
     let delegate_config = DelegateConfig {
-        validator: Some(validator_pubkey), // Set delegating ER validator
+        validator: validator_pubkey, // Set delegating ER validator
         ..Default::default()
     };
 

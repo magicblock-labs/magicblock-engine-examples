@@ -18,7 +18,7 @@ export enum CounterInstruction {
   CommitAndUndelegate = "0300000000000000",       // [3, 0, 0, 0, 0, 0, 0, 0]
   Commit = "0400000000000000",                    // [4, 0, 0, 0, 0, 0, 0, 0]
   IncrementAndCommit = "0500000000000000",        // [5, 0, 0, 0, 0, 0, 0, 0]
-  IncreamentAndUndelegate = "0600000000000000",   // [6, 0, 0, 0, 0, 0, 0, 0]
+  IncrementAndUndelegate = "0600000000000000",   // [6, 0, 0, 0, 0, 0, 0, 0]
   Undelegate = "C41C29CE302533A7"                 // [196, 28, 41, 206, 48, 37, 51, 167]
 }
 

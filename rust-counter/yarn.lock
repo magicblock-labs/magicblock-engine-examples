@@ -179,6 +179,20 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
+"@magicblock-labs/ephemeral-rollups-kit@^0.3.6":
+  version "0.3.6"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-kit/-/ephemeral-rollups-kit-0.3.6.tgz#1ef496ba56c8767f89bdc5c946dab9a4b3ace0bd"
+  integrity sha512-d3q6Oug+et6Op1XJHPr/yNvNHkJmFbVCF8Q3qmQ98fAvRx+z1+OjVawfKgmOdJjQ3u5Fb4/L0Nc8ZsPF6bTHYw==
+  dependencies:
+    "@metaplex-foundation/beet" "^0.7.2"
+    "@phala/dcap-qvl-web" "^0.2.7"
+    "@solana-program/system" "^0.9.0"
+    "@solana/kit" "^4.0.0"
+    "@solana/transaction-confirmation" "^4.0.0"
+    bs58 "^6.0.0"
+    rpc-websockets "^9.0.4"
+    typescript "^5.3.0"
+
 "@magicblock-labs/ephemeral-rollups-sdk@^0.3.4":
   version "0.3.4"
   resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.3.4.tgz#74f79c7be6dd273fa3872e5388e88b8bad863002"
@@ -332,6 +346,11 @@
   version "4.52.4"
   resolved "https://registry.yarnpkg.com/@rollup/rollup-win32-x64-msvc/-/rollup-win32-x64-msvc-4.52.4.tgz#5b2dd648a960b8fa00d76f2cc4eea2f03daa80f4"
   integrity sha512-bf9PtUa0u8IXDVxzRToFQKsNCRz9qLYfR/MpECxl4mRoWYjAeFjgxj1XdZr2M/GNVpT05p+LgQOHopYDlUu6/w==
+
+"@solana-program/system@^0.9.0":
+  version "0.9.0"
+  resolved "https://registry.yarnpkg.com/@solana-program/system/-/system-0.9.0.tgz#ae18325200b6e4d8a6bc757dea99cf9da5679f2f"
+  integrity sha512-yu+i0SZ+c+0E9Cy+btoMiCbxRnP/FLQuv/Ba8l2klZApAiOX1Ja/2IGkctFV36fglsI7PwD9czkSkHm8og+QeA==
 
 "@solana/accounts@4.0.0":
   version "4.0.0"
@@ -703,7 +722,7 @@
     "@solana/errors" "4.0.0"
     "@solana/rpc-types" "4.0.0"
 
-"@solana/transaction-confirmation@4.0.0":
+"@solana/transaction-confirmation@4.0.0", "@solana/transaction-confirmation@^4.0.0":
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/@solana/transaction-confirmation/-/transaction-confirmation-4.0.0.tgz#cb6256ba7fc4cf156a2d51563fc8f8ad644fc2ba"
   integrity sha512-DTBIMB5/UCOpVyL5E0xwswtxs/PGeSD1VL5+C1UCPlggpZNIOlhZoaQqFO56wrJDFASzPMx+dakda5BUuhQkBg==

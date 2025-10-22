@@ -6,13 +6,15 @@ import { CounterInstruction, IncreaseCounterPayload } from "./schema";
 import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, GetCommitmentSignature
  } from "@magicblock-labs/ephemeral-rollups-sdk";
 
+import { describe, it, beforeAll, expect } from "vitest";
+
 import dotenv from 'dotenv'
 dotenv.config()
 
 
 
-describe("basic-test", async function () {
-    this.timeout(60000);  // Set timeout for the test
+describe.only("basic-test", async () => {
+    const TEST_TIMEOUT = 60_000;
     console.log("rust-counter.ts")
 
     // Get programId from target folder
@@ -33,9 +35,9 @@ describe("basic-test", async function () {
     const userKeypair = initializeSolSignerKeypair();  // Use the keypair management function
   
     // Run this once before all tests
-    before(async function () {
+    beforeAll( async () => {
         await airdropSolIfNeeded(connectionBaseLayer, userKeypair.publicKey, 2, 0.05);
-    });
+    }, TEST_TIMEOUT);
   
     // Get pda of counter_account
     let [counterPda, bump] = PublicKey.findProgramAddressSync(
@@ -45,7 +47,7 @@ describe("basic-test", async function () {
     console.log("Program ID: ", PROGRAM_ID.toString())
     console.log("Counter PDA: ", counterPda.toString())
 
-    it("Initialize counter on Solana", async function () {
+    it("Initialize counter on Solana", async () => {
         const start = Date.now();
 
         // 1: IncreaseCounter
@@ -88,9 +90,10 @@ describe("basic-test", async function () {
         ); 
         const duration = Date.now() - start;
         console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
+        expect(txHash).toBeDefined();
 
-    });
-    it("Increase counter on Solana", async function () {
+    }, TEST_TIMEOUT);
+    it("Increase counter on Solana", async () => {
         const start = Date.now();
 
         // 1: IncreaseCounter
@@ -128,8 +131,9 @@ describe("basic-test", async function () {
         ); 
         const duration = Date.now() - start;
         console.log(`${duration}ms (Base Layer) Increment txHash: ${txHash}`);
+        expect(txHash).toBeDefined();
 
-    });
+    }, TEST_TIMEOUT);
     it("Delegate counter to ER", async function () {
         const start = Date.now();
 
@@ -216,9 +220,10 @@ describe("basic-test", async function () {
         ); 
         const duration = Date.now() - start;
         console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
+        expect(txHash).toBeDefined();
 
-    });
-    it("Increase counter on ER (1)", async function () {
+    }, TEST_TIMEOUT);
+    it("Increase counter on ER (1)", async () => {
         const start = Date.now();
 
         // 1: IncreaseCounter
@@ -256,9 +261,10 @@ describe("basic-test", async function () {
         ); 
         const duration = Date.now() - start;
         console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
+        expect(txHash).toBeDefined();
 
-    });
-    it("Commit counter state on ER to Solana", async function () {
+    }, TEST_TIMEOUT);
+    it("Commit counter state on ER to Solana", async () => {
         const start = Date.now();
 
         // 3: Commit
@@ -316,8 +322,10 @@ describe("basic-test", async function () {
         );
         const commitDuration = Date.now() - comfirmCommitStart;
         console.log(`${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`);
-    });
-    it("Increase counter on ER (2)", async function () {
+        expect(txHash).toBeDefined();
+
+    }, TEST_TIMEOUT);
+    it("Increase counter on ER (2)", async () => {
 
         const start = Date.now();
 
@@ -356,8 +364,9 @@ describe("basic-test", async function () {
         ); 
         const duration = Date.now() - start;
         console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
+        expect(txHash).toBeDefined();
 
-    });
+    }, TEST_TIMEOUT);
     it("Commit and undelegate counter on ER to Solana", async function () {
 
         const start = Date.now();
@@ -417,6 +426,7 @@ describe("basic-test", async function () {
         );
         const commitDuration = Date.now() - comfirmCommitStart;
         console.log(`${commitDuration}ms (Base Layer) Undelegate txHash: ${txCommitSgn}`);
+        expect(txHash).toBeDefined();
 
-    });
+    }, TEST_TIMEOUT);
 });

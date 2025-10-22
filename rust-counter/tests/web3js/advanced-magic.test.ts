@@ -5,11 +5,13 @@ import * as fs from "fs";
 import { CounterInstruction, IncreaseCounterPayload } from "./schema";
 import { DELEGATION_PROGRAM_ID, delegationRecordPdaFromDelegatedAccount, delegationMetadataPdaFromDelegatedAccount, delegateBufferPdaFromDelegatedAccountAndOwnerProgram, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, GetCommitmentSignature, ConnectionMagicRouter
  } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { describe, it, beforeAll, expect } from "vitest";
 
 import dotenv from 'dotenv'
 dotenv.config()
 
-describe("magic-router-and-multiple-atomic-ixs", () => {
+describe("magic-router-and-multiple-atomic-ixs", async () => {
+    const TEST_TIMEOUT = 60_000;
     console.log("advanced-magic.ts")
 
     // Get programId from target folder
@@ -35,12 +37,12 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
 
     // Run this once before all tests
     let ephemeralValidator
-    before(async function () {
+    beforeAll(async () => {
         console.log("Endpoint:", connection.rpcEndpoint.toString());
         ephemeralValidator = await connection.getClosestValidator()
         console.log("Detected validator identity:", ephemeralValidator);
         await airdropSolIfNeeded(connection, userKeypair.publicKey, 2, 0.05);
-    });
+    }, TEST_TIMEOUT);
   
     // Get pda of counter_account
     let [counterPda, bump] = PublicKey.findProgramAddressSync(
@@ -51,7 +53,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
     console.log("Program ID: ", PROGRAM_ID.toString())
     console.log("Counter PDA: ", counterPda.toString())
   
-    it("Initialize counter on Solana", async function () {
+    it("Initialize counter on Solana", async () => {
         const start = Date.now();
 
         // 1: InitializeCounter
@@ -94,10 +96,11 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         ); 
         const duration = Date.now() - start;
         console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
+        expect(txHash).toBeDefined();
 
-    });
+    }, TEST_TIMEOUT);
   
-    it("Delegate counter to ER", async function () {
+    it("Delegate counter to ER", async () => {
         const start = Date.now();
 
         // 2: Delegate
@@ -168,10 +171,11 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         ); 
         const duration = Date.now() - start;
         console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
+        expect(txHash).toBeDefined();
 
-    });
+    }, TEST_TIMEOUT);
   
-    it("Increase the delegate counter and commit through CPI", async function () {
+    it("Increase delegated counter and commit through CPI", async () => {
         const start = Date.now();
 
         // 1: IncreaseCounter
@@ -231,10 +235,11 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         );
         const commitDuration = Date.now() - comfirmCommitStart;
         console.log(`${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`);
+        expect(txHash).toBeDefined();
 
-    });
+    }, TEST_TIMEOUT);
   
-    it("Increase delegated counter and undelegate through CPI", async function () {
+    it("Increase delegated counter and undelegate through CPI", async () => {
 
         const start = Date.now();
 
@@ -268,7 +273,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
             }
         ]
         const serializedInstructionData =  Buffer.concat([
-            Buffer.from(CounterInstruction.IncreamentAndUndelegate, 'hex'),
+            Buffer.from(CounterInstruction.IncrementAndUndelegate, 'hex'),
             borsh.serialize(IncreaseCounterPayload.schema, new IncreaseCounterPayload(1))
         ])
         const IncreamentAndUndelegateIx = new TransactionInstruction({
@@ -295,7 +300,8 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
         );
         const commitDuration = Date.now() - comfirmCommitStart;
         console.log(`${commitDuration}ms (Base Layer) Undelegate txHash: ${txCommitSgn}`);
+        expect(txHash).toBeDefined();
 
-    });
+    }, TEST_TIMEOUT);
   
 });

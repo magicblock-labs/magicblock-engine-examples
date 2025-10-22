@@ -4,16 +4,20 @@
   "main": "index.js",
   "license": "ISC",
   "dependencies": {
+    "@magicblock-labs/ephemeral-rollups-kit": "^0.3.6",
     "@magicblock-labs/ephemeral-rollups-sdk": "^0.3.4",
+    "@solana-program/system": "^0.9.0",
     "@solana/buffer-layout": "^4.0.1",
     "@solana/kit": "^4.0.0",
+    "@solana/transaction-confirmation": "^4.0.0",
     "@solana/web3.js": "^1.98.2",
     "borsh": "0.7.0",
     "dotenv": "^16.5.0",
     "fs": "0.0.2"
   },
   "scripts": {
-    "test": "NODE_OPTIONS='--no-deprecation' yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/*.ts"
+    "test": "npx vitest run ./tests/kit",
+    "test-web3js": "npx vitest run ./tests/web3js"
   },
   "devDependencies": {
     "@types/chai": "^5.2.2",
