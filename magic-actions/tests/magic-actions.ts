@@ -75,9 +75,9 @@ describe("magic-actions", () => {
     const tx = await program.methods
       .updateLeaderboard()
       .accounts({
-        escrow: leaderboard_pda, // unused - filler account
-        escrowAuth: leaderboard_pda, // unused - filler account
         counter: pda,
+        escrow: pda,
+        escrowAuth: pda,
       })
       .transaction();
 

@@ -5,9 +5,8 @@ use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_rollups_sdk::ephem::{MagicInstructionBuilder, MagicAction, CallHandler, CommitType};
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 use anchor_lang::Discriminator;
-use ephemeral_rollups_sdk::consts::EXTERNAL_CALL_HANDLER_DISCRIMINATOR;
 
-declare_id!("27bYc6G5sNWxKGwj7A9cgKwLp3kfkWbViKT9M4JZXCxw");
+declare_id!("FNG2W4yLLuT3ZsuHC94oDFKBxyyPtW6GHkPz1i669VPZ");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 pub const LEADERBOARD_SEED: &[u8] = b"leaderboard";
@@ -34,8 +33,6 @@ pub mod magic_actions {
         Ok(())
     }
 
-    // Since this is an unchecked account, we need to manually deserialize the counter account.
-    #[instruction(discriminator = &EXTERNAL_CALL_HANDLER_DISCRIMINATOR)]
     pub fn update_leaderboard(ctx: Context<UpdateLeaderboard>) -> Result<()> {
         let leaderboard = &mut ctx.accounts.leaderboard;
         let counter_info = &mut ctx.accounts.counter.to_account_info();
@@ -78,7 +75,7 @@ pub mod magic_actions {
         );
 
         let action_args = ActionArgs {
-            escrow_index: 1,
+            escrow_index: 0,
             data: instruction_data,
         };
         
@@ -135,15 +132,14 @@ pub struct Increment<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateLeaderboard<'info> {
-    #[account(mut)]
-    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
-    pub escrow: UncheckedAccount<'info>,
-    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
-    pub escrow_auth: UncheckedAccount<'info>,
     #[account(mut, seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: Account<'info, Leaderboard>,
     /// CHECK: Your program ID
     pub counter: UncheckedAccount<'info>,
+    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
+    pub escrow: UncheckedAccount<'info>,
+    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
+    pub escrow_auth: UncheckedAccount<'info>,
 }
 
 #[delegate]

@@ -1,14 +1,15 @@
 [toolchain]
-package_manager = "yarn"
+anchor_version = "0.31.1"
+solana_version = "2.1.0"
 
 [features]
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-magic_actions = "27bYc6G5sNWxKGwj7A9cgKwLp3kfkWbViKT9M4JZXCxw"
-
 [programs.devnet]
+magic_actions = "FNG2W4yLLuT3ZsuHC94oDFKBxyyPtW6GHkPz1i669VPZ"
+
+[programs.localnet]
 magic_actions = "27bYc6G5sNWxKGwj7A9cgKwLp3kfkWbViKT9M4JZXCxw"
 
 [registry]
