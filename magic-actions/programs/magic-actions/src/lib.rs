@@ -1,10 +1,10 @@
 use anchor_lang::prelude::*;
+use anchor_lang::Discriminator;
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
-use ephemeral_rollups_sdk::ephem::{MagicInstructionBuilder, MagicAction, CallHandler, CommitType};
+use ephemeral_rollups_sdk::ephem::{CallHandler, CommitType, MagicAction, MagicInstructionBuilder};
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
-use anchor_lang::Discriminator;
 
 declare_id!("FNG2W4yLLuT3ZsuHC94oDFKBxyyPtW6GHkPz1i669VPZ");
 
@@ -38,12 +38,15 @@ pub mod magic_actions {
         let counter_info = &mut ctx.accounts.counter.to_account_info();
         let mut data: &[u8] = &counter_info.try_borrow_data()?;
         let counter = Counter::try_deserialize(&mut data)?;
-    
+
         if counter.count > leaderboard.high_score {
             leaderboard.high_score = counter.count;
         }
-    
-        msg!("Leaderboard updated! High score: {}", leaderboard.high_score);
+
+        msg!(
+            "Leaderboard updated! High score: {}",
+            leaderboard.high_score
+        );
         Ok(())
     }
 
@@ -70,15 +73,14 @@ pub mod magic_actions {
     }
 
     pub fn commit_and_update_leaderboard(ctx: Context<CommitAndUpdateLeaderboard>) -> Result<()> {
-        let instruction_data = anchor_lang::InstructionData::data(
-            &crate::instruction::UpdateLeaderboard {}
-        );
+        let instruction_data =
+            anchor_lang::InstructionData::data(&crate::instruction::UpdateLeaderboard {});
 
         let action_args = ActionArgs {
             escrow_index: 0,
             data: instruction_data,
         };
-        
+
         let accounts = vec![
             ShortAccountMeta {
                 pubkey: ctx.accounts.leaderboard.key(),
@@ -97,7 +99,7 @@ pub mod magic_actions {
             destination_program: crate::ID,
             accounts,
         };
-    
+
         let magic_builder = MagicInstructionBuilder {
             payer: ctx.accounts.payer.to_account_info(),
             magic_context: ctx.accounts.magic_context.to_account_info(),
@@ -107,7 +109,7 @@ pub mod magic_actions {
                 call_handlers: vec![call_handler],
             }),
         };
-    
+
         magic_builder.build_and_invoke()?;
         Ok(())
     }
@@ -137,9 +139,13 @@ pub struct UpdateLeaderboard<'info> {
     /// CHECK: Your program ID
     pub counter: UncheckedAccount<'info>,
     /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
-    pub escrow: UncheckedAccount<'info>,
-    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
+    /// Escrow authority is an account from which we derived `escrow`
+    /// Using it one can verify if action was scheduled with expected authority
     pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
+    /// Escrow account that is a `signer` in callback
+    /// It is derived from `escrow_auth` and `escrow_index` one specified in `CallHandler`
+    pub escrow: UncheckedAccount<'info>,
 }
 
 #[delegate]
@@ -165,7 +171,7 @@ pub struct UndelegateCounter<'info> {
 pub struct CommitAndUpdateLeaderboard<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    
+
     #[account(mut, seeds = [TEST_PDA_SEED], bump)]
     pub counter: Account<'info, Counter>,
 
