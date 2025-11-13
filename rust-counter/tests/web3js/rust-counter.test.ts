@@ -28,7 +28,7 @@ dotenv.config()
 
 
 
-describe.only("basic-test", async () => {
+describe("basic-test", async () => {
     const TEST_TIMEOUT = 60_000;
     console.log("rust-counter.ts")
 

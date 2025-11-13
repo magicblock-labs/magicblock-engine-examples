@@ -8,9 +8,9 @@ This program has utilized the following sofware packages.
 
 | Software   | Version | Installation Guide                                      |
 | ---------- | ------- | ------------------------------------------------------- |
-| **Solana** | 2.0.21  | [Install Solana](https://docs.anza.xyz/cli/install)     |
-| **Rust**   | 1.82    | [Install Rust](https://www.rust-lang.org/tools/install) |
-| **Node**   | 22.17.0 | [Install Node](https://nodejs.org/en/download/current)  |
+| **Solana** | 2.3.13  | [Install Solana](https://docs.anza.xyz/cli/install)     |
+| **Rust**   | 1.85.0  | [Install Rust](https://www.rust-lang.org/tools/install) |
+| **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)  |
 
 ````sh
 # Check and initialize your Solana version
