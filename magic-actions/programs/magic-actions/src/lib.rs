@@ -139,9 +139,13 @@ pub struct UpdateLeaderboard<'info> {
     /// CHECK: Your program ID
     pub counter: UncheckedAccount<'info>,
     /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
-    pub escrow: UncheckedAccount<'info>,
-    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
+    /// Escrow authority is an account from which we derived `escrow`
+    /// Using it one can verify if action was scheduled with expected authority
     pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
+    /// Escrow account that is a `signer` in callback
+    /// It is derived from `escrow_auth` and `escrow_index` one specified in `CallHandler`
+    pub escrow: UncheckedAccount<'info>,
 }
 
 #[delegate]
