@@ -16,15 +16,15 @@ This program has utilized the following software packages.
 ```sh
 # Check and initialize your Solana version
 agave-install list
-agave-install init 2.1.21
+agave-install init 2.3.13
 
 # Check and initialize your Rust version
 rustup show
-rustup install 1.82
+rustup install 1.85.0
 
 # Check and initialize your Anchor version
 avm list
-avm use 0.31.1
+avm use 0.32.1
 ```
 
 ## ✨ Build and Test
