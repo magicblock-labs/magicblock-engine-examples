@@ -29,7 +29,7 @@ avm use 0.32.1
 
 ## ✨ Build and Test
 
-Run the tests with existing program:
+The test script automatically detects the cluster from `Anchor.toml` and handles Ephemeral Rollup setup for localnet:
 
 ```bash
 yarn
