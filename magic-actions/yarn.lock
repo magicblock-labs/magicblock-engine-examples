@@ -12,10 +12,10 @@
   resolved "https://registry.npmjs.org/@coral-xyz/anchor-errors/-/anchor-errors-0.31.1.tgz"
   integrity sha512-NhNEku4F3zzUSBtrYz84FzYWm48+9OvmT1Hhnwr6GnPQry2dsEqH/ti/7ASjjpoFTWRnPXrjAIT1qM6Isop+LQ==
 
-"@coral-xyz/anchor@^0.31.1":
-  version "0.31.1"
-  resolved "https://registry.npmjs.org/@coral-xyz/anchor/-/anchor-0.31.1.tgz"
-  integrity sha512-QUqpoEK+gi2S6nlYc2atgT2r41TT3caWr/cPUEL8n8Md9437trZ68STknq897b82p5mW0XrTBNOzRbmIRJtfsA==
+"@coral-xyz/anchor@^0.32.1":
+  version "0.32.1"
+  resolved "https://registry.yarnpkg.com/@coral-xyz/anchor/-/anchor-0.32.1.tgz#a07440d9d267840f4f99f1493bd8ce7d7f128e57"
+  integrity sha512-zAyxFtfeje2FbMA1wzgcdVs7Hng/MijPKpRijoySPCicnvcTQs/+dnPZ/cR+LcXM9v9UYSyW81uRNYZtN5G4yg==
   dependencies:
     "@coral-xyz/anchor-errors" "^0.31.1"
     "@coral-xyz/borsh" "^0.31.1"
@@ -39,10 +39,10 @@
     bn.js "^5.1.2"
     buffer-layout "^1.2.0"
 
-"@magicblock-labs/ephemeral-rollups-sdk@0.2.11":
-  version "0.2.11"
-  resolved "https://registry.npmjs.org/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.2.11.tgz"
-  integrity sha512-I9pqYBsWhkUpndt9b4P6jqpVhAKaMdyyiBuxEX+Y2VdWeXuRpF0qXngyn26i1oKCVvbPNQYLu033LpNeSB4BKg==
+"@magicblock-labs/ephemeral-rollups-sdk@^0.4.1":
+  version "0.4.1"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.4.1.tgz#2fba50160e6a279c0eaaa02bac50e48ee8781e54"
+  integrity sha512-Te/8DIddisjci1nhUNM24EtfS2Hk3h4PXjYtGQV/MsIGq5S+Zwd04Sop8q5h05GHYbvzMAG1TqDPIArPBOBzVA==
   dependencies:
     "@metaplex-foundation/beet" "^0.7.2"
     "@phala/dcap-qvl-web" "^0.2.7"
