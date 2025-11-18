@@ -114,22 +114,45 @@ if [ "$CLUSTER" = "localnet" ]; then
   export ANCHOR_WALLET="${HOME}/.config/solana/id.json"
   export ANCHOR_PROVIDER_URL="http://127.0.0.1:8899"
   echo -e "${GREEN}Running anchor test...${NC}"
-  anchor build && anchor deploy \
-  --provider.cluster localnet
-  EPHEMERAL_PROVIDER_ENDPOINT="http://localhost:7799" \
-  EPHEMERAL_WS_ENDPOINT="ws://localhost:7800" \
-  yarn ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts \
-  --provider.cluster localnet \
-  --skip-local-validator \
-  --skip-build \
-  --skip-deploy
+  anchor build && anchor deploy --provider.cluster localnet
+  
+  yarn ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --provider.cluster localnet --skip-local-validator --skip-build --skip-deploy
+  TEST_EXIT_CODE=$?
+  
+  if [ $TEST_EXIT_CODE -ne 0 ]; then
+    echo -e "${RED}Tests failed with exit code ${TEST_EXIT_CODE}${NC}"
+    exit $TEST_EXIT_CODE
+  fi
+  echo -e "${GREEN}Tests completed successfully${NC}"
 else
   # For devnet or other clusters, run tests directly (anchor has already built/deployed)
   echo -e "${GREEN}Running tests for ${CLUSTER}...${NC}"
   export ANCHOR_WALLET="${HOME}/.config/solana/id.json"
-  export ANCHOR_PROVIDER_URL="https://api.devnet.solana.com"
+  
+  # Derive ANCHOR_PROVIDER_URL from CLUSTER
+  case "$CLUSTER" in
+    localnet)
+      export ANCHOR_PROVIDER_URL="http://127.0.0.1:8899"
+      ;;
+    devnet)
+      export ANCHOR_PROVIDER_URL="https://api.devnet.solana.com"
+      ;;
+    mainnet)
+      export ANCHOR_PROVIDER_URL="https://api.mainnet-beta.solana.com"
+      ;;
+    *)
+      echo -e "${RED}Error: Unknown cluster '${CLUSTER}'. Please specify a valid ANCHOR_PROVIDER_URL${NC}"
+      exit 1
+      ;;
+  esac
+  
   yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts
+  TEST_EXIT_CODE=$?
+  
+  if [ $TEST_EXIT_CODE -ne 0 ]; then
+    echo -e "${RED}Tests failed with exit code ${TEST_EXIT_CODE}${NC}"
+    exit $TEST_EXIT_CODE
+  fi
+  echo -e "${GREEN}Tests completed successfully${NC}"
 fi
-
-echo -ne "${GREEN}Tests completed${NC}"
 
