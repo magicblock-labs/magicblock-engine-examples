@@ -73,7 +73,13 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
               isWritable: false,
             },
           ]
-        : [];
+        : [
+            {
+              pubkey: new web3.PublicKey(validator.identity),
+              isSigner: false,
+              isWritable: false,
+            },
+        ];
 
     let tx = await program.methods
       .delegate()
