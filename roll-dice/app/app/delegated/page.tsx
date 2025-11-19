@@ -11,7 +11,6 @@ import {
 } from "@solana/web3.js"
 import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk"
 import { createDelegateInstruction } from "@/lib/delegate-instruction"
-import { useToast } from "@/hooks/use-toast"
 import Dice from "@/components/dice"
 import SolanaAddress from "@/components/solana-address"
 import {
@@ -22,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
 import {
   PROGRAM_ID,
   PLAYER_SEED,
@@ -46,6 +46,105 @@ import type { RollEntry, CachedBlockhash } from "@/lib/types"
 const derivePlayerPda = (user: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from(PLAYER_SEED), user.toBuffer()], PROGRAM_ID)[0]
 
+const MiniDice = ({ value }: { value: number | null }) => {
+  if (value === null) return <span className="text-muted-foreground">-</span>
+  
+  const safeValue = Math.min(Math.max(1, value), 6)
+  const dotSize = "w-1.5 h-1.5"
+  
+  return (
+    <div className="w-8 h-8 bg-white rounded border shadow-sm flex items-center justify-center">
+      <div className="relative w-full h-full p-1">
+        {safeValue === 1 && (
+          <div className="grid place-items-center h-full w-full">
+            <div className={`${dotSize} bg-black rounded-full`} />
+          </div>
+        )}
+        {safeValue === 2 && (
+          <div className="grid grid-cols-2 h-full w-full gap-0.5">
+            <div className="flex justify-start items-start">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="flex justify-end items-end">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+          </div>
+        )}
+        {safeValue === 3 && (
+          <div className="grid grid-cols-3 grid-rows-3 h-full w-full gap-0.5">
+            <div className="col-start-1 row-start-1 flex justify-start items-start">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="col-start-2 row-start-2 flex justify-center items-center">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="col-start-3 row-start-3 flex justify-end items-end">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+          </div>
+        )}
+        {safeValue === 4 && (
+          <div className="grid grid-cols-2 grid-rows-2 h-full w-full gap-0.5">
+            <div className="flex justify-start items-start">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="flex justify-end items-start">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="flex justify-start items-end">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="flex justify-end items-end">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+          </div>
+        )}
+        {safeValue === 5 && (
+          <div className="grid grid-cols-3 grid-rows-3 h-full w-full gap-0.5">
+            <div className="col-start-1 row-start-1 flex justify-start items-start">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="col-start-3 row-start-1 flex justify-end items-start">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="col-start-2 row-start-2 flex justify-center items-center">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="col-start-1 row-start-3 flex justify-start items-end">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="col-start-3 row-start-3 flex justify-end items-end">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+          </div>
+        )}
+        {safeValue === 6 && (
+          <div className="grid grid-cols-2 grid-rows-3 h-full w-full gap-0.5">
+            <div className="flex justify-start items-start">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="flex justify-end items-start">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="flex justify-start items-center">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="flex justify-end items-center">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="flex justify-start items-end">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+            <div className="flex justify-end items-end">
+              <div className={`${dotSize} bg-black rounded-full`} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function DiceRollerDelegated() {
   const [diceValue, setDiceValue] = useState(1)
   const [isRolling, setIsRolling] = useState(false)
@@ -53,10 +152,9 @@ export default function DiceRollerDelegated() {
   const [isDelegated, setIsDelegated] = useState(false)
   const [isDelegating, setIsDelegating] = useState(false)
   const [rollHistory, setRollHistory] = useState<RollEntry[]>([])
+  const [timerTick, setTimerTick] = useState(0)
   
   const previousDiceValueRef = useRef<number>(1)
-  const previousRollnumRef = useRef<number>(0)
-  const expectingRollResultRef = useRef<boolean>(false)
   const programRef = useRef<anchor.Program | null>(null)
   const ephemeralProgramRef = useRef<anchor.Program | null>(null)
   const connectionRef = useRef<Connection | null>(null)
@@ -71,8 +169,6 @@ export default function DiceRollerDelegated() {
   const payerKeypairRef = useRef<Keypair | null>(null)
   const cachedBaseBlockhashRef = useRef<CachedBlockhash | null>(null)
   const cachedEphemeralBlockhashRef = useRef<CachedBlockhash | null>(null)
-  
-  const { toast } = useToast()
 
   const clearAllIntervals = useCallback(() => {
     if (rollIntervalRef.current) {
@@ -179,10 +275,8 @@ export default function DiceRollerDelegated() {
         try {
           const player = program.coder.accounts.decode("player", account.data)
           const initialValue = player.lastResult || 1
-          const initialRollnum = player.rollnum || 0
           setDiceValue(initialValue)
           previousDiceValueRef.current = initialValue
-          previousRollnumRef.current = Number(initialRollnum)
         } catch (error) {
           console.error("Failed to decode player on init:", error)
         }
@@ -209,41 +303,45 @@ export default function DiceRollerDelegated() {
         subscriptionIdRef.current = ephemeralConnection.onAccountChange(
           playerPk,
           (accountInfo) => {
+            console.log("[WebSocket] Account change received", { hasData: !!accountInfo?.data })
             if (!ephemeralProgramRef.current || !accountInfo || !accountInfo.data) return
             
             try {
               const player = ephemeralProgramRef.current.coder.accounts.decode("player", accountInfo.data)
               const newValue = Number(player.lastResult)
-              const newRollnum = Number(player.rollnum || 0)
-              const previousRollnum = previousRollnumRef.current
+              
+              console.log("[WebSocket] Decoded player:", {
+                newValue
+              })
               
               if (newValue > 0) {
                 setDiceValue(newValue)
                 previousDiceValueRef.current = newValue
               }
               
-              if (newRollnum > previousRollnum && expectingRollResultRef.current) {
-                previousRollnumRef.current = newRollnum
-                const endTime = Date.now()
-                setRollHistory(prev => {
+              setRollHistory(prev => {
+                const pendingIndex = prev.findIndex(entry => entry.isPending)
+                if (pendingIndex !== -1) {
+                  console.log("[WebSocket] Processing roll completion")
+                  const endTime = Date.now()
                   const updated = [...prev]
-                  const pendingIndex = updated.findIndex(entry => entry.isPending)
-                  if (pendingIndex !== -1) {
-                    updated[pendingIndex] = {
-                      value: newValue,
-                      startTime: updated[pendingIndex].startTime,
-                      endTime,
-                      isPending: false,
-                    }
+                  updated[pendingIndex] = {
+                    value: newValue,
+                    startTime: updated[pendingIndex].startTime,
+                    endTime,
+                    isPending: false,
                   }
+                  setIsRolling(false)
+                  clearAllIntervals()
+                  console.log("[WebSocket] Roll completion processed")
                   return updated
-                })
-                expectingRollResultRef.current = false
-                setIsRolling(false)
-                clearAllIntervals()
-              }
+                } else {
+                  console.log("[WebSocket] Received update but no pending entry found")
+                  return prev
+                }
+              })
             } catch (error) {
-              console.error("Failed to decode player account:", error)
+              console.error("[WebSocket] Failed to decode player account:", error)
             }
           },
           { commitment: "processed" }
@@ -270,13 +368,8 @@ export default function DiceRollerDelegated() {
     } catch (error) {
       console.error("Failed to initialize delegated dice:", error)
       setIsInitialized(false)
-      toast({
-        title: "Error",
-        description: "Failed to initialize delegated dice",
-        variant: "destructive",
-      })
     }
-    }, [refreshDelegationStatus, toast, fetchBlockhash])
+    }, [refreshDelegationStatus, fetchBlockhash])
 
   useEffect(() => {
     initializeProgram()
@@ -338,39 +431,30 @@ export default function DiceRollerDelegated() {
       await sendTransaction(connection, new Transaction().add(delegateIx), payerKeypair, [playerKeypair], false)
 
       await refreshDelegationStatus()
-      toast({
-        title: "Delegated",
-        description: "Account delegated successfully",
-      })
     } catch (error) {
       console.error("Delegation failed:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delegate account",
-        variant: "destructive",
-      })
     } finally {
       setIsDelegating(false)
     }
-  }, [ensureFunds, isDelegated, refreshDelegationStatus, sendTransaction, toast])
+  }, [ensureFunds, isDelegated, refreshDelegationStatus, sendTransaction])
 
   const handleRollDice = useCallback(async () => {
     if (isRolling || !isInitialized || !isDelegated) return
     if (!ephemeralProgramRef.current || !playerKeypairRef.current || !playerPdaRef.current) return
 
+    console.log("[RollDice] Starting roll")
     setIsRolling(true)
-    expectingRollResultRef.current = true
     clearAllIntervals()
 
     rollIntervalRef.current = setInterval(() => {
       setDiceValue(Math.floor(Math.random() * 6) + 1)
     }, ROLL_ANIMATION_INTERVAL_MS)
 
-    // Create pending roll history entry (will update startTime after transaction is sent)
+    // Create pending roll history entry (startTime will be set when transaction is sent)
     setRollHistory(prev => {
       const newEntry = {
         value: null,
-        startTime: Date.now(), // Temporary, will be updated after send
+        startTime: Date.now(), // Temporary placeholder
         endTime: null,
         isPending: true,
       }
@@ -378,15 +462,26 @@ export default function DiceRollerDelegated() {
     })
 
     timerIntervalRef.current = setInterval(() => {
-      setRollHistory(prev => [...prev])
-    }, 1)
+      setRollHistory(prev => {
+        const hasPending = prev.some(entry => entry.isPending)
+        if (!hasPending) {
+          if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current)
+            timerIntervalRef.current = null
+          }
+          return prev
+        }
+        setTimerTick(t => t + 1)
+        return prev
+      })
+    }, 10)
 
     timeoutRef.current = setTimeout(() => {
-      if (expectingRollResultRef.current) {
-        clearAllIntervals()
-        expectingRollResultRef.current = false
-        setIsRolling(false)
-        setRollHistory(prev => {
+      setRollHistory(prev => {
+        const hasPending = prev.some(entry => entry.isPending)
+        if (hasPending) {
+          clearAllIntervals()
+          setIsRolling(false)
           const updated = [...prev]
           const pendingIndex = updated.findIndex(entry => entry.isPending)
           if (pendingIndex !== -1) {
@@ -396,13 +491,9 @@ export default function DiceRollerDelegated() {
             }
           }
           return updated
-        })
-        toast({
-          title: "Notice",
-          description: "Dice roll is taking longer than expected. Check explorer.",
-          variant: "destructive",
-        })
-      }
+        }
+        return prev
+      })
     }, ROLL_TIMEOUT_MS)
 
     try {
@@ -428,23 +519,27 @@ export default function DiceRollerDelegated() {
       tx.feePayer = playerKeypairRef.current.publicKey
       tx.sign(playerKeypairRef.current)
 
-      await ephemeralConnectionRef.current!.sendRawTransaction(
-        tx.serialize(),
+      const serializedTx = tx.serialize()
+      const transactionStartTime = Date.now()
+      console.log("[RollDice] Sending transaction")
+      ephemeralConnectionRef.current!.sendRawTransaction(
+        serializedTx,
         { skipPreflight: true }
       )
-
-      const startTime = Date.now()
+      console.log("[RollDice] Transaction sent, waiting for websocket update")
+      
       setRollHistory(prev => {
         const updated = [...prev]
         const pendingIndex = updated.findIndex(entry => entry.isPending && entry.value === null)
         if (pendingIndex !== -1) {
           updated[pendingIndex] = {
             ...updated[pendingIndex],
-            startTime,
+            startTime: transactionStartTime,
           }
         }
         return updated
       })
+      
 
       if (ephemeralConnectionRef.current) {
         await fetchBlockhash(ephemeralConnectionRef.current, true)
@@ -452,13 +547,7 @@ export default function DiceRollerDelegated() {
     } catch (error) {
       clearAllIntervals()
       console.error("Error rolling dice:", error)
-      toast({
-        title: "Error",
-        description: "Failed to roll dice",
-        variant: "destructive",
-      })
       setIsRolling(false)
-      expectingRollResultRef.current = false
       setRollHistory(prev => {
         const updated = [...prev]
         const pendingIndex = updated.findIndex(entry => entry.isPending)
@@ -468,7 +557,7 @@ export default function DiceRollerDelegated() {
         return updated
       })
     }
-  }, [clearAllIntervals, isDelegated, isInitialized, isRolling, toast, getBlockhash, fetchBlockhash])
+  }, [clearAllIntervals, isDelegated, isInitialized, isRolling, getBlockhash, fetchBlockhash])
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100">
@@ -476,76 +565,78 @@ export default function DiceRollerDelegated() {
         <SolanaAddress />
       </div>
 
-      <div className="flex flex-row gap-8 px-8 py-8 flex-grow">
-        <div className="flex flex-col items-center justify-center flex-1">
+      <div className="flex flex-col items-center justify-center px-8 py-8 flex-grow">
+        <div className="flex flex-row items-start justify-center gap-16">
+          <div className="flex flex-col items-center flex-shrink-0">
+            <div className="flex items-center gap-4 mb-6">
+              <Badge className={`px-4 py-1.5 text-sm ${isDelegated ? "bg-green-600 text-white border-green-600" : "bg-amber-600 text-white border-amber-600"}`}>
+                {isDelegated ? "Delegated" : "Undelegated"}
+              </Badge>
+              {!isDelegated && (
+                <button
+                  onClick={handleDelegate}
+                  disabled={!isInitialized || isDelegating}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium shadow hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isDelegating ? "Delegating..." : "Delegate"}
+                </button>
+              )}
+            </div>
 
-          <div className="flex items-center gap-4 mb-6">
-            <span className={`text-sm font-medium ${isDelegated ? "text-green-600" : "text-amber-600"}`}>
-              {isDelegated ? "Delegated" : "Undelegated"}
-            </span>
-            {!isDelegated && (
-              <button
-                onClick={handleDelegate}
-                disabled={!isInitialized || isDelegating}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium shadow hover:bg-blue-700 disabled:opacity-50"
-              >
-                {isDelegating ? "Delegating..." : "Delegate"}
-              </button>
-            )}
+            <div className="mb-8">
+              <Dice value={diceValue} isRolling={isRolling} onClick={handleRollDice} />
+            </div>
+
+            <button
+              onClick={handleRollDice}
+              disabled={isRolling || !isInitialized || !isDelegated}
+              className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium shadow-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {isRolling ? "Rolling..." : !isInitialized ? "Initializing..." : !isDelegated ? "Delegate First" : "Roll Dice"}
+            </button>
           </div>
 
-          <div className="mb-8">
-            <Dice value={diceValue} isRolling={isRolling} onClick={handleRollDice} />
-          </div>
-
-          <button
-            onClick={handleRollDice}
-            disabled={isRolling || !isInitialized || !isDelegated}
-            className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium shadow-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            {isRolling ? "Rolling..." : !isInitialized ? "Initializing..." : !isDelegated ? "Delegate First" : "Roll Dice"}
-          </button>
-        </div>
-
-        <div className="flex flex-col w-96">
-          <h2 className="text-xl font-bold mb-4">Roll History</h2>
-          <div className="bg-white rounded-lg shadow border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Value</TableHead>
-                  <TableHead className="text-right w-24">Time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rollHistory.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
-                      No rolls yet
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rollHistory.map((entry, index) => {
-                    const elapsed = entry.isPending
-                      ? Date.now() - entry.startTime
-                      : entry.endTime
-                        ? entry.endTime - entry.startTime
-                        : 0
-                    const formattedTime = `${elapsed.toString().padStart(6, '\u00A0')}ms${entry.isPending ? '...' : ''}`
-                    return (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">
-                          {entry.value !== null ? entry.value : "-"}
-                        </TableCell>
-                        <TableCell className={`text-right font-mono whitespace-pre ${entry.isPending ? "text-blue-600 font-medium" : ""}`}>
-                          {formattedTime}
+          <div className="flex flex-col w-96 ml-8 -mt-16 flex-shrink-0">
+            <div className="bg-white rounded-lg shadow border overflow-hidden">
+              <div className="h-[400px] overflow-y-auto custom-scrollbar">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-white z-10">
+                    <TableRow>
+                      <TableHead>Value</TableHead>
+                      <TableHead className="text-right w-24">Time</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rollHistory.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
+                          No rolls yet
                         </TableCell>
                       </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
+                    ) : (
+                      rollHistory.slice(0, 10).map((entry, index) => {
+                        const elapsed = entry.isPending
+                          ? Date.now() - entry.startTime
+                          : entry.endTime
+                            ? entry.endTime - entry.startTime
+                            : 0
+                        const formattedTime = `${elapsed.toString().padStart(6, '\u00A0')}ms${entry.isPending ? '...' : ''}`
+                        return (
+                          <TableRow key={index}>
+                            <TableCell>
+                              <MiniDice value={entry.value} />
+                            </TableCell>
+                            <TableCell className={`text-right font-mono whitespace-pre ${entry.isPending ? "text-blue-600 font-medium" : ""}`}>
+                              {formattedTime}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
