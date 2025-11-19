@@ -9,7 +9,8 @@ import {
   Transaction,
   SystemProgram,
 } from "@solana/web3.js"
-import { createDelegateInstruction, DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk"
+import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk"
+import { createDelegateInstruction } from "@/lib/delegate-instruction"
 import { useToast } from "@/hooks/use-toast"
 import Dice from "@/components/dice"
 import SolanaAddress from "@/components/solana-address"
@@ -513,7 +514,7 @@ export default function DiceRollerDelegated() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Value</TableHead>
-                  <TableHead>Time</TableHead>
+                  <TableHead className="text-right w-24">Time</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -530,13 +531,14 @@ export default function DiceRollerDelegated() {
                       : entry.endTime
                         ? entry.endTime - entry.startTime
                         : 0
+                    const formattedTime = `${elapsed.toString().padStart(6, '\u00A0')}ms${entry.isPending ? '...' : ''}`
                     return (
                       <TableRow key={index}>
                         <TableCell className="font-medium">
                           {entry.value !== null ? entry.value : "-"}
                         </TableCell>
-                        <TableCell className={entry.isPending ? "text-blue-600 font-medium" : ""}>
-                          {entry.isPending ? `${elapsed}ms...` : `${elapsed}ms`}
+                        <TableCell className={`text-right font-mono whitespace-pre ${entry.isPending ? "text-blue-600 font-medium" : ""}`}>
+                          {formattedTime}
                         </TableCell>
                       </TableRow>
                     )
