@@ -58,13 +58,30 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
 
   it("Delegate counter to ER", async () => {
     const start = Date.now();
+
+    const validator = (await connection.getClosestValidator());
+    console.log("Delegating to closest validator: ", JSON.stringify(validator));
+
+    // Add local validator identity to the remaining accounts if running on localnet
+    const remainingAccounts =
+      connection.rpcEndpoint.includes("localhost") ||
+      connection.rpcEndpoint.includes("127.0.0.1")
+        ? [
+            {
+              pubkey: new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+              isSigner: false,
+              isWritable: false,
+            },
+          ]
+        : [];
+
     let tx = await program.methods
       .delegate()
       .accounts({
         payer: providerMagic.wallet.publicKey,
-        validator: ER_VALIDATOR,
         pda: pda,
       })
+      .remainingAccounts(remainingAccounts)
       .transaction();
     const txHash = await sendAndConfirmTransaction(connection, tx, [providerMagic.wallet.payer], {
       skipPreflight: true,

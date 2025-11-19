@@ -152,7 +152,6 @@ pub struct DelegateCounter<'info> {
     #[account(mut, del)]
     /// CHECK: the correct pda
     pub pda: AccountInfo<'info>,
-    pub validator: Option<AccountInfo<'info>>,
 }
 
 #[commit]

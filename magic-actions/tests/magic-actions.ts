@@ -94,13 +94,26 @@ describe("magic-actions", () => {
     const validator = (await routerConnection.getClosestValidator());
     console.log("Delegating to closest validator: ", JSON.stringify(validator));
 
+        // Add local validator identity to the remaining accounts if running on localnet
+    const remainingAccounts =
+      routerConnection.rpcEndpoint.includes("localhost") ||
+      routerConnection.rpcEndpoint.includes("127.0.0.1")
+        ? [
+            {
+              pubkey: new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+              isSigner: false,
+              isWritable: false,
+            },
+          ]
+        : [];
+
     const tx = await program.methods
       .delegate()
       .accounts({
         payer: anchor.Wallet.local().publicKey,
-        validator: new web3.PublicKey(validator.identity),
         pda: pda
       })
+      .remainingAccounts(remainingAccounts)
       .transaction();
 
     const signature = await sendAndConfirmTransaction(
