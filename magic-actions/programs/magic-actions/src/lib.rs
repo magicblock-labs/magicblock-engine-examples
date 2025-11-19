@@ -6,7 +6,7 @@ use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_rollups_sdk::ephem::{CallHandler, CommitType, MagicAction, MagicInstructionBuilder};
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 
-declare_id!("9msF7eZxvueFy3TwZ4Q1xocXrBgWd8Q9oriRw6jvh32n");
+declare_id!("CrWQv121NBNzXjxVe5pNL7MsT2yW13dMheE4nemoudQ1");
 
 pub const TEST_PDA_SEED: &[u8] = b"test-pda";
 pub const LEADERBOARD_SEED: &[u8] = b"leaderboard";
@@ -55,8 +55,9 @@ pub mod magic_actions {
             &ctx.accounts.payer,
             &[TEST_PDA_SEED],
             DelegateConfig {
-                commit_frequency_ms: 30_000,
-                validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")),
+                // Optionally set a specific validator from the first remaining account
+                validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
+                ..Default::default()
             },
         )?;
         Ok(())
@@ -151,6 +152,7 @@ pub struct DelegateCounter<'info> {
     #[account(mut, del)]
     /// CHECK: the correct pda
     pub pda: AccountInfo<'info>,
+    pub validator: Option<AccountInfo<'info>>,
 }
 
 #[commit]

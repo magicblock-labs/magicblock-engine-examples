@@ -2,9 +2,9 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
 import { MagicActions } from "../target/types/magic_actions";
 import {
-  getDelegationStatus, getClosestValidator, sendMagicTransaction
+  ConnectionMagicRouter,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { Transaction } from "@solana/web3.js";
+import { Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 
 const SEED_TEST_PDA = "test-pda";
 const SEED_LEADERBOARD = "leaderboard";
@@ -15,7 +15,7 @@ describe("magic-actions", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
   const program = anchor.workspace.magicActions as Program<MagicActions>;
 
-  const routerConnection = new web3.Connection(
+  const routerConnection: ConnectionMagicRouter = new ConnectionMagicRouter(
     process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app",
     {
       wsEndpoint: process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app",
@@ -47,7 +47,7 @@ describe("magic-actions", () => {
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .transaction() as Transaction;
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -63,7 +63,7 @@ describe("magic-actions", () => {
       })
       .transaction() as Transaction;
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -81,7 +81,7 @@ describe("magic-actions", () => {
       })
       .transaction();
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -91,18 +91,19 @@ describe("magic-actions", () => {
   });
 
   it("Delegate Counter to ER!", async () => {
-    const validatorKey = await getClosestValidator(routerConnection);
-    console.log("Delegating to closest validator: ", validatorKey.toString());
+    const validator = (await routerConnection.getClosestValidator());
+    console.log("Delegating to closest validator: ", JSON.stringify(validator));
 
     const tx = await program.methods
       .delegate()
       .accounts({
         payer: anchor.Wallet.local().publicKey,
-        pda: pda,
+        validator: new web3.PublicKey(validator.identity),
+        pda: pda
       })
       .transaction();
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -121,7 +122,7 @@ describe("magic-actions", () => {
       })
       .transaction();
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -139,7 +140,7 @@ describe("magic-actions", () => {
       })
       .transaction();
 
-      const signature = await sendMagicTransaction(
+      const signature = await sendAndConfirmTransaction(
         routerConnection,
         tx,
         [anchor.Wallet.local().payer]
@@ -157,7 +158,7 @@ describe("magic-actions", () => {
       })
       .transaction();
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -167,9 +168,9 @@ describe("magic-actions", () => {
   });
 });
 
-async function printCounter(program: Program<MagicActions>, counter_pda: web3.PublicKey, leaderboard_pda: web3.PublicKey, routerConnection: web3.Connection, signature: string, message: string) {
+async function printCounter(program: Program<MagicActions>, counter_pda: web3.PublicKey, leaderboard_pda: web3.PublicKey, routerConnection: ConnectionMagicRouter, signature: string, message: string) {
   console.log(message+" Signature: ", signature);
-  const delegationStatus = await getDelegationStatus(routerConnection, counter_pda);
+  const delegationStatus = await routerConnection.getDelegationStatus(counter_pda);
   const leaderboardAccount = await program.account.leaderboard.fetch(leaderboard_pda);
 
   var counterER = "";
