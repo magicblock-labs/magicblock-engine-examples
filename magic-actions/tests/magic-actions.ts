@@ -105,7 +105,13 @@ describe("magic-actions", () => {
               isWritable: false,
             },
           ]
-        : [];
+        : [
+            {
+              pubkey: new web3.PublicKey(validator.identity),
+              isSigner: false,
+              isWritable: false,
+            },
+        ];
 
     const tx = await program.methods
       .delegate()
