@@ -1,12 +1,13 @@
 use anchor_lang::prelude::*;
 use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
+use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_and_undelegate_accounts};
 
 
-declare_id!("8QudyDCGXZw8jJnV7zAm5Fsr1Suztg6Nu5YCgAf2fuWj");
+declare_id!("5bPwgoPWz274NKgThcnPas2Mv4rSknu9JrbxzFVqU5gY");
 
 
 pub const PLAYER: &[u8] = b"playerd";
@@ -33,7 +34,11 @@ pub mod random_dice_delegated {
             callback_program_id: ID,
             callback_discriminator: instruction::CallbackRollDiceSimple::DISCRIMINATOR.to_vec(),
             caller_seed: [client_seed; 32],
-            accounts_metas: None,
+            accounts_metas: Some(vec![SerializableAccountMeta {
+                pubkey: ctx.accounts.player.key(),
+                is_signer: false,
+                is_writable: true,
+            }]),
             ..Default::default()
         });
         ctx.accounts
@@ -42,11 +47,15 @@ pub mod random_dice_delegated {
     }
 
     pub fn callback_roll_dice_simple(
-        _ctx: Context<CallbackRollDiceSimpleCtx>,
+        ctx: Context<CallbackRollDiceSimpleCtx>,
         randomness: [u8; 32],
     ) -> Result<()> {
         let rnd_u8 = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 6);
         msg!("Consuming random number: {:?}", rnd_u8);
+        player.rollnum = player.rollnum.saturating_add(1);
+        msg!("Roll number: {:?}", player.rollnum);
+        let player = &mut ctx.accounts.player;
+        player.last_result = rnd_u8;
         Ok(())
     }
 
@@ -76,7 +85,7 @@ pub mod random_dice_delegated {
 pub struct Initialize<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(init_if_needed, payer = payer, space = 8 + 1, seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
+    #[account(init_if_needed, payer = payer, space = 8 + 2, seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
     pub player: Account<'info, Player>,
     pub system_program: Program<'info, System>,
 }
@@ -121,6 +130,8 @@ pub struct CallbackRollDiceSimpleCtx<'info> {
     /// enforcing the callback is executed by the VRF program trough CPI
     #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
     pub vrf_program_identity: Signer<'info>,
+    #[account(mut)]
+    pub player: Account<'info, Player>,
 }
 
 #[delegate]
@@ -145,4 +156,5 @@ pub struct Undelegate<'info> {
 #[account]
 pub struct Player {
     pub last_result: u8,
+    pub rollnum: u8,
 }
