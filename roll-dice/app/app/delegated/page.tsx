@@ -1,22 +1,18 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import Dice from "@/components/dice"
-import SolanaAddress from "@/components/solana-address"
-// @ts-ignore
 import * as anchor from "@coral-xyz/anchor"
-// @ts-ignore
 import {
   Connection,
   Keypair,
   PublicKey,
   Transaction,
-  VersionedTransaction,
   SystemProgram,
-  LAMPORTS_PER_SOL,
 } from "@solana/web3.js"
 import { createDelegateInstruction, DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk"
 import { useToast } from "@/hooks/use-toast"
+import Dice from "@/components/dice"
+import SolanaAddress from "@/components/solana-address"
 import {
   Table,
   TableBody,
@@ -25,37 +21,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-
-const PROGRAM_ID = new PublicKey("5bPwgoPWz274NKgThcnPas2Mv4rSknu9JrbxzFVqU5gY")
-const PLAYER_SEED = "playerd"
-const ORACLE_QUEUE = new PublicKey("5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc")
-const BASE_ENDPOINT = "https://rpc.magicblock.app/devnet"
-const PLAYER_STORAGE_KEY = "solanaKeypair"
-const PAYER_STORAGE_KEY = "delegatePayerKeypair"
-
-const walletAdapterFrom = (keypair: Keypair) => ({
-  publicKey: keypair.publicKey,
-  async signTransaction<T extends Transaction | VersionedTransaction>(transaction: T): Promise<T> {
-    // @ts-ignore - Transaction and VersionedTransaction have different sign signatures
-    transaction.sign(keypair)
-    return transaction
-  },
-  async signAllTransactions<T extends Transaction | VersionedTransaction>(transactions: T[]): Promise<T[]> {
-    // @ts-ignore - Transaction and VersionedTransaction have different sign signatures
-    transactions.forEach(tx => tx.sign(keypair))
-    return transactions
-  },
-})
+import {
+  PROGRAM_ID,
+  PLAYER_SEED,
+  ORACLE_QUEUE,
+  BASE_ENDPOINT,
+  PLAYER_STORAGE_KEY,
+  PAYER_STORAGE_KEY,
+  BLOCKHASH_REFRESH_INTERVAL_MS,
+  ROLL_TIMEOUT_MS,
+  ROLL_ANIMATION_INTERVAL_MS,
+} from "@/lib/config"
+import {
+  walletAdapterFrom,
+  loadOrCreateKeypair,
+  ensureFunds,
+  fetchAndCacheBlockhash,
+  getCachedBlockhash,
+  checkDelegationStatus,
+} from "@/lib/solana-utils"
+import type { RollEntry, CachedBlockhash } from "@/lib/types"
 
 const derivePlayerPda = (user: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from(PLAYER_SEED), user.toBuffer()], PROGRAM_ID)[0]
-
-type RollEntry = {
-  value: number | null
-  startTime: number
-  endTime: number | null
-  isPending: boolean
-}
 
 export default function DiceRollerDelegated() {
   const [diceValue, setDiceValue] = useState(1)
@@ -64,6 +52,7 @@ export default function DiceRollerDelegated() {
   const [isDelegated, setIsDelegated] = useState(false)
   const [isDelegating, setIsDelegating] = useState(false)
   const [rollHistory, setRollHistory] = useState<RollEntry[]>([])
+  
   const previousDiceValueRef = useRef<number>(1)
   const previousRollnumRef = useRef<number>(0)
   const expectingRollResultRef = useRef<boolean>(false)
@@ -79,8 +68,9 @@ export default function DiceRollerDelegated() {
   const blockhashIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const playerKeypairRef = useRef<Keypair | null>(null)
   const payerKeypairRef = useRef<Keypair | null>(null)
-  const cachedBaseBlockhashRef = useRef<{ blockhash: string; lastValidBlockHeight: number; timestamp: number } | null>(null)
-  const cachedEphemeralBlockhashRef = useRef<{ blockhash: string; lastValidBlockHeight: number; timestamp: number } | null>(null)
+  const cachedBaseBlockhashRef = useRef<CachedBlockhash | null>(null)
+  const cachedEphemeralBlockhashRef = useRef<CachedBlockhash | null>(null)
+  
   const { toast } = useToast()
 
   const clearAllIntervals = useCallback(() => {
@@ -103,54 +93,26 @@ export default function DiceRollerDelegated() {
   }, [])
 
 
-  const ensureFunds = useCallback(async (connection: Connection, keypair: Keypair) => {
-    const balance = await connection.getBalance(keypair.publicKey)
-    if (balance < 0.05 * LAMPORTS_PER_SOL) {
-      const signature = await connection.requestAirdrop(keypair.publicKey, LAMPORTS_PER_SOL)
-      await connection.confirmTransaction(signature, "confirmed")
-    }
+  const fetchBlockhash = useCallback(async (connection: Connection, isEphemeral: boolean) => {
+    const cacheRef = isEphemeral ? cachedEphemeralBlockhashRef : cachedBaseBlockhashRef
+    await fetchAndCacheBlockhash(connection, cacheRef)
   }, [])
 
-  const fetchAndCacheBlockhash = useCallback(async (connection: Connection, isEphemeral: boolean) => {
-    try {
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
-      const cached = {
-        blockhash,
-        lastValidBlockHeight,
-        timestamp: Date.now(),
-      }
-      if (isEphemeral) {
-        cachedEphemeralBlockhashRef.current = cached
-      } else {
-        cachedBaseBlockhashRef.current = cached
-      }
-    } catch (error) {
-      console.error("Failed to fetch blockhash:", error)
-    }
+  const getBlockhash = useCallback((connection: Connection, isEphemeral: boolean): string | null => {
+    const cacheRef = isEphemeral ? cachedEphemeralBlockhashRef : cachedBaseBlockhashRef
+    return getCachedBlockhash(connection, cacheRef)
   }, [])
-
-  const getCachedBlockhash = useCallback((connection: Connection, isEphemeral: boolean): string | null => {
-    const cached = isEphemeral ? cachedEphemeralBlockhashRef.current : cachedBaseBlockhashRef.current
-    if (!cached) return null
-    
-    const age = Date.now() - cached.timestamp
-    if (age > 30000) {
-      fetchAndCacheBlockhash(connection, isEphemeral)
-    }
-    
-    return cached.blockhash
-  }, [fetchAndCacheBlockhash])
 
   const sendTransaction = useCallback(
     async (connection: Connection, transaction: Transaction, feePayer: Keypair, signers: Keypair[], isEphemeral: boolean = false) => {
       let blockhash: string
-      const cached = getCachedBlockhash(connection, isEphemeral)
+      const cached = getBlockhash(connection, isEphemeral)
       if (cached) {
         blockhash = cached
       } else {
         const result = await connection.getLatestBlockhash()
         blockhash = result.blockhash
-        fetchAndCacheBlockhash(connection, isEphemeral)
+        await fetchBlockhash(connection, isEphemeral)
       }
       
       transaction.recentBlockhash = blockhash
@@ -164,29 +126,16 @@ export default function DiceRollerDelegated() {
 
       signerMap.forEach(signer => transaction.partialSign(signer))
 
-      const signature = await connection.sendRawTransaction(transaction.serialize())
-      return signature
+      return await connection.sendRawTransaction(transaction.serialize())
     },
-    [getCachedBlockhash, fetchAndCacheBlockhash]
+    [getBlockhash, fetchBlockhash]
   )
 
   const refreshDelegationStatus = useCallback(async () => {
     if (!connectionRef.current || !playerKeypairRef.current) return false
-    const accountInfo = await connectionRef.current.getAccountInfo(playerKeypairRef.current.publicKey)
-    const delegated = !!accountInfo && accountInfo.owner.equals(DELEGATION_PROGRAM_ID)
+    const delegated = await checkDelegationStatus(connectionRef.current, playerKeypairRef.current.publicKey)
     setIsDelegated(delegated)
     return delegated
-  }, [])
-
-  const loadOrCreateKeypair = useCallback((storageKey: string) => {
-    if (typeof window === "undefined") return Keypair.generate()
-    const stored = window.localStorage.getItem(storageKey)
-    if (stored) {
-      return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(stored)))
-    }
-    const generated = Keypair.generate()
-    window.localStorage.setItem(storageKey, JSON.stringify(Array.from(generated.secretKey)))
-    return generated
   }, [])
 
   const initializeProgram = useCallback(async () => {
@@ -302,19 +251,19 @@ export default function DiceRollerDelegated() {
 
       await refreshDelegationStatus()
       
-      await fetchAndCacheBlockhash(connection, false)
+      await fetchBlockhash(connection, false)
       if (ephemeralConnection) {
-        await fetchAndCacheBlockhash(ephemeralConnection, true)
+        await fetchBlockhash(ephemeralConnection, true)
       }
       
       blockhashIntervalRef.current = setInterval(() => {
         if (connectionRef.current) {
-          fetchAndCacheBlockhash(connectionRef.current, false)
+          fetchBlockhash(connectionRef.current, false)
         }
         if (ephemeralConnectionRef.current) {
-          fetchAndCacheBlockhash(ephemeralConnectionRef.current, true)
+          fetchBlockhash(ephemeralConnectionRef.current, true)
         }
-      }, 20000)
+      }, BLOCKHASH_REFRESH_INTERVAL_MS)
       
       setIsInitialized(true)
     } catch (error) {
@@ -326,13 +275,14 @@ export default function DiceRollerDelegated() {
         variant: "destructive",
       })
     }
-  }, [ensureFunds, loadOrCreateKeypair, refreshDelegationStatus, toast, fetchAndCacheBlockhash])
+    }, [refreshDelegationStatus, toast, fetchBlockhash])
 
   useEffect(() => {
     initializeProgram()
 
     return () => {
       clearAllIntervals()
+      // Clean up subscription
       if (subscriptionIdRef.current !== null && ephemeralConnectionRef.current) {
         ephemeralConnectionRef.current.removeAccountChangeListener(subscriptionIdRef.current).catch(console.error)
         subscriptionIdRef.current = null
@@ -377,6 +327,8 @@ export default function DiceRollerDelegated() {
         await sendTransaction(connection, new Transaction().add(assignIx), payerKeypair, [playerKeypair], false)
       }
 
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
       const delegateIx = createDelegateInstruction({
         payer: payerKeypair.publicKey,
         delegatedAccount: playerKeypair.publicKey,
@@ -411,12 +363,13 @@ export default function DiceRollerDelegated() {
 
     rollIntervalRef.current = setInterval(() => {
       setDiceValue(Math.floor(Math.random() * 6) + 1)
-    }, 100)
+    }, ROLL_ANIMATION_INTERVAL_MS)
 
+    // Create pending roll history entry (will update startTime after transaction is sent)
     setRollHistory(prev => {
       const newEntry = {
         value: null,
-        startTime: Date.now(),
+        startTime: Date.now(), // Temporary, will be updated after send
         endTime: null,
         isPending: true,
       }
@@ -449,7 +402,7 @@ export default function DiceRollerDelegated() {
           variant: "destructive",
         })
       }
-    }, 10000)
+    }, ROLL_TIMEOUT_MS)
 
     try {
       const randomValue = Math.floor(Math.random() * 6) + 1
@@ -463,7 +416,7 @@ export default function DiceRollerDelegated() {
         })
         .transaction()
 
-      const cachedBlockhash = getCachedBlockhash(ephemeralConnectionRef.current!, true)
+      const cachedBlockhash = getBlockhash(ephemeralConnectionRef.current!, true)
       if (cachedBlockhash) {
         tx.recentBlockhash = cachedBlockhash
       } else {
@@ -474,7 +427,7 @@ export default function DiceRollerDelegated() {
       tx.feePayer = playerKeypairRef.current.publicKey
       tx.sign(playerKeypairRef.current)
 
-      const signature = await ephemeralConnectionRef.current!.sendRawTransaction(
+      await ephemeralConnectionRef.current!.sendRawTransaction(
         tx.serialize(),
         { skipPreflight: true }
       )
@@ -492,13 +445,8 @@ export default function DiceRollerDelegated() {
         return updated
       })
 
-      toast({
-        title: "Dice Rolled",
-        description: `Result: TX: ${signature.slice(0, 8)}...`,
-      })
-
       if (ephemeralConnectionRef.current) {
-        fetchAndCacheBlockhash(ephemeralConnectionRef.current, true)
+        await fetchBlockhash(ephemeralConnectionRef.current, true)
       }
     } catch (error) {
       clearAllIntervals()
@@ -519,7 +467,7 @@ export default function DiceRollerDelegated() {
         return updated
       })
     }
-  }, [clearAllIntervals, isDelegated, isInitialized, isRolling, toast, getCachedBlockhash, fetchAndCacheBlockhash])
+  }, [clearAllIntervals, isDelegated, isInitialized, isRolling, toast, getBlockhash, fetchBlockhash])
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100">
