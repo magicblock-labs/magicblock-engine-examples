@@ -60,11 +60,15 @@ pub mod random_dice_delegated {
     }
 
     // Delegate the player account to use the VRF in the ephemeral rollups
-    pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
+    pub fn delegate(ctx: Context<DelegateInput>, params: DelegateParams) -> Result<()> {
+        let config = DelegateConfig {
+            commit_frequency_ms: params.commit_frequency_ms,
+            validator: params.validator,
+        };
         ctx.accounts.delegate_player(
             &ctx.accounts.user,
             &[PLAYER, &ctx.accounts.user.key().to_bytes().as_slice()],
-            DelegateConfig::default(),
+            config,
         )?;
         Ok(())
     }
@@ -157,4 +161,10 @@ pub struct Undelegate<'info> {
 pub struct Player {
     pub last_result: u8,
     pub rollnum: u8,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct DelegateParams {
+    pub commit_frequency_ms: u32,
+    pub validator: Option<Pubkey>,
 }

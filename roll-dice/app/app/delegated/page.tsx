@@ -183,10 +183,7 @@ export default function DiceRollerDelegated() {
       clearTimeout(timeoutRef.current)
       timeoutRef.current = null
     }
-    if (blockhashIntervalRef.current) {
-      clearInterval(blockhashIntervalRef.current)
-      blockhashIntervalRef.current = null
-    }
+    // Note: blockhashIntervalRef is NOT cleared here - it should run continuously
     if (delegationPollIntervalRef.current) {
       clearInterval(delegationPollIntervalRef.current)
       delegationPollIntervalRef.current = null
@@ -337,12 +334,18 @@ export default function DiceRollerDelegated() {
         await fetchBlockhash(ephemeralConnection, true)
       }
       
+      // Clear any existing interval before creating a new one
+      if (blockhashIntervalRef.current) {
+        clearInterval(blockhashIntervalRef.current)
+      }
+      
+      // Start continuous blockhash refresh - this runs every 20 seconds regardless of other activity
       blockhashIntervalRef.current = setInterval(() => {
         if (connectionRef.current) {
-          fetchBlockhash(connectionRef.current, false)
+          fetchBlockhash(connectionRef.current, false).catch(console.error)
         }
         if (ephemeralConnectionRef.current) {
-          fetchBlockhash(ephemeralConnectionRef.current, true)
+          fetchBlockhash(ephemeralConnectionRef.current, true).catch(console.error)
         }
       }, BLOCKHASH_REFRESH_INTERVAL_MS)
       
@@ -358,6 +361,11 @@ export default function DiceRollerDelegated() {
 
     return () => {
       clearAllIntervals()
+      // Clean up blockhash refresh interval on unmount
+      if (blockhashIntervalRef.current) {
+        clearInterval(blockhashIntervalRef.current)
+        blockhashIntervalRef.current = null
+      }
       // Clean up subscription
       if (subscriptionIdRef.current !== null && ephemeralConnectionRef.current) {
         ephemeralConnectionRef.current.removeAccountChangeListener(subscriptionIdRef.current).catch(console.error)

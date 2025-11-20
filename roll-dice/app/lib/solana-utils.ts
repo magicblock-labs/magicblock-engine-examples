@@ -61,7 +61,9 @@ export const getCachedBlockhash = (
   
   const age = Date.now() - cached.timestamp
   if (age > BLOCKHASH_CACHE_MAX_AGE_MS) {
-    fetchAndCacheBlockhash(connection, cacheRef)
+    // Trigger refresh in background but don't return stale blockhash
+    fetchAndCacheBlockhash(connection, cacheRef).catch(console.error)
+    return null
   }
   
   return cached.blockhash
