@@ -165,6 +165,7 @@ export default function DiceRollerDelegated() {
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const blockhashIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const delegationPollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const playerKeypairRef = useRef<Keypair | null>(null)
   const cachedBaseBlockhashRef = useRef<CachedBlockhash | null>(null)
   const cachedEphemeralBlockhashRef = useRef<CachedBlockhash | null>(null)
@@ -185,6 +186,10 @@ export default function DiceRollerDelegated() {
     if (blockhashIntervalRef.current) {
       clearInterval(blockhashIntervalRef.current)
       blockhashIntervalRef.current = null
+    }
+    if (delegationPollIntervalRef.current) {
+      clearInterval(delegationPollIntervalRef.current)
+      delegationPollIntervalRef.current = null
     }
   }, [])
 
@@ -381,13 +386,30 @@ export default function DiceRollerDelegated() {
         .delegate()
         .rpc()
 
-      await refreshDelegationStatus()
+      // Poll every second until delegation succeeds
+      if (delegationPollIntervalRef.current) {
+        clearInterval(delegationPollIntervalRef.current)
+      }
+
+      delegationPollIntervalRef.current = setInterval(async () => {
+        const delegated = await refreshDelegationStatus()
+        if (delegated) {
+          if (delegationPollIntervalRef.current) {
+            clearInterval(delegationPollIntervalRef.current)
+            delegationPollIntervalRef.current = null
+          }
+          setIsDelegating(false)
+        }
+      }, 1000)
     } catch (error) {
       console.error("Delegation failed:", error)
-    } finally {
+      if (delegationPollIntervalRef.current) {
+        clearInterval(delegationPollIntervalRef.current)
+        delegationPollIntervalRef.current = null
+      }
       setIsDelegating(false)
     }
-  }, [ensureFunds, isDelegated, refreshDelegationStatus])
+  }, [isDelegated, refreshDelegationStatus])
 
   const handleRollDice = useCallback(async () => {
     if (isRolling || !isInitialized || !isDelegated) return
