@@ -298,6 +298,48 @@ export default function DiceRollerDelegated() {
     await fetchBlockhash(newEphemeralConnection, true)
   }, [clearAllIntervals, fetchBlockhash])
 
+  const sendBackgroundRoll = useCallback(async () => {
+    if (!ephemeralProgramRef.current || !playerKeypairRef.current || !playerPdaRef.current) return
+
+    try {
+      const randomValue = Math.floor(Math.random() * 6) + 1
+
+      const tx = await ephemeralProgramRef.current.methods
+        .rollDiceDelegated(randomValue)
+        .accounts({
+          payer: playerKeypairRef.current.publicKey,
+          player: playerPdaRef.current,
+          oracleQueue: ORACLE_QUEUE,
+        })
+        .transaction()
+
+      const cachedBlockhash = getBlockhash(ephemeralConnectionRef.current!, true)
+      if (cachedBlockhash) {
+        tx.recentBlockhash = cachedBlockhash
+      } else {
+        const { blockhash } = await ephemeralConnectionRef.current!.getLatestBlockhash()
+        tx.recentBlockhash = blockhash
+      }
+      
+      tx.feePayer = playerKeypairRef.current.publicKey
+      tx.sign(playerKeypairRef.current)
+
+      const serializedTx = tx.serialize()
+      console.log("[BackgroundRoll] Sending transaction")
+      ephemeralConnectionRef.current!.sendRawTransaction(
+        serializedTx,
+        { skipPreflight: true }
+      )
+      console.log("[BackgroundRoll] Transaction sent")
+
+      if (ephemeralConnectionRef.current) {
+        await fetchBlockhash(ephemeralConnectionRef.current, true)
+      }
+    } catch (error) {
+      console.error("[BackgroundRoll] Error:", error)
+    }
+  }, [getBlockhash, fetchBlockhash])
+
   const initializeProgram = useCallback(async () => {
     if (typeof window === "undefined") return
     try {
@@ -441,6 +483,60 @@ export default function DiceRollerDelegated() {
           // Continue with default ephemeral connection if update fails
           await fetchBlockhash(ephemeralConnection, true)
         }
+      } else if (!isDelegated && routerConnectionRef.current) {
+        // Automatically delegate on startup if not already delegated
+        setIsDelegating(true)
+        try {
+          const validatorResult = await routerConnectionRef.current.getClosestValidator()
+          console.log("getClosestValidator result on init:", validatorResult)
+          
+          const validatorIdentity = validatorResult.identity
+          const validatorFqdn = validatorResult.fqdn
+          
+          if (!validatorIdentity || !validatorFqdn) {
+            throw new Error("Validator identity or fqdn not found in getClosestValidator response")
+          }
+          
+          await updateEphemeralConnectionToValidator(validatorFqdn)
+          
+          await ensureFunds(connection, playerKeypairRef.current)
+          const validatorPubkey = new PublicKey(validatorIdentity)
+          await program.methods
+            .delegate({
+              commitFrequencyMs: 30000,
+              validator: validatorPubkey,
+            })
+            .rpc()
+
+          // Poll every second until delegation succeeds
+          if (delegationPollIntervalRef.current) {
+            clearInterval(delegationPollIntervalRef.current)
+          }
+
+          delegationPollIntervalRef.current = setInterval(async () => {
+            const delegated = await refreshDelegationStatus()
+            if (delegated) {
+              if (delegationPollIntervalRef.current) {
+                clearInterval(delegationPollIntervalRef.current)
+                delegationPollIntervalRef.current = null
+              }
+              setIsDelegating(false)
+              // Send background roll immediately after successful delegation
+              sendBackgroundRoll().catch(console.error)
+            }
+          }, 1000)
+        } catch (error) {
+          console.error("Automatic delegation failed on startup:", error)
+          if (delegationPollIntervalRef.current) {
+            clearInterval(delegationPollIntervalRef.current)
+            delegationPollIntervalRef.current = null
+          }
+          setIsDelegating(false)
+          await fetchBlockhash(connection, false)
+          if (ephemeralConnection) {
+            await fetchBlockhash(ephemeralConnection, true)
+          }
+        }
       } else {
         await fetchBlockhash(connection, false)
         if (ephemeralConnection) {
@@ -468,7 +564,7 @@ export default function DiceRollerDelegated() {
       console.error("Failed to initialize delegated dice:", error)
       setIsInitialized(false)
     }
-    }, [refreshDelegationStatus, fetchBlockhash, updateEphemeralConnectionToValidator])
+    }, [refreshDelegationStatus, fetchBlockhash, updateEphemeralConnectionToValidator, sendBackgroundRoll])
 
   useEffect(() => {
     initializeProgram()
@@ -487,48 +583,6 @@ export default function DiceRollerDelegated() {
       }
     }
   }, [clearAllIntervals, initializeProgram])
-
-  const sendBackgroundRoll = useCallback(async () => {
-    if (!ephemeralProgramRef.current || !playerKeypairRef.current || !playerPdaRef.current) return
-
-    try {
-      const randomValue = Math.floor(Math.random() * 6) + 1
-
-      const tx = await ephemeralProgramRef.current.methods
-        .rollDiceDelegated(randomValue)
-        .accounts({
-          payer: playerKeypairRef.current.publicKey,
-          player: playerPdaRef.current,
-          oracleQueue: ORACLE_QUEUE,
-        })
-        .transaction()
-
-      const cachedBlockhash = getBlockhash(ephemeralConnectionRef.current!, true)
-      if (cachedBlockhash) {
-        tx.recentBlockhash = cachedBlockhash
-      } else {
-        const { blockhash } = await ephemeralConnectionRef.current!.getLatestBlockhash()
-        tx.recentBlockhash = blockhash
-      }
-      
-      tx.feePayer = playerKeypairRef.current.publicKey
-      tx.sign(playerKeypairRef.current)
-
-      const serializedTx = tx.serialize()
-      console.log("[BackgroundRoll] Sending transaction")
-      ephemeralConnectionRef.current!.sendRawTransaction(
-        serializedTx,
-        { skipPreflight: true }
-      )
-      console.log("[BackgroundRoll] Transaction sent")
-
-      if (ephemeralConnectionRef.current) {
-        await fetchBlockhash(ephemeralConnectionRef.current, true)
-      }
-    } catch (error) {
-      console.error("[BackgroundRoll] Error:", error)
-    }
-  }, [getBlockhash, fetchBlockhash])
 
   const handleDelegateToValidator = useCallback(async (validatorIdentity: string, validatorFqdn: string) => {
     if (
