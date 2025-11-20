@@ -211,6 +211,92 @@ export default function DiceRollerDelegated() {
     return delegated
   }, [])
 
+  const updateEphemeralConnectionToValidator = useCallback(async (validatorFqdn: string) => {
+    if (!playerKeypairRef.current || !playerPdaRef.current || !programRef.current) return
+
+    // Convert https:// to wss:// for WebSocket endpoint
+    const ephemeralWsEndpoint = validatorFqdn.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://")
+    const newEphemeralConnection = new Connection(validatorFqdn, {
+      wsEndpoint: ephemeralWsEndpoint,
+      commitment: "processed",
+    })
+    
+    // Clean up old subscription
+    if (subscriptionIdRef.current !== null && ephemeralConnectionRef.current) {
+      await ephemeralConnectionRef.current.removeAccountChangeListener(subscriptionIdRef.current).catch(console.error)
+    }
+    
+    ephemeralConnectionRef.current = newEphemeralConnection
+    setEphemeralEndpoint(validatorFqdn)
+    
+    // Recreate ephemeral program with new connection
+    const idl = await anchor.Program.fetchIdl(PROGRAM_ID, programRef.current.provider)
+    if (!idl) throw new Error("IDL not found")
+    
+    const ephemeralProvider = new anchor.AnchorProvider(
+      newEphemeralConnection,
+      walletAdapterFrom(playerKeypairRef.current),
+      anchor.AnchorProvider.defaultOptions()
+    )
+    ephemeralProgramRef.current = new anchor.Program(idl, ephemeralProvider)
+    
+    // Recreate subscription with new connection
+    subscriptionIdRef.current = newEphemeralConnection.onAccountChange(
+      playerPdaRef.current,
+      (accountInfo) => {
+        console.log("[WebSocket] Account change received", { hasData: !!accountInfo?.data })
+        if (!ephemeralProgramRef.current || !accountInfo || !accountInfo.data) return
+        
+        try {
+          const player = ephemeralProgramRef.current.coder.accounts.decode("player", accountInfo.data)
+          const newValue = Number(player.lastResult)
+          
+          console.log("[WebSocket] Decoded player:", {
+            newValue
+          })
+          
+          setPlayerAccountData({
+            lastResult: newValue,
+            rollnum: Number(player.rollnum),
+          })
+          
+          if (newValue > 0) {
+            setDiceValue(newValue)
+            previousDiceValueRef.current = newValue
+          }
+          
+          setRollHistory(prev => {
+            const pendingIndex = prev.findIndex(entry => entry.isPending)
+            if (pendingIndex !== -1) {
+              console.log("[WebSocket] Processing roll completion")
+              const endTime = Date.now()
+              const updated = [...prev]
+              updated[pendingIndex] = {
+                value: newValue,
+                startTime: updated[pendingIndex].startTime,
+                endTime,
+                isPending: false,
+              }
+              setIsRolling(false)
+              clearAllIntervals()
+              console.log("[WebSocket] Roll completion processed")
+              return updated
+            } else {
+              console.log("[WebSocket] Received update but no pending entry found")
+              return prev
+            }
+          })
+        } catch (error) {
+          console.error("[WebSocket] Failed to decode player account:", error)
+        }
+      },
+      { commitment: "processed" }
+    )
+
+    // Fetch blockhash for new connection
+    await fetchBlockhash(newEphemeralConnection, true)
+  }, [clearAllIntervals, fetchBlockhash])
+
   const initializeProgram = useCallback(async () => {
     if (typeof window === "undefined") return
     try {
@@ -338,11 +424,27 @@ export default function DiceRollerDelegated() {
         )
       }
 
-      await refreshDelegationStatus()
+      const isDelegated = await refreshDelegationStatus()
       
-      await fetchBlockhash(connection, false)
-      if (ephemeralConnection) {
-        await fetchBlockhash(ephemeralConnection, true)
+      // If already delegated, update ephemeral connection to nearest validator
+      if (isDelegated && routerConnectionRef.current) {
+        try {
+          const validatorResult = await routerConnectionRef.current.getClosestValidator()
+          console.log("getClosestValidator result on init:", validatorResult)
+          
+          if (validatorResult.fqdn) {
+            await updateEphemeralConnectionToValidator(validatorResult.fqdn)
+          }
+        } catch (error) {
+          console.error("Failed to update ephemeral connection to nearest validator:", error)
+          // Continue with default ephemeral connection if update fails
+          await fetchBlockhash(ephemeralConnection, true)
+        }
+      } else {
+        await fetchBlockhash(connection, false)
+        if (ephemeralConnection) {
+          await fetchBlockhash(ephemeralConnection, true)
+        }
       }
       
       // Clear any existing interval before creating a new one
@@ -365,7 +467,7 @@ export default function DiceRollerDelegated() {
       console.error("Failed to initialize delegated dice:", error)
       setIsInitialized(false)
     }
-    }, [refreshDelegationStatus, fetchBlockhash])
+    }, [refreshDelegationStatus, fetchBlockhash, updateEphemeralConnectionToValidator])
 
   useEffect(() => {
     initializeProgram()
@@ -390,7 +492,8 @@ export default function DiceRollerDelegated() {
       !programRef.current ||
       !connectionRef.current ||
       !playerKeypairRef.current ||
-      !playerPdaRef.current
+      !playerPdaRef.current ||
+      !routerConnectionRef.current
     )
       return
     if (isDelegated) return
@@ -400,9 +503,30 @@ export default function DiceRollerDelegated() {
       const connection = connectionRef.current
       const playerKeypair = playerKeypairRef.current
 
+      // Get closest validator
+      const validatorResult = await routerConnectionRef.current.getClosestValidator()
+      console.log("getClosestValidator result:", validatorResult)
+      
+      const validatorIdentity = validatorResult.identity
+      const validatorFqdn = validatorResult.fqdn
+      
+      if (!validatorIdentity) {
+        throw new Error("Validator identity not found in getClosestValidator response")
+      }
+      
+      const validatorPubkey = new PublicKey(validatorIdentity)
+      
+      // Update ephemeral connection to use the fqdn from getClosestValidator
+      if (validatorFqdn) {
+        await updateEphemeralConnectionToValidator(validatorFqdn)
+      }
+
       await ensureFunds(connection, playerKeypair)
       await programRef.current.methods
-        .delegate()
+        .delegate({
+          commitFrequencyMs: 30000,
+          validator: validatorPubkey,
+        })
         .rpc()
 
       // Poll every second until delegation succeeds
@@ -428,7 +552,7 @@ export default function DiceRollerDelegated() {
       }
       setIsDelegating(false)
     }
-  }, [isDelegated, refreshDelegationStatus])
+  }, [isDelegated, refreshDelegationStatus, clearAllIntervals, updateEphemeralConnectionToValidator])
 
   const handleRollDice = useCallback(async () => {
     if (isRolling || !isInitialized || !isDelegated) return
