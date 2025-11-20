@@ -140,9 +140,9 @@ pub struct UpdateLeaderboard<'info> {
     /// CHECK: Your program ID
     pub counter: UncheckedAccount<'info>,
     /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
-    pub escrow: UncheckedAccount<'info>,
-    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
     pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
+    pub escrow: UncheckedAccount<'info>,
 }
 
 #[delegate]
