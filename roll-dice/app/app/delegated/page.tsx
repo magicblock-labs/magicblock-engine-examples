@@ -488,6 +488,48 @@ export default function DiceRollerDelegated() {
     }
   }, [clearAllIntervals, initializeProgram])
 
+  const sendBackgroundRoll = useCallback(async () => {
+    if (!ephemeralProgramRef.current || !playerKeypairRef.current || !playerPdaRef.current) return
+
+    try {
+      const randomValue = Math.floor(Math.random() * 6) + 1
+
+      const tx = await ephemeralProgramRef.current.methods
+        .rollDiceDelegated(randomValue)
+        .accounts({
+          payer: playerKeypairRef.current.publicKey,
+          player: playerPdaRef.current,
+          oracleQueue: ORACLE_QUEUE,
+        })
+        .transaction()
+
+      const cachedBlockhash = getBlockhash(ephemeralConnectionRef.current!, true)
+      if (cachedBlockhash) {
+        tx.recentBlockhash = cachedBlockhash
+      } else {
+        const { blockhash } = await ephemeralConnectionRef.current!.getLatestBlockhash()
+        tx.recentBlockhash = blockhash
+      }
+      
+      tx.feePayer = playerKeypairRef.current.publicKey
+      tx.sign(playerKeypairRef.current)
+
+      const serializedTx = tx.serialize()
+      console.log("[BackgroundRoll] Sending transaction")
+      ephemeralConnectionRef.current!.sendRawTransaction(
+        serializedTx,
+        { skipPreflight: true }
+      )
+      console.log("[BackgroundRoll] Transaction sent")
+
+      if (ephemeralConnectionRef.current) {
+        await fetchBlockhash(ephemeralConnectionRef.current, true)
+      }
+    } catch (error) {
+      console.error("[BackgroundRoll] Error:", error)
+    }
+  }, [getBlockhash, fetchBlockhash])
+
   const handleDelegateToValidator = useCallback(async (validatorIdentity: string, validatorFqdn: string) => {
     if (
       !programRef.current ||
@@ -529,6 +571,8 @@ export default function DiceRollerDelegated() {
             delegationPollIntervalRef.current = null
           }
           setIsDelegating(false)
+          // Send background roll immediately after successful delegation
+          sendBackgroundRoll().catch(console.error)
         }
       }, 1000)
     } catch (error) {
@@ -539,7 +583,7 @@ export default function DiceRollerDelegated() {
       }
       setIsDelegating(false)
     }
-  }, [isDelegated, refreshDelegationStatus, clearAllIntervals, updateEphemeralConnectionToValidator])
+  }, [isDelegated, refreshDelegationStatus, clearAllIntervals, updateEphemeralConnectionToValidator, sendBackgroundRoll])
 
   const handleDelegate = useCallback(async () => {
     if (
