@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::Discriminator;
-use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::anchor::{action, commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_rollups_sdk::ephem::{CallHandler, CommitType, MagicAction, MagicInstructionBuilder};
@@ -133,16 +133,13 @@ pub struct Increment<'info> {
     pub counter: Account<'info, Counter>,
 }
 
+#[action]
 #[derive(Accounts)]
 pub struct UpdateLeaderboard<'info> {
     #[account(mut, seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: Account<'info, Leaderboard>,
-    /// CHECK: Your program ID
+    /// CHECK: PDA owner depends on: 1) Delegated: Delegation Program; 2) Undelegated: Your program ID
     pub counter: UncheckedAccount<'info>,
-    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
-    pub escrow_auth: UncheckedAccount<'info>,
-    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
-    pub escrow: UncheckedAccount<'info>,
 }
 
 #[delegate]
