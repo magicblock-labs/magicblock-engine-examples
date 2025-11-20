@@ -7,6 +7,7 @@ import {
   Keypair,
   PublicKey,
 } from "@solana/web3.js"
+import { ConnectionMagicRouter } from "@magicblock-labs/ephemeral-rollups-sdk"
 import Dice from "@/components/dice"
 import SolanaAddress from "@/components/solana-address"
 import {
@@ -153,12 +154,14 @@ export default function DiceRollerDelegated() {
   const [playerAccountData, setPlayerAccountData] = useState<{ lastResult: number; rollnum: number } | null>(null)
   const [playerPda, setPlayerPda] = useState<PublicKey | null>(null)
   const [copied, setCopied] = useState(false)
+  const [ephemeralEndpoint, setEphemeralEndpoint] = useState<string | null>(null)
   
   const previousDiceValueRef = useRef<number>(1)
   const programRef = useRef<anchor.Program | null>(null)
   const ephemeralProgramRef = useRef<anchor.Program | null>(null)
   const connectionRef = useRef<Connection | null>(null)
   const ephemeralConnectionRef = useRef<Connection | null>(null)
+  const routerConnectionRef = useRef<ConnectionMagicRouter | null>(null)
   const playerPdaRef = useRef<PublicKey | null>(null)
   const subscriptionIdRef = useRef<number | null>(null)
   const rollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -256,7 +259,15 @@ export default function DiceRollerDelegated() {
         }
       }
 
+      const routerEndpoint = process.env.NEXT_PUBLIC_ROUTER_ENDPOINT || "https://devnet-router.magicblock.app"
+      const routerWsEndpoint = process.env.NEXT_PUBLIC_ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app"
+      const routerConnection = new ConnectionMagicRouter(routerEndpoint, {
+        wsEndpoint: routerWsEndpoint,
+      })
+      routerConnectionRef.current = routerConnection
+
       const ephemeralEndpoint = process.env.NEXT_PUBLIC_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet.magicblock.app"
+      setEphemeralEndpoint(ephemeralEndpoint)
       const ephemeralWsEndpoint = process.env.NEXT_PUBLIC_EPHEMERAL_WS_ENDPOINT || "wss://devnet.magicblock.app"
       const ephemeralConnection = new Connection(ephemeralEndpoint, {
         wsEndpoint: ephemeralWsEndpoint,
@@ -550,6 +561,19 @@ export default function DiceRollerDelegated() {
     }
   }
 
+  const handleGetClosestValidator = useCallback(async () => {
+    if (!routerConnectionRef.current) {
+      console.error("Router connection not initialized")
+      return
+    }
+    try {
+      const result = await routerConnectionRef.current.getClosestValidator()
+      console.log("getClosestValidator result:", result)
+    } catch (error) {
+      console.error("Failed to get closest validator:", error)
+    }
+  }, [])
+
   const formatAddress = (addr: string) => {
     if (!addr) return ""
     return `${addr.substring(0, 8)}...${addr.substring(addr.length - 8)}`
@@ -574,6 +598,21 @@ export default function DiceRollerDelegated() {
                   <span className="text-xs font-mono">{formatAddress(playerPda.toBase58())}</span>
                   {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-gray-400" />}
                 </div>
+              </div>
+              {ephemeralEndpoint && (
+                <div className="space-y-1 pt-2 border-t">
+                  <div className="text-xs text-muted-foreground">Ephemeral Connection</div>
+                  <div className="text-xs font-mono break-all">{ephemeralEndpoint}</div>
+                </div>
+              )}
+              <div className="pt-2 border-t">
+                <button
+                  onClick={handleGetClosestValidator}
+                  disabled={!isInitialized}
+                  className="w-full px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Get Closest Validator
+                </button>
               </div>
               {playerAccountData && (
                 <div className="grid grid-cols-2 gap-3 pt-2 border-t">
