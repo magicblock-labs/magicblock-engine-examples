@@ -149,6 +149,7 @@ export default function DiceRollerDelegated() {
   const [isInitialized, setIsInitialized] = useState(false)
   const [isDelegated, setIsDelegated] = useState(false)
   const [isDelegating, setIsDelegating] = useState(false)
+  const [isUndelegating, setIsUndelegating] = useState(false)
   const [rollHistory, setRollHistory] = useState<RollEntry[]>([])
   const [timerTick, setTimerTick] = useState(0)
   const [playerAccountData, setPlayerAccountData] = useState<{ lastResult: number; rollnum: number } | null>(null)
@@ -487,13 +488,12 @@ export default function DiceRollerDelegated() {
     }
   }, [clearAllIntervals, initializeProgram])
 
-  const handleDelegate = useCallback(async () => {
+  const handleDelegateToValidator = useCallback(async (validatorIdentity: string, validatorFqdn: string) => {
     if (
       !programRef.current ||
       !connectionRef.current ||
       !playerKeypairRef.current ||
-      !playerPdaRef.current ||
-      !routerConnectionRef.current
+      !playerPdaRef.current
     )
       return
     if (isDelegated) return
@@ -502,24 +502,11 @@ export default function DiceRollerDelegated() {
     try {
       const connection = connectionRef.current
       const playerKeypair = playerKeypairRef.current
-
-      // Get closest validator
-      const validatorResult = await routerConnectionRef.current.getClosestValidator()
-      console.log("getClosestValidator result:", validatorResult)
-      
-      const validatorIdentity = validatorResult.identity
-      const validatorFqdn = validatorResult.fqdn
-      
-      if (!validatorIdentity) {
-        throw new Error("Validator identity not found in getClosestValidator response")
-      }
       
       const validatorPubkey = new PublicKey(validatorIdentity)
       
-      // Update ephemeral connection to use the fqdn from getClosestValidator
-      if (validatorFqdn) {
-        await updateEphemeralConnectionToValidator(validatorFqdn)
-      }
+      // Update ephemeral connection to use the fqdn
+      await updateEphemeralConnectionToValidator(validatorFqdn)
 
       await ensureFunds(connection, playerKeypair)
       await programRef.current.methods
@@ -553,6 +540,139 @@ export default function DiceRollerDelegated() {
       setIsDelegating(false)
     }
   }, [isDelegated, refreshDelegationStatus, clearAllIntervals, updateEphemeralConnectionToValidator])
+
+  const handleDelegate = useCallback(async () => {
+    if (
+      !programRef.current ||
+      !connectionRef.current ||
+      !playerKeypairRef.current ||
+      !playerPdaRef.current ||
+      !routerConnectionRef.current
+    )
+      return
+    if (isDelegated) return
+
+    setIsDelegating(true)
+    try {
+      const connection = connectionRef.current
+      const playerKeypair = playerKeypairRef.current
+
+      // Get closest validator
+      const validatorResult = await routerConnectionRef.current.getClosestValidator()
+      console.log("getClosestValidator result:", validatorResult)
+      
+      const validatorIdentity = validatorResult.identity
+      const validatorFqdn = validatorResult.fqdn
+      
+      if (!validatorIdentity || !validatorFqdn) {
+        throw new Error("Validator identity or fqdn not found in getClosestValidator response")
+      }
+      
+      await handleDelegateToValidator(validatorIdentity, validatorFqdn)
+    } catch (error) {
+      console.error("Delegation failed:", error)
+      if (delegationPollIntervalRef.current) {
+        clearInterval(delegationPollIntervalRef.current)
+        delegationPollIntervalRef.current = null
+      }
+      setIsDelegating(false)
+    }
+  }, [isDelegated, handleDelegateToValidator])
+
+  const handleUndelegate = useCallback(async () => {
+    if (
+      !programRef.current ||
+      !playerKeypairRef.current ||
+      !playerPdaRef.current
+    )
+      return
+    if (!isDelegated) return
+
+    setIsUndelegating(true)
+    try {
+      // Store refs in local variables for TypeScript
+      const playerKeypair = playerKeypairRef.current
+      const playerPda = playerPdaRef.current
+      const program = programRef.current
+      
+      if (!playerKeypair || !playerPda || !program) {
+        throw new Error("Required refs not available")
+      }
+
+      // List of all known validator endpoints
+      const validatorEndpoints = [
+        "https://devnet-us.magicblock.app",
+        "https://devnet-as.magicblock.app",
+      ]
+
+      // Fetch IDL once
+      const idl = await anchor.Program.fetchIdl(PROGRAM_ID, program.provider)
+      if (!idl) throw new Error("IDL not found")
+
+      // Send undelegate RPC to all validator endpoints
+      const undelegatePromises = validatorEndpoints.map(async (endpoint) => {
+        try {
+          const wsEndpoint = endpoint.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://")
+          const connection = new Connection(endpoint, {
+            wsEndpoint,
+            commitment: "processed",
+          })
+          
+          const provider = new anchor.AnchorProvider(
+            connection,
+            walletAdapterFrom(playerKeypair),
+            anchor.AnchorProvider.defaultOptions()
+          )
+          
+          const ephemeralProgram = new anchor.Program(idl, provider)
+          
+          return await ephemeralProgram.methods
+            .undelegate()
+            .accounts({
+              payer: playerKeypair.publicKey,
+              user: playerPda,
+            })
+            .rpc()
+        } catch (error) {
+          console.warn(`Undelegation failed for ${endpoint}:`, error)
+          throw error
+        }
+      })
+
+      // Wait for all attempts (at least one should succeed)
+      const results = await Promise.allSettled(undelegatePromises)
+      const successful = results.filter(r => r.status === "fulfilled")
+      
+      if (successful.length === 0) {
+        throw new Error("All undelegation attempts failed")
+      }
+      
+      console.log(`Undelegation succeeded on ${successful.length} endpoint(s)`)
+
+      // Poll every second until undelegation succeeds
+      if (delegationPollIntervalRef.current) {
+        clearInterval(delegationPollIntervalRef.current)
+      }
+
+      delegationPollIntervalRef.current = setInterval(async () => {
+        const delegated = await refreshDelegationStatus()
+        if (!delegated) {
+          if (delegationPollIntervalRef.current) {
+            clearInterval(delegationPollIntervalRef.current)
+            delegationPollIntervalRef.current = null
+          }
+          setIsUndelegating(false)
+        }
+      }, 1000)
+    } catch (error) {
+      console.error("Undelegation failed:", error)
+      if (delegationPollIntervalRef.current) {
+        clearInterval(delegationPollIntervalRef.current)
+        delegationPollIntervalRef.current = null
+      }
+      setIsUndelegating(false)
+    }
+  }, [isDelegated, refreshDelegationStatus])
 
   const handleRollDice = useCallback(async () => {
     if (isRolling || !isInitialized || !isDelegated) return
@@ -710,7 +830,7 @@ export default function DiceRollerDelegated() {
         {playerPda && (
           <Card className="w-80">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Player Account</CardTitle>
+              <CardTitle className="text-sm font-medium">Debug</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1">
@@ -729,13 +849,36 @@ export default function DiceRollerDelegated() {
                   <div className="text-xs font-mono break-all">{ephemeralEndpoint}</div>
                 </div>
               )}
-              <div className="pt-2 border-t">
+              <div className="pt-2 border-t space-y-2">
                 <button
                   onClick={handleGetClosestValidator}
                   disabled={!isInitialized}
                   className="w-full px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Get Closest Validator
+                </button>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => handleDelegateToValidator("MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd", "https://devnet-us.magicblock.app")}
+                    disabled={!isInitialized || isDelegated || isDelegating}
+                    className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    US
+                  </button>
+                  <button
+                    onClick={() => handleDelegateToValidator("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57", "https://devnet-as.magicblock.app")}
+                    disabled={!isInitialized || isDelegated || isDelegating}
+                    className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    AS
+                  </button>
+                </div>
+                <button
+                  onClick={handleUndelegate}
+                  disabled={!isInitialized || !isDelegated || isUndelegating}
+                  className="w-full px-3 py-1.5 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUndelegating ? "Undelegating..." : "Undelegate"}
                 </button>
               </div>
               {playerAccountData && (
