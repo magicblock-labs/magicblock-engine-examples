@@ -3,6 +3,7 @@ export type RollEntry = {
   startTime: number
   endTime: number | null
   isPending: boolean
+  signature?: string
 }
 
 export type CachedBlockhash = {

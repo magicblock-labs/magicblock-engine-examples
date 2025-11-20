@@ -778,22 +778,24 @@ export default function DiceRollerDelegated() {
       const transactionStartTime = Date.now()
       const sendPromise = connection.sendRawTransaction(tx.serialize(), { skipPreflight: true })
       
-      setRollHistory(prev => {
-        const updated = [...prev]
-        const pendingIndex = updated.findIndex(entry => entry.isPending && entry.value === null)
-        if (pendingIndex !== -1) {
-          updated[pendingIndex].startTime = transactionStartTime
-        }
-        return updated
-      })
-      
-      fetchAndCacheBlockhash(connection, cachedEphemeralBlockhashRef).catch(console.error)
-      sendPromise.catch((error) => {
+      sendPromise.then((signature) => {
+        setRollHistory(prev => {
+          const updated = [...prev]
+          const pendingIndex = updated.findIndex(entry => entry.isPending && entry.value === null)
+          if (pendingIndex !== -1) {
+            updated[pendingIndex].startTime = transactionStartTime
+            updated[pendingIndex].signature = signature
+          }
+          return updated
+        })
+      }).catch((error) => {
         console.error("[RollDice] Transaction send error:", error)
         clearAllIntervals()
         setIsRolling(false)
         setRollHistory(prev => prev.filter(entry => !entry.isPending))
       })
+      
+      fetchAndCacheBlockhash(connection, cachedEphemeralBlockhashRef).catch(console.error)
     } catch (error) {
       clearAllIntervals()
       console.error("Error rolling dice:", error)
@@ -828,6 +830,19 @@ export default function DiceRollerDelegated() {
   const formatAddress = (addr: string) => {
     if (!addr) return ""
     return `${addr.substring(0, 8)}...${addr.substring(addr.length - 8)}`
+  }
+
+  const shortenSignature = (signature: string) => {
+    if (!signature) return ""
+    return `${signature.substring(0, 4)}...${signature.substring(signature.length - 4)}`
+  }
+
+  const getExplorerUrl = (signature: string) => {
+    if (ephemeralEndpoint) {
+      const encodedUrl = encodeURIComponent(ephemeralEndpoint)
+      return `https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=${encodedUrl}`
+    }
+    return `https://explorer.solana.com/tx/${signature}?cluster=devnet`
   }
 
   return (
@@ -985,7 +1000,19 @@ export default function DiceRollerDelegated() {
                         return (
                           <TableRow key={index}>
                             <TableCell>
-                              <MiniDice value={entry.value} />
+                              <div className="flex items-center gap-2">
+                                <MiniDice value={entry.value} />
+                                {entry.signature && (
+                                  <a
+                                    href={getExplorerUrl(entry.signature)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-gray-500 hover:text-gray-700 hover:underline font-mono"
+                                  >
+                                    {shortenSignature(entry.signature)}
+                                  </a>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className={`text-right font-mono whitespace-pre ${entry.isPending ? "text-blue-600 font-medium" : ""}`}>
                               {formattedTime}
