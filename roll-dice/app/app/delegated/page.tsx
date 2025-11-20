@@ -603,6 +603,7 @@ export default function DiceRollerDelegated() {
       const validatorEndpoints = [
         "https://devnet-us.magicblock.app",
         "https://devnet-as.magicblock.app",
+        "https://devnet-eu.magicblock.app",
       ]
 
       // Fetch IDL once
@@ -871,6 +872,13 @@ export default function DiceRollerDelegated() {
                     className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     AS
+                  </button>
+                  <button
+                    onClick={() => handleDelegateToValidator("MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e", "https://devnet-eu.magicblock.app")}
+                    disabled={!isInitialized || isDelegated || isDelegating}
+                    className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    EU
                   </button>
                 </div>
                 <button
