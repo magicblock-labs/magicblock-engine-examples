@@ -33,6 +33,21 @@ pub mod magic_actions {
         Ok(())
     }
 
+    /// Updates the leaderboard's high score from the on-chain counter if the counter's value is greater.
+    ///
+    /// Reads the Counter account data and sets `leaderboard.high_score` to the counter's `count` when that value exceeds the current high score.
+    ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use anchor_lang::prelude::*;
+    /// # use crate::program::update_leaderboard;
+    /// let ctx: Context<UpdateLeaderboard> = unimplemented!();
+    /// update_leaderboard(ctx).unwrap();
+    /// ```
     pub fn update_leaderboard(ctx: Context<UpdateLeaderboard>) -> Result<()> {
         let leaderboard = &mut ctx.accounts.leaderboard;
         let counter_info = &mut ctx.accounts.counter.to_account_info();
@@ -62,6 +77,21 @@ pub mod magic_actions {
         Ok(())
     }
 
+    /// Undelegates the counter PDA and commits any pending ephemeral actions for the payer.
+    ///
+    /// Commits any pending actions associated with the counter account and then performs the undelegation using the program's magic context.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, an error if the commit or undelegation fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // inside an Anchor instruction handler:
+    /// // let ctx: Context<UndelegateCounter> = /* provided by the runtime */;
+    /// // undelegate(ctx)?;
+    /// ```
     pub fn undelegate(ctx: Context<UndelegateCounter>) -> Result<()> {
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
@@ -72,6 +102,20 @@ pub mod magic_actions {
         Ok(())
     }
 
+    /// Commits the current counter and requests this program to update the leaderboard via a Magic action.
+    ///
+    /// Builds a `MagicAction::Commit` containing a `CallHandler` that encodes the crate's `UpdateLeaderboard` instruction, commits the counter account as escrow, and invokes the magic program to perform the cross-program call.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// // Given a valid `ctx: Context<CommitAndUpdateLeaderboard>`
+    /// commit_and_update_leaderboard(ctx)?;
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success.
     pub fn commit_and_update_leaderboard(ctx: Context<CommitAndUpdateLeaderboard>) -> Result<()> {
         let instruction_data =
             anchor_lang::InstructionData::data(&crate::instruction::UpdateLeaderboard {});
