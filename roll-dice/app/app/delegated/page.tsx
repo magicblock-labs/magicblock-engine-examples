@@ -6,11 +6,7 @@ import {
   Connection,
   Keypair,
   PublicKey,
-  Transaction,
-  SystemProgram,
 } from "@solana/web3.js"
-import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk"
-import { createDelegateInstruction } from "@/lib/delegate-instruction"
 import Dice from "@/components/dice"
 import SolanaAddress from "@/components/solana-address"
 import {
@@ -22,13 +18,14 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Copy, Check } from "lucide-react"
 import {
   PROGRAM_ID,
   PLAYER_SEED,
   ORACLE_QUEUE,
   BASE_ENDPOINT,
   PLAYER_STORAGE_KEY,
-  PAYER_STORAGE_KEY,
   BLOCKHASH_REFRESH_INTERVAL_MS,
   ROLL_TIMEOUT_MS,
   ROLL_ANIMATION_INTERVAL_MS,
@@ -153,6 +150,9 @@ export default function DiceRollerDelegated() {
   const [isDelegating, setIsDelegating] = useState(false)
   const [rollHistory, setRollHistory] = useState<RollEntry[]>([])
   const [timerTick, setTimerTick] = useState(0)
+  const [playerAccountData, setPlayerAccountData] = useState<{ lastResult: number; rollnum: number } | null>(null)
+  const [playerPda, setPlayerPda] = useState<PublicKey | null>(null)
+  const [copied, setCopied] = useState(false)
   
   const previousDiceValueRef = useRef<number>(1)
   const programRef = useRef<anchor.Program | null>(null)
@@ -166,7 +166,6 @@ export default function DiceRollerDelegated() {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const blockhashIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const playerKeypairRef = useRef<Keypair | null>(null)
-  const payerKeypairRef = useRef<Keypair | null>(null)
   const cachedBaseBlockhashRef = useRef<CachedBlockhash | null>(null)
   const cachedEphemeralBlockhashRef = useRef<CachedBlockhash | null>(null)
 
@@ -200,37 +199,9 @@ export default function DiceRollerDelegated() {
     return getCachedBlockhash(connection, cacheRef)
   }, [])
 
-  const sendTransaction = useCallback(
-    async (connection: Connection, transaction: Transaction, feePayer: Keypair, signers: Keypair[], isEphemeral: boolean = false) => {
-      let blockhash: string
-      const cached = getBlockhash(connection, isEphemeral)
-      if (cached) {
-        blockhash = cached
-      } else {
-        const result = await connection.getLatestBlockhash()
-        blockhash = result.blockhash
-        await fetchBlockhash(connection, isEphemeral)
-      }
-      
-      transaction.recentBlockhash = blockhash
-      transaction.feePayer = feePayer.publicKey
-
-      const signerMap = new Map<string, Keypair>()
-      signerMap.set(feePayer.publicKey.toBase58(), feePayer)
-      for (const signer of signers) {
-        signerMap.set(signer.publicKey.toBase58(), signer)
-      }
-
-      signerMap.forEach(signer => transaction.partialSign(signer))
-
-      return await connection.sendRawTransaction(transaction.serialize())
-    },
-    [getBlockhash, fetchBlockhash]
-  )
-
   const refreshDelegationStatus = useCallback(async () => {
-    if (!connectionRef.current || !playerKeypairRef.current) return false
-    const delegated = await checkDelegationStatus(connectionRef.current, playerKeypairRef.current.publicKey)
+    if (!connectionRef.current || !playerPdaRef.current) return false
+    const delegated = await checkDelegationStatus(connectionRef.current, playerPdaRef.current)
     setIsDelegated(delegated)
     return delegated
   }, [])
@@ -244,12 +215,8 @@ export default function DiceRollerDelegated() {
       if (!playerKeypairRef.current) {
         playerKeypairRef.current = loadOrCreateKeypair(PLAYER_STORAGE_KEY)
       }
-      if (!payerKeypairRef.current) {
-        payerKeypairRef.current = loadOrCreateKeypair(PAYER_STORAGE_KEY)
-      }
 
       await ensureFunds(connection, playerKeypairRef.current)
-      await ensureFunds(connection, payerKeypairRef.current)
 
       const provider = new anchor.AnchorProvider(
         connection,
@@ -265,6 +232,7 @@ export default function DiceRollerDelegated() {
 
       const playerPk = derivePlayerPda(playerKeypairRef.current.publicKey)
       playerPdaRef.current = playerPk
+      setPlayerPda(playerPk)
 
       let account = await connection.getAccountInfo(playerPk)
       if (!account) {
@@ -277,6 +245,10 @@ export default function DiceRollerDelegated() {
           const initialValue = player.lastResult || 1
           setDiceValue(initialValue)
           previousDiceValueRef.current = initialValue
+          setPlayerAccountData({
+            lastResult: Number(player.lastResult),
+            rollnum: Number(player.rollnum),
+          })
         } catch (error) {
           console.error("Failed to decode player on init:", error)
         }
@@ -312,6 +284,11 @@ export default function DiceRollerDelegated() {
               
               console.log("[WebSocket] Decoded player:", {
                 newValue
+              })
+              
+              setPlayerAccountData({
+                lastResult: newValue,
+                rollnum: Number(player.rollnum),
               })
               
               if (newValue > 0) {
@@ -389,7 +366,6 @@ export default function DiceRollerDelegated() {
       !programRef.current ||
       !connectionRef.current ||
       !playerKeypairRef.current ||
-      !payerKeypairRef.current ||
       !playerPdaRef.current
     )
       return
@@ -399,36 +375,11 @@ export default function DiceRollerDelegated() {
     try {
       const connection = connectionRef.current
       const playerKeypair = playerKeypairRef.current
-      const payerKeypair = payerKeypairRef.current
 
       await ensureFunds(connection, playerKeypair)
-      await ensureFunds(connection, payerKeypair)
-
       await programRef.current.methods
         .delegate()
-        .accounts({
-          user: playerKeypair.publicKey,
-          player: playerPdaRef.current,
-        })
         .rpc()
-
-      const ownerInfo = await connection.getAccountInfo(playerKeypair.publicKey)
-      if (!ownerInfo || !ownerInfo.owner.equals(DELEGATION_PROGRAM_ID)) {
-        const assignIx = SystemProgram.assign({
-          accountPubkey: playerKeypair.publicKey,
-          programId: DELEGATION_PROGRAM_ID,
-        })
-        await sendTransaction(connection, new Transaction().add(assignIx), payerKeypair, [playerKeypair], false)
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 3000))
-
-      const delegateIx = createDelegateInstruction({
-        payer: payerKeypair.publicKey,
-        delegatedAccount: playerKeypair.publicKey,
-        ownerProgram: SystemProgram.programId,
-      })
-      await sendTransaction(connection, new Transaction().add(delegateIx), payerKeypair, [playerKeypair], false)
 
       await refreshDelegationStatus()
     } catch (error) {
@@ -436,7 +387,7 @@ export default function DiceRollerDelegated() {
     } finally {
       setIsDelegating(false)
     }
-  }, [ensureFunds, isDelegated, refreshDelegationStatus, sendTransaction])
+  }, [ensureFunds, isDelegated, refreshDelegationStatus])
 
   const handleRollDice = useCallback(async () => {
     if (isRolling || !isInitialized || !isDelegated) return
@@ -559,10 +510,56 @@ export default function DiceRollerDelegated() {
     }
   }, [clearAllIntervals, isDelegated, isInitialized, isRolling, getBlockhash, fetchBlockhash])
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error("Failed to copy:", error)
+    }
+  }
+
+  const formatAddress = (addr: string) => {
+    if (!addr) return ""
+    return `${addr.substring(0, 8)}...${addr.substring(addr.length - 8)}`
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-100">
-      <div className="absolute top-4 right-4 z-10">
+      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
         <SolanaAddress />
+        {playerPda && (
+          <Card className="w-80">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Player Account</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">PDA Address</div>
+                <div
+                  className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1 transition-colors"
+                  onClick={() => copyToClipboard(playerPda.toBase58())}
+                >
+                  <span className="text-xs font-mono">{formatAddress(playerPda.toBase58())}</span>
+                  {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-gray-400" />}
+                </div>
+              </div>
+              {playerAccountData && (
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground">Last Result</div>
+                    <div className="text-sm font-semibold">{playerAccountData.lastResult}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground">Roll Count</div>
+                    <div className="text-sm font-semibold">{playerAccountData.rollnum}</div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="flex flex-col items-center justify-center px-8 py-8 flex-grow">
