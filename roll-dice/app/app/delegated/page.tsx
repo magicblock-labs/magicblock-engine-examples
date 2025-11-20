@@ -20,6 +20,12 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Copy, Check } from "lucide-react"
 import {
   PROGRAM_ID,
@@ -195,14 +201,12 @@ export default function DiceRollerDelegated() {
   }, [])
 
 
-  const fetchBlockhash = useCallback(async (connection: Connection, isEphemeral: boolean) => {
+  const getBlockhashAsync = useCallback(async (connection: Connection, isEphemeral: boolean): Promise<string> => {
     const cacheRef = isEphemeral ? cachedEphemeralBlockhashRef : cachedBaseBlockhashRef
-    await fetchAndCacheBlockhash(connection, cacheRef)
-  }, [])
-
-  const getBlockhash = useCallback((connection: Connection, isEphemeral: boolean): string | null => {
-    const cacheRef = isEphemeral ? cachedEphemeralBlockhashRef : cachedBaseBlockhashRef
-    return getCachedBlockhash(connection, cacheRef)
+    const cached = getCachedBlockhash(connection, cacheRef)
+    if (cached) return cached
+    const { blockhash } = await connection.getLatestBlockhash()
+    return blockhash
   }, [])
 
   const refreshDelegationStatus = useCallback(async () => {
@@ -245,47 +249,23 @@ export default function DiceRollerDelegated() {
     subscriptionIdRef.current = newEphemeralConnection.onAccountChange(
       playerPdaRef.current,
       (accountInfo) => {
-        console.log("[WebSocket] Account change received", { hasData: !!accountInfo?.data })
-        if (!ephemeralProgramRef.current || !accountInfo || !accountInfo.data) return
-        
+        if (!ephemeralProgramRef.current || !accountInfo?.data) return
         try {
           const player = ephemeralProgramRef.current.coder.accounts.decode("player", accountInfo.data)
           const newValue = Number(player.lastResult)
-          
-          console.log("[WebSocket] Decoded player:", {
-            newValue
-          })
-          
-          setPlayerAccountData({
-            lastResult: newValue,
-            rollnum: Number(player.rollnum),
-          })
-          
+          setPlayerAccountData({ lastResult: newValue, rollnum: Number(player.rollnum) })
           if (newValue > 0) {
             setDiceValue(newValue)
             previousDiceValueRef.current = newValue
           }
-          
           setRollHistory(prev => {
-            const pendingIndex = prev.findIndex(entry => entry.isPending)
-            if (pendingIndex !== -1) {
-              console.log("[WebSocket] Processing roll completion")
-              const endTime = Date.now()
-              const updated = [...prev]
-              updated[pendingIndex] = {
-                value: newValue,
-                startTime: updated[pendingIndex].startTime,
-                endTime,
-                isPending: false,
-              }
-              setIsRolling(false)
-              clearAllIntervals()
-              console.log("[WebSocket] Roll completion processed")
-              return updated
-            } else {
-              console.log("[WebSocket] Received update but no pending entry found")
-              return prev
-            }
+            const idx = prev.findIndex(entry => entry.isPending)
+            if (idx === -1) return prev
+            const updated = [...prev]
+            updated[idx] = { ...updated[idx], value: newValue, endTime: Date.now(), isPending: false }
+            setIsRolling(false)
+            clearAllIntervals()
+            return updated
           })
         } catch (error) {
           console.error("[WebSocket] Failed to decode player account:", error)
@@ -295,50 +275,33 @@ export default function DiceRollerDelegated() {
     )
 
     // Fetch blockhash for new connection
-    await fetchBlockhash(newEphemeralConnection, true)
-  }, [clearAllIntervals, fetchBlockhash])
+    await fetchAndCacheBlockhash(newEphemeralConnection, cachedEphemeralBlockhashRef)
+  }, [clearAllIntervals])
 
   const sendBackgroundRoll = useCallback(async () => {
-    if (!ephemeralProgramRef.current || !playerKeypairRef.current || !playerPdaRef.current) return
+    if (!ephemeralProgramRef.current || !playerKeypairRef.current || !playerPdaRef.current || !ephemeralConnectionRef.current) return
 
     try {
       const randomValue = Math.floor(Math.random() * 6) + 1
-
-      const tx = await ephemeralProgramRef.current.methods
-        .rollDiceDelegated(randomValue)
-        .accounts({
+      const [tx, blockhash] = await Promise.all([
+        ephemeralProgramRef.current.methods.rollDiceDelegated(randomValue).accounts({
           payer: playerKeypairRef.current.publicKey,
           player: playerPdaRef.current,
           oracleQueue: ORACLE_QUEUE,
-        })
-        .transaction()
+        }).transaction(),
+        getBlockhashAsync(ephemeralConnectionRef.current, true)
+      ])
 
-      const cachedBlockhash = getBlockhash(ephemeralConnectionRef.current!, true)
-      if (cachedBlockhash) {
-        tx.recentBlockhash = cachedBlockhash
-      } else {
-        const { blockhash } = await ephemeralConnectionRef.current!.getLatestBlockhash()
-        tx.recentBlockhash = blockhash
-      }
-      
+      tx.recentBlockhash = blockhash
       tx.feePayer = playerKeypairRef.current.publicKey
       tx.sign(playerKeypairRef.current)
 
-      const serializedTx = tx.serialize()
-      console.log("[BackgroundRoll] Sending transaction")
-      ephemeralConnectionRef.current!.sendRawTransaction(
-        serializedTx,
-        { skipPreflight: true }
-      )
-      console.log("[BackgroundRoll] Transaction sent")
-
-      if (ephemeralConnectionRef.current) {
-        await fetchBlockhash(ephemeralConnectionRef.current, true)
-      }
+      ephemeralConnectionRef.current.sendRawTransaction(tx.serialize(), { skipPreflight: true })
+      fetchAndCacheBlockhash(ephemeralConnectionRef.current, cachedEphemeralBlockhashRef).catch(console.error)
     } catch (error) {
       console.error("[BackgroundRoll] Error:", error)
     }
-  }, [getBlockhash, fetchBlockhash])
+  }, [getBlockhashAsync])
 
   const initializeProgram = useCallback(async () => {
     if (typeof window === "undefined") return
@@ -417,47 +380,23 @@ export default function DiceRollerDelegated() {
         subscriptionIdRef.current = ephemeralConnection.onAccountChange(
           playerPk,
           (accountInfo) => {
-            console.log("[WebSocket] Account change received", { hasData: !!accountInfo?.data })
-            if (!ephemeralProgramRef.current || !accountInfo || !accountInfo.data) return
-            
+            if (!ephemeralProgramRef.current || !accountInfo?.data) return
             try {
               const player = ephemeralProgramRef.current.coder.accounts.decode("player", accountInfo.data)
               const newValue = Number(player.lastResult)
-              
-              console.log("[WebSocket] Decoded player:", {
-                newValue
-              })
-              
-              setPlayerAccountData({
-                lastResult: newValue,
-                rollnum: Number(player.rollnum),
-              })
-              
+              setPlayerAccountData({ lastResult: newValue, rollnum: Number(player.rollnum) })
               if (newValue > 0) {
                 setDiceValue(newValue)
                 previousDiceValueRef.current = newValue
               }
-              
               setRollHistory(prev => {
-                const pendingIndex = prev.findIndex(entry => entry.isPending)
-                if (pendingIndex !== -1) {
-                  console.log("[WebSocket] Processing roll completion")
-                  const endTime = Date.now()
-                  const updated = [...prev]
-                  updated[pendingIndex] = {
-                    value: newValue,
-                    startTime: updated[pendingIndex].startTime,
-                    endTime,
-                    isPending: false,
-                  }
-                  setIsRolling(false)
-                  clearAllIntervals()
-                  console.log("[WebSocket] Roll completion processed")
-                  return updated
-                } else {
-                  console.log("[WebSocket] Received update but no pending entry found")
-                  return prev
-                }
+                const idx = prev.findIndex(entry => entry.isPending)
+                if (idx === -1) return prev
+                const updated = [...prev]
+                updated[idx] = { ...updated[idx], value: newValue, endTime: Date.now(), isPending: false }
+                setIsRolling(false)
+                clearAllIntervals()
+                return updated
               })
             } catch (error) {
               console.error("[WebSocket] Failed to decode player account:", error)
@@ -481,7 +420,7 @@ export default function DiceRollerDelegated() {
         } catch (error) {
           console.error("Failed to update ephemeral connection to nearest validator:", error)
           // Continue with default ephemeral connection if update fails
-          await fetchBlockhash(ephemeralConnection, true)
+          await fetchAndCacheBlockhash(ephemeralConnection, cachedEphemeralBlockhashRef)
         }
       } else if (!isDelegated && routerConnectionRef.current) {
         // Automatically delegate on startup if not already delegated
@@ -532,15 +471,15 @@ export default function DiceRollerDelegated() {
             delegationPollIntervalRef.current = null
           }
           setIsDelegating(false)
-          await fetchBlockhash(connection, false)
+          await fetchAndCacheBlockhash(connection, cachedBaseBlockhashRef)
           if (ephemeralConnection) {
-            await fetchBlockhash(ephemeralConnection, true)
+            await fetchAndCacheBlockhash(ephemeralConnection, cachedEphemeralBlockhashRef)
           }
         }
       } else {
-        await fetchBlockhash(connection, false)
+        await fetchAndCacheBlockhash(connection, cachedBaseBlockhashRef)
         if (ephemeralConnection) {
-          await fetchBlockhash(ephemeralConnection, true)
+          await fetchAndCacheBlockhash(ephemeralConnection, cachedEphemeralBlockhashRef)
         }
       }
       
@@ -552,10 +491,10 @@ export default function DiceRollerDelegated() {
       // Start continuous blockhash refresh - this runs every 20 seconds regardless of other activity
       blockhashIntervalRef.current = setInterval(() => {
         if (connectionRef.current) {
-          fetchBlockhash(connectionRef.current, false).catch(console.error)
+          fetchAndCacheBlockhash(connectionRef.current, cachedBaseBlockhashRef).catch(console.error)
         }
         if (ephemeralConnectionRef.current) {
-          fetchBlockhash(ephemeralConnectionRef.current, true).catch(console.error)
+          fetchAndCacheBlockhash(ephemeralConnectionRef.current, cachedEphemeralBlockhashRef).catch(console.error)
         }
       }, BLOCKHASH_REFRESH_INTERVAL_MS)
       
@@ -564,7 +503,7 @@ export default function DiceRollerDelegated() {
       console.error("Failed to initialize delegated dice:", error)
       setIsInitialized(false)
     }
-    }, [refreshDelegationStatus, fetchBlockhash, updateEphemeralConnectionToValidator, sendBackgroundRoll])
+    }, [refreshDelegationStatus, updateEphemeralConnectionToValidator, sendBackgroundRoll])
 
   useEffect(() => {
     initializeProgram()
@@ -813,86 +752,55 @@ export default function DiceRollerDelegated() {
 
     timeoutRef.current = setTimeout(() => {
       setRollHistory(prev => {
-        const hasPending = prev.some(entry => entry.isPending)
-        if (hasPending) {
-          clearAllIntervals()
-          setIsRolling(false)
-          const updated = [...prev]
-          const pendingIndex = updated.findIndex(entry => entry.isPending)
-          if (pendingIndex !== -1) {
-            updated[pendingIndex] = {
-              ...updated[pendingIndex],
-              isPending: false,
-            }
-          }
-          return updated
-        }
-        return prev
+        if (!prev.some(entry => entry.isPending)) return prev
+        clearAllIntervals()
+        setIsRolling(false)
+        return prev.map(entry => entry.isPending ? { ...entry, isPending: false } : entry)
       })
     }, ROLL_TIMEOUT_MS)
 
     try {
       const randomValue = Math.floor(Math.random() * 6) + 1
-
-      const tx = await ephemeralProgramRef.current.methods
-        .rollDiceDelegated(randomValue)
-        .accounts({
+      const connection = ephemeralConnectionRef.current!
+      const [tx, blockhash] = await Promise.all([
+        ephemeralProgramRef.current.methods.rollDiceDelegated(randomValue).accounts({
           payer: playerKeypairRef.current.publicKey,
           player: playerPdaRef.current,
           oracleQueue: ORACLE_QUEUE,
-        })
-        .transaction()
+        }).transaction(),
+        getBlockhashAsync(connection, true)
+      ])
 
-      const cachedBlockhash = getBlockhash(ephemeralConnectionRef.current!, true)
-      if (cachedBlockhash) {
-        tx.recentBlockhash = cachedBlockhash
-      } else {
-        const { blockhash } = await ephemeralConnectionRef.current!.getLatestBlockhash()
-        tx.recentBlockhash = blockhash
-      }
-      
+      tx.recentBlockhash = blockhash
       tx.feePayer = playerKeypairRef.current.publicKey
       tx.sign(playerKeypairRef.current)
 
-      const serializedTx = tx.serialize()
       const transactionStartTime = Date.now()
-      console.log("[RollDice] Sending transaction")
-      ephemeralConnectionRef.current!.sendRawTransaction(
-        serializedTx,
-        { skipPreflight: true }
-      )
-      console.log("[RollDice] Transaction sent, waiting for websocket update")
+      const sendPromise = connection.sendRawTransaction(tx.serialize(), { skipPreflight: true })
       
       setRollHistory(prev => {
         const updated = [...prev]
         const pendingIndex = updated.findIndex(entry => entry.isPending && entry.value === null)
         if (pendingIndex !== -1) {
-          updated[pendingIndex] = {
-            ...updated[pendingIndex],
-            startTime: transactionStartTime,
-          }
+          updated[pendingIndex].startTime = transactionStartTime
         }
         return updated
       })
       
-
-      if (ephemeralConnectionRef.current) {
-        await fetchBlockhash(ephemeralConnectionRef.current, true)
-      }
+      fetchAndCacheBlockhash(connection, cachedEphemeralBlockhashRef).catch(console.error)
+      sendPromise.catch((error) => {
+        console.error("[RollDice] Transaction send error:", error)
+        clearAllIntervals()
+        setIsRolling(false)
+        setRollHistory(prev => prev.filter(entry => !entry.isPending))
+      })
     } catch (error) {
       clearAllIntervals()
       console.error("Error rolling dice:", error)
       setIsRolling(false)
-      setRollHistory(prev => {
-        const updated = [...prev]
-        const pendingIndex = updated.findIndex(entry => entry.isPending)
-        if (pendingIndex !== -1) {
-          updated.splice(pendingIndex, 1)
-        }
-        return updated
-      })
+      setRollHistory(prev => prev.filter(entry => !entry.isPending))
     }
-  }, [clearAllIntervals, isDelegated, isInitialized, isRolling, getBlockhash, fetchBlockhash])
+  }, [clearAllIntervals, isDelegated, isInitialized, isRolling, getBlockhashAsync])
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -928,78 +836,84 @@ export default function DiceRollerDelegated() {
         <SolanaAddress />
         {playerPda && (
           <Card className="w-80">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Debug</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">PDA Address</div>
-                <div
-                  className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1 transition-colors"
-                  onClick={() => copyToClipboard(playerPda.toBase58())}
-                >
-                  <span className="text-xs font-mono">{formatAddress(playerPda.toBase58())}</span>
-                  {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-gray-400" />}
-                </div>
-              </div>
-              {ephemeralEndpoint && (
-                <div className="space-y-1 pt-2 border-t">
-                  <div className="text-xs text-muted-foreground">Ephemeral Connection</div>
-                  <div className="text-xs font-mono break-all">{ephemeralEndpoint}</div>
-                </div>
-              )}
-              <div className="pt-2 border-t space-y-2">
-                <button
-                  onClick={handleGetClosestValidator}
-                  disabled={!isInitialized}
-                  className="w-full px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Get Closest Validator
-                </button>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => handleDelegateToValidator("MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd", "https://devnet-us.magicblock.app")}
-                    disabled={!isInitialized || isDelegated || isDelegating}
-                    className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    US
-                  </button>
-                  <button
-                    onClick={() => handleDelegateToValidator("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57", "https://devnet-as.magicblock.app")}
-                    disabled={!isInitialized || isDelegated || isDelegating}
-                    className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    AS
-                  </button>
-                  <button
-                    onClick={() => handleDelegateToValidator("MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e", "https://devnet-eu.magicblock.app")}
-                    disabled={!isInitialized || isDelegated || isDelegating}
-                    className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    EU
-                  </button>
-                </div>
-                <button
-                  onClick={handleUndelegate}
-                  disabled={!isInitialized || !isDelegated || isUndelegating}
-                  className="w-full px-3 py-1.5 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isUndelegating ? "Undelegating..." : "Undelegate"}
-                </button>
-              </div>
-              {playerAccountData && (
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t">
-                  <div className="space-y-1">
-                    <div className="text-xs text-muted-foreground">Last Result</div>
-                    <div className="text-sm font-semibold">{playerAccountData.lastResult}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs text-muted-foreground">Roll Count</div>
-                    <div className="text-sm font-semibold">{playerAccountData.rollnum}</div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="debug" className="border-none">
+                <AccordionTrigger className="px-6 py-3 hover:no-underline">
+                  <CardTitle className="text-sm font-medium">Debug</CardTitle>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <CardContent className="space-y-3 pt-0">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">PDA Address</div>
+                      <div
+                        className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1 transition-colors"
+                        onClick={() => copyToClipboard(playerPda.toBase58())}
+                      >
+                        <span className="text-xs font-mono">{formatAddress(playerPda.toBase58())}</span>
+                        {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-gray-400" />}
+                      </div>
+                    </div>
+                    {ephemeralEndpoint && (
+                      <div className="space-y-1 pt-2 border-t">
+                        <div className="text-xs text-muted-foreground">Ephemeral Connection</div>
+                        <div className="text-xs font-mono break-all">{ephemeralEndpoint}</div>
+                      </div>
+                    )}
+                    <div className="pt-2 border-t space-y-2">
+                      <button
+                        onClick={handleGetClosestValidator}
+                        disabled={!isInitialized}
+                        className="w-full px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Get Closest Validator
+                      </button>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          onClick={() => handleDelegateToValidator("MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd", "https://devnet-us.magicblock.app")}
+                          disabled={!isInitialized || isDelegated || isDelegating}
+                          className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          US
+                        </button>
+                        <button
+                          onClick={() => handleDelegateToValidator("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57", "https://devnet-as.magicblock.app")}
+                          disabled={!isInitialized || isDelegated || isDelegating}
+                          className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          AS
+                        </button>
+                        <button
+                          onClick={() => handleDelegateToValidator("MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e", "https://devnet-eu.magicblock.app")}
+                          disabled={!isInitialized || isDelegated || isDelegating}
+                          className="px-2 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          EU
+                        </button>
+                      </div>
+                      <button
+                        onClick={handleUndelegate}
+                        disabled={!isInitialized || !isDelegated || isUndelegating}
+                        className="w-full px-3 py-1.5 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isUndelegating ? "Undelegating..." : "Undelegate"}
+                      </button>
+                    </div>
+                    {playerAccountData && (
+                      <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Last Result</div>
+                          <div className="text-sm font-semibold">{playerAccountData.lastResult}</div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Roll Count</div>
+                          <div className="text-sm font-semibold">{playerAccountData.rollnum}</div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </Card>
         )}
       </div>
@@ -1028,6 +942,14 @@ export default function DiceRollerDelegated() {
 
             <button
               onClick={handleRollDice}
+              onMouseEnter={() => {
+                if (ephemeralConnectionRef.current && !isRolling && isInitialized && isDelegated) {
+                  const cached = getCachedBlockhash(ephemeralConnectionRef.current, cachedEphemeralBlockhashRef)
+                  if (!cached) {
+                    fetchAndCacheBlockhash(ephemeralConnectionRef.current, cachedEphemeralBlockhashRef).catch(console.error)
+                  }
+                }
+              }}
               disabled={isRolling || !isInitialized || !isDelegated}
               className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium shadow-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
