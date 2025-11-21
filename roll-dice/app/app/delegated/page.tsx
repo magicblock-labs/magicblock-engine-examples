@@ -781,10 +781,20 @@ export default function DiceRollerDelegated() {
       sendPromise.then((signature) => {
         setRollHistory(prev => {
           const updated = [...prev]
-          const pendingIndex = updated.findIndex(entry => entry.isPending && entry.value === null)
-          if (pendingIndex !== -1) {
-            updated[pendingIndex].startTime = transactionStartTime
-            updated[pendingIndex].signature = signature
+          // First try to find a pending entry without a value (normal case)
+          let targetIndex = updated.findIndex(entry => entry.isPending && entry.value === null)
+          // If not found, try to find a pending entry without a signature (account updated first)
+          if (targetIndex === -1) {
+            targetIndex = updated.findIndex(entry => entry.isPending && !entry.signature)
+          }
+          // If still not found, find the most recent entry without a signature (account updated and no longer pending)
+          // Since entries are added to the front, the first match is the most recent
+          if (targetIndex === -1) {
+            targetIndex = updated.findIndex(entry => !entry.signature)
+          }
+          if (targetIndex !== -1) {
+            updated[targetIndex].startTime = transactionStartTime
+            updated[targetIndex].signature = signature
           }
           return updated
         })
