@@ -77,12 +77,9 @@ pub mod magic_actions {
         let instruction_data =
             anchor_lang::InstructionData::data(&crate::instruction::UpdateLeaderboard {});
 
-        let action_args = ActionArgs {
-            escrow_index: 0,
-            data: instruction_data,
-        };
+        let action_args = ActionArgs::new(instruction_data);
 
-        let accounts = vec![
+        let action_accounts = vec![
             ShortAccountMeta {
                 pubkey: ctx.accounts.leaderboard.key(),
                 is_writable: true,
@@ -92,26 +89,23 @@ pub mod magic_actions {
                 is_writable: false,
             },
         ];
-
-        let call_handler = CallHandler {
-            args: action_args,
-            compute_units: 200_000,
-            escrow_authority: ctx.accounts.payer.to_account_info(),
+        let action = CallHandler {
             destination_program: crate::ID,
-            accounts,
+            accounts: action_accounts,
+            args: action_args,
+            escrow_authority: ctx.accounts.payer.to_account_info(), // Signer authorized to pay transaction fees for action from escrow PDA
+            compute_units: 200_000,
         };
-
-        let magic_builder = MagicInstructionBuilder {
+        let magic_action = MagicInstructionBuilder {
             payer: ctx.accounts.payer.to_account_info(),
             magic_context: ctx.accounts.magic_context.to_account_info(),
             magic_program: ctx.accounts.magic_program.to_account_info(),
             magic_action: MagicAction::Commit(CommitType::WithHandler {
                 commited_accounts: vec![ctx.accounts.counter.to_account_info()],
-                call_handlers: vec![call_handler],
+                call_handlers: vec![action],
             }),
         };
-
-        magic_builder.build_and_invoke()?;
+        magic_action.build_and_invoke()?;
         Ok(())
     }
 }

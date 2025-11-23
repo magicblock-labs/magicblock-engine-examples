@@ -3,13 +3,14 @@ import { Program, web3 } from "@coral-xyz/anchor";
 import { MagicActions } from "../target/types/magic_actions";
 import {
   ConnectionMagicRouter,
+  createCloseEscrowInstruction,
+  createTopUpEscrowInstruction,
+  escrowPdaFromEscrowAuthority,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 
 const SEED_TEST_PDA = "test-pda";
 const SEED_LEADERBOARD = "leaderboard";
-
-
 
 describe("magic-actions", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
@@ -76,8 +77,8 @@ describe("magic-actions", () => {
       .updateLeaderboard()
       .accounts({
         counter: pda,
-        escrow: pda,
-        escrowAuth: pda,
+        escrowAuth: anchor.Wallet.local().publicKey,
+        escrow: escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
       })
       .transaction();
 
@@ -90,11 +91,11 @@ describe("magic-actions", () => {
     await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Updated Leaderboard!");
   });
 
-  it("Delegate Counter to ER!", async () => {
+  it("Delegate Counter to ER and create Escrow for Magic Action!", async () => {
     const validator = (await routerConnection.getClosestValidator());
     console.log("Delegating to closest validator: ", JSON.stringify(validator));
 
-        // Add local validator identity to the remaining accounts if running on localnet
+    // Add local validator identity to the remaining accounts if running on localnet
     const remainingAccounts =
       routerConnection.rpcEndpoint.includes("localhost") ||
       routerConnection.rpcEndpoint.includes("127.0.0.1")
@@ -113,14 +114,23 @@ describe("magic-actions", () => {
             },
         ];
 
-    const tx = await program.methods
+    const topUpEscrowIx = createTopUpEscrowInstruction(
+      escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
+      anchor.Wallet.local().publicKey,
+      anchor.Wallet.local().publicKey,
+      10000 // top-up amount in lamports
+    )
+    
+    const delegateIx = await program.methods
       .delegate()
       .accounts({
         payer: anchor.Wallet.local().publicKey,
         pda: pda
       })
       .remainingAccounts(remainingAccounts)
-      .transaction();
+      .instruction();
+
+    const tx = new Transaction().add(topUpEscrowIx, delegateIx);
 
     const signature = await sendAndConfirmTransaction(
       routerConnection,
@@ -184,6 +194,21 @@ describe("magic-actions", () => {
     );
     await sleepWithAnimation(5);
     await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Undelegated Counter PDA!");
+  });
+  it("Close Escrow for Action!", async () => {
+    const closeEscrowIx = createCloseEscrowInstruction(
+      escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
+      anchor.Wallet.local().publicKey
+    )
+
+    const tx = new Transaction().add(closeEscrowIx);
+
+    const signature = await sendAndConfirmTransaction(
+      routerConnection,
+      tx,
+      [anchor.Wallet.local().payer]
+    );
+    await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Esrow closed!");
   });
 });
 
