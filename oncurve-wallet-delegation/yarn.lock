@@ -174,7 +174,7 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
-"@magicblock-labs/ephemeral-rollups-kit@^0.6.0":
+"@magicblock-labs/ephemeral-rollups-kit@0.6.0":
   version "0.6.0"
   resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-kit/-/ephemeral-rollups-kit-0.6.0.tgz#1a986df7e0e175d8abe7e021b58ea725960a82e2"
   integrity sha512-W2JoACYJESSkRe+JzqLnJ/+lpSFW9zQz5NYw74SHON/1Uqt8c00UD6SywaYxkJlojvu4VWmZIMusr1KOULbtoA==
@@ -187,7 +187,7 @@
     rpc-websockets "^9.0.4"
     typescript "^5.3.0"
 
-"@magicblock-labs/ephemeral-rollups-sdk@^0.6.0":
+"@magicblock-labs/ephemeral-rollups-sdk@0.6.0":
   version "0.6.0"
   resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.6.0.tgz#fcef4d60fe22199b6a72e65dc7e381e68cceb618"
   integrity sha512-3Xr/6abOVL2jI4yK8lmbf8J4VKnGvW7J5TOrbRkXmot/Zd426OGJWnWB+tkMdWaNygy+9rAXg6eRNGB0ulj5fQ==

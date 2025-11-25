@@ -39,10 +39,10 @@
     bn.js "^5.1.2"
     buffer-layout "^1.2.0"
 
-"@magicblock-labs/ephemeral-rollups-sdk@^0.5.0":
-  version "0.5.0"
-  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.5.0.tgz#0c30f28bec62bafc0f5e81cb12dd1654c76ddb2c"
-  integrity sha512-sp2dWEsstQi2MXeKavaDTj6Db4OdUXdrEj41DWZ6WXxoyjLOTb9MTENbozcVvuahRLAudS4vlHY7eNbuB0/Mkg==
+"@magicblock-labs/ephemeral-rollups-sdk@0.6.0":
+  version "0.6.0"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.6.0.tgz#fcef4d60fe22199b6a72e65dc7e381e68cceb618"
+  integrity sha512-3Xr/6abOVL2jI4yK8lmbf8J4VKnGvW7J5TOrbRkXmot/Zd426OGJWnWB+tkMdWaNygy+9rAXg6eRNGB0ulj5fQ==
   dependencies:
     "@phala/dcap-qvl-web" "^0.2.7"
     "@solana/web3.js" "^1.98.0"

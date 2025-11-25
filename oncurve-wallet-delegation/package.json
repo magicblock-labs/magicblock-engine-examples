@@ -1,11 +1,11 @@
 {
-  "name": "counter_client",
+  "name": "wallet",
   "version": "1.0.0",
   "main": "index.js",
   "license": "ISC",
   "dependencies": {
-    "@magicblock-labs/ephemeral-rollups-kit": "^0.6.0",
-    "@magicblock-labs/ephemeral-rollups-sdk": "^0.6.0",
+    "@magicblock-labs/ephemeral-rollups-kit": "0.6.0",
+    "@magicblock-labs/ephemeral-rollups-sdk": "0.6.0",
     "@solana-program/system": "^0.9.0",
     "@solana/buffer-layout": "^4.0.1",
     "@solana/kit": "^4.0.0",
