@@ -1,22 +1,22 @@
-import * as web3 from '@solana/web3.js'
-import * as fs from 'fs'
+import { Keypair, Connection, PublicKey, Transaction, SystemProgram, sendAndConfirmTransaction, LAMPORTS_PER_SOL } from '@solana/web3.js'
+import { readFileSync, writeFileSync } from 'fs'
 
 import dotenv from 'dotenv'
 dotenv.config()
 
 // Initialize Keypair for SOL (delegated account)
-export function initializeSolSignerKeypair(): web3.Keypair {
+export function initializeSolSignerKeypair(): Keypair {
 
-    let signer: web3.Keypair
+    let signer: Keypair
 
     if (!process.env.PRIVATE_KEY) {
-        signer = web3.Keypair.generate()
+        signer = Keypair.generate()
         // Append the new key-value pair to the contents of the .env file
-        fs.writeFileSync('.env', `PRIVATE_KEY=[${signer.secretKey.toString()}]\n`)
+        writeFileSync('.env', `PRIVATE_KEY=[${signer.secretKey.toString()}]\n`)
     } else {
         const secret = JSON.parse(process.env.PRIVATE_KEY ?? "") as number[]
         const secretKey = Uint8Array.from(secret)
-        signer = web3.Keypair.fromSecretKey(secretKey)
+        signer = Keypair.fromSecretKey(secretKey)
     }
 
     return signer
@@ -24,20 +24,20 @@ export function initializeSolSignerKeypair(): web3.Keypair {
 }
 
 // Initialize Keypair for fee payer and signer
-export async function initializeFeePayer(connection: web3.Connection, userKeypair: web3.Keypair): Promise<web3.Keypair> {
+export async function initializeFeePayer(connection: Connection, userKeypair: Keypair): Promise<Keypair> {
 
-    let feePayer: web3.Keypair
+    let feePayer: Keypair
 
     if (!process.env.FEE_PAYER_PRIVATE_KEY) {
-        feePayer = web3.Keypair.generate()
+        feePayer = Keypair.generate()
         // Append the new key-value pair to the contents of the .env file
-        let envContent = fs.readFileSync('.env', 'utf-8')
+        let envContent = readFileSync('.env', 'utf-8')
         envContent += `FEE_PAYER_PRIVATE_KEY=[${feePayer.secretKey.toString()}]\n`
-        fs.writeFileSync('.env', envContent)
+        writeFileSync('.env', envContent)
     } else {
         const secret = JSON.parse(process.env.FEE_PAYER_PRIVATE_KEY ?? "") as number[]
         const secretKey = Uint8Array.from(secret)
-        feePayer = web3.Keypair.fromSecretKey(secretKey)
+        feePayer = Keypair.fromSecretKey(secretKey)
     }
 
     // Transfer 0.1 SOL to fee payer if needed
@@ -47,13 +47,13 @@ export async function initializeFeePayer(connection: web3.Connection, userKeypai
     
     if (feePayerBalance < TRANSFER_AMOUNT && userBalance >= TRANSFER_AMOUNT * 2) {
         try {
-            const transferInstruction = web3.SystemProgram.transfer({
+            const transferInstruction = SystemProgram.transfer({
                 fromPubkey: userKeypair.publicKey,
                 toPubkey: feePayer.publicKey,
                 lamports: TRANSFER_AMOUNT,
             });
-            const tx = new web3.Transaction().add(transferInstruction);
-            await web3.sendAndConfirmTransaction(
+            const tx = new Transaction().add(transferInstruction);
+            await sendAndConfirmTransaction(
                 connection,
                 tx,
                 [userKeypair],
@@ -68,16 +68,16 @@ export async function initializeFeePayer(connection: web3.Connection, userKeypai
     return feePayer
 }
 
-export async function airdropSolIfNeeded(connection: web3.Connection, pubkey: web3.PublicKey, amount: number, threshold: number) {
+export async function airdropSolIfNeeded(connection: Connection, pubkey: PublicKey, amount: number, threshold: number) {
 
     if (connection.rpcEndpoint.includes('dev') || connection.rpcEndpoint.includes('test') || connection.rpcEndpoint.includes('local') || connection.rpcEndpoint.includes('http://')) {
         const balance = await connection.getBalance(pubkey)
-        console.log('Current balance is', balance / web3.LAMPORTS_PER_SOL, ' SOL','\n')
-        if (balance < threshold * web3.LAMPORTS_PER_SOL) {
+        console.log('Current balance is', balance / LAMPORTS_PER_SOL, ' SOL','\n')
+        if (balance < threshold * LAMPORTS_PER_SOL) {
             console.log(`Selected cluster: ${connection.rpcEndpoint}`)
             console.log(`Airdropping ${amount} SOL... to ${pubkey.toString()}`)
             try {
-                await connection.requestAirdrop(pubkey, amount * web3.LAMPORTS_PER_SOL)
+                await connection.requestAirdrop(pubkey, amount * LAMPORTS_PER_SOL)
                 console.log(`\rAirdrop of ${amount} SOL was successful.`)
             } catch (e) {
                 console.error('Airdrop failed:', e);

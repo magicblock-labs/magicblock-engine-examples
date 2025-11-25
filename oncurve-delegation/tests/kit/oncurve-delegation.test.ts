@@ -19,7 +19,6 @@ import {
   pipe,
   setTransactionMessageFeePayer,
   getAddressFromPublicKey,
-  lamports,
 } from "@solana/kit";
 import { getAssignInstruction } from "@solana-program/system";
 import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system";

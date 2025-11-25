@@ -1,4 +1,4 @@
-import { generateKeyPair, createKeyPairFromPrivateKeyBytes, createKeyPairFromBytes, Address, createSolanaRpc, createSolanaRpcSubscriptions, airdropFactory, lamports, getAddressFromPublicKey, address, pipe, createTransactionMessage, setTransactionMessageFeePayer, appendTransactionMessageInstructions } from "@solana/kit"
+import { createKeyPairFromPrivateKeyBytes, createKeyPairFromBytes, Address, createSolanaRpc, createSolanaRpcSubscriptions, airdropFactory, lamports, getAddressFromPublicKey, pipe, createTransactionMessage, setTransactionMessageFeePayer, appendTransactionMessageInstructions } from "@solana/kit"
 
 import * as fs from 'fs'
 
