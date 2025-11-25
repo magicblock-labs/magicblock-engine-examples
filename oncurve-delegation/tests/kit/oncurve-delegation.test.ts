@@ -21,7 +21,7 @@ import {
   getAddressFromPublicKey,
   lamports,
 } from "@solana/kit";
-import { getAssignInstruction, getTransferSolInstruction } from "@solana-program/system";
+import { getAssignInstruction } from "@solana-program/system";
 import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system";
 import { describe, it, beforeAll, expect } from "vitest";
 
