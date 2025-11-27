@@ -73,7 +73,7 @@ describe("basic-test", async () => {
   const [counterPda, bump] = await getProgramDerivedAddress({
       programAddress: PROGRAM_ID,
       seeds: [
-          Buffer.from("counter_account"),
+          Buffer.from("counter"),
           addressEncoder.encode(userPubkey)
       ],
   });

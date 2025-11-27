@@ -87,10 +87,8 @@ pub fn process_initialize_counter(program_id: &Pubkey, accounts: &[AccountInfo])
     let system_program = next_account_info(accounts_iter)?;
 
     // Check to ensure that you're using the right PDA
-    let (counter_pda, bump_seed) = Pubkey::find_program_address(
-        &[b"counter_account", initializer_account.key.as_ref()],
-        program_id,
-    );
+    let (counter_pda, bump_seed) =
+        Pubkey::find_program_address(&[b"counter", initializer_account.key.as_ref()], program_id);
     if counter_pda != *counter_account.key {
         msg!("Invalid seeds for PDA");
         return Err(ProgramError::InvalidArgument);
@@ -120,11 +118,7 @@ pub fn process_initialize_counter(program_id: &Pubkey, accounts: &[AccountInfo])
                 counter_account.clone(),
                 system_program.clone(),
             ],
-            &[&[
-                b"counter_account",
-                initializer_account.key.as_ref(),
-                &[bump_seed],
-            ]],
+            &[&[b"counter", initializer_account.key.as_ref(), &[bump_seed]]],
         )?;
         msg!(
             "Counter account {} created with its owner {}",
@@ -152,10 +146,8 @@ pub fn process_increase_counter(
     let counter_account = next_account_info(accounts_iter)?;
 
     // Check to ensure that you're using the right PDA derived from initializer account
-    let (counter_pda, _bump_seed) = Pubkey::find_program_address(
-        &[b"counter_account", initializer_account.key.as_ref()],
-        program_id,
-    );
+    let (counter_pda, _bump_seed) =
+        Pubkey::find_program_address(&[b"counter", initializer_account.key.as_ref()], program_id);
     if counter_pda != *counter_account.key {
         msg!("Invalid seeds for PDA");
         return Err(ProgramError::InvalidArgument);
@@ -187,7 +179,7 @@ pub fn process_delegate(_program_id: &Pubkey, accounts: &[AccountInfo]) -> Progr
     let validator_pubkey: Option<Pubkey> = validator_account.map(|acc_info| acc_info.key.clone());
 
     // Prepare counter pda seeds
-    let seed_1 = b"counter_account";
+    let seed_1 = b"counter";
     let seed_2 = initializer.key.as_ref();
     let pda_seeds: &[&[u8]] = &[seed_1, seed_2];
 
@@ -303,7 +295,7 @@ pub fn process_increment_commit(
 
     // Check to ensure that you're using the right PDA derived from initializer account
     let (counter_pda, _bump_seed) =
-        Pubkey::find_program_address(&[b"counter_account", initializer.key.as_ref()], program_id);
+        Pubkey::find_program_address(&[b"counter", initializer.key.as_ref()], program_id);
     if counter_pda != *counter_account.key {
         msg!("Invalid seeds for PDA");
         return Err(ProgramError::InvalidArgument);
@@ -345,7 +337,7 @@ pub fn process_increment_undelegate(
 
     // Check to ensure that you're using the right PDA derived from initializer account
     let (counter_pda, _bump_seed) =
-        Pubkey::find_program_address(&[b"counter_account", initializer.key.as_ref()], program_id);
+        Pubkey::find_program_address(&[b"counter", initializer.key.as_ref()], program_id);
     if counter_pda != *counter_account.key {
         msg!("Invalid seeds for PDA");
         return Err(ProgramError::InvalidArgument);

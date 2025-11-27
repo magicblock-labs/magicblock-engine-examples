@@ -46,7 +46,7 @@ describe("magic-router-and-multiple-atomic-ixs", async () => {
   
     // Get pda of counter_account
     let [counterPda, bump] = PublicKey.findProgramAddressSync(
-        [Buffer.from("counter_account"), userKeypair.publicKey.toBuffer()],
+        [Buffer.from("counter"), userKeypair.publicKey.toBuffer()],
         PROGRAM_ID
     );
 

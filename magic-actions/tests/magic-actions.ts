@@ -9,7 +9,7 @@ import {
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 
-const SEED_TEST_PDA = "test-pda";
+const COUNTER_SEED = "counter";
 const SEED_LEADERBOARD = "leaderboard";
 
 describe("magic-actions", () => {
@@ -24,7 +24,7 @@ describe("magic-actions", () => {
   );
 
   const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from(SEED_TEST_PDA)],
+    [Buffer.from(COUNTER_SEED)],
     program.programId
   );
 

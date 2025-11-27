@@ -8,7 +8,7 @@ use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 
 declare_id!("CrWQv121NBNzXjxVe5pNL7MsT2yW13dMheE4nemoudQ1");
 
-pub const TEST_PDA_SEED: &[u8] = b"test-pda";
+pub const COUNTER_SEED: &[u8] = b"counter";
 pub const LEADERBOARD_SEED: &[u8] = b"leaderboard";
 
 #[ephemeral]
@@ -53,7 +53,7 @@ pub mod magic_actions {
     pub fn delegate(ctx: Context<DelegateCounter>) -> Result<()> {
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
-            &[TEST_PDA_SEED],
+            &[COUNTER_SEED],
             DelegateConfig {
                 // Optionally set a specific validator from the first remaining account
                 validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
@@ -112,7 +112,7 @@ pub mod magic_actions {
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init_if_needed, payer = user, space = 8 + 8, seeds = [TEST_PDA_SEED], bump)]
+    #[account(init_if_needed, payer = user, space = 8 + 8, seeds = [COUNTER_SEED], bump)]
     pub counter: Account<'info, Counter>,
     #[account(init_if_needed, payer = user, space = 8 + 8, seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: Account<'info, Leaderboard>,
@@ -123,7 +123,7 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct Increment<'info> {
-    #[account(mut, seeds = [TEST_PDA_SEED], bump)]
+    #[account(mut, seeds = [COUNTER_SEED], bump)]
     pub counter: Account<'info, Counter>,
 }
 
@@ -150,7 +150,7 @@ pub struct DelegateCounter<'info> {
 pub struct UndelegateCounter<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut, seeds = [TEST_PDA_SEED], bump)]
+    #[account(mut, seeds = [COUNTER_SEED], bump)]
     pub counter: Account<'info, Counter>,
 }
 
@@ -160,7 +160,7 @@ pub struct CommitAndUpdateLeaderboard<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut, seeds = [TEST_PDA_SEED], bump)]
+    #[account(mut, seeds = [COUNTER_SEED], bump)]
     pub counter: Account<'info, Counter>,
 
     /// CHECK: Leaderboard PDA - not mut here, writable set in handler

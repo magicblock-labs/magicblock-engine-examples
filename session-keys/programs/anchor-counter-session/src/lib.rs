@@ -3,24 +3,31 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
 
-declare_id!("7TZLD9W7e4bDZuJH3sM5EWGWy648JM1o1Lt6YFtiasCZ");
+use session_keys::{session_auth_or, Session, SessionError, SessionToken};
 
-pub const COUNTER_SEED: &[u8] = b"counter";
+declare_id!("6nMudTUrvXh1NGDyJYHPozJRmmHxB3s9Mjp2pSQqZiZ9");
+
+const COUNTER_SEED: &[u8] = b"counter";
 
 #[ephemeral]
 #[program]
-pub mod anchor_counter {
+pub mod anchor_counter_session {
     use super::*;
 
     /// Initialize the counter.
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count = 0;
+        counter.authority = *ctx.accounts.user.key;
         msg!("PDA {} count: {}", counter.key(), counter.count);
         Ok(())
     }
 
     /// Increment the counter.
+    #[session_auth_or(
+        ctx.accounts.counter.authority.key() == ctx.accounts.signer.key(),
+        SessionError::InvalidToken
+    )]
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
@@ -36,7 +43,7 @@ pub mod anchor_counter {
     pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
-            &[COUNTER_SEED],
+            &[COUNTER_SEED, ctx.accounts.payer.key().as_ref()],
             DelegateConfig {
                 // Optionally set a specific validator from the first remaining account
                 validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
@@ -47,6 +54,10 @@ pub mod anchor_counter {
     }
 
     /// Manual commit the account in the ER.
+    #[session_auth_or(
+        ctx.accounts.counter.authority.key() == ctx.accounts.signer.key(),
+        SessionError::InvalidToken
+    )]
     pub fn commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
         commit_accounts(
             &ctx.accounts.payer,
@@ -58,6 +69,10 @@ pub mod anchor_counter {
     }
 
     /// Undelegate the account from the delegation program
+    #[session_auth_or(
+        ctx.accounts.counter.authority.key() == ctx.accounts.signer.key(),
+        SessionError::InvalidToken
+    )]
     pub fn undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
@@ -69,6 +84,10 @@ pub mod anchor_counter {
     }
 
     /// Increment the counter + manual commit the account in the ER.
+    #[session_auth_or(
+        ctx.accounts.counter.authority.key() == ctx.accounts.signer.key(),
+        SessionError::InvalidToken
+    )]
     pub fn increment_and_commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
@@ -84,6 +103,10 @@ pub mod anchor_counter {
     }
 
     /// Increment the counter + manual commit the account in the ER.
+    #[session_auth_or(
+        ctx.accounts.counter.authority.key() == ctx.accounts.signer.key(),
+        SessionError::InvalidToken
+    )]
     pub fn increment_and_undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
@@ -102,7 +125,7 @@ pub mod anchor_counter {
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init_if_needed, payer = user, space = 8 + 8, seeds = [COUNTER_SEED], bump)]
+    #[account(init_if_needed, payer = user, space = 8 + 32 + 8, seeds = [ COUNTER_SEED, user.key().as_ref() ], bump)]
     pub counter: Account<'info, Counter>,
     #[account(mut)]
     pub user: Signer<'info>,
@@ -120,23 +143,42 @@ pub struct DelegateInput<'info> {
 }
 
 /// Account for the increment instruction.
-#[derive(Accounts)]
+#[derive(Accounts, Session)]
 pub struct Increment<'info> {
-    #[account(mut, seeds = [COUNTER_SEED], bump)]
+    #[account(
+        mut, 
+        seeds = [ COUNTER_SEED, counter.authority.key().as_ref() ], 
+        bump
+    )]
     pub counter: Account<'info, Counter>,
+    #[session(
+        signer = signer,
+        authority = counter.authority.key() 
+    )]
+    pub session_token: Option<Account<'info, SessionToken>>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
 }
 
 /// Account for the increment instruction + manual commit.
 #[commit]
-#[derive(Accounts)]
+#[derive(Accounts, Session)]
 pub struct IncrementAndCommit<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut, seeds = [COUNTER_SEED], bump)]
+    #[account(mut, seeds = [COUNTER_SEED, counter.authority.key().as_ref()], bump)]
     pub counter: Account<'info, Counter>,
+    #[session(
+        signer = signer,
+        authority = counter.authority.key() 
+    )]
+    pub session_token: Option<Account<'info, SessionToken>>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
 }
 
 #[account]
 pub struct Counter {
+    pub authority: Pubkey,
     pub count: u64,
 }

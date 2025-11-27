@@ -7,9 +7,7 @@ import {
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 
-const SEED_TEST_PDA = "test-pda"; // GS5bf2RCq8AEtSGURYUnHVqDi2iWceg78DTQFZ5q1Wzv
-const ER_VALIDATOR = new web3.PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"); // Asia ER Validator
-
+const COUNTER_SEED = "counter";
 
 describe("magic-router-and-multiple-atomic-ixs", () => {
     console.log("advanced-magic.ts")
@@ -23,12 +21,12 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
     const providerMagic = new anchor.AnchorProvider(connection,anchor.Wallet.local());
 
   const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
-  const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from(SEED_TEST_PDA)],
+  const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from(COUNTER_SEED)],
     program.programId,
   );
   console.log("Program ID: ", program.programId.toString())
-  console.log("Counter PDA: ", pda.toString())
+  console.log("Counter PDA: ", counterPDA.toString())
 
   // Run this once before all tests
   let ephemeralValidator;
@@ -85,7 +83,7 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
       .delegate()
       .accounts({
         payer: providerMagic.wallet.publicKey,
-        pda: pda,
+        pda: counterPDA,
       })
       .remainingAccounts(remainingAccounts)
       .transaction();

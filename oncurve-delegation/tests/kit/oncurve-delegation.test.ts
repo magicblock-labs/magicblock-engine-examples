@@ -144,7 +144,7 @@ describe("on-curve-delegation-kit", async () => {
       // Prepare transaction
       const transactionMessage = pipe(
         createTransactionMessage({ version: 0 }),
-        (tx) => setTransactionMessageFeePayer(feePayerAddress, tx),
+        (tx) => setTransactionMessageFeePayer(userAddress, tx),
         (tx) =>
           appendTransactionMessageInstructions([commitInstruction], tx)
       );
@@ -152,7 +152,7 @@ describe("on-curve-delegation-kit", async () => {
       // Send and confirm transaction on ephemeral connection
       const txHash = await ephemeralConnection.sendAndConfirmTransaction(
         transactionMessage,
-        [userKeypair, feePayerKeypair],
+        [userKeypair],
         { commitment: "confirmed", skipPreflight: true }
       );
 

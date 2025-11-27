@@ -4,9 +4,9 @@ import { AnchorCounter } from "../target/types/anchor_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
-const SEED_TEST_PDA = "test-pda"; // 5fSfSTkNZ4czi3w5bRyDaC8dLretQv9Zy77KRBXQ7ZzB
+const COUNTER_SEED = "counter"; 
 
-describe.only("anchor-counter", () => {
+describe("anchor-counter", () => {
   console.log("anchor-counter.ts");
 
   // Configure the client to use the local cluster.
@@ -39,13 +39,13 @@ describe.only("anchor-counter", () => {
   });
 
   const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
-  const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from(SEED_TEST_PDA)],
+  const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from(COUNTER_SEED)],
     program.programId,
   );
 
   console.log("Program ID: ", program.programId.toString());
-  console.log("Counter PDA: ", pda.toString());
+  console.log("Counter PDA: ", counterPDA.toString());
 
   it("Initialize counter on Solana", async () => {
     const start = Date.now();
@@ -55,12 +55,8 @@ describe.only("anchor-counter", () => {
         user: provider.wallet.publicKey,
       })
       .transaction();
-    tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (
-      await provider.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await provider.sendAndConfirm(tx, [], {
+
+    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
       skipPreflight: true,
       commitment: "confirmed",
     });
@@ -73,15 +69,10 @@ describe.only("anchor-counter", () => {
     let tx = await program.methods
       .increment()
       .accounts({
-        counter: pda,
+        counter: counterPDA,
       })
       .transaction();
-    tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (
-      await provider.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await provider.sendAndConfirm(tx, [], {
+    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
       skipPreflight: true,
       commitment: "confirmed",
     });
@@ -107,16 +98,11 @@ describe.only("anchor-counter", () => {
       .delegate()
       .accounts({
         payer: provider.wallet.publicKey,
-        pda: pda,
+        pda: counterPDA,
       })
       .remainingAccounts(remainingAccounts)
       .transaction();
-    tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (
-      await provider.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await provider.sendAndConfirm(tx, [], {
+    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
       skipPreflight: true,
       commitment: "confirmed",
     });
@@ -129,7 +115,7 @@ describe.only("anchor-counter", () => {
     let tx = await program.methods
       .increment()
       .accounts({
-        counter: pda,
+        counter: counterPDA,
       })
       .transaction();
     tx.feePayer = providerEphemeralRollup.wallet.publicKey;
