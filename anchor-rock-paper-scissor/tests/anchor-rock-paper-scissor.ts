@@ -3,13 +3,17 @@ import { sendAndConfirmTransaction } from "@solana/web3.js";
 import { Program } from "@coral-xyz/anchor";
 import { AnchorRockPaperScissor } from "../target/types/anchor_rock_paper_scissor";
 import BN from "bn.js";
+import * as nacl from 'tweetnacl';
 
 import {
   groupPdaFromId,
   PERMISSION_PROGRAM_ID,
-  permissionPdaFromAccount
-} from "@magicblock-labs/ephemeral-rollups-sdk/privacy";
-import { checkPermissionAccount, getAuthToken } from "./tee-getAuthToken";
+  permissionPdaFromAccount,
+  getAuthToken,
+  getPermissionStatus,
+  waitUntilPermissionActive,
+  GetCommitmentSignature
+} from "@magicblock-labs/ephemeral-rollups-sdk";
 
 
 describe("anchor-rock-paper-scissor", () => {
@@ -26,10 +30,10 @@ describe("anchor-rock-paper-scissor", () => {
   const player1 = provider.wallet.payer;
   const player2 = anchor.web3.Keypair.generate();
 
+  const ephemeralRpcEndpoint = (process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://tee.magicblock.app").replace(/\/$/, "");
   const providerEphemeralRollup = new anchor.AnchorProvider(
     new anchor.web3.Connection(
-      process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
-        "https://tee.magicblock.app/",
+      ephemeralRpcEndpoint,
       {
         wsEndpoint:
           process.env.EPHEMERAL_WS_ENDPOINT || "wss://tee.magicblock.app/",
@@ -73,8 +77,8 @@ describe("anchor-rock-paper-scissor", () => {
 
 
     // Permission TEE AuthToken
-    let authTokenPlayer1: string = "";
-    let authTokenPlayer2: string = "";
+    let authTokenPlayer1: { token: string; expiresAt: number };
+    let authTokenPlayer2: { token: string; expiresAt: number };
     let providerTeePlayer1
     let providerTeePlayer2
 
@@ -94,18 +98,18 @@ describe("anchor-rock-paper-scissor", () => {
         console.log("💸 Player 2 Balance:", balance2 / anchor.web3.LAMPORTS_PER_SOL, "SOL");
 
         // Get Auth Tokens if using TEE
-        if (providerEphemeralRollup.connection.rpcEndpoint.includes("tee")) {
-            authTokenPlayer1 = await getAuthToken(providerEphemeralRollup.connection.rpcEndpoint, player1);
-            console.log("Player 1 Auth Token:", authTokenPlayer1);
-            authTokenPlayer2 = await getAuthToken(providerEphemeralRollup.connection.rpcEndpoint, player2);
-            console.log("Player 2 Auth Token:", authTokenPlayer2);
+         if (ephemeralRpcEndpoint.includes("tee")) {
+             authTokenPlayer1 = await getAuthToken(ephemeralRpcEndpoint, player1.publicKey, (message: Uint8Array) => Promise.resolve(nacl.sign.detached(message, player1.secretKey)));
+             console.log("Player 1 Auth Token:", authTokenPlayer1.token);
+             authTokenPlayer2 = await getAuthToken(ephemeralRpcEndpoint, player2.publicKey, (message: Uint8Array) => Promise.resolve(nacl.sign.detached(message, player2.secretKey)));
+             console.log("Player 2 Auth Token:", authTokenPlayer2.token);
             providerTeePlayer1 = new anchor.AnchorProvider(
               new anchor.web3.Connection(
                 process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
-                  "https://tee.magicblock.app?token=" + authTokenPlayer1,
+                  "https://tee.magicblock.app?token=" + authTokenPlayer1.token,
                 {
                   wsEndpoint:
-                    process.env.EPHEMERAL_WS_ENDPOINT || "wss://tee.magicblock.app?token=" + authTokenPlayer1,
+                    process.env.EPHEMERAL_WS_ENDPOINT || "wss://tee.magicblock.app?token=" + authTokenPlayer1.token,
                 },
               ),
               anchor.Wallet.local(),
@@ -113,10 +117,10 @@ describe("anchor-rock-paper-scissor", () => {
             providerTeePlayer2 = new anchor.AnchorProvider(
               new anchor.web3.Connection(
                 process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
-                  "https://tee.magicblock.app?token=" + authTokenPlayer2,
+                  "https://tee.magicblock.app?token=" + authTokenPlayer2.token,
                 {
                   wsEndpoint:
-                    process.env.EPHEMERAL_WS_ENDPOINT || "wss://tee.magicblock.app?token=" + authTokenPlayer2,
+                    process.env.EPHEMERAL_WS_ENDPOINT || "wss://tee.magicblock.app?token=" + authTokenPlayer2.token,
                 },
               ),
               anchor.Wallet.local(),
@@ -175,6 +179,13 @@ describe("anchor-rock-paper-scissor", () => {
       commitment: "confirmed",
     });
     console.log("✅ Game Created:", txHash);
+
+    const result = await waitUntilPermissionActive(ephemeralRpcEndpoint, player1ChoicePda);
+    if (result) {
+      console.log("✅ Player 1 Choice permission active:", player1ChoicePda.toBase58(), txHash);
+    } else {
+      console.log("❌ Player 1 Choice permission not active:", player1ChoicePda.toBase58());
+    }
   });
 
   it("Join Game (Player 2)", async () => {
@@ -241,6 +252,13 @@ describe("anchor-rock-paper-scissor", () => {
     });
 
     console.log("✅ Player 2 joined:", txHash);
+
+    const player2ChoiceResult = await waitUntilPermissionActive(ephemeralRpcEndpoint, player2ChoicePda);
+    if (player2ChoiceResult) {
+      console.log("✅ Player 2 Choice permission active:", player2ChoicePda.toBase58(), txHash);
+    } else {
+      console.log("❌ Player 2 Choice permission not active:", player2ChoicePda.toBase58());
+    }
   });
 
   it("Player 1 Makes Choice", async () => {
@@ -260,14 +278,14 @@ describe("anchor-rock-paper-scissor", () => {
 
     tx.feePayer = player1.publicKey;
     tx.recentBlockhash = (
-      await (authTokenPlayer1 ? providerTeePlayer1 : provider).connection.getLatestBlockhash())
+      await (authTokenPlayer1.token ? providerTeePlayer1 : provider).connection.getLatestBlockhash())
     .blockhash;
-    const txHash = await sendAndConfirmTransaction((authTokenPlayer1 ? providerTeePlayer1 : provider).connection, tx, [player1], {
+    const txHash = await sendAndConfirmTransaction((authTokenPlayer1.token ? providerTeePlayer1 : provider).connection, tx, [player1], {
       skipPreflight: true,
       commitment: "confirmed",
     });
 
-    console.log("✅ Player 1 made choice:", choice, txHash);
+    console.log(`✅ Player 1 ${player1.publicKey} made choice:`, choice, txHash);
   });
 
   it("Player 2 Makes Choice", async () => {
@@ -286,33 +304,33 @@ describe("anchor-rock-paper-scissor", () => {
     );
 
     tx.feePayer = player2.publicKey;
-    const txHash = await sendAndConfirmTransaction((authTokenPlayer2 ? providerTeePlayer2 : provider).connection, tx, [player2], {
+    const txHash = await sendAndConfirmTransaction((authTokenPlayer2.token ? providerTeePlayer2 : provider).connection, tx, [player2], {
       skipPreflight: true,
       commitment: "confirmed",
     });
 
-    console.log("✅ Player 2 made choice:", choice,txHash);
+    console.log(`✅ Player 2 ${player2.publicKey} made choice:`, choice, txHash);
   });
 
   it("Player 1 checks own choice", async () => {
-    const accountInfo = await (authTokenPlayer1 ? providerTeePlayer1 : provider).connection.getAccountInfo(player1ChoicePda);
+    const accountInfo = await (authTokenPlayer1.token ? providerTeePlayer1 : provider).connection.getAccountInfo(player1ChoicePda);
     const player1ChoiceData = accountInfo.data;
     const player1ChoiceAccount = program.account.playerChoice.coder.accounts.decode("playerChoice", player1ChoiceData);
-    console.log("👀 Check Player 1 own Choice:", player1ChoiceAccount.choice);
+    console.log(`👀 Check Player 1  own Choice:`, player1ChoiceAccount.choice);
   });
 
     it("Player 2 check own choice", async () => {
-    const accountInfo = await (authTokenPlayer2 ? providerTeePlayer2 : provider).connection.getAccountInfo(player2ChoicePda);
+    const accountInfo = await (authTokenPlayer2.token ? providerTeePlayer2 : provider).connection.getAccountInfo(player2ChoicePda);
     const player2ChoiceData = accountInfo.data;
     const player2ChoiceAccount = program.account.playerChoice.coder.accounts.decode("playerChoice", player2ChoiceData);
-    console.log("👀 Check Player 2 own Choice:", player2ChoiceAccount.choice);
+    console.log(`👀 Check Player 2 own Choice:`, player2ChoiceAccount.choice);
   });
 
   it("Sneak Player 1 Choice"  , async () => {
-    await checkPermissionAccount(player1ChoicePda.toString())
-    const accountInfo = await (authTokenPlayer2 ? providerTeePlayer2 : provider).connection.getAccountInfo(player1ChoicePda);
+    await getPermissionStatus(ephemeralRpcEndpoint, player1ChoicePda)
+    const accountInfo = await (authTokenPlayer2.token ? providerTeePlayer2 : provider).connection.getAccountInfo(player1ChoicePda);
     if (accountInfo === null) {
-      console.log("✅ Player 1 choice account not found — as expected.");
+      console.log(`✅ Player 1 choice account not found — as expected.`);
       return; // test passes
     }
     // You can optionally fail if account *shouldn't* exist:
@@ -320,9 +338,9 @@ describe("anchor-rock-paper-scissor", () => {
   });
 
   it("Sneak Player 2 Choice"  , async () => {
-    await checkPermissionAccount(player2ChoicePda.toString())
-    const accountInfo = await (authTokenPlayer1 ? providerTeePlayer1 : provider).connection.getAccountInfo(player2ChoicePda);
-      // Assert that accountInfo is null (account not found)
+    await getPermissionStatus(ephemeralRpcEndpoint, player2ChoicePda)
+    const accountInfo = await (authTokenPlayer1.token ? providerTeePlayer1 : provider).connection.getAccountInfo(player2ChoicePda);
+    // Assert that accountInfo is null (account not found)
     if (accountInfo === null) {
       console.log("✅ Player 2 choice account not found — as expected.");
       return; // test passes
@@ -330,8 +348,6 @@ describe("anchor-rock-paper-scissor", () => {
     // You can optionally fail if account *shouldn't* exist:
     throw new Error("❌ Player 2 choice account exists unexpectedly!");
   });
-
-
 
   it("Reveal Winner", async () => {
     let tx = await program.methods
@@ -345,13 +361,14 @@ describe("anchor-rock-paper-scissor", () => {
       })
       .transaction();
     tx.feePayer = player1.publicKey;
-    const txHash = await sendAndConfirmTransaction((authTokenPlayer1 ? providerTeePlayer1 : provider).connection, tx, [player1], {
+    const txHash = await sendAndConfirmTransaction((authTokenPlayer1.token ? providerTeePlayer1 : provider).connection, tx, [player1], {
       skipPreflight: true,
       commitment: "finalized"
     });
-    console.log("✅ Winner Revealed:", txHash)
+    const txBase = await GetCommitmentSignature(txHash, providerTeePlayer1.connection)
+    console.log("✅ Winner Revealed:", txBase)
 
-    const accountInfo = await (authTokenPlayer1 ? providerTeePlayer1 : provider).connection.getAccountInfo(gamePda);
+    const accountInfo = await provider.connection.getAccountInfo(gamePda);
     const gameData = accountInfo.data;
     const gameAccount = program.account.game.coder.accounts.decode("game", gameData);
     console.log("🏆 Winner is:", gameAccount.winner?.toBase58());
