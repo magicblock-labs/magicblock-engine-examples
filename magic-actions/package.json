@@ -6,7 +6,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
-    "@magicblock-labs/ephemeral-rollups-sdk": "0.6.0",
+    "@magicblock-labs/ephemeral-rollups-sdk": "0.6.4",
     "@solana/web3.js": "^1.98.2",
     "magic-router-sdk": "^1.0.8"
   },

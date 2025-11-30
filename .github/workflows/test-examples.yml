@@ -90,6 +90,7 @@ jobs:
           --provider.cluster localnet \
           --skip-local-validator \
           --skip-deploy
+
       - name: Test anchor-minter
         run: |
           cd anchor-minter
@@ -106,42 +107,67 @@ jobs:
           anchor test \
           --skip-deploy
 
-    # - name: Test bolt-counter
-    #   run: |
-    #     cd bolt-counter
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     yarn test
+      #   - name: Test bolt-counter
+      #     run: |
+      #         cd bolt-counter
+      #         yarn install
+      #         EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+      #         EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+      #         PROVIDER_ENDPOINT=http://localhost:8899 \
+      #         WS_ENDPOINT=http://localhost:8900 \
+      #         yarn test
 
-    # - name: Test dummy-token-transfer
-    #   run: |
-    #     cd dummy-token-transfer
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     anchor test
+      - name: Test dummy-token-transfer
+        run: |
+          cd dummy-token-transfer
+          yarn install
+          EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+          EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+          PROVIDER_ENDPOINT=http://localhost:8899 \
+          WS_ENDPOINT=http://localhost:8900 \
+          anchor test
 
-    # - name: Test roll-dice
-    #   run: |
-    #     cd roll-dice
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     anchor test
+      - name: Test magic-actions
+        run: |
+          cd magic-actions
+          yarn install
+          anchor build
+          yarn install
+          anchor test \
+          --skip-deploy
 
-    # - name: Test rust-counter
-    #   run: |
-    #     cd rust-counter
-    #     yarn install
-    #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-    #     PROVIDER_ENDPOINT=http://localhost:8899 \
-    #     WS_ENDPOINT=http://localhost:8900 \
-    #     yarn test
+      - name: Test oncurve-delegation
+        run: |
+          cd oncurve-delegation
+          yarn install
+          yarn test
+          yarn test-web3js
+
+      - name: Test roll-dice
+        run: |
+          cd roll-dice
+          yarn install
+          EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+          EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+          PROVIDER_ENDPOINT=http://localhost:8899 \
+          WS_ENDPOINT=http://localhost:8900 \
+          anchor test
+
+      - name: Test rust-counter
+        run: |
+          cd rust-counter
+          yarn install
+          EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
+          EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
+          PROVIDER_ENDPOINT=http://localhost:8899 \
+          WS_ENDPOINT=http://localhost:8900 \
+          yarn test
+
+      - name: Test session-keys
+        run: |
+          cd session-keys
+          yarn install
+          anchor build
+          yarn install
+          anchor test \
+          --skip-deploy
