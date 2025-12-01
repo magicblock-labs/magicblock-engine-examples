@@ -15,9 +15,9 @@ describe("magic-router-counter-session", () => {
     console.log("advanced-magic.ts")
     
     const connection = new ConnectionMagicRouter(
-        process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-router.magicblock.app/", 
+        process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app/", 
         {
-          wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-router.magicblock.app/"
+          wsEndpoint: process.env.WS_ROUTER_ENDPOINT || "wss://devnet-router.magicblock.app/"
         }
     )
     const providerMagic = new anchor.AnchorProvider(connection, anchor.Wallet.local());

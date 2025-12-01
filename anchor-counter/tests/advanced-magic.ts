@@ -13,9 +13,9 @@ describe("magic-router-and-multiple-atomic-ixs", () => {
     console.log("advanced-magic.ts")
     
     const connection = new ConnectionMagicRouter(
-      "https://devnet-router.magicblock.app/", 
+      process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app/", 
         {
-          wsEndpoint: "wss://devnet-router.magicblock.app/"
+          wsEndpoint: process.env.WS_ROUTER_ENDPOINT || "wss://devnet-router.magicblock.app/"
         }
     )
     const providerMagic = new anchor.AnchorProvider(connection,anchor.Wallet.local());

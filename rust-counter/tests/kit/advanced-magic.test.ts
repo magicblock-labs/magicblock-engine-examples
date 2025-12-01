@@ -53,8 +53,8 @@ describe("basic-test", async () => {
 
 
   // Connections
-  const connection = await Connection.create("https://devnet-router.magicblock.app", "wss://devnet-router.magicblock.app")
-  const ephemeralConnection = await Connection.create("https://devnet-router.magicblock.app", "wss://devnet-router.magicblock.app")
+  const connection = await Connection.create(process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app", process.env.WS_ROUTER_ENDPOINT || "wss://devnet-router.magicblock.app")
+  const ephemeralConnection = await Connection.create(process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app", process.env.WS_ROUTER_ENDPOINT || "wss://devnet-router.magicblock.app")
 
   console.log("Base Layer RPC:", connection.clusterUrlHttp, "| Websocket:",  connection.clusterUrlWs);
   console.log("ER RPC:", ephemeralConnection.clusterUrlHttp, "| Websocket:", ephemeralConnection.clusterUrlWs);

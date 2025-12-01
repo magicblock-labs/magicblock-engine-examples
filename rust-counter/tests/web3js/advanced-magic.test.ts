@@ -22,9 +22,9 @@ describe("magic-router-and-multiple-atomic-ixs", async () => {
 
     // Set up a connection to blockchain cluster
     const connection = new ConnectionMagicRouter(
-        "https://devnet-router.magicblock.app", 
+        process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app", 
         {
-            wsEndpoint:"wss://devnet-router.magicblock.app"
+            wsEndpoint: process.env.WS_ROUTER_ENDPOINT || "wss://devnet-router.magicblock.app"
         }
     );
     
