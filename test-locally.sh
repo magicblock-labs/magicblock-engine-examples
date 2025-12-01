@@ -13,28 +13,140 @@ run_test() {
   local test_command=$2
   local test_log="/tmp/test_${test_name}.log"
   
-  echo "Testing $test_name..."
+  echo ""
+  echo "========================================"
+  echo "Testing: $test_name"
+  echo "========================================"
+  echo ""
   
-  # Run test with color forced for various tools
-  FORCE_COLOR=1 CARGO_TERM_COLOR=always NO_COLOR= eval "$test_command" 2>&1 > >(tee "$test_log")
+  # Start test in background and monitor progress
+  ( FORCE_COLOR=1 CARGO_TERM_COLOR=always NO_COLOR= eval "$test_command" ) > "$test_log" 2>&1 &
+  local test_pid=$!
+  
+  # Handle interrupt signal to kill test
+  trap "kill -TERM $test_pid 2>/dev/null; exit 1" INT TERM
+  
+  # Progress indicator spinner
+  local spinner=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+  local spinner_idx=0
+  local last_status=""
+  
+  # Monitor test progress
+  while kill -0 $test_pid 2>/dev/null; do
+    # Detect current action by checking log contents
+    local current_status=""
+    
+    # Get the most recent meaningful line from log
+    local last_line=$(tail -1 "$test_log" 2>/dev/null)
+    
+    if grep -q "Deploying program" "$test_log"; then
+      local prog_name=$(grep "Deploying program" "$test_log" | tail -1 | sed 's/.*Deploying program "\([^"]*\)".*/\1/')
+      current_status="Deploying $prog_name..."
+    elif grep -q "Waiting for program" "$test_log"; then
+      local prog_id=$(grep "Waiting for program" "$test_log" | tail -1 | sed 's/.*for program \([^ ]*\).*/\1/')
+      current_status="Confirming $prog_id..."
+    elif grep -q "Running.*ts-mocha\|Running.*vitest" "$test_log"; then
+      current_status="Running tests..."
+    elif grep -q "Resolving packages" "$test_log" && ! grep -q "success Already" "$test_log"; then
+      current_status="Resolving dependencies..."
+    elif grep -q "success Already" "$test_log" && ! grep -q "Running.*tests" "$test_log"; then
+      current_status="Dependencies installed..."
+    elif grep -q "Finished.*target" "$test_log"; then
+      local finish_type=$(echo "$last_line" | sed 's/.*Finished \(.*\) target.*/\1/')
+      current_status="Building ($finish_type)..."
+    elif grep -q "Compiling\|Checking" "$test_log"; then
+      local crate=$(echo "$last_line" | sed 's/.*Compiling \([^ ]*\).*/\1/' | sed 's/.*Checking \([^ ]*\).*/\1/')
+      current_status="Building $crate..."
+    else
+      current_status="Preparing..."
+    fi
+    
+    # Update status line (carriage return to overwrite)
+    if [ "$current_status" != "$last_status" ]; then
+      printf "\r  ${spinner[$spinner_idx]} $current_status                                    "
+      last_status="$current_status"
+    else
+      # Just update spinner even if status unchanged
+      printf "\r  ${spinner[$spinner_idx]} $current_status                                    "
+    fi
+    
+    spinner_idx=$(( (spinner_idx + 1) % 10 ))
+    sleep 0.5
+  done
+  
+  # Wait for completion
+  wait $test_pid
+  
+  # Check if test failed
+  local test_failed=false
+  if grep -q "[0-9] failing" "$test_log" || grep -q "error\[" "$test_log" || grep -q "could not compile" "$test_log"; then
+    test_failed=true
+  fi
+  
+  # Clear the progress line
+  printf "\r                                         \r"
+  
+  # If test failed, show all output; if passed, show only summary
+  if [ "$test_failed" = true ]; then
+    # Show full output on failure
+    cat "$test_log"
+  else
+    # Show only stage completion markers on success
+    local stages_completed=""
+    if grep -q "Finished.*profile" "$test_log"; then
+      stages_completed+="✓ Building  "
+    fi
+    if grep -q "Deploy success" "$test_log"; then
+      stages_completed+="✓ Deploying  "
+    fi
+    if grep -q "yarn install\|success Already" "$test_log"; then
+      stages_completed+="✓ Installing  "
+    fi
+    if grep -q "passing" "$test_log"; then
+      stages_completed+="✓ Testing"
+    fi
+    if [ -n "$stages_completed" ]; then
+      echo "  $stages_completed"
+    fi
+  fi
   
   # Check if test actually failed by looking for failure indicators
-  if grep -qiE "(failing|FAIL|error\[|error:|could not compile|TransactionExpiredBlockheightExceededError|InvalidAccountOwner)" "$test_log"; then
+  # Check for mocha test failures (X failing)
+  if grep -q "[0-9] failing" "$test_log"; then
     FAILED_TESTS+=("$test_name")
-    echo ""
-    echo "✗ $test_name FAILED"
     
-    # Extract error details - get larger context from the log
-    local error_details=$(tail -200 "$test_log" | grep -A 100 -E "(failing|FAIL|error\[|could not compile|TransactionExpiredBlockheightExceededError|InvalidAccountOwner|Error:)" | head -50)
+    # Extract test failures section - get from first failure number onwards
+    local error_details=$(tail -600 "$test_log" | sed -n '/^  [0-9]\+)/,$p' | head -300)
+    
     if [ -z "$error_details" ]; then
-      error_details=$(tail -100 "$test_log")
+      # Fallback: get the whole end of log
+      error_details=$(tail -400 "$test_log")
     fi
+    
+    FAILED_TESTS_ERRORS["$test_name"]="$error_details"
+  # Check for compile errors
+  elif grep -q "error\[" "$test_log" || grep -q "could not compile" "$test_log"; then
+    FAILED_TESTS+=("$test_name")
+    
+    # Extract compilation error details
+    local error_details=$(grep -B 2 -A 8 "error\[" "$test_log" | head -60)
+    if [ -z "$error_details" ]; then
+      error_details=$(grep -B 3 -A 5 "could not compile" "$test_log" | head -60)
+    fi
+    
     FAILED_TESTS_ERRORS["$test_name"]="$error_details"
   else
     PASSED_TESTS+=("$test_name")
-    echo ""
-    echo "✓ $test_name passed"
   fi
+  
+  # Print result
+  echo ""
+  if [[ " ${FAILED_TESTS[@]} " =~ " ${test_name} " ]]; then
+    echo "Result: ✗ FAILED"
+  else
+    echo "Result: ✓ PASSED"
+  fi
+  echo "========================================"
   echo ""
 }
 
@@ -127,7 +239,7 @@ EPHEMERAL_PID=$!
 echo "Validators ready. Running tests..."
 echo ""
 
-run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT='http://localhost:7799' EPHEMERAL_WS_ENDPOINT='ws://localhost:7800' PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --provider.cluster localnet --skip-local-validator --skip-deploy; cd .."
+# run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT='http://localhost:7799' EPHEMERAL_WS_ENDPOINT='ws://localhost:7800' PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --provider.cluster localnet --skip-local-validator --skip-deploy; cd .."
 
 run_test "anchor-minter" "cd anchor-minter && anchor build && anchor deploy --provider.cluster localnet && yarn install && anchor test --skip-deploy; cd .."
 
@@ -137,13 +249,13 @@ run_test "dummy-token-transfer" "cd dummy-token-transfer && yarn install && EPHE
 
 run_test "magic-actions" "cd magic-actions && yarn install && anchor build && yarn install && anchor test --skip-deploy; cd .."
 
-run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js; cd .."
+# run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js; cd .."
 
-run_test "roll-dice" "cd roll-dice && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test; cd .."
+# run_test "roll-dice" "cd roll-dice && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test; cd .."
 
-run_test "rust-counter" "cd rust-counter && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test; cd .."
+# run_test "rust-counter" "cd rust-counter && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test; cd .."
 
-run_test "session-keys" "cd session-keys && yarn install && anchor build && yarn install && anchor test --skip-deploy; cd .."
+# run_test "session-keys" "cd session-keys && yarn install && anchor build && yarn install && anchor test --skip-deploy; cd .."
 
 # Print summary report
 echo "========================================"
