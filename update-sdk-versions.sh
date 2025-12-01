@@ -74,10 +74,10 @@ echo "Regenerating Cargo.lock files..."
 find . -name "Cargo.toml" -type f | while read -r file; do
   dir=$(dirname "$file")
   if [ -f "$dir/Cargo.lock" ]; then
-    if (cd "$dir" && cargo update 2>/dev/null); then
+    if (cd "$dir" && cargo build 2>/dev/null); then
       echo "  ✓ $dir/Cargo.lock"
     else
-      echo "  ✗ $dir/Cargo.lock (cargo update failed)"
+      echo "  ✗ $dir/Cargo.lock (cargo build failed)"
       CARGO_ERRORS+=("$dir")
     fi
   fi
