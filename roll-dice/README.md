@@ -16,7 +16,7 @@ This program has utilized the following sofware packages.
 | ---------- | ------- | --------------------------------------------------------------- |
 | **Solana** | 2.1.6   | [Install Solana](https://docs.anza.xyz/cli/install)             |
 | **Rust**   | 1.82    | [Install Rust](https://www.rust-lang.org/tools/install)         |
-| **Anchor** | 0.31.0  | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
+| **Anchor** | 0.32.1  | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
 | **Node**   | 22.17.0 | [Install Node](https://nodejs.org/en/download/current)          |
 
 ```sh
@@ -30,7 +30,7 @@ rustup install 1.82
 
 # Check and initialize your Anchor version
 avm list
-avm use 0.31.0
+avm use 0.32.1
 ```
 
 ## ✨ Build and Test
