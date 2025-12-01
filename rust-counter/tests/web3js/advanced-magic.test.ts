@@ -22,15 +22,11 @@ describe("magic-router-and-multiple-atomic-ixs", async () => {
 
     // Set up a connection to blockchain cluster
     const connection = new ConnectionMagicRouter(
-        process.env.PROVIDER_ENDPOINT 
-        || 
-        "https://devnet-router.magicblock.app"
-        , {
-            wsEndpoint:
-            process.env.WS_ENDPOINT 
-            || 
-            "wss://devnet-router.magicblock.app"
-        });
+        "https://devnet-router.magicblock.app", 
+        {
+            wsEndpoint:"wss://devnet-router.magicblock.app"
+        }
+    );
     
     // Create user keypair and airdrop SOL if needed
     const userKeypair = initializeSolSignerKeypair();  // Use the keypair management function
@@ -46,7 +42,7 @@ describe("magic-router-and-multiple-atomic-ixs", async () => {
   
     // Get pda of counter_account
     let [counterPda, bump] = PublicKey.findProgramAddressSync(
-        [Buffer.from("counter_account"), userKeypair.publicKey.toBuffer()],
+        [Buffer.from("counter"), userKeypair.publicKey.toBuffer()],
         PROGRAM_ID
     );
 

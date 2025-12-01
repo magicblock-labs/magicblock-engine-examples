@@ -4,8 +4,8 @@
   "main": "index.js",
   "license": "ISC",
   "dependencies": {
-    "@magicblock-labs/ephemeral-rollups-kit": "^0.4.1",
-    "@magicblock-labs/ephemeral-rollups-sdk": "^0.4.1",
+    "@magicblock-labs/ephemeral-rollups-kit": "^0.6.4",
+    "@magicblock-labs/ephemeral-rollups-sdk": "^0.6.4",
     "@solana-program/system": "^0.9.0",
     "@solana/buffer-layout": "^4.0.1",
     "@solana/kit": "^4.0.0",

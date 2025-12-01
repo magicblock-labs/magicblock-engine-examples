@@ -1,13 +1,10 @@
 use anchor_lang::prelude::*;
-use ephemeral_rollups_sdk::anchor::{self, commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
+use ephemeral_rollups_sdk::access_control::{ CreateGroupCpiBuilder, CreatePermissionCpiBuilder };
 
-use magicblock_permission_client::instructions::{
-    CreateGroupCpiBuilder, CreatePermissionCpiBuilder,
-};
-
-declare_id!("AviHxCYvxaBXoSmoFbqnC4jgeoCSnLYKj4kJRoi6jCTH");
+declare_id!("Bya4RoBgWjgPvkdhPYYpbKQrzf14YXLpNPAyqpdf4ydp");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";
@@ -61,7 +58,7 @@ pub mod anchor_rock_paper_scissor {
     }
 
     // 3️⃣ Player makes a choice
-    pub fn make_choice(ctx: Context<MakeChoice>, game_id: u64, choice: Choice) -> Result<()> {
+    pub fn make_choice(ctx: Context<MakeChoice>, _game_id: u64, choice: Choice) -> Result<()> {
         let player_choice = &mut ctx.accounts.player_choice;
         require!(player_choice.choice.is_none(), GameError::AlreadyChose);
 

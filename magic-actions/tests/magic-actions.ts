@@ -2,20 +2,21 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
 import { MagicActions } from "../target/types/magic_actions";
 import {
-  getDelegationStatus, getClosestValidator, sendMagicTransaction
+  ConnectionMagicRouter,
+  createCloseEscrowInstruction,
+  createTopUpEscrowInstruction,
+  escrowPdaFromEscrowAuthority,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { Transaction } from "@solana/web3.js";
+import { Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 
-const SEED_TEST_PDA = "test-pda";
+const COUNTER_SEED = "counter";
 const SEED_LEADERBOARD = "leaderboard";
-
-
 
 describe("magic-actions", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
   const program = anchor.workspace.magicActions as Program<MagicActions>;
 
-  const routerConnection = new web3.Connection(
+  const routerConnection: ConnectionMagicRouter = new ConnectionMagicRouter(
     process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app",
     {
       wsEndpoint: process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app",
@@ -23,7 +24,7 @@ describe("magic-actions", () => {
   );
 
   const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from(SEED_TEST_PDA)],
+    [Buffer.from(COUNTER_SEED)],
     program.programId
   );
 
@@ -47,7 +48,7 @@ describe("magic-actions", () => {
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .transaction() as Transaction;
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -63,7 +64,7 @@ describe("magic-actions", () => {
       })
       .transaction() as Transaction;
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -76,12 +77,12 @@ describe("magic-actions", () => {
       .updateLeaderboard()
       .accounts({
         counter: pda,
-        escrow: pda,
-        escrowAuth: pda,
+        escrowAuth: anchor.Wallet.local().publicKey,
+        escrow: escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
       })
       .transaction();
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -90,19 +91,48 @@ describe("magic-actions", () => {
     await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Updated Leaderboard!");
   });
 
-  it("Delegate Counter to ER!", async () => {
-    const validatorKey = await getClosestValidator(routerConnection);
-    console.log("Delegating to closest validator: ", validatorKey.toString());
+  it("Delegate Counter to ER and create Escrow for Magic Action!", async () => {
+    const validator = (await routerConnection.getClosestValidator());
+    console.log("Delegating to closest validator: ", JSON.stringify(validator));
 
-    const tx = await program.methods
+    // Add local validator identity to the remaining accounts if running on localnet
+    const remainingAccounts =
+      routerConnection.rpcEndpoint.includes("localhost") ||
+      routerConnection.rpcEndpoint.includes("127.0.0.1")
+        ? [
+            {
+              pubkey: new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+              isSigner: false,
+              isWritable: false,
+            },
+          ]
+        : [
+            {
+              pubkey: new web3.PublicKey(validator.identity),
+              isSigner: false,
+              isWritable: false,
+            },
+        ];
+
+    const topUpEscrowIx = createTopUpEscrowInstruction(
+      escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
+      anchor.Wallet.local().publicKey,
+      anchor.Wallet.local().publicKey,
+      10000 // top-up amount in lamports
+    )
+    
+    const delegateIx = await program.methods
       .delegate()
       .accounts({
         payer: anchor.Wallet.local().publicKey,
-        pda: pda,
+        pda: pda
       })
-      .transaction();
+      .remainingAccounts(remainingAccounts)
+      .instruction();
 
-    const signature = await sendMagicTransaction(
+    const tx = new Transaction().add(topUpEscrowIx, delegateIx);
+
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -121,7 +151,7 @@ describe("magic-actions", () => {
       })
       .transaction();
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -139,7 +169,7 @@ describe("magic-actions", () => {
       })
       .transaction();
 
-      const signature = await sendMagicTransaction(
+      const signature = await sendAndConfirmTransaction(
         routerConnection,
         tx,
         [anchor.Wallet.local().payer]
@@ -157,7 +187,7 @@ describe("magic-actions", () => {
       })
       .transaction();
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
       [anchor.Wallet.local().payer]
@@ -165,11 +195,26 @@ describe("magic-actions", () => {
     await sleepWithAnimation(5);
     await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Undelegated Counter PDA!");
   });
+  it("Close Escrow for Action!", async () => {
+    const closeEscrowIx = createCloseEscrowInstruction(
+      escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
+      anchor.Wallet.local().publicKey
+    )
+
+    const tx = new Transaction().add(closeEscrowIx);
+
+    const signature = await sendAndConfirmTransaction(
+      routerConnection,
+      tx,
+      [anchor.Wallet.local().payer]
+    );
+    await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Esrow closed!");
+  });
 });
 
-async function printCounter(program: Program<MagicActions>, counter_pda: web3.PublicKey, leaderboard_pda: web3.PublicKey, routerConnection: web3.Connection, signature: string, message: string) {
+async function printCounter(program: Program<MagicActions>, counter_pda: web3.PublicKey, leaderboard_pda: web3.PublicKey, routerConnection: ConnectionMagicRouter, signature: string, message: string) {
   console.log(message+" Signature: ", signature);
-  const delegationStatus = await getDelegationStatus(routerConnection, counter_pda);
+  const delegationStatus = await routerConnection.getDelegationStatus(counter_pda);
   const leaderboardAccount = await program.account.leaderboard.fetch(leaderboard_pda);
 
   var counterER = "";

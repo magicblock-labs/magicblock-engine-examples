@@ -1,14 +1,14 @@
 use anchor_lang::prelude::*;
 use anchor_lang::Discriminator;
-use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::anchor::{action, commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_rollups_sdk::ephem::{CallHandler, CommitType, MagicAction, MagicInstructionBuilder};
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 
-declare_id!("9msF7eZxvueFy3TwZ4Q1xocXrBgWd8Q9oriRw6jvh32n");
+declare_id!("CrWQv121NBNzXjxVe5pNL7MsT2yW13dMheE4nemoudQ1");
 
-pub const TEST_PDA_SEED: &[u8] = b"test-pda";
+pub const COUNTER_SEED: &[u8] = b"counter";
 pub const LEADERBOARD_SEED: &[u8] = b"leaderboard";
 
 #[ephemeral]
@@ -53,10 +53,11 @@ pub mod magic_actions {
     pub fn delegate(ctx: Context<DelegateCounter>) -> Result<()> {
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
-            &[TEST_PDA_SEED],
+            &[COUNTER_SEED],
             DelegateConfig {
-                commit_frequency_ms: 30_000,
-                validator: Some(pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")),
+                // Optionally set a specific validator from the first remaining account
+                validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
+                ..Default::default()
             },
         )?;
         Ok(())
@@ -76,12 +77,9 @@ pub mod magic_actions {
         let instruction_data =
             anchor_lang::InstructionData::data(&crate::instruction::UpdateLeaderboard {});
 
-        let action_args = ActionArgs {
-            escrow_index: 0,
-            data: instruction_data,
-        };
+        let action_args = ActionArgs::new(instruction_data);
 
-        let accounts = vec![
+        let action_accounts = vec![
             ShortAccountMeta {
                 pubkey: ctx.accounts.leaderboard.key(),
                 is_writable: true,
@@ -91,33 +89,30 @@ pub mod magic_actions {
                 is_writable: false,
             },
         ];
-
-        let call_handler = CallHandler {
-            args: action_args,
-            compute_units: 200_000,
-            escrow_authority: ctx.accounts.payer.to_account_info(),
+        let action = CallHandler {
             destination_program: crate::ID,
-            accounts,
+            accounts: action_accounts,
+            args: action_args,
+            escrow_authority: ctx.accounts.payer.to_account_info(), // Signer authorized to pay transaction fees for action from escrow PDA
+            compute_units: 200_000,
         };
-
-        let magic_builder = MagicInstructionBuilder {
+        let magic_action = MagicInstructionBuilder {
             payer: ctx.accounts.payer.to_account_info(),
             magic_context: ctx.accounts.magic_context.to_account_info(),
             magic_program: ctx.accounts.magic_program.to_account_info(),
             magic_action: MagicAction::Commit(CommitType::WithHandler {
                 commited_accounts: vec![ctx.accounts.counter.to_account_info()],
-                call_handlers: vec![call_handler],
+                call_handlers: vec![action],
             }),
         };
-
-        magic_builder.build_and_invoke()?;
+        magic_action.build_and_invoke()?;
         Ok(())
     }
 }
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init_if_needed, payer = user, space = 8 + 8, seeds = [TEST_PDA_SEED], bump)]
+    #[account(init_if_needed, payer = user, space = 8 + 8, seeds = [COUNTER_SEED], bump)]
     pub counter: Account<'info, Counter>,
     #[account(init_if_needed, payer = user, space = 8 + 8, seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: Account<'info, Leaderboard>,
@@ -128,20 +123,17 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct Increment<'info> {
-    #[account(mut, seeds = [TEST_PDA_SEED], bump)]
+    #[account(mut, seeds = [COUNTER_SEED], bump)]
     pub counter: Account<'info, Counter>,
 }
 
+#[action]
 #[derive(Accounts)]
 pub struct UpdateLeaderboard<'info> {
     #[account(mut, seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: Account<'info, Leaderboard>,
-    /// CHECK: Your program ID
+    /// CHECK: PDA owner depends on: 1) Delegated: Delegation Program; 2) Undelegated: Your program ID
     pub counter: UncheckedAccount<'info>,
-    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
-    pub escrow: UncheckedAccount<'info>,
-    /// CHECK: the correct pda - this will be moved to the end in the future, meaning you can omit this unless needed
-    pub escrow_auth: UncheckedAccount<'info>,
 }
 
 #[delegate]
@@ -158,7 +150,7 @@ pub struct DelegateCounter<'info> {
 pub struct UndelegateCounter<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut, seeds = [TEST_PDA_SEED], bump)]
+    #[account(mut, seeds = [COUNTER_SEED], bump)]
     pub counter: Account<'info, Counter>,
 }
 
@@ -168,7 +160,7 @@ pub struct CommitAndUpdateLeaderboard<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut, seeds = [TEST_PDA_SEED], bump)]
+    #[account(mut, seeds = [COUNTER_SEED], bump)]
     pub counter: Account<'info, Counter>,
 
     /// CHECK: Leaderboard PDA - not mut here, writable set in handler

@@ -332,12 +332,13 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.4.1"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf068e9dc9c71ba2c0e1c3e1cc14ed633428274589f20483ea6680353cf81c00"
+checksum = "b4894a355bcce77c9700df46ca2c56e0c426e9a25d241bd54fb41ad26702ae07"
 dependencies = [
  "base64ct",
  "borsh 1.5.7",
+ "ephemeral-rollups-sdk-attribute-action",
  "ephemeral-rollups-sdk-attribute-commit",
  "ephemeral-rollups-sdk-attribute-delegate",
  "ephemeral-rollups-sdk-attribute-ephemeral",
@@ -349,10 +350,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.4.1"
+name = "ephemeral-rollups-sdk-attribute-action"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5d2622e5f61947543f6f1668434529dc29ac54e9d8512c7bf4f38d67c139485"
+checksum = "a5b1b029ff25a38f221319e7833320d955afcc57f3ef86951163910cc6e495a4"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "ephemeral-rollups-sdk-attribute-commit"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95fac8d716ccd003a70580f3ea999a36e87fa1e3e61ca9b3116f37cde27de73f"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -360,9 +371,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.4.1"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "540da5e9c176532fa92f60fd74915d09cc694bf2849be0cc079ec30499f94f49"
+checksum = "6ebfc3a165203a88148d8842bd4c3c96c7024ccf99a1a36e7a3bc1870dce3ac0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -371,9 +382,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.4.1"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a8d85afb0d8559775441afcafe3b121a629f80ef702678e7daac663e25500ed"
+checksum = "79ebf314db14cf215c64d792ce9c4533e8147f55f94135874454f47f53ecce18"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -589,9 +600,9 @@ dependencies = [
 
 [[package]]
 name = "magicblock-magic-program-api"
-version = "0.2.3"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1076e02cb9260b2400e8b7b21d6c5839e6054a0f5b9d75378811c66fa04d8d40"
+checksum = "ce6ec80d63618a71bb4db324ec5fdca8f85552d0469a51aa063d290256d425f5"
 dependencies = [
  "bincode",
  "serde",
@@ -872,10 +883,11 @@ checksum = "56e6fa9c48d24d85fb3de5ad847117517440f6beceb7798af16b4a87d616b8d0"
 
 [[package]]
 name = "serde"
-version = "1.0.219"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
+checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
+ "serde_core",
  "serde_derive",
 ]
 
@@ -889,10 +901,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_derive"
-version = "1.0.219"
+name = "serde_core"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00"
+checksum = "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
+dependencies = [
+ "serde_derive",
+]
+
+[[package]]
+name = "serde_derive"
+version = "1.0.228"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
 dependencies = [
  "proc-macro2",
  "quote",
