@@ -1,15 +1,16 @@
 use anchor_lang::prelude::*;
 use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
+use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_and_undelegate_accounts};
 
 
-declare_id!("8QudyDCGXZw8jJnV7zAm5Fsr1Suztg6Nu5YCgAf2fuWj");
+declare_id!("7JJKDgfhr5eKjijcWiMkKnEoiLXNRbjctq1D1o8PFuDx");
 
 
-pub const PLAYER: &[u8] = b"playerd";
+pub const PLAYER_SEED: &[u8] = b"playerd2";
 
 #[ephemeral]
 #[program]
@@ -21,6 +22,9 @@ pub mod random_dice_delegated {
             "Initializing player account: {:?}",
             ctx.accounts.player.key()
         );
+        let player = &mut ctx.accounts.player;
+        player.last_result = 0;
+        player.rollnum = 0;
         Ok(())
     }
 
@@ -33,7 +37,11 @@ pub mod random_dice_delegated {
             callback_program_id: ID,
             callback_discriminator: instruction::CallbackRollDiceSimple::DISCRIMINATOR.to_vec(),
             caller_seed: [client_seed; 32],
-            accounts_metas: None,
+            accounts_metas: Some(vec![SerializableAccountMeta {
+                pubkey: ctx.accounts.player.key(),
+                is_signer: false,
+                is_writable: true,
+            }]),
             ..Default::default()
         });
         ctx.accounts
@@ -42,20 +50,28 @@ pub mod random_dice_delegated {
     }
 
     pub fn callback_roll_dice_simple(
-        _ctx: Context<CallbackRollDiceSimpleCtx>,
+        ctx: Context<CallbackRollDiceSimpleCtx>,
         randomness: [u8; 32],
     ) -> Result<()> {
+        let player = &mut ctx.accounts.player;
         let rnd_u8 = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 6);
         msg!("Consuming random number: {:?}", rnd_u8);
+        player.rollnum = player.rollnum.saturating_add(1);
+        msg!("Roll number: {:?}", player.rollnum);
+        player.last_result = rnd_u8;
         Ok(())
     }
 
     // Delegate the player account to use the VRF in the ephemeral rollups
-    pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
+    pub fn delegate(ctx: Context<DelegateInput>, params: DelegateParams) -> Result<()> {
+        let config = DelegateConfig {
+            commit_frequency_ms: params.commit_frequency_ms,
+            validator: params.validator,
+        };
         ctx.accounts.delegate_player(
             &ctx.accounts.user,
-            &[PLAYER, &ctx.accounts.user.key().to_bytes().as_slice()],
-            DelegateConfig::default(),
+            &[PLAYER_SEED, &ctx.accounts.user.key().to_bytes().as_slice()],
+            config,
         )?;
         Ok(())
     }
@@ -76,7 +92,7 @@ pub mod random_dice_delegated {
 pub struct Initialize<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(init_if_needed, payer = payer, space = 8 + 1, seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
+    #[account(init_if_needed, payer = payer, space = 8 + 2, seeds = [PLAYER_SEED, payer.key().to_bytes().as_slice()], bump)]
     pub player: Account<'info, Player>,
     pub system_program: Program<'info, System>,
 }
@@ -86,7 +102,7 @@ pub struct Initialize<'info> {
 pub struct DoRollDiceCtx<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
+    #[account(seeds = [PLAYER_SEED, payer.key().to_bytes().as_slice()], bump)]
     pub player: Account<'info, Player>,
     /// CHECK: The oracle queue
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
@@ -98,7 +114,7 @@ pub struct DoRollDiceCtx<'info> {
 pub struct DoRollDiceDelegatedCtx<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
+    #[account(seeds = [PLAYER_SEED, payer.key().to_bytes().as_slice()], bump)]
     pub player: Account<'info, Player>,
     /// CHECK: The oracle queue
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
@@ -121,6 +137,8 @@ pub struct CallbackRollDiceSimpleCtx<'info> {
     /// enforcing the callback is executed by the VRF program trough CPI
     #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
     pub vrf_program_identity: Signer<'info>,
+    #[account(mut)]
+    pub player: Account<'info, Player>,
 }
 
 #[delegate]
@@ -129,7 +147,7 @@ pub struct DelegateInput<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     /// CHECK The pda to delegate
-    #[account(mut, del, seeds = [PLAYER, user.key().to_bytes().as_slice()], bump)]
+    #[account(mut, del, seeds = [PLAYER_SEED, user.key().to_bytes().as_slice()], bump)]
     pub player: Account<'info, Player>,
 }
 
@@ -138,11 +156,18 @@ pub struct DelegateInput<'info> {
 pub struct Undelegate<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut, seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
+    #[account(mut, seeds = [PLAYER_SEED, payer.key().to_bytes().as_slice()], bump)]
     pub user: Account<'info, Player>,
 }
 
 #[account]
 pub struct Player {
     pub last_result: u8,
+    pub rollnum: u8,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct DelegateParams {
+    pub commit_frequency_ms: u32,
+    pub validator: Option<Pubkey>,
 }
