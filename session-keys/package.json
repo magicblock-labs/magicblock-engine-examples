@@ -6,7 +6,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",
-    "@magicblock-labs/ephemeral-rollups-sdk": "0.6.0",
+    "@magicblock-labs/ephemeral-rollups-sdk": "0.6.5",
     "@magicblock-labs/gum-sdk": "^3.0.10"
   },
   "devDependencies": {

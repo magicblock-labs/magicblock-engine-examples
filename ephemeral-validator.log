@@ -1,0 +1,11 @@
+
+🧙 Magicblock Validator is running! 🪄✦
+🏷️ Validator version: 0.3.1 (Git: 834a831)
+-----------------------------------
+📡 RPC endpoint:       http://0.0.0.0:7799
+🔌 WebSocket endpoint: ws://0.0.0.0:7800
+🖥️ Validator identity: mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
+🗄️ Ledger location:    test-ledger-magicblock/rocksdb
+-----------------------------------
+Ready for connections!
+

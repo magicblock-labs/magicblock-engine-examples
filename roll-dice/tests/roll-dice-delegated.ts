@@ -37,7 +37,7 @@ describe("roll-dice-delegated", () => {
   })
 
   it("Initialized player!", async () => {
-    const tx = await program.methods.initialize().rpc();
+    const tx = await program.methods.initialize().rpc({ skipPreflight: true });
     console.log("Your transaction signature", tx);
   });
 
@@ -50,12 +50,12 @@ describe("roll-dice-delegated", () => {
   });
 
   it("Do Roll Dice Delegated!", async () => {
-    const tx = await ephemeralProgram.methods.rollDiceDelegated(0).rpc();
+    const tx = await ephemeralProgram.methods.rollDiceDelegated(0).rpc({ skipPreflight: true });
     console.log("Your transaction signature", tx);
   });
 
   it("Undelegate Roll Dice!", async () => {
-    const tx = await ephemeralProgram.methods.undelegate().rpc();
+    const tx = await ephemeralProgram.methods.undelegate().rpc({ skipPreflight: true });
     console.log("Your transaction signature", tx);
   });
 

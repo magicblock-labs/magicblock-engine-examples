@@ -2,10 +2,9 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN, Program, web3 } from "@coral-xyz/anchor";
 import { DummyTransfer } from "../target/types/dummy_transfer";
 import {
-  DELEGATION_PROGRAM_ID,
+  DELEGATION_PROGRAM_ID, ConnectionMagicRouter
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { getClosestValidator, sendMagicTransaction } from "magic-router-sdk";
-import { Transaction} from "@solana/web3.js";
+import { PublicKey, sendAndConfirmTransaction, Transaction} from "@solana/web3.js";
 
 // Helper function to print balances of all accounts
 async function printBalances(program: Program<DummyTransfer>, andyBalancePda: web3.PublicKey, bobBalancePda: web3.PublicKey) {
@@ -38,7 +37,7 @@ describe("dummy-transfer", () => {
   anchor.setProvider(provider);
 
   // Configure the router endpoint for Magic Router
-  const routerConnection = new web3.Connection(
+  const routerConnection = new ConnectionMagicRouter(
     process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app",
     {
       wsEndpoint: process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app",
@@ -97,10 +96,11 @@ describe("dummy-transfer", () => {
       })
       .transaction() as Transaction;
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [provider.wallet.payer]
+      [provider.wallet.payer],
+      { skipPreflight: true }
     );
     console.log("✅ Initialized Andy Balance PDA! Signature:", signature);
     } 
@@ -125,10 +125,11 @@ describe("dummy-transfer", () => {
         .add(transferIx)
         .add(initIx);
 
-      const signature = await sendMagicTransaction(
+      const signature = await sendAndConfirmTransaction(
         routerConnection,
         tx,
-        [provider.wallet.payer, bob]
+        [provider.wallet.payer, bob],
+        { skipPreflight: true }
       );
       console.log("✅ Initialized Bob Balance PDA! Signature:", signature);
     } else {
@@ -157,10 +158,11 @@ describe("dummy-transfer", () => {
       })
       .transaction();
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [provider.wallet.payer]
+      [provider.wallet.payer],
+      { skipPreflight: true }
     );
     console.log("✅ Transfered 5 from Andy to Bob");
     console.log("Transfer Tx: ", signature);
@@ -179,7 +181,7 @@ describe("dummy-transfer", () => {
       return;
     }
 
-    const validatorKey = await getClosestValidator(routerConnection);
+    const validatorKey = new PublicKey((await routerConnection.getClosestValidator()).identity);
     const tx = await program.methods
       .delegate({
         commitFrequencyMs: 30000,
@@ -201,10 +203,13 @@ describe("dummy-transfer", () => {
       ])
       .transaction();
 
-    const signature = await sendMagicTransaction(
+    const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [provider.wallet.payer, bob]
+      [provider.wallet.payer, bob],
+      {
+        skipPreflight: true
+      }
     );
 
     // Naive wait for the transaction to be confirmed on the base chain. Better pattern incoming soon.
@@ -233,10 +238,11 @@ describe("dummy-transfer", () => {
       })
       .transaction();
 
-    const signature1 = await sendMagicTransaction(
+    const signature1 = await sendAndConfirmTransaction(
       routerConnection,
       tx1,
-      [provider.wallet.payer]
+      [provider.wallet.payer],
+      { skipPreflight: true }
     );
     console.log("✅ Transfered 5 from Andy to Bob in the ephemeral rollup");
     console.log("Transfer Tx: ", signature1);
@@ -249,10 +255,11 @@ describe("dummy-transfer", () => {
       })
       .transaction();
 
-    const signature2 = await sendMagicTransaction(
+    const signature2 = await sendAndConfirmTransaction(
       routerConnection,
       tx2,
-      [bob]
+      [bob],
+      { skipPreflight: true }
     );
     console.log("✅ Transfered 15 from Bob to Andy in the ephemeral rollup");
     console.log("Transfer Tx: ", signature2);
@@ -276,10 +283,11 @@ describe("dummy-transfer", () => {
       })
       .transaction();
 
-    const signature1 = await sendMagicTransaction(
+    const signature1 = await sendAndConfirmTransaction(
       routerConnection,
       tx1,
-      [provider.wallet.payer]
+      [provider.wallet.payer],
+      { skipPreflight: true }
     );
 
     const tx2 = await program.methods
@@ -289,10 +297,11 @@ describe("dummy-transfer", () => {
       })
       .transaction();
 
-    const signature2 = await sendMagicTransaction(
+    const signature2 = await sendAndConfirmTransaction(
       routerConnection,
       tx2,
-      [bob]
+      [bob],
+      { skipPreflight: true }
     );
 
     console.log("✅ Undelegated Balances of Andy and Bob");

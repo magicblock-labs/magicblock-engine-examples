@@ -115,10 +115,10 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
-"@magicblock-labs/ephemeral-rollups-sdk@0.6.0":
-  version "0.6.0"
-  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.6.0.tgz#fcef4d60fe22199b6a72e65dc7e381e68cceb618"
-  integrity sha512-3Xr/6abOVL2jI4yK8lmbf8J4VKnGvW7J5TOrbRkXmot/Zd426OGJWnWB+tkMdWaNygy+9rAXg6eRNGB0ulj5fQ==
+"@magicblock-labs/ephemeral-rollups-sdk@0.6.5":
+  version "0.6.5"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.6.5.tgz#54b15cc1dc56aed4efbece0b6ea4f0cb740cca9d"
+  integrity sha512-z/6lNa5hZ7jJwmdHLvlUX3seDC+JyrKyHOEv3G4UTNAYIawIJpeVyS7H94S6EXKbEYT690Sa3GqKLOWUCRZdrA==
   dependencies:
     "@phala/dcap-qvl-web" "^0.2.7"
     "@solana/web3.js" "^1.98.0"

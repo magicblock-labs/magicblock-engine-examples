@@ -9,12 +9,12 @@ describe("roll-dice", () => {
   const program = anchor.workspace.RandomDice as Program<RandomDice>;
 
   it("Initialized player!", async () => {
-    const tx = await program.methods.initialize().rpc();
+    const tx = await program.methods.initialize().rpc({ skipPreflight: true });
     console.log("Your transaction signature", tx);
   });
 
   it("Do Roll Dice!", async () => {
-    const tx = await program.methods.rollDice(0).rpc();
+    const tx = await program.methods.rollDice(0).rpc({ skipPreflight: true });
     console.log("Your transaction signature", tx);
     const playerPk = web3.PublicKey.findProgramAddressSync([Buffer.from("playerd"), anchor.getProvider().publicKey.toBytes()], program.programId)[0];
     let player =  await program.account.player.fetch(playerPk, "processed");
