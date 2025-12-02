@@ -25,7 +25,8 @@ const App: React.FC = () => {
     let { connection } = useConnection();
     const ephemeralConnection  = useRef<Connection | null>(null);
     const provider = useRef<Provider>(new SimpleProvider(connection));
-    const { publicKey, sendTransaction } = useWallet();
+    const { publicKey, signTransaction: walletSignTransaction } = useWallet();
+    const signTransaction = walletSignTransaction || (async (tx: Transaction) => { throw new Error('Wallet not connected'); });
     const tempKeypair = useRef<Keypair | null>(null);
     const [counter, setCounter] = useState<number>(0);
     const [ephemeralCounter, setEphemeralCounter] = useState<number>(0);
@@ -33,6 +34,7 @@ const App: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [transactionError, setTransactionError] = useState<string | null>(null);
     const [transactionSuccess, setTransactionSuccess] = useState<string | null>(null);
+    const [sessionTokenExists, setSessionTokenExists] = useState<boolean>(false);
     const counterProgramClient = useRef<Program | null>(null);
     const [counterPda, setCounterPda] = useState<PublicKey | null>(null);
     let counterSubscriptionId = useRef<number | null>(null);
@@ -141,6 +143,10 @@ const App: React.FC = () => {
             );
             sessionTokenPDA.current = pda;
             console.log("Session Token PDA:", pda.toString());
+            
+            // Check if session token exists
+            const accountInfo = await connection.getAccountInfo(pda);
+            setSessionTokenExists(!!accountInfo);
         };
         
         initSessionManager().catch(console.error);
@@ -223,34 +229,64 @@ const App: React.FC = () => {
      * Increase counter transaction
      */
     const increaseCounterTx = useCallback(async () => {
-        if (!tempKeypair.current) {
-            console.error("tempKeypair not available");
-            return;
-        }
         if (!counterPda) {
             console.error("counterPda not available");
             return;
         }
-        if (!sessionTokenPDA.current) {
-            console.error("sessionTokenPDA not available");
-            return;
-        }
-        if(!isDelegated){
+
+        if (sessionTokenExists) {
+            if (!tempKeypair.current) {
+                console.error("tempKeypair not available");
+                return;
+            }
             const accountTmpWallet = await connection.getAccountInfo(tempKeypair.current.publicKey);
             if (!accountTmpWallet || accountTmpWallet.lamports <= 0.01 * LAMPORTS_PER_SOL) {
                 await transferToTempKeypair()
             }
+        } else {
+            if (!publicKey) {
+                console.error("publicKey not available");
+                return;
+            }
         }
 
-        const transaction = await counterProgramClient.current?.methods
-            .increment()
-            .accounts({
-                counter: counterPda,
-                sessionToken: sessionTokenPDA.current,
-                payer: tempKeypair.current.publicKey,
-            }).transaction() as Transaction;
+        const payer = sessionTokenExists ? tempKeypair.current!.publicKey : publicKey!;
 
-        // Add instruction to print to the noop program and and make the transaction unique
+         const incrementAccounts: any = {
+             counter: counterPda,
+             payer: payer,
+         };
+         
+         // Use sessionToken if session exists, otherwise use program ID as placeholder
+         if (sessionTokenExists) {
+             if (!sessionTokenPDA.current) {
+                 console.error("sessionTokenPDA not available");
+                 return;
+             }
+             incrementAccounts.sessionToken = sessionTokenPDA.current;
+         } else {
+             incrementAccounts.sessionToken = COUNTER_PROGRAM;
+         }
+
+         let transaction = await counterProgramClient.current?.methods
+             .increment()
+             .accounts(incrementAccounts)
+             .transaction() as Transaction;
+
+        // Check if counter account exists, if not add initialize instruction
+        const accountInfo = await connection.getAccountInfo(counterPda);
+        if (!accountInfo) {
+            console.log("Counter not initialized, adding initialize instruction");
+            const initTx = await counterProgramClient.current?.methods
+                .initialize()
+                .accounts({
+                    user: payer,
+                })
+                .transaction() as Transaction;
+            transaction.add(...initTx.instructions);
+        }
+
+        // Add instruction to print to the noop program and make the transaction unique
         const noopInstruction = new TransactionInstruction({
             programId: new PublicKey('noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV'),
             keys: [],
@@ -259,76 +295,74 @@ const App: React.FC = () => {
         transaction.add(noopInstruction);
 
         setIsSubmitting(true);
-        setTransactionError(null);
-        setTransactionSuccess(null);
-        try {
-            let connectionToUse = isDelegated ? ephemeralConnection.current : connection;
-            if (!connectionToUse) return;
-            
-            const {
-                value: { blockhash, lastValidBlockHeight }
-            } = await connectionToUse.getLatestBlockhashAndContext();
-            if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
-            if (!transaction.feePayer) transaction.feePayer = tempKeypair.current.publicKey;
-            
-            transaction.sign(tempKeypair.current);
-            
-            const signature = await connectionToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
-            await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
-            console.log(`Transaction confirmed: ${signature}`);
-            setTransactionSuccess(`Counter incremented`);
+         setTransactionError(null);
+         setTransactionSuccess(null);
+         try {
+             if (sessionTokenExists && tempKeypair.current) {
+                 // Sign with temp keypair when session token exists
+                 let connectionToUse = isDelegated ? ephemeralConnection.current : connection;
+                 if (!connectionToUse) return;
+                 
+                 const {
+                     value: { blockhash, lastValidBlockHeight }
+                 } = await connectionToUse.getLatestBlockhashAndContext();
+                 if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
+                 if (!transaction.feePayer) transaction.feePayer = payer;
+                 
+                 transaction.sign(tempKeypair.current);
+                 const signature = await connectionToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
+                 await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 console.log(`Transaction confirmed: ${signature}`);
+             } else {
+                 // Sign with wallet when no session token
+                 let connectionToUse = isDelegated ? ephemeralConnection.current : connection;
+                 if (!connectionToUse) return;
+                 
+                 const {
+                     value: { blockhash, lastValidBlockHeight }
+                 } = await connectionToUse.getLatestBlockhashAndContext();
+                 if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
+                 if (!transaction.feePayer) transaction.feePayer = payer;
+                 
+                 try {
+                     console.log("Attempting wallet signature with:", {
+                         instructions: transaction.instructions.length,
+                         feePayer: transaction.feePayer?.toBase58(),
+                         recentBlockhash: transaction.recentBlockhash
+                     });
+                     const signedTransaction = await signTransaction(transaction);
+                     const signature = await connectionToUse.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+                     await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                     console.log(`Transaction confirmed: ${signature}`);
+                 } catch (walletErr: any) {
+                     console.error("Wallet error details:", {
+                         message: walletErr.message,
+                         name: walletErr.name,
+                         stack: walletErr.stack
+                     });
+                     throw walletErr;
+                 }
+             }
+             setTransactionSuccess(`Counter incremented`);
         } catch (error) {
             setTransactionError(`Transaction failed: ${error}`);
         } finally {
             setIsSubmitting(false);
         }
-    }, [isDelegated, counterPda, sessionTokenPDA, connection, transferToTempKeypair]);
-
-    /**
-     * Initialize counter transaction
-     */
-    const initializeCounterTx = useCallback(async () => {
-        if (!publicKey || !counterProgramClient.current || !counterPda) return;
-
-        const transaction = await counterProgramClient.current.methods
-            .initialize()
-            .accounts({
-                user: publicKey,
-            })
-            .transaction();
-
-        setIsSubmitting(true);
-        setTransactionError(null);
-        setTransactionSuccess(null);
-        try {
-            const {
-                value: { blockhash, lastValidBlockHeight }
-            } = await connection.getLatestBlockhashAndContext();
-            if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
-            if (!transaction.feePayer) transaction.feePayer = publicKey;
-
-            const signature = await sendTransaction(transaction, connection);
-            await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
-            console.log(`Transaction confirmed: ${signature}`);
-            setTransactionSuccess(`Counter initialized successfully`);
-        } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [publicKey, counterProgramClient, counterPda, connection, sendTransaction]);
+    }, [isDelegated, counterPda, sessionTokenPDA, connection, transferToTempKeypair, publicKey, sessionTokenExists, signTransaction]);
 
     /**
      * Create session transaction
      */
     const createSessionTx = useCallback(async () => {
         if (!publicKey || !tempKeypair.current || !sessionTokenManager.current) return;
+        if (!counterPda) return;
         
         const topUp = true;
         const validUntilBN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600); // valid for 1 hour
         const topUpLamportsBN = new anchor.BN(0.0005 * LAMPORTS_PER_SOL);
 
-        const transaction = await sessionTokenManager.current.program.methods
+        let transaction = await sessionTokenManager.current.program.methods
             .createSession(topUp, validUntilBN, topUpLamportsBN)
             .accounts({
                 targetProgram: COUNTER_PROGRAM,
@@ -337,12 +371,24 @@ const App: React.FC = () => {
             })
             .transaction();
 
+        // Check if counter account exists, if not add initialize instruction
+        const accountInfo = await connection.getAccountInfo(counterPda);
+        if (!accountInfo && counterProgramClient.current) {
+            console.log("Counter not initialized, adding initialize instruction");
+            const initTx = await counterProgramClient.current.methods
+                .initialize()
+                .accounts({
+                    user: publicKey,
+                })
+                .transaction() as Transaction;
+            transaction.add(...initTx.instructions);
+        }
+
         setIsSubmitting(true);
         setTransactionError(null);
         setTransactionSuccess(null);
         try {
             const {
-                context: { slot: minContextSlot },
                 value: { blockhash, lastValidBlockHeight }
             } = await connection.getLatestBlockhashAndContext();
             if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
@@ -352,30 +398,60 @@ const App: React.FC = () => {
             transaction.sign(tempKeypair.current);
             
             // Then sign with wallet adapter
-            const signature = await sendTransaction(transaction, connection, { minContextSlot });
+            const signedTransaction = await signTransaction(transaction);
+            const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
             await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
             console.log(`Transaction confirmed: ${signature}`);
             setTransactionSuccess(`Session created successfully`);
-        } catch (error) {
+            setSessionTokenExists(true);
+            } catch (error) {
             setTransactionError(`Transaction failed: ${error}`);
-        } finally {
+            } finally {
             setIsSubmitting(false);
-        }
-    }, [publicKey, connection, sendTransaction]);
+            }
+            }, [publicKey, connection, signTransaction, tempKeypair]);
 
     /**
      * Delegate PDA transaction
      */
     const delegatePdaTx = useCallback(async () => {
         console.log("Delegate PDA transaction");
-        console.log(tempKeypair.current);
-        if (!tempKeypair.current) return;
         if (!counterPda) return;
-        if (!sessionTokenPDA.current) return;
-        const accountTmpWallet = await connection.getAccountInfo(tempKeypair.current.publicKey);
-        if (!accountTmpWallet || accountTmpWallet.lamports <= 0.01 * LAMPORTS_PER_SOL) {
-            await transferToTempKeypair()
+
+        if (sessionTokenExists) {
+            if (!tempKeypair.current) {
+                console.error("tempKeypair not available");
+                return;
+            }
+            const accountTmpWallet = await connection.getAccountInfo(tempKeypair.current.publicKey);
+            if (!accountTmpWallet || accountTmpWallet.lamports <= 0.01 * LAMPORTS_PER_SOL) {
+                await transferToTempKeypair()
+            }
+        } else {
+            if (!publicKey) {
+                console.error("publicKey not available");
+                return;
+            }
         }
+
+        const payer = sessionTokenExists ? tempKeypair.current!.publicKey : publicKey!;
+        
+        const delegateAccounts: any = {
+            payer: payer,
+            pda: counterPda,
+        };
+        
+        // Use sessionToken if session exists, otherwise use program ID as placeholder
+        if (sessionTokenExists) {
+            if (!sessionTokenPDA.current) {
+                console.error("sessionTokenPDA not available");
+                return;
+            }
+            delegateAccounts.sessionToken = sessionTokenPDA.current;
+        } else {
+            delegateAccounts.sessionToken = COUNTER_PROGRAM;
+        }
+        
         const remainingAccounts =
             connection.rpcEndpoint.includes("localhost") ||
             connection.rpcEndpoint.includes("127.0.0.1")
@@ -389,81 +465,119 @@ const App: React.FC = () => {
                     },
                 ]
                 : [];
-        const transaction = await counterProgramClient.current?.methods
-            .delegate()
-            .accounts({
-                payer: tempKeypair.current.publicKey,
-                pda: counterPda,
-                sessionToken: sessionTokenPDA.current,
-            })
-            .remainingAccounts(remainingAccounts)
-            .transaction() as Transaction;
-        
-        setIsSubmitting(true);
-        setTransactionError(null);
-        setTransactionSuccess(null);
-        try {
-            const {
+
+                const transaction = await counterProgramClient.current?.methods
+                .delegate()
+                .accounts(delegateAccounts)
+                .remainingAccounts(remainingAccounts)
+                .transaction() as Transaction;
+                
+                setIsSubmitting(true);
+                setTransactionError(null);
+                setTransactionSuccess(null);
+                try {
+                const {
                 value: { blockhash, lastValidBlockHeight }
-            } = await connection.getLatestBlockhashAndContext();
-            if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
-            if (!transaction.feePayer) transaction.feePayer = tempKeypair.current.publicKey;
-            
-            transaction.sign(tempKeypair.current);
-            
-            const signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
-            await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
-            setEphemeralCounter(Number(counter));
-            console.log(`Transaction confirmed: ${signature}`);
-            setTransactionSuccess(`Delegation successful`);
-        } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [counterPda, sessionTokenPDA, connection, counter, transferToTempKeypair]);
+                } = await connection.getLatestBlockhashAndContext();
+                if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
+                if (!transaction.feePayer) transaction.feePayer = payer;
+                
+                if (sessionTokenExists && tempKeypair.current) {
+                    // Sign with temp keypair when session token exists
+                    transaction.sign(tempKeypair.current);
+                    const signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
+                    await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                } else {
+                    // Sign with wallet when no session token
+                    const signedTransaction = await signTransaction(transaction);
+                    const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+                    await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                }
+                setEphemeralCounter(Number(counter));
+                console.log(`Transaction confirmed`);
+                setTransactionSuccess(`Delegation successful`);
+                } catch (error) {
+                setTransactionError(`Transaction failed: ${error}`);
+                } finally {
+                setIsSubmitting(false);
+                }
+                }, [counterPda, sessionTokenPDA, connection, counter, transferToTempKeypair, publicKey, sessionTokenExists, signTransaction, tempKeypair]);
 
     /**
      * Undelegate PDA transaction
      */
     const undelegatePdaTx = useCallback(async () => {
-        if (!tempKeypair.current) return;
         if (!counterPda) return;
-        if (!sessionTokenPDA.current) return;
-        if (!ephemeralConnection.current) return;
         console.log("Undelegate PDA transaction");
+
+        if (sessionTokenExists) {
+            if (!tempKeypair.current) {
+                console.error("tempKeypair not available");
+                return;
+            }
+        } else {
+            if (!publicKey) {
+                console.error("publicKey not available");
+                return;
+            }
+        }
+
+        const payer = sessionTokenExists ? tempKeypair.current!.publicKey : publicKey!;
+
+        // Always use ephemeral connection for undelegate
+        const connToUse = ephemeralConnection.current;
+        if (!connToUse) return;
         
+        const undelegateAccounts: any = {
+            payer: payer,
+            counter: counterPda,
+        };
+        
+        // Use sessionToken if session exists, otherwise use program ID as placeholder
+        if (sessionTokenExists) {
+            if (!sessionTokenPDA.current) {
+                console.error("sessionTokenPDA not available");
+                return;
+            }
+            undelegateAccounts.sessionToken = sessionTokenPDA.current;
+        } else {
+            undelegateAccounts.sessionToken = COUNTER_PROGRAM;
+        }
+
         const transaction = await counterProgramClient.current?.methods
             .undelegate()
-            .accounts({
-                payer: tempKeypair.current.publicKey,
-                counter: counterPda,
-                sessionToken: sessionTokenPDA.current,
-            })
+            .accounts(undelegateAccounts)
             .transaction() as Transaction;
 
         setIsSubmitting(true);
-        setTransactionError(null);
-        setTransactionSuccess(null);
-        try {
-            const {
-                value: { blockhash, lastValidBlockHeight }
-            } = await ephemeralConnection.current.getLatestBlockhashAndContext();
-            if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
-            if (!transaction.feePayer) transaction.feePayer = tempKeypair.current.publicKey;
-            
-            transaction.sign(tempKeypair.current);
-            
-            const signature = await ephemeralConnection.current.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
-            await ephemeralConnection.current.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
-            console.log(`Transaction confirmed: ${signature}`);
-            setTransactionSuccess(`Undelegation successful`);
-        } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [tempKeypair, counterPda, sessionTokenPDA, ephemeralConnection]);
+         setTransactionError(null);
+         setTransactionSuccess(null);
+         try {
+             const {
+                 value: { blockhash, lastValidBlockHeight }
+             } = await connToUse.getLatestBlockhashAndContext();
+             if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
+             if (!transaction.feePayer) transaction.feePayer = payer;
+             
+             if (sessionTokenExists && tempKeypair.current) {
+                 // Sign with temp keypair when session token exists
+                 transaction.sign(tempKeypair.current);
+                 const signature = await connToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
+                 await connToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+             } else {
+                 // Sign with wallet when no session token
+                 const signedTransaction = await signTransaction(transaction);
+                 const signature = await connToUse.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: true });
+                 await connToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+             }
+             console.log(`Transaction confirmed`);
+             setTransactionSuccess(`Undelegation successful`);
+         } catch (error) {
+             setTransactionError(`Transaction failed: ${error}`);
+         } finally {
+             setIsSubmitting(false);
+         }
+    }, [counterPda, sessionTokenPDA, publicKey, sessionTokenExists, signTransaction, ephemeralConnection]);
 
     /**
      * Revoke session transaction
@@ -479,26 +593,28 @@ const App: React.FC = () => {
             .transaction();
 
         setIsSubmitting(true);
-        setTransactionError(null);
-        setTransactionSuccess(null);
-        try {
-            const {
-                value: { blockhash, lastValidBlockHeight }
-            } = await connection.getLatestBlockhashAndContext();
-            if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
-            if (!transaction.feePayer) transaction.feePayer = publicKey;
+         setTransactionError(null);
+         setTransactionSuccess(null);
+         try {
+             const {
+                 value: { blockhash, lastValidBlockHeight }
+             } = await connection.getLatestBlockhashAndContext();
+             if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
+             if (!transaction.feePayer) transaction.feePayer = publicKey;
 
-            // Sign with wallet adapter
-            const signature = await sendTransaction(transaction, connection);
-            await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
-            console.log(`Transaction confirmed: ${signature}`);
-            setTransactionSuccess(`Session revoked successfully`);
-        } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [publicKey, sessionTokenPDA, sessionTokenManager, connection, sendTransaction]);
+             // Sign with wallet adapter
+             const signedTransaction = await signTransaction(transaction);
+             const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+             await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+             console.log(`Transaction confirmed: ${signature}`);
+             setTransactionSuccess(`Session revoked successfully`);
+             setSessionTokenExists(false);
+             } catch (error) {
+             setTransactionError(`Transaction failed: ${error}`);
+             } finally {
+             setIsSubmitting(false);
+             }
+    }, [publicKey, sessionTokenPDA, sessionTokenManager, connection, signTransaction]);
 
      /**
       * -------
@@ -521,9 +637,6 @@ const App: React.FC = () => {
             <h1>Ephemeral Counter</h1>
 
             <div className="button-container">
-                <Button title={"Initialize Counter"} resetGame={initializeCounterTx} disabled={false}/>
-                <Button title={"Create Session"} resetGame={createSessionTx} disabled={false}/>
-                <Button title={"Revoke Session"} resetGame={revokeSessionTx} disabled={false}/>
                 <Button title={"Delegate"} resetGame={delegateTx} disabled={isDelegated}/>
                 <Button title={"Undelegate"} resetGame={undelegateTx} disabled={!isDelegated}/>
             </div>
@@ -541,6 +654,14 @@ const App: React.FC = () => {
                     updateSquares={(index: string | number) => updateCounter(Number(index))}
                     clsName={isDelegated ? ephemeralCounter.toString() : ''}
                 />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '20px' }}>
+                {!sessionTokenExists ? (
+                    <button onClick={createSessionTx} style={{ padding: '8px 12px', margin: '0px', background: 'transparent', border: '2px solid #eee', color: '#eee', width: '150px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>Create Session</button>
+                ) : (
+                    <button onClick={revokeSessionTx} style={{ padding: '8px 12px', margin: '0px', background: 'transparent', border: '2px solid #eee', color: '#eee', width: '150px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>Revoke Session</button>
+                )}
             </div>
             {isSubmitting && (<div style={{
                     display: 'flex',
