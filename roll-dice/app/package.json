@@ -39,6 +39,7 @@
     "@radix-ui/react-tooltip": "^1.1.6",
     "@solana/web3.js": "latest",
     "@coral-xyz/anchor": "^0.31.0",
+    "@magicblock-labs/ephemeral-rollups-sdk": "latest",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

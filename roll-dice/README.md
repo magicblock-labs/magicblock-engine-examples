@@ -68,3 +68,4 @@ yarn dev
 ```
 
 The application will be available at `http://localhost:3000` (or another port if 3000 is already in use).
+The delegated dice demo will be available at `http://localhost:3000/delegated`.
