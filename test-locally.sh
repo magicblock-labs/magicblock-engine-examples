@@ -58,6 +58,8 @@ run_test() {
       current_status="Confirming $prog_id"
     elif grep -q "Running test suite\|Running.*ts-mocha\|Running.*vitest\|ts-mocha.*tests" "$test_log"; then
       current_status="Running tests"
+    elif grep -q " RUN  v" "$test_log"; then
+      current_status="Running tests"
     elif grep -q "passing\|failing" "$test_log"; then
       current_status="Running tests"
     elif grep -q "Resolving packages" "$test_log" && ! grep -q "success Already" "$test_log"; then
