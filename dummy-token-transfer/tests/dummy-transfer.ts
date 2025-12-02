@@ -99,7 +99,8 @@ describe("dummy-transfer", () => {
     const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [provider.wallet.payer]
+      [provider.wallet.payer],
+      { skipPreflight: true }
     );
     console.log("✅ Initialized Andy Balance PDA! Signature:", signature);
     } 
@@ -127,7 +128,8 @@ describe("dummy-transfer", () => {
       const signature = await sendAndConfirmTransaction(
         routerConnection,
         tx,
-        [provider.wallet.payer, bob]
+        [provider.wallet.payer, bob],
+        { skipPreflight: true }
       );
       console.log("✅ Initialized Bob Balance PDA! Signature:", signature);
     } else {
@@ -159,7 +161,8 @@ describe("dummy-transfer", () => {
     const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [provider.wallet.payer]
+      [provider.wallet.payer],
+      { skipPreflight: true }
     );
     console.log("✅ Transfered 5 from Andy to Bob");
     console.log("Transfer Tx: ", signature);
@@ -203,7 +206,10 @@ describe("dummy-transfer", () => {
     const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [provider.wallet.payer, bob]
+      [provider.wallet.payer, bob],
+      {
+        skipPreflight: true
+      }
     );
 
     // Naive wait for the transaction to be confirmed on the base chain. Better pattern incoming soon.
@@ -235,7 +241,8 @@ describe("dummy-transfer", () => {
     const signature1 = await sendAndConfirmTransaction(
       routerConnection,
       tx1,
-      [provider.wallet.payer]
+      [provider.wallet.payer],
+      { skipPreflight: true }
     );
     console.log("✅ Transfered 5 from Andy to Bob in the ephemeral rollup");
     console.log("Transfer Tx: ", signature1);
@@ -251,7 +258,8 @@ describe("dummy-transfer", () => {
     const signature2 = await sendAndConfirmTransaction(
       routerConnection,
       tx2,
-      [bob]
+      [bob],
+      { skipPreflight: true }
     );
     console.log("✅ Transfered 15 from Bob to Andy in the ephemeral rollup");
     console.log("Transfer Tx: ", signature2);
@@ -278,7 +286,8 @@ describe("dummy-transfer", () => {
     const signature1 = await sendAndConfirmTransaction(
       routerConnection,
       tx1,
-      [provider.wallet.payer]
+      [provider.wallet.payer],
+      { skipPreflight: true }
     );
 
     const tx2 = await program.methods
@@ -291,7 +300,8 @@ describe("dummy-transfer", () => {
     const signature2 = await sendAndConfirmTransaction(
       routerConnection,
       tx2,
-      [bob]
+      [bob],
+      { skipPreflight: true }
     );
 
     console.log("✅ Undelegated Balances of Andy and Bob");

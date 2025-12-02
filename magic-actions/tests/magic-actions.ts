@@ -51,7 +51,8 @@ describe("magic-actions", () => {
     const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [anchor.Wallet.local().payer]
+      [anchor.Wallet.local().payer],
+      { skipPreflight: true }
     );
     await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Initialized Counter PDA!");
   });
@@ -67,7 +68,8 @@ describe("magic-actions", () => {
     const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [anchor.Wallet.local().payer]
+      [anchor.Wallet.local().payer],
+      { skipPreflight: true }
     );
     console.log("✅ Incremented Counter PDA! Signature:", signature);
   });
@@ -85,7 +87,8 @@ describe("magic-actions", () => {
     const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [anchor.Wallet.local().payer]
+      [anchor.Wallet.local().payer],
+      { skipPreflight: true }
     );
 
     await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Updated Leaderboard!");
@@ -135,7 +138,8 @@ describe("magic-actions", () => {
     const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [anchor.Wallet.local().payer]
+      [anchor.Wallet.local().payer],
+      { skipPreflight: true }
     );
 
     await sleepWithAnimation(10); // ensure the delegation is processed
@@ -154,7 +158,8 @@ describe("magic-actions", () => {
     const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [anchor.Wallet.local().payer]
+      [anchor.Wallet.local().payer],
+      { skipPreflight: true }
     );
 
     await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Incremented Counter PDA!");
@@ -172,7 +177,8 @@ describe("magic-actions", () => {
       const signature = await sendAndConfirmTransaction(
         routerConnection,
         tx,
-        [anchor.Wallet.local().payer]
+        [anchor.Wallet.local().payer],
+        { skipPreflight: true }
       );
 
       await sleepWithAnimation(5);
@@ -190,7 +196,8 @@ describe("magic-actions", () => {
     const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [anchor.Wallet.local().payer]
+      [anchor.Wallet.local().payer],
+      { skipPreflight: true }
     );
     await sleepWithAnimation(5);
     await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Undelegated Counter PDA!");
@@ -206,7 +213,8 @@ describe("magic-actions", () => {
     const signature = await sendAndConfirmTransaction(
       routerConnection,
       tx,
-      [anchor.Wallet.local().payer]
+      [anchor.Wallet.local().payer],
+      { skipPreflight: true }
     );
     await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Esrow closed!");
   });

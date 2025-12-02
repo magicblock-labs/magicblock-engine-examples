@@ -1,11 +1,16 @@
 #!/bin/bash
 set -o monitor
 
+# Suppress job control messages
+set +m
+
 SOLANA_PID=""
 EPHEMERAL_PID=""
 PASSED_TESTS=()
 FAILED_TESTS=()
-declare -A FAILED_TESTS_ERRORS
+FAILED_TESTS_NAMES=()
+FAILED_TESTS_ERRORS=()
+TEST_COUNT=0
 
 # Test runner function
 run_test() {
@@ -13,9 +18,11 @@ run_test() {
   local test_command=$2
   local test_log="/tmp/test_${test_name}.log"
   
+  ((TEST_COUNT++))
+  
   echo ""
   echo "========================================"
-  echo "Testing: $test_name"
+  echo "Testing: $TEST_COUNT. $test_name"
   echo "========================================"
   echo ""
   
@@ -28,8 +35,12 @@ run_test() {
   
   # Progress indicator spinner
   local spinner=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+  local dots=("." ".." "...")
   local spinner_idx=0
+  local dots_idx=0
   local last_status=""
+  local status_start_time=$SECONDS
+  local stage_times=""
   
   # Monitor test progress
   while kill -0 $test_pid 2>/dev/null; do
@@ -41,36 +52,61 @@ run_test() {
     
     if grep -q "Deploying program" "$test_log"; then
       local prog_name=$(grep "Deploying program" "$test_log" | tail -1 | sed 's/.*Deploying program "\([^"]*\)".*/\1/')
-      current_status="Deploying $prog_name..."
+      current_status="Deploying $prog_name"
     elif grep -q "Waiting for program" "$test_log"; then
       local prog_id=$(grep "Waiting for program" "$test_log" | tail -1 | sed 's/.*for program \([^ ]*\).*/\1/')
-      current_status="Confirming $prog_id..."
-    elif grep -q "Running.*ts-mocha\|Running.*vitest" "$test_log"; then
-      current_status="Running tests..."
+      current_status="Confirming $prog_id"
+    elif grep -q "Running test suite\|Running.*ts-mocha\|Running.*vitest\|ts-mocha.*tests" "$test_log"; then
+      current_status="Running tests"
+    elif grep -q "passing\|failing" "$test_log"; then
+      current_status="Running tests"
     elif grep -q "Resolving packages" "$test_log" && ! grep -q "success Already" "$test_log"; then
-      current_status="Resolving dependencies..."
+      current_status="Resolving dependencies"
     elif grep -q "success Already" "$test_log" && ! grep -q "Running.*tests" "$test_log"; then
-      current_status="Dependencies installed..."
+      current_status="Dependencies installed"
     elif grep -q "Finished.*target" "$test_log"; then
-      local finish_type=$(echo "$last_line" | sed 's/.*Finished \(.*\) target.*/\1/')
-      current_status="Building ($finish_type)..."
+      current_status="Building"
     elif grep -q "Compiling\|Checking" "$test_log"; then
       local crate=$(echo "$last_line" | sed 's/.*Compiling \([^ ]*\).*/\1/' | sed 's/.*Checking \([^ ]*\).*/\1/')
-      current_status="Building $crate..."
+      current_status="Building $crate"
     else
-      current_status="Preparing..."
+      current_status="Preparing"
     fi
     
     # Update status line (carriage return to overwrite)
     if [ "$current_status" != "$last_status" ]; then
-      printf "\r  ${spinner[$spinner_idx]} $current_status                                    "
+      # Record time for previous status if it's a main stage
+      if [ -n "$last_status" ]; then
+        case "$last_status" in
+          Building*|*Building)
+            local elapsed=$((SECONDS - status_start_time))
+            stage_times+="Building:$elapsed "
+            ;;
+          Deploying*|*Deploying)
+            local elapsed=$((SECONDS - status_start_time))
+            stage_times+="Deploying:$elapsed "
+            ;;
+          Installing*|*Installing|*Resolving*|*Dependencies*)
+            local elapsed=$((SECONDS - status_start_time))
+            stage_times+="Installing:$elapsed "
+            ;;
+          Running*|*tests*|*Testing*)
+            local elapsed=$((SECONDS - status_start_time))
+            stage_times+="Testing:$elapsed "
+            ;;
+        esac
+      fi
+      status_start_time=$SECONDS
+      echo -ne "\r  ${spinner[$spinner_idx]} $current_status${dots[$dots_idx]}                                    "
       last_status="$current_status"
     else
-      # Just update spinner even if status unchanged
-      printf "\r  ${spinner[$spinner_idx]} $current_status                                    "
+      # Update with current elapsed time for the running stage
+      local current_elapsed=$((SECONDS - status_start_time))
+      echo -ne "\r  ${spinner[$spinner_idx]} $current_status (${current_elapsed}s)${dots[$dots_idx]}                                    "
     fi
     
     spinner_idx=$(( (spinner_idx + 1) % 10 ))
+    dots_idx=$(( (dots_idx + 1) % 3 ))
     sleep 0.5
   done
   
@@ -84,27 +120,79 @@ run_test() {
   fi
   
   # Clear the progress line
-  printf "\r                                         \r"
+  echo -ne "\r                                                                                  \r"
+  
+  # Record final status time if it's a main stage
+  if [ -n "$last_status" ]; then
+    case "$last_status" in
+      Building*|*Building)
+        local elapsed=$((SECONDS - status_start_time))
+        stage_times+="Building:$elapsed "
+        ;;
+      Deploying*|*Deploying)
+        local elapsed=$((SECONDS - status_start_time))
+        stage_times+="Deploying:$elapsed "
+        ;;
+      Installing*|*Installing|*Resolving*|*Dependencies*)
+        local elapsed=$((SECONDS - status_start_time))
+        stage_times+="Installing:$elapsed "
+        ;;
+      Running*|*tests*|*Testing*)
+        local elapsed=$((SECONDS - status_start_time))
+        stage_times+="Testing:$elapsed "
+        ;;
+    esac
+  fi
+  
+  # If tests ran but we didn't capture testing time, add it
+  if grep -q "passing\|failing" "$test_log" && ! echo "$stage_times" | grep -q "Testing"; then
+    stage_times+="Testing:1 "
+  fi
+  
+  # Trim trailing space
+  stage_times="${stage_times% }"
+  
+  # Debug: remove this line after testing
+  # echo "DEBUG stage_times: [$stage_times]" >&2
   
   # If test failed, show all output; if passed, show only summary
   if [ "$test_failed" = true ]; then
     # Show full output on failure
     cat "$test_log"
   else
-    # Show only stage completion markers on success
+    # Show only stage completion markers on success with timing
     local stages_completed=""
-    if grep -q "Finished.*profile" "$test_log"; then
-      stages_completed+="✓ Building  "
+    
+    # Parse stage_times and display with timing
+    if [ -n "$stage_times" ]; then
+      for stage_timing in $stage_times; do
+        local stage_name="${stage_timing%:*}"
+        local duration="${stage_timing#*:}"
+        case "$stage_name" in
+          "Building") stages_completed+="✓ Building (${duration}s)  " ;;
+          "Deploying") stages_completed+="✓ Deploying (${duration}s)  " ;;
+          "Installing") stages_completed+="✓ Installing (${duration}s)  " ;;
+          "Testing") stages_completed+="✓ Testing (${duration}s)" ;;
+        esac
+      done
     fi
-    if grep -q "Deploy success" "$test_log"; then
-      stages_completed+="✓ Deploying  "
+    
+    # Fallback if no stage_times were captured
+    if [ -z "$stages_completed" ]; then
+      if grep -q "Finished.*profile" "$test_log"; then
+        stages_completed+="✓ Building  "
+      fi
+      if grep -q "Deploy success" "$test_log"; then
+        stages_completed+="✓ Deploying  "
+      fi
+      if grep -q "yarn install\|success Already" "$test_log"; then
+        stages_completed+="✓ Installing  "
+      fi
+      if grep -q "passing" "$test_log"; then
+        stages_completed+="✓ Testing"
+      fi
     fi
-    if grep -q "yarn install\|success Already" "$test_log"; then
-      stages_completed+="✓ Installing  "
-    fi
-    if grep -q "passing" "$test_log"; then
-      stages_completed+="✓ Testing"
-    fi
+    
     if [ -n "$stages_completed" ]; then
       echo "  $stages_completed"
     fi
@@ -115,15 +203,17 @@ run_test() {
   if grep -q "[0-9] failing" "$test_log"; then
     FAILED_TESTS+=("$test_name")
     
-    # Extract test failures section - get from first failure number onwards
-    local error_details=$(tail -600 "$test_log" | sed -n '/^  [0-9]\+)/,$p' | head -300)
+    # Extract test failures section - find last occurrence of test suite and get failures from there
+    # Get the last test suite block (after the last blank line followed by test name pattern)
+    local error_details=$(tac "$test_log" | sed -n '/^  [0-9]\+)/,/^[[:space:]]*$/p' | tac)
     
     if [ -z "$error_details" ]; then
-      # Fallback: get the whole end of log
-      error_details=$(tail -400 "$test_log")
+      # Fallback: get from "failing" keyword to end
+      error_details=$(tail -500 "$test_log" | sed -n '/failing/,$p' | head -400)
     fi
     
-    FAILED_TESTS_ERRORS["$test_name"]="$error_details"
+    FAILED_TESTS_NAMES+=("$test_name")
+    FAILED_TESTS_ERRORS+=("$error_details")
   # Check for compile errors
   elif grep -q "error\[" "$test_log" || grep -q "could not compile" "$test_log"; then
     FAILED_TESTS+=("$test_name")
@@ -134,7 +224,8 @@ run_test() {
       error_details=$(grep -B 3 -A 5 "could not compile" "$test_log" | head -60)
     fi
     
-    FAILED_TESTS_ERRORS["$test_name"]="$error_details"
+    FAILED_TESTS_NAMES+=("$test_name")
+    FAILED_TESTS_ERRORS+=("$error_details")
   else
     PASSED_TESTS+=("$test_name")
   fi
@@ -152,8 +243,13 @@ run_test() {
 
 # Cleanup function
 cleanup() {
+  # Disable trap to prevent recursion
+  trap - EXIT INT TERM
+  
+  # Clear current line
+  echo -ne "\r                                                                                  \r"
   echo ""
-  echo "Stopping validators..."
+  echo -n "Stopping validators... "
   
   # Kill by PID if available
   if [ -n "$SOLANA_PID" ]; then
@@ -178,8 +274,17 @@ cleanup() {
   pkill -f "solana-test-validator" 2>/dev/null || true
   pkill -f "ephemeral-validator" 2>/dev/null || true
   
-  wait 2>/dev/null || true
-  echo "Validators stopped."
+  # Wait for background jobs silently
+  { wait 2>/dev/null || true; } 2>/dev/null
+  
+  # Check if validators are actually stopped
+  if ! pgrep -f "solana-test-validator" >/dev/null 2>&1 && ! pgrep -f "ephemeral-validator" >/dev/null 2>&1; then
+    echo "✓ Stopped"
+  else
+    echo "✗ Failed to stop"
+  fi
+  
+  exit 0
 }
 
 # Set up trap to catch INT (Ctrl+C), TERM, and EXIT
@@ -241,21 +346,21 @@ echo ""
 
 # run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT='http://localhost:7799' EPHEMERAL_WS_ENDPOINT='ws://localhost:7800' PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --provider.cluster localnet --skip-local-validator --skip-deploy; cd .."
 
-run_test "anchor-minter" "cd anchor-minter && anchor build && anchor deploy --provider.cluster localnet && yarn install && anchor test --skip-deploy; cd .."
+run_test "anchor-minter" "cd anchor-minter && anchor build && anchor deploy --provider.cluster localnet && yarn install && anchor test  --skip-build --skip-deploy --skip-local-validator; cd .."
 
 run_test "anchor-rock-paper-scissor" "cd anchor-rock-paper-scissor && anchor build && yarn install && anchor test --skip-deploy; cd .."
 
-run_test "dummy-token-transfer" "cd dummy-token-transfer && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test; cd .."
+run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
-run_test "magic-actions" "cd magic-actions && yarn install && anchor build && yarn install && anchor test --skip-deploy; cd .."
+run_test "magic-actions" "cd magic-actions && yarn install && anchor build && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
-# run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js; cd .."
+run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test-web3js; cd .."
 
-# run_test "roll-dice" "cd roll-dice && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test; cd .."
+run_test "roll-dice + roll-dice-delegated" "cd roll-dice && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
 # run_test "rust-counter" "cd rust-counter && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test; cd .."
 
-# run_test "session-keys" "cd session-keys && yarn install && anchor build && yarn install && anchor test --skip-deploy; cd .."
+run_test "session-keys" "cd session-keys && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
 # Print summary report
 echo "========================================"
@@ -291,9 +396,9 @@ if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
   echo "FAILED TESTS - ERROR DETAILS"
   echo "========================================"
   echo ""
-  for test in "${FAILED_TESTS[@]}"; do
-    echo "--- $test ---"
-    echo "${FAILED_TESTS_ERRORS[$test]}"
+  for i in "${!FAILED_TESTS_NAMES[@]}"; do
+    echo "--- ${FAILED_TESTS_NAMES[$i]} ---"
+    echo "${FAILED_TESTS_ERRORS[$i]}"
     echo ""
   done
 fi
