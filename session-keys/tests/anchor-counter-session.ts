@@ -115,7 +115,7 @@ describe("anchor-counter-session", () => {
       .accounts({
         counter: counterPDA,
         sessionToken: sessionTokenPDA,
-        signer: sessionKeypair.publicKey,
+        payer: sessionKeypair.publicKey,
 
       })
       .transaction();
@@ -144,12 +144,13 @@ describe("anchor-counter-session", () => {
     let tx = await program.methods
       .delegate()
       .accounts({
-        payer: provider.wallet.publicKey,
+        payer: sessionKeypair.publicKey,
         pda: counterPDA,
+        sessionToken: sessionTokenPDA,
       })
       .remainingAccounts(remainingAccounts)
       .transaction();
-    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [provider.wallet.payer], {
+    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [sessionKeypair], {
       skipPreflight: true,
       commitment: "confirmed"
     });
@@ -164,7 +165,7 @@ describe("anchor-counter-session", () => {
       .accounts({
         counter: counterPDA,
         sessionToken: sessionTokenPDA,
-        signer: sessionKeypair.publicKey,
+        payer: sessionKeypair.publicKey,
       })
       .transaction()
     const txHash = await sendAndConfirmTransaction(providerEphemeralRollup.connection, tx, [sessionKeypair],
@@ -184,7 +185,6 @@ describe("anchor-counter-session", () => {
       .accounts({
         counter: counterPDA,
         sessionToken: sessionTokenPDA,
-        signer: sessionKeypair.publicKey,
         payer: sessionKeypair.publicKey
       })
       .transaction();
@@ -217,7 +217,6 @@ describe("anchor-counter-session", () => {
       .accounts({
         counter: counterPDA,
         sessionToken: sessionTokenPDA,
-        signer: sessionKeypair.publicKey,
         payer: sessionKeypair.publicKey
       })
       .transaction();
@@ -250,7 +249,6 @@ describe("anchor-counter-session", () => {
       .accounts({
         counter: counterPDA,
         sessionToken: sessionTokenPDA,
-        signer: sessionKeypair.publicKey,
         payer: sessionKeypair.publicKey
       })
       .transaction();
