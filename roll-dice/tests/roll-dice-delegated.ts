@@ -42,10 +42,24 @@ describe("roll-dice-delegated", () => {
   });
 
   it("Delegate Roll Dice!", async () => {
-    const tx = await program.methods.delegate({
-      commitFrequencyMs: 30000,
-      validator: new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"),
-    }).rpc();
+    const remainingAccounts =
+      providerEphemeralRollup.connection.rpcEndpoint.includes("localhost") ||
+      providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1")
+        ? [
+            {
+              pubkey: new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+              isSigner: false,
+              isWritable: false,
+            },
+          ]
+        : [];
+    const tx = await program.methods
+      .delegate()
+      .accounts({
+        user: anchor.Wallet.local().publicKey,
+      })
+      .remainingAccounts(remainingAccounts)
+      .rpc();
     console.log("Your transaction signature", tx);
   });
 

@@ -7,7 +7,7 @@ use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_and_undelegate_accounts};
 
 
-declare_id!("7JJKDgfhr5eKjijcWiMkKnEoiLXNRbjctq1D1o8PFuDx");
+declare_id!("D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM");
 
 
 pub const PLAYER_SEED: &[u8] = b"playerd2";
@@ -63,15 +63,16 @@ pub mod random_dice_delegated {
     }
 
     // Delegate the player account to use the VRF in the ephemeral rollups
-    pub fn delegate(ctx: Context<DelegateInput>, params: DelegateParams) -> Result<()> {
-        let config = DelegateConfig {
-            commit_frequency_ms: params.commit_frequency_ms,
-            validator: params.validator,
-        };
+    /// Set specific validator based on ER, see https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup
+    pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
         ctx.accounts.delegate_player(
             &ctx.accounts.user,
             &[PLAYER_SEED, &ctx.accounts.user.key().to_bytes().as_slice()],
-            config,
+            DelegateConfig {
+                // Optionally set a specific validator from the first remaining account
+                validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
+                ..Default::default()
+            },
         )?;
         Ok(())
     }
@@ -164,10 +165,4 @@ pub struct Undelegate<'info> {
 pub struct Player {
     pub last_result: u8,
     pub rollnum: u8,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct DelegateParams {
-    pub commit_frequency_ms: u32,
-    pub validator: Option<Pubkey>,
 }

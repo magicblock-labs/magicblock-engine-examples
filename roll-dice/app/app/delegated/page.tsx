@@ -439,11 +439,19 @@ export default function DiceRollerDelegated() {
           
           await ensureFunds(connection, playerKeypairRef.current)
           const validatorPubkey = new PublicKey(validatorIdentity)
+          const remainingAccounts = [
+            {
+              pubkey: validatorPubkey,
+              isSigner: false,
+              isWritable: false,
+            },
+          ]
           await program.methods
-            .delegate({
-              commitFrequencyMs: 30000,
-              validator: validatorPubkey,
+            .delegate()
+            .accounts({
+              user: playerKeypairRef.current.publicKey,
             })
+            .remainingAccounts(remainingAccounts)
             .rpc()
 
           // Poll every second until delegation succeeds
@@ -545,11 +553,19 @@ export default function DiceRollerDelegated() {
       await updateEphemeralConnectionToValidator(validatorFqdn)
 
       await ensureFunds(connection, playerKeypair)
+      const remainingAccounts = [
+        {
+          pubkey: validatorPubkey,
+          isSigner: false,
+          isWritable: false,
+        },
+      ]
       await programRef.current.methods
-        .delegate({
-          commitFrequencyMs: 30000,
-          validator: validatorPubkey,
+        .delegate()
+        .accounts({
+          user: playerKeypair.publicKey,
         })
+        .remainingAccounts(remainingAccounts)
         .rpc()
 
       // Poll every second until delegation succeeds
