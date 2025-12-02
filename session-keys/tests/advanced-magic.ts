@@ -126,14 +126,15 @@ describe("magic-router-counter-session", () => {
         let tx = await program.methods
             .delegate()
             .accounts({
-                payer: providerMagic.wallet.publicKey,
+                payer: sessionKeypair.publicKey,
                 pda: counterPDA,
+                sessionToken: sessionTokenPDA,
             })
             .remainingAccounts(remainingAccounts)
             .transaction();
-        const txHash = await sendAndConfirmTransaction(connection, tx, [providerMagic.wallet.payer], {
+        const txHash = await sendAndConfirmTransaction(connection, tx, [sessionKeypair], {
             skipPreflight: true,
-            commitment: "confirmed"
+            commitment: "finalized"
         });
         const duration = Date.now() - start;
         console.log(`${duration}ms (Magic Router) Delegate txHash: ${txHash}`);
@@ -146,7 +147,7 @@ describe("magic-router-counter-session", () => {
             .accounts({
                 counter: counterPDA,
                 sessionToken: sessionTokenPDA,
-                signer: sessionKeypair.publicKey,
+                payer: sessionKeypair.publicKey
             })
             .transaction();
         const txHash = await sendAndConfirmTransaction(connection, tx, [sessionKeypair], {
@@ -154,7 +155,7 @@ describe("magic-router-counter-session", () => {
             commitment: "confirmed"
         });
         const duration = Date.now() - start;
-        console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
+        console.log(`${duration}ms (Magic Router) Increment txHash: ${txHash}`);
     });
 
     it("Increase delegated counter and commit through CPI", async () => {
@@ -164,7 +165,6 @@ describe("magic-router-counter-session", () => {
             .accounts({
                 counter: counterPDA,
                 sessionToken: sessionTokenPDA,
-                signer: sessionKeypair.publicKey,
                 payer: sessionKeypair.publicKey
             })
             .transaction();
@@ -172,7 +172,7 @@ describe("magic-router-counter-session", () => {
             skipPreflight: true,
         });
         const duration = Date.now() - start;
-        console.log(`${duration}ms (ER) Increment And Commit txHash: ${txHash}`);
+        console.log(`${duration}ms (Magic Router) Increment And Commit txHash: ${txHash}`);
 
         // Get the commitment signature on the base layer
         const comfirmCommitStart = Date.now();
@@ -194,7 +194,6 @@ describe("magic-router-counter-session", () => {
             .accounts({
                 counter: counterPDA,
                 sessionToken: sessionTokenPDA,
-                signer: sessionKeypair.publicKey,
                 payer: sessionKeypair.publicKey
             })
             .transaction();
