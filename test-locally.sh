@@ -360,7 +360,7 @@ run_test "roll-dice + roll-dice-delegated" "cd roll-dice && anchor build && anch
 
 # run_test "rust-counter" "cd rust-counter && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test; cd .."
 
-run_test "session-keys" "cd session-keys && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
+run_test "session-keys" "cd session-keys && anchor build && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
 # Print summary report
 echo "========================================"
