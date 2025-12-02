@@ -363,7 +363,7 @@ describe("anchor-rock-paper-scissor", () => {
     tx.feePayer = player1.publicKey;
     const txHash = await sendAndConfirmTransaction((authTokenPlayer1.token ? providerTeePlayer1 : provider).connection, tx, [player1], {
       skipPreflight: true,
-      commitment: "finalized"
+      commitment: "confirmed"
     });
     const txBase = await GetCommitmentSignature(txHash, providerTeePlayer1.connection)
     console.log("✅ Winner Revealed:", txBase)
