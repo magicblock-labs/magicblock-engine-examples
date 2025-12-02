@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import {Program} from "@coral-xyz/anchor";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { RandomDiceDelegated } from "../target/types/random_dice_delegated";
 
 describe("roll-dice-delegated", () => {
@@ -21,9 +21,15 @@ describe("roll-dice-delegated", () => {
   );
   const ephemeralProgram = new Program(program.idl, providerEphemeralRollup);
 
-  console.log("Base Layer Connection: ", provider.connection._rpcEndpoint);
-  console.log("Ephemeral Rollup Connection: ", providerEphemeralRollup.connection._rpcEndpoint);
+  const playerPda = PublicKey.findProgramAddressSync(
+    [Buffer.from("playerd2"), anchor.Wallet.local().publicKey.toBytes()],
+    program.programId
+  )[0];
+
+  console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
+  console.log("Ephemeral Rollup Connection: ", providerEphemeralRollup.connection.rpcEndpoint);
   console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`)
+  console.log("Player PDA: ", playerPda.toString());
 
   before(async function () {
     const balance = await provider.connection.getBalance(anchor.Wallet.local().publicKey)
@@ -36,7 +42,10 @@ describe("roll-dice-delegated", () => {
   });
 
   it("Delegate Roll Dice!", async () => {
-    const tx = await program.methods.delegate().rpc();
+    const tx = await program.methods.delegate({
+      commitFrequencyMs: 30000,
+      validator: new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"),
+    }).rpc();
     console.log("Your transaction signature", tx);
   });
 
