@@ -209,13 +209,6 @@ export default function DiceRollerDelegated() {
     return blockhash
   }, [])
 
-  const refreshDelegationStatus = useCallback(async () => {
-    if (!connectionRef.current || !playerPdaRef.current) return false
-    const delegated = await checkDelegationStatus(connectionRef.current, playerPdaRef.current)
-    setIsDelegated(delegated)
-    return delegated
-  }, [])
-
   const updateEphemeralConnectionToValidator = useCallback(async (validatorFqdn: string) => {
     if (!playerKeypairRef.current || !playerPdaRef.current || !programRef.current) return
 
@@ -277,6 +270,25 @@ export default function DiceRollerDelegated() {
     // Fetch blockhash for new connection
     await fetchAndCacheBlockhash(newEphemeralConnection, cachedEphemeralBlockhashRef)
   }, [clearAllIntervals])
+
+  const refreshDelegationStatus = useCallback(async () => {
+    if (!routerConnectionRef.current || !playerPdaRef.current) return false
+    try {
+      const delegationStatus = await routerConnectionRef.current.getDelegationStatus(playerPdaRef.current)
+      setIsDelegated(delegationStatus.isDelegated)
+      
+      // Update ephemeral connection to use the FQDN from delegation status if available
+      const delegationStatusWithFqdn = delegationStatus as { isDelegated: boolean; fqdn?: string }
+      if (delegationStatusWithFqdn.isDelegated && delegationStatusWithFqdn.fqdn) {
+        await updateEphemeralConnectionToValidator(delegationStatusWithFqdn.fqdn)
+      }
+      
+      return delegationStatus.isDelegated
+    } catch (error) {
+      console.error("Failed to refresh delegation status:", error)
+      return false
+    }
+  }, [updateEphemeralConnectionToValidator])
 
   const sendBackgroundRoll = useCallback(async () => {
     if (!ephemeralProgramRef.current || !playerKeypairRef.current || !playerPdaRef.current || !ephemeralConnectionRef.current) return
@@ -408,21 +420,8 @@ export default function DiceRollerDelegated() {
 
       const isDelegated = await refreshDelegationStatus()
       
-      // If already delegated, update ephemeral connection to nearest validator
-      if (isDelegated && routerConnectionRef.current) {
-        try {
-          const validatorResult = await routerConnectionRef.current.getClosestValidator()
-          console.log("getClosestValidator result on init:", validatorResult)
-          
-          if (validatorResult.fqdn) {
-            await updateEphemeralConnectionToValidator(validatorResult.fqdn)
-          }
-        } catch (error) {
-          console.error("Failed to update ephemeral connection to nearest validator:", error)
-          // Continue with default ephemeral connection if update fails
-          await fetchAndCacheBlockhash(ephemeralConnection, cachedEphemeralBlockhashRef)
-        }
-      } else if (!isDelegated && routerConnectionRef.current) {
+      // refreshDelegationStatus already updates the ephemeral connection to the FQDN from delegation status if delegated
+      if (!isDelegated && routerConnectionRef.current) {
         // Automatically delegate on startup if not already delegated
         setIsDelegating(true)
         try {
@@ -472,14 +471,16 @@ export default function DiceRollerDelegated() {
           }
           setIsDelegating(false)
           await fetchAndCacheBlockhash(connection, cachedBaseBlockhashRef)
-          if (ephemeralConnection) {
-            await fetchAndCacheBlockhash(ephemeralConnection, cachedEphemeralBlockhashRef)
+          // Use ephemeralConnectionRef.current instead of ephemeralConnection since updateEphemeralConnectionToValidator may have updated it
+          if (ephemeralConnectionRef.current) {
+            await fetchAndCacheBlockhash(ephemeralConnectionRef.current, cachedEphemeralBlockhashRef)
           }
         }
       } else {
         await fetchAndCacheBlockhash(connection, cachedBaseBlockhashRef)
-        if (ephemeralConnection) {
-          await fetchAndCacheBlockhash(ephemeralConnection, cachedEphemeralBlockhashRef)
+        // Use ephemeralConnectionRef.current instead of ephemeralConnection since refreshDelegationStatus may have updated it
+        if (ephemeralConnectionRef.current) {
+          await fetchAndCacheBlockhash(ephemeralConnectionRef.current, cachedEphemeralBlockhashRef)
         }
       }
       
@@ -620,7 +621,8 @@ export default function DiceRollerDelegated() {
     if (
       !programRef.current ||
       !playerKeypairRef.current ||
-      !playerPdaRef.current
+      !playerPdaRef.current ||
+      !routerConnectionRef.current
     )
       return
     if (!isDelegated) return
@@ -636,56 +638,45 @@ export default function DiceRollerDelegated() {
         throw new Error("Required refs not available")
       }
 
-      // List of all known validator endpoints
-      const validatorEndpoints = [
-        "https://devnet-us.magicblock.app",
-        "https://devnet-as.magicblock.app",
-        "https://devnet-eu.magicblock.app",
-      ]
+      // Get the FQDN from delegation status
+      const delegationStatus = await routerConnectionRef.current.getDelegationStatus(playerPda)
+      const delegationStatusWithFqdn = delegationStatus as { isDelegated: boolean; fqdn?: string }
+      
+      if (!delegationStatusWithFqdn.fqdn) {
+        throw new Error("FQDN not found in delegation status")
+      }
 
+      const validatorFqdn = delegationStatusWithFqdn.fqdn
+      const wsEndpoint = validatorFqdn.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://")
+      
       // Fetch IDL once
       const idl = await anchor.Program.fetchIdl(PROGRAM_ID, program.provider)
       if (!idl) throw new Error("IDL not found")
 
-      // Send undelegate RPC to all validator endpoints
-      const undelegatePromises = validatorEndpoints.map(async (endpoint) => {
-        try {
-          const wsEndpoint = endpoint.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://")
-          const connection = new Connection(endpoint, {
-            wsEndpoint,
-            commitment: "processed",
-          })
-          
-          const provider = new anchor.AnchorProvider(
-            connection,
-            walletAdapterFrom(playerKeypair),
-            anchor.AnchorProvider.defaultOptions()
-          )
-          
-          const ephemeralProgram = new anchor.Program(idl, provider)
-          
-          return await ephemeralProgram.methods
-            .undelegate()
-            .accounts({
-              payer: playerKeypair.publicKey,
-              user: playerPda,
-            })
-            .rpc()
-        } catch (error) {
-          console.warn(`Undelegation failed for ${endpoint}:`, error)
-          throw error
-        }
+      // Create connection to the specific validator we're delegated to
+      const connection = new Connection(validatorFqdn, {
+        wsEndpoint,
+        commitment: "processed",
       })
+      
+      const provider = new anchor.AnchorProvider(
+        connection,
+        walletAdapterFrom(playerKeypair),
+        anchor.AnchorProvider.defaultOptions()
+      )
+      
+      const ephemeralProgram = new anchor.Program(idl, provider)
+      
+      // Send undelegate RPC to the specific validator endpoint
+      await ephemeralProgram.methods
+        .undelegate()
+        .accounts({
+          payer: playerKeypair.publicKey,
+          user: playerPda,
+        })
+        .rpc()
 
-      // Wait for all attempts (at least one should succeed)
-      const results = await Promise.allSettled(undelegatePromises)
-      const successful = results.filter(r => r.status === "fulfilled")
-      
-      if (successful.length === 0) {
-        throw new Error("All undelegation attempts failed")
-      }
-      
-      console.log(`Undelegation succeeded on ${successful.length} endpoint(s)`)
+      console.log(`Undelegation sent to ${validatorFqdn}`)
 
       // Poll every second until undelegation succeeds
       if (delegationPollIntervalRef.current) {
