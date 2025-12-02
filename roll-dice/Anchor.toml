@@ -7,11 +7,11 @@ skip-lint = false
 
 [programs.devnet]
 rool_dice = "8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP"
-roll-dice-delegated = "7JJKDgfhr5eKjijcWiMkKnEoiLXNRbjctq1D1o8PFuDx"
+roll-dice-delegated = "D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM"
 
 [programs.localnet]
 rool_dice = "8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP"
-roll-dice-delegated = "7JJKDgfhr5eKjijcWiMkKnEoiLXNRbjctq1D1o8PFuDx"
+roll-dice-delegated = "D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM"
 
 [registry]
 url = "https://api.apr.dev"

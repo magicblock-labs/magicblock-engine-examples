@@ -1,5 +1,5 @@
 {
-  "address": "7JJKDgfhr5eKjijcWiMkKnEoiLXNRbjctq1D1o8PFuDx",
+  "address": "D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM",
   "metadata": {
     "name": "random_dice_delegated",
     "version": "0.1.0",
@@ -48,6 +48,9 @@
     },
     {
       "name": "delegate",
+      "docs": [
+        "Set specific validator based on ER, see https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup"
+      ],
       "discriminator": [
         90,
         147,
@@ -88,38 +91,38 @@
             "program": {
               "kind": "const",
               "value": [
-                93,
-                148,
-                146,
-                139,
-                193,
+                179,
+                217,
+                114,
+                141,
+                12,
+                154,
+                18,
+                123,
+                68,
+                119,
+                180,
+                125,
+                173,
+                111,
                 60,
-                52,
-                112,
-                108,
-                219,
-                27,
-                42,
-                121,
-                156,
+                210,
+                43,
+                63,
+                230,
+                240,
+                225,
+                132,
+                125,
+                237,
+                175,
+                38,
+                240,
+                134,
+                203,
                 177,
-                71,
-                107,
-                9,
-                33,
-                199,
-                196,
-                69,
-                79,
-                93,
-                188,
-                139,
-                129,
-                194,
-                82,
-                176,
-                198,
-                175
+                191,
+                110
               ]
             }
           }
@@ -225,7 +228,7 @@
         },
         {
           "name": "owner_program",
-          "address": "7JJKDgfhr5eKjijcWiMkKnEoiLXNRbjctq1D1o8PFuDx"
+          "address": "D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM"
         },
         {
           "name": "delegation_program",
@@ -236,16 +239,7 @@
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": [
-        {
-          "name": "params",
-          "type": {
-            "defined": {
-              "name": "DelegateParams"
-            }
-          }
-        }
-      ]
+      "args": []
     },
     {
       "name": "initialize",
@@ -493,24 +487,6 @@
     }
   ],
   "types": [
-    {
-      "name": "DelegateParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "commit_frequency_ms",
-            "type": "u32"
-          },
-          {
-            "name": "validator",
-            "type": {
-              "option": "pubkey"
-            }
-          }
-        ]
-      }
-    },
     {
       "name": "Player",
       "type": {
