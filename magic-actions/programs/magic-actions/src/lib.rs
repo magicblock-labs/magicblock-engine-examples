@@ -74,11 +74,10 @@ pub mod magic_actions {
     }
 
     pub fn commit_and_update_leaderboard(ctx: Context<CommitAndUpdateLeaderboard>) -> Result<()> {
+        // Create action instruction
         let instruction_data =
             anchor_lang::InstructionData::data(&crate::instruction::UpdateLeaderboard {});
-
         let action_args = ActionArgs::new(instruction_data);
-
         let action_accounts = vec![
             ShortAccountMeta {
                 pubkey: ctx.accounts.leaderboard.key(),
@@ -96,6 +95,8 @@ pub mod magic_actions {
             escrow_authority: ctx.accounts.payer.to_account_info(), // Signer authorized to pay transaction fees for action from escrow PDA
             compute_units: 200_000,
         };
+
+        // Build commit and action instruction
         let magic_action = MagicInstructionBuilder {
             payer: ctx.accounts.payer.to_account_info(),
             magic_context: ctx.accounts.magic_context.to_account_info(),
@@ -105,7 +106,10 @@ pub mod magic_actions {
                 call_handlers: vec![action],
             }),
         };
+
+        // Invoke
         magic_action.build_and_invoke()?;
+
         Ok(())
     }
 }
