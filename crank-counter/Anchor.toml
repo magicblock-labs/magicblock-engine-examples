@@ -12,7 +12,7 @@ crank_counter = "5LomaZ9w94qfwvdDa1QhhCe41HYqrQTkdYfP39pX6LqH"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
