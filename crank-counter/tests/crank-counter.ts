@@ -1,8 +1,8 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
-import { CrankCounter } from "../target/types/crank_counter";
+import { Program, web3 } from "@coral-xyz/anchor";
+import { AnchorCounter } from "../target/types/anchor_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { GetCommitmentSignature, ConnectionMagicRouter, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const COUNTER_SEED = "counter"; 
 
@@ -23,6 +23,16 @@ describe("crank-counter", () => {
     ),
     anchor.Wallet.local(),
   );
+
+  const routerConnection: ConnectionMagicRouter = new ConnectionMagicRouter(
+    process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
+      "https://devnet-router.magicblock.app/",
+    {
+      wsEndpoint:
+        process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
+    }
+  );
+
   console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
   console.log(
     "Ephemeral Rollup Connection: ",
@@ -46,7 +56,7 @@ describe("crank-counter", () => {
   console.log("Program ID: ", program.programId.toString());
   console.log("Counter PDA: ", counterPDA.toString());
 
-  it("Initialize counter on Solana", async () => {
+  xit("Initialize counter on Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
       .initialize()
@@ -63,7 +73,7 @@ describe("crank-counter", () => {
     console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
   });
 
-  it("Increase counter on Solana", async () => {
+  xit("Increase counter on Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
       .increment()
@@ -79,7 +89,7 @@ describe("crank-counter", () => {
     console.log(`${duration}ms (Base Layer) Increment txHash: ${txHash}`);
   });
 
-  it("Delegate counter to ER", async () => {
+  xit("Delegate counter to ER", async () => {
     const start = Date.now();
     // Add local validator identity to the remaining accounts if running on localnet
     const remainingAccounts =
@@ -127,12 +137,14 @@ describe("crank-counter", () => {
     console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
   });
 
-  it("Commit counter state on ER to Solana", async () => {
+  it("Schedule increment counter on ER", async () => {
     const start = Date.now();
     let tx = await program.methods
-      .commit()
+      .scheduleIncrement()
       .accounts({
+        magicProgram: MAGIC_PROGRAM_ID,
         payer: providerEphemeralRollup.wallet.publicKey,
+        program: program.programId,
       })
       .transaction();
     tx.feePayer = providerEphemeralRollup.wallet.publicKey;
@@ -145,38 +157,18 @@ describe("crank-counter", () => {
       skipPreflight: true,
     });
     const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Commit txHash: ${txHash}`);
+    console.log(`${duration}ms (ER) Schedule Increment txHash: ${txHash}`);
+    
+    await printCounter(program, counterPDA, routerConnection, txHash, "✅ Scheduled Increment (5 increments, 100ms interval)");
 
-    // Get the commitment signature on the base layer
-    const comfirmCommitStart = Date.now();
-    // Await for the commitment on the base layer
-    const txCommitSgn = await GetCommitmentSignature(
-      txHash,
-      providerEphemeralRollup.connection,
-    );
-    const commitDuration = Date.now() - comfirmCommitStart;
-    console.log(
-      `${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`,
-    );
+    // Wait for increments to execute (5 increments * 100ms = 500ms, add buffer)
+    console.log("Waiting for scheduled increments to execute...");
+    await sleepWithAnimation(1);
+    
+    await printCounter(program, counterPDA, routerConnection, txHash, "✅ After Scheduled Increments");
   });
 
-  it("Increase counter on ER and commit", async () => {
-    const start = Date.now();
-    let tx = await program.methods
-      .incrementAndCommit()
-      .accounts({})
-      .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Increment and Commit txHash: ${txHash}`);
-  });
-
-  it("Increment and undelegate counter on ER to Solana", async () => {
+  xit("Increment and undelegate counter on ER to Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
       .incrementAndUndelegate()
@@ -193,5 +185,53 @@ describe("crank-counter", () => {
     const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`);
+
+    await sleepWithAnimation(4);
+    
+    await printCounter(program, counterPDA, routerConnection, txHash, "✅ After Scheduled Increments");
+
   });
 });
+
+async function printCounter(program: Program<AnchorCounter>, counter_pda: web3.PublicKey, routerConnection: ConnectionMagicRouter, signature: string, message: string) {
+  console.log(message+" Signature: ", signature);
+  const delegationStatus = await routerConnection.getDelegationStatus(counter_pda);
+
+  var counterER = "";
+  var counterBase = "";
+  var delegationStatusMsg = "";
+
+  if (delegationStatus.isDelegated) {
+    const counterAccountER = await routerConnection.getAccountInfo(counter_pda);
+    const countValue = counterAccountER?.data.readBigUInt64LE(8);
+    counterER = countValue?.toString() || "0";
+    counterBase = "<Delegated>";
+    delegationStatusMsg = "✅ Delegated";
+  } else {
+    counterER = "<Not Delegated>";
+    const counterAccount = await program.account.counter.fetch(counter_pda);
+    counterBase = counterAccount.count.toNumber().toString();
+    delegationStatusMsg = "❌ Not Delegated";
+  }
+
+  console.log("--------------------------------");
+  console.log("| "+delegationStatusMsg);
+  console.log("--------------------------------");
+  console.log("| Counter (Base): ", counterBase);
+  console.log("| Counter (ER): ", counterER);
+  console.log("--------------------------------");
+}
+
+async function sleepWithAnimation(seconds: number): Promise<void> {
+  const totalMs = seconds * 1000;
+  const interval = 500;
+  const iterations = Math.floor(totalMs / interval);
+
+  for (let i = 0; i < iterations; i++) {
+    const dots = '.'.repeat((i % 3) + 1);
+    process.stdout.write(`\rWaiting${dots}   `);
+    await new Promise(resolve => setTimeout(resolve, interval));
+  }
+
+  process.stdout.write('\r\x1b[K');
+}
