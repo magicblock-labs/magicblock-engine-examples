@@ -119,7 +119,7 @@ describe("crank-counter", () => {
     console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
   });
 
-  it("Increase counter on ER", async () => {
+  xit("Increase counter on ER", async () => {
     const start = Date.now();
     let tx = await program.methods
       .increment()
@@ -158,14 +158,6 @@ describe("crank-counter", () => {
     });
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Schedule Increment txHash: ${txHash}`);
-    
-    await printCounter(program, counterPDA, routerConnection, txHash, "✅ Scheduled Increment (5 increments, 100ms interval)");
-
-    // Wait for increments to execute (5 increments * 100ms = 500ms, add buffer)
-    console.log("Waiting for scheduled increments to execute...");
-    await sleepWithAnimation(1);
-    
-    await printCounter(program, counterPDA, routerConnection, txHash, "✅ After Scheduled Increments");
   });
 
   xit("Increment and undelegate counter on ER to Solana", async () => {

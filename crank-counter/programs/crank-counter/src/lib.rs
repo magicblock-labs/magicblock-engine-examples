@@ -9,10 +9,12 @@ use anchor_lang::solana_program::{
 };
 use std::io::Write;
 use ephemeral_rollups_sdk::consts::MAGIC_PROGRAM_ID;
+use magicblock_magic_program_api::{
+    args::ScheduleTaskArgs, instruction::MagicBlockInstruction,
+};
 
 
-
-declare_id!("5LomaZ9w94qfwvdDa1QhhCe41HYqrQTkdYfP39pX6LqH");
+declare_id!("4BEtKDKV7bZ5866oy9MVCS5cRuNCSQTVV4m2Bzs2HEaf");
 
 
 pub const COUNTER_SEED: &[u8] = b"counter";
@@ -42,27 +44,16 @@ pub mod anchor_counter {
     }
 
     pub fn schedule_increment(ctx: Context<ScheduleIncrement>) -> Result<()> {
-        use sha2::{Sha256, Digest};
-        let mut hasher = Sha256::new();
-        hasher.update(b"global:increment");
-        let hash = hasher.finalize();
-        let mut discriminator = [0u8; 8];
-        discriminator.copy_from_slice(&hash[..8]);
-
-        let increment_instruction_data =
-            anchor_lang::InstructionData::data(&crate::instruction::Increment {});
-        
         let increment_ix = Instruction {
             program_id: crate::ID,
             accounts: vec![AccountMeta::new(ctx.accounts.counter.key(), false),
                         ],
-            data: discriminator.to_vec(),
+            data: anchor_lang::InstructionData::data(&crate::instruction::Increment {}),
         };
 
         msg!("Schedule increment instruction: {:?}", increment_ix);
-        // call increment instruction
         invoke_signed(
-            &increment_instruction_data,
+            &increment_ix,
             &[
                 ctx.accounts.counter.to_account_info(),
                 ctx.accounts.program.to_account_info(),
@@ -70,14 +61,27 @@ pub mod anchor_counter {
             &[],
         )?;
         
-        let schedule_ix = Instruction {
-            program_id: MAGIC_PROGRAM_ID,
-            accounts: vec![
-                AccountMeta::new(*ctx.accounts.payer.key, true),
+        let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(
+            ScheduleTaskArgs {
+                task_id: 1,
+                execution_interval_millis: 100,
+                iterations: 3,
+                instructions: vec![increment_ix],
+            },
+        ))
+        .map_err(|err| {
+            msg!("ERROR: failed to serialize args {:?}", err);
+            ProgramError::InvalidArgument
+        })?;
+
+        let schedule_ix = Instruction::new_with_bytes(
+            MAGIC_PROGRAM_ID,
+            &ix_data,
+            vec![
+                AccountMeta::new(ctx.accounts.payer.key(), true),
                 AccountMeta::new(ctx.accounts.counter.key(), false),
             ],
-            data: create_schedule_task_instruction_data(1, 100, 5, vec![increment_ix])?,
-        };
+        );
         
         invoke_signed(
             &schedule_ix,
@@ -213,32 +217,4 @@ pub struct ScheduleIncrement<'info> {
     pub counter: Account<'info, Counter>,
     /// CHECK: asdf
     pub program: AccountInfo<'info>,
-}
-
-fn create_schedule_task_instruction_data(
-    task_id: i64,
-    execution_interval_millis: i64,
-    iterations: i64,
-    instructions: Vec<Instruction>,
-) -> Result<Vec<u8>> {
-    let mut data = Vec::new();
-    data.write_all(&6u32.to_le_bytes())?;
-    data.write_all(&task_id.to_le_bytes())?;
-    data.write_all(&execution_interval_millis.to_le_bytes())?;
-    data.write_all(&iterations.to_le_bytes())?;
-    data.write_all(&(instructions.len() as u64).to_le_bytes())?;
-    
-    for instruction in instructions {
-        data.write_all(instruction.program_id.as_ref())?;
-        data.write_all(&(instruction.accounts.len() as u64).to_le_bytes())?;
-        for account_meta in instruction.accounts {
-            data.write_all(account_meta.pubkey.as_ref())?;
-            data.push(account_meta.is_signer as u8);
-            data.push(account_meta.is_writable as u8);
-        }
-        data.write_all(&(instruction.data.len() as u64).to_le_bytes())?;
-        data.write_all(&instruction.data)?;
-    }
-    
-    Ok(data)
 }

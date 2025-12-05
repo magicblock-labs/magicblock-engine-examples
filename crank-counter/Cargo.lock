@@ -501,7 +501,9 @@ name = "crank-counter"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "bincode",
  "ephemeral-rollups-sdk",
+ "magicblock-magic-program-api",
  "sha2 0.10.9",
 ]
 
