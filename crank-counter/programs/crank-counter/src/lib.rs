@@ -67,37 +67,37 @@ pub mod anchor_counter {
             &[],
         )?;
         
-        let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(
-            ScheduleTaskArgs {
-                task_id: args.task_id,
-                execution_interval_millis: args.execution_interval_millis,
-                iterations: args.iterations,
-                instructions: vec![increment_ix],
-            },
-        ))
-        .map_err(|err| {
-            msg!("ERROR: failed to serialize args {:?}", err);
-            ProgramError::InvalidArgument
-        })?;
+        // let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(
+        //     ScheduleTaskArgs {
+        //         task_id: args.task_id,
+        //         execution_interval_millis: args.execution_interval_millis,
+        //         iterations: args.iterations,
+        //         instructions: vec![increment_ix],
+        //     },
+        // ))
+        // .map_err(|err| {
+        //     msg!("ERROR: failed to serialize args {:?}", err);
+        //     ProgramError::InvalidArgument
+        // })?;
 
-        let schedule_ix = Instruction::new_with_bytes(
-            MAGIC_PROGRAM_ID,
-            &ix_data,
-            vec![
-                AccountMeta::new(ctx.accounts.payer.key(), true),
-                AccountMeta::new(ctx.accounts.counter.key(), false),
-            ],
-        );
+        // let schedule_ix = Instruction::new_with_bytes(
+        //     MAGIC_PROGRAM_ID,
+        //     &ix_data,
+        //     vec![
+        //         AccountMeta::new(ctx.accounts.payer.key(), true),
+        //         AccountMeta::new(ctx.accounts.counter.key(), false),
+        //     ],
+        // );
         
-        invoke_signed(
-            &schedule_ix,
-            &[
-                ctx.accounts.payer.to_account_info(),
-                ctx.accounts.counter.to_account_info(),
-                ctx.accounts.program.to_account_info(),
-            ],
-            &[],
-        )?;
+        // invoke_signed(
+        //     &schedule_ix,
+        //     &[
+        //         ctx.accounts.payer.to_account_info(),
+        //         ctx.accounts.counter.to_account_info(),
+        //         ctx.accounts.program.to_account_info(),
+        //     ],
+        //     &[],
+        // )?;
         
         Ok(())
     }
@@ -219,8 +219,9 @@ pub struct ScheduleIncrement<'info> {
     pub magic_program: AccountInfo<'info>,
     #[account(mut)]
     pub payer: Signer<'info>,
+    /// CHECK: Passed to CPI - using AccountInfo to avoid Anchor re-serializing stale data after CPI
     #[account(mut, seeds = [COUNTER_SEED], bump)]
-    pub counter: Account<'info, Counter>,
+    pub counter: AccountInfo<'info>,
     /// CHECK: asdf
     pub program: AccountInfo<'info>,
 }

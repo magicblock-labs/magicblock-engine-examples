@@ -141,7 +141,7 @@ describe("crank-counter", () => {
     const start = Date.now();
     let tx = await program.methods
       .scheduleIncrement({
-        taskId: new BN(1),
+        taskId: new BN(2),
         executionIntervalMillis: new BN(100),
         iterations: new BN(3),
       })
@@ -182,52 +182,5 @@ describe("crank-counter", () => {
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`);
 
-    await sleepWithAnimation(4);
-    
-    await printCounter(program, counterPDA, routerConnection, txHash, "✅ After Scheduled Increments");
-
   });
 });
-
-async function printCounter(program: Program<AnchorCounter>, counter_pda: web3.PublicKey, routerConnection: ConnectionMagicRouter, signature: string, message: string) {
-  console.log(message+" Signature: ", signature);
-  const delegationStatus = await routerConnection.getDelegationStatus(counter_pda);
-
-  var counterER = "";
-  var counterBase = "";
-  var delegationStatusMsg = "";
-
-  if (delegationStatus.isDelegated) {
-    const counterAccountER = await routerConnection.getAccountInfo(counter_pda);
-    const countValue = counterAccountER?.data.readBigUInt64LE(8);
-    counterER = countValue?.toString() || "0";
-    counterBase = "<Delegated>";
-    delegationStatusMsg = "✅ Delegated";
-  } else {
-    counterER = "<Not Delegated>";
-    const counterAccount = await program.account.counter.fetch(counter_pda);
-    counterBase = counterAccount.count.toNumber().toString();
-    delegationStatusMsg = "❌ Not Delegated";
-  }
-
-  console.log("--------------------------------");
-  console.log("| "+delegationStatusMsg);
-  console.log("--------------------------------");
-  console.log("| Counter (Base): ", counterBase);
-  console.log("| Counter (ER): ", counterER);
-  console.log("--------------------------------");
-}
-
-async function sleepWithAnimation(seconds: number): Promise<void> {
-  const totalMs = seconds * 1000;
-  const interval = 500;
-  const iterations = Math.floor(totalMs / interval);
-
-  for (let i = 0; i < iterations; i++) {
-    const dots = '.'.repeat((i % 3) + 1);
-    process.stdout.write(`\rWaiting${dots}   `);
-    await new Promise(resolve => setTimeout(resolve, interval));
-  }
-
-  process.stdout.write('\r\x1b[K');
-}
