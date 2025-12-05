@@ -7,7 +7,6 @@ use anchor_lang::solana_program::{
     instruction::{AccountMeta, Instruction},
     program::invoke_signed,
 };
-use std::io::Write;
 use ephemeral_rollups_sdk::consts::MAGIC_PROGRAM_ID;
 use magicblock_magic_program_api::{
     args::ScheduleTaskArgs, instruction::MagicBlockInstruction,
@@ -18,6 +17,13 @@ declare_id!("4BEtKDKV7bZ5866oy9MVCS5cRuNCSQTVV4m2Bzs2HEaf");
 
 
 pub const COUNTER_SEED: &[u8] = b"counter";
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct ScheduleIncrementArgs {
+    pub task_id: u64,
+    pub execution_interval_millis: u64,
+    pub iterations: u64,
+}
 
 #[ephemeral]
 #[program]
@@ -43,7 +49,7 @@ pub mod anchor_counter {
         Ok(())
     }
 
-    pub fn schedule_increment(ctx: Context<ScheduleIncrement>) -> Result<()> {
+    pub fn schedule_increment(ctx: Context<ScheduleIncrement>, args: ScheduleIncrementArgs) -> Result<()> {
         let increment_ix = Instruction {
             program_id: crate::ID,
             accounts: vec![AccountMeta::new(ctx.accounts.counter.key(), false),
@@ -63,9 +69,9 @@ pub mod anchor_counter {
         
         let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(
             ScheduleTaskArgs {
-                task_id: 1,
-                execution_interval_millis: 100,
-                iterations: 3,
+                task_id: args.task_id,
+                execution_interval_millis: args.execution_interval_millis,
+                iterations: args.iterations,
                 instructions: vec![increment_ix],
             },
         ))

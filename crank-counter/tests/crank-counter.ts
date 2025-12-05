@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program, web3 } from "@coral-xyz/anchor";
+import { BN, Program, web3 } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { GetCommitmentSignature, ConnectionMagicRouter, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
@@ -140,7 +140,11 @@ describe("crank-counter", () => {
   it("Schedule increment counter on ER", async () => {
     const start = Date.now();
     let tx = await program.methods
-      .scheduleIncrement()
+      .scheduleIncrement({
+        taskId: new BN(1),
+        executionIntervalMillis: new BN(100),
+        iterations: new BN(3),
+      })
       .accounts({
         magicProgram: MAGIC_PROGRAM_ID,
         payer: providerEphemeralRollup.wallet.publicKey,
