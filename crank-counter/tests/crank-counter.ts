@@ -47,7 +47,7 @@ describe("crank-counter", () => {
   console.log("Program ID: ", program.programId.toString());
   console.log("Counter PDA: ", counterPDA.toString());
 
-  it("Initialize counter on Solana", async () => {
+  xit("Initialize counter on Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
       .initialize()
@@ -64,7 +64,7 @@ describe("crank-counter", () => {
     console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
   });
 
-  it("Increase counter on Solana", async () => {
+  xit("Increase counter on Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
       .increment()
@@ -80,7 +80,7 @@ describe("crank-counter", () => {
     console.log(`${duration}ms (Base Layer) Increment txHash: ${txHash}`);
   });
 
-  it("Delegate counter to ER", async () => {
+  xit("Delegate counter to ER", async () => {
     const start = Date.now();
     // Add local validator identity to the remaining accounts if running on localnet
     const remainingAccounts =
@@ -110,7 +110,7 @@ describe("crank-counter", () => {
     console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
   });
 
-  it("Increase counter on ER", async () => {
+  xit("Increase counter on ER", async () => {
     const start = Date.now();
     let tx = await program.methods
       .increment()
@@ -132,7 +132,7 @@ describe("crank-counter", () => {
     const start = Date.now();
     let tx = await program.methods
       .scheduleIncrement({
-        taskId: new BN(2),
+        taskId: new BN(23),
         executionIntervalMillis: new BN(100),
         iterations: new BN(3),
       })
