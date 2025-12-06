@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
+use ephemeral_rollups_sdk::ephem::{commit_and_undelegate_accounts};
 
 use anchor_lang::solana_program::{
     instruction::{AccountMeta, Instruction},
@@ -49,6 +49,7 @@ pub mod anchor_counter {
         Ok(())
     }
 
+    // Schedules crank for increment counter
     pub fn schedule_increment(ctx: Context<ScheduleIncrement>, args: ScheduleIncrementArgs) -> Result<()> {
         let increment_ix = Instruction {
             program_id: crate::ID,
@@ -115,50 +116,8 @@ pub mod anchor_counter {
         Ok(())
     }
 
-    /// Manual commit the account in the ER.
-    pub fn commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
-        commit_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
-        Ok(())
-    }
-
     /// Undelegate the account from the delegation program
-    pub fn undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
-        commit_and_undelegate_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
-        Ok(())
-    }
-
-    /// Increment the counter + manual commit the account in the ER.
-    pub fn increment_and_commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
-        let counter = &mut ctx.accounts.counter;
-        counter.count += 1;
-        msg!("PDA {} count: {}", counter.key(), counter.count);
-        counter.exit(&crate::ID)?;
-        commit_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
-        Ok(())
-    }
-
-    /// Increment the counter + manual commit the account in the ER.
-    pub fn increment_and_undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
-        let counter = &mut ctx.accounts.counter;
-        counter.count += 1;
-        msg!("PDA {} count: {}", counter.key(), counter.count);
-        // Serialize the Anchor counter account, commit and undelegate
-        counter.exit(&crate::ID)?;
+    pub fn undelegate(ctx: Context<UndelegateInput>) -> Result<()> {
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.counter.to_account_info()],
@@ -198,7 +157,7 @@ pub struct Increment<'info> {
 /// Account for the increment instruction + manual commit.
 #[commit]
 #[derive(Accounts)]
-pub struct IncrementAndCommit<'info> {
+pub struct UndelegateInput<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(mut, seeds = [COUNTER_SEED], bump)]

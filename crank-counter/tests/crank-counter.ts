@@ -47,8 +47,7 @@ describe("crank-counter", () => {
   console.log("Program ID: ", program.programId.toString());
   console.log("Counter PDA: ", counterPDA.toString());
 
-  xit("Initialize counter on Solana", async () => {
-    const start = Date.now();
+  it("Initialize counter on Solana", async () => {
     let tx = await program.methods
       .initialize()
       .accounts({
@@ -60,29 +59,11 @@ describe("crank-counter", () => {
       skipPreflight: true,
       commitment: "confirmed",
     });
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
+    console.log(`[Base Layer] Initialize txHash: ${txHash}`);
   });
 
-  xit("Increase counter on Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
-      .increment()
-      .accounts({
-        counter: counterPDA,
-      })
-      .transaction();
-    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) Increment txHash: ${txHash}`);
-  });
-
-  xit("Delegate counter to ER", async () => {
-    const start = Date.now();
-    // Add local validator identity to the remaining accounts if running on localnet
+  it("Delegate counter to ER", async () => {
+    // Add local validator identity to the remaining accounts if running on localnet.
     const remainingAccounts =
       providerEphemeralRollup.connection.rpcEndpoint.includes("localhost") ||
       providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1")
@@ -106,35 +87,15 @@ describe("crank-counter", () => {
       skipPreflight: true,
       commitment: "confirmed",
     });
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
-  });
-
-  xit("Increase counter on ER", async () => {
-    const start = Date.now();
-    let tx = await program.methods
-      .increment()
-      .accounts({
-        counter: counterPDA,
-      })
-      .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
+    console.log(`[Base Layer] Delegate txHash: ${txHash}`);
   });
 
   it("Schedule increment counter on ER", async () => {
-    const start = Date.now();
     let tx = await program.methods
       .scheduleIncrement({
-        taskId: new BN(23),
-        executionIntervalMillis: new BN(100),
-        iterations: new BN(3),
+        taskId: new BN(1), // Task ID can be arbitrary, used mostly to cancel cranks.
+        executionIntervalMillis: new BN(100), // Milliseconds between executions.
+        iterations: new BN(3), // Number of times to execute the task.
       })
       .accounts({
         magicProgram: MAGIC_PROGRAM_ID,
@@ -150,13 +111,13 @@ describe("crank-counter", () => {
 
     const txHash = await providerEphemeralRollup.sendAndConfirm(tx, [], {
       skipPreflight: true,
+      commitment: "confirmed",
     });
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Schedule Increment txHash: ${txHash}`);
-      });
+    console.log(`[ER] Schedule Increment txHash: ${txHash}`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  });
 
-  xit("undelegate counter on ER to Solana", async () => {
-    const start = Date.now();
+  it("undelegate counter on ER to Solana", async () => {
     let tx = await program.methods
       .undelegate()
       .accounts({
@@ -170,8 +131,12 @@ describe("crank-counter", () => {
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
 
     const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Undelegate txHash: ${txHash}`);
+    console.log(`[ER] Undelegate txHash: ${txHash}`);
 
+  });
+
+  after(async () => {
+    // Exit process to prevent hanging on WebSocket connections
+    setTimeout(() => process.exit(0), 100);
   });
 });
