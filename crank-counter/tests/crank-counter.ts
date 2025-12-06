@@ -24,15 +24,6 @@ describe("crank-counter", () => {
     anchor.Wallet.local(),
   );
 
-  const routerConnection: ConnectionMagicRouter = new ConnectionMagicRouter(
-    process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
-      "https://devnet-router.magicblock.app/",
-    {
-      wsEndpoint:
-        process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
-    }
-  );
-
   console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
   console.log(
     "Ephemeral Rollup Connection: ",
@@ -56,7 +47,7 @@ describe("crank-counter", () => {
   console.log("Program ID: ", program.programId.toString());
   console.log("Counter PDA: ", counterPDA.toString());
 
-  xit("Initialize counter on Solana", async () => {
+  it("Initialize counter on Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
       .initialize()
@@ -73,7 +64,7 @@ describe("crank-counter", () => {
     console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
   });
 
-  xit("Increase counter on Solana", async () => {
+  it("Increase counter on Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
       .increment()
@@ -89,7 +80,7 @@ describe("crank-counter", () => {
     console.log(`${duration}ms (Base Layer) Increment txHash: ${txHash}`);
   });
 
-  xit("Delegate counter to ER", async () => {
+  it("Delegate counter to ER", async () => {
     const start = Date.now();
     // Add local validator identity to the remaining accounts if running on localnet
     const remainingAccounts =
@@ -119,7 +110,7 @@ describe("crank-counter", () => {
     console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
   });
 
-  xit("Increase counter on ER", async () => {
+  it("Increase counter on ER", async () => {
     const start = Date.now();
     let tx = await program.methods
       .increment()
@@ -162,12 +153,12 @@ describe("crank-counter", () => {
     });
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Schedule Increment txHash: ${txHash}`);
-  });
+      });
 
-  xit("Increment and undelegate counter on ER to Solana", async () => {
+  xit("undelegate counter on ER to Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
-      .incrementAndUndelegate()
+      .undelegate()
       .accounts({
         payer: providerEphemeralRollup.wallet.publicKey,
       })
@@ -180,7 +171,7 @@ describe("crank-counter", () => {
 
     const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
     const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`);
+    console.log(`${duration}ms (ER) Undelegate txHash: ${txHash}`);
 
   });
 });

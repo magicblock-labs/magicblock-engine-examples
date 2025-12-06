@@ -13,7 +13,7 @@ use magicblock_magic_program_api::{
 };
 
 
-declare_id!("4BEtKDKV7bZ5866oy9MVCS5cRuNCSQTVV4m2Bzs2HEaf");
+declare_id!("6mCLoiBZrHiAjZvXEefcYK7Pmxv9rm4k9CghGgGXkXNx");
 
 
 pub const COUNTER_SEED: &[u8] = b"counter";
