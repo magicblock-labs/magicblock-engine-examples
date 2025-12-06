@@ -117,7 +117,7 @@ describe("crank-counter", () => {
     await new Promise(resolve => setTimeout(resolve, 2000));
   });
 
-  it("undelegate counter on ER to Solana", async () => {
+  it("Undelegate counter on ER to Solana", async () => {
     let tx = await program.methods
       .undelegate()
       .accounts({

@@ -57,15 +57,6 @@ pub mod anchor_counter {
                         ],
             data: anchor_lang::InstructionData::data(&crate::instruction::Increment {}),
         };
-
-        msg!("Schedule increment instruction: {:?}", increment_ix);
-        invoke_signed(
-            &increment_ix,
-            &[
-                ctx.accounts.counter.to_account_info(),
-            ],
-            &[],
-        )?;
         
         let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(
             ScheduleTaskArgs {
