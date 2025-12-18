@@ -1,20 +1,16 @@
 use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::{commit_and_undelegate_accounts};
+use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 
 use anchor_lang::solana_program::{
     instruction::{AccountMeta, Instruction},
     program::invoke_signed,
 };
 use ephemeral_rollups_sdk::consts::MAGIC_PROGRAM_ID;
-use magicblock_magic_program_api::{
-    args::ScheduleTaskArgs, instruction::MagicBlockInstruction,
-};
+use magicblock_magic_program_api::{args::ScheduleTaskArgs, instruction::MagicBlockInstruction};
 
-
-declare_id!("FW2QPnTK9WwYLNG29GhH7PGYdp7Jwq3pGQrUuNdUnK44");
-
+declare_id!("CSYoUGHEE5urpgmH3qXpwHJSVggwiDY6fqDXLBgHSMcH");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 
@@ -50,22 +46,22 @@ pub mod anchor_counter {
     }
 
     // Schedules crank for increment counter
-    pub fn schedule_increment(ctx: Context<ScheduleIncrement>, args: ScheduleIncrementArgs) -> Result<()> {
+    pub fn schedule_increment(
+        ctx: Context<ScheduleIncrement>,
+        args: ScheduleIncrementArgs,
+    ) -> Result<()> {
         let increment_ix = Instruction {
             program_id: crate::ID,
-            accounts: vec![AccountMeta::new(ctx.accounts.counter.key(), false),
-                        ],
+            accounts: vec![AccountMeta::new(ctx.accounts.counter.key(), false)],
             data: anchor_lang::InstructionData::data(&crate::instruction::Increment {}),
         };
-        
-        let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(
-            ScheduleTaskArgs {
-                task_id: args.task_id,
-                execution_interval_millis: args.execution_interval_millis,
-                iterations: args.iterations,
-                instructions: vec![increment_ix],
-            },
-        ))
+
+        let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(ScheduleTaskArgs {
+            task_id: args.task_id,
+            execution_interval_millis: args.execution_interval_millis,
+            iterations: args.iterations,
+            instructions: vec![increment_ix],
+        }))
         .map_err(|err| {
             msg!("ERROR: failed to serialize args {:?}", err);
             ProgramError::InvalidArgument
@@ -79,7 +75,7 @@ pub mod anchor_counter {
                 AccountMeta::new(ctx.accounts.counter.key(), false),
             ],
         );
-        
+
         invoke_signed(
             &schedule_ix,
             &[
@@ -88,7 +84,7 @@ pub mod anchor_counter {
             ],
             &[],
         )?;
-        
+
         Ok(())
     }
 

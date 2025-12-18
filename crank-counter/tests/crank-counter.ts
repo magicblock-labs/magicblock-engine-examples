@@ -2,7 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN, Program, web3 } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { GetCommitmentSignature, ConnectionMagicRouter, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const COUNTER_SEED = "counter"; 
 
