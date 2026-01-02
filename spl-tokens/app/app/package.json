@@ -1,12 +1,12 @@
 {
     "homepage": ".",
-    "name": "counter-ui-game",
+    "name": "native-spl",
     "version": "0.1.0",
     "private": true,
     "dependencies": {
         "@coral-xyz/anchor": "^0.32.1",
         "@craco/craco": "^7.1.0",
-        "@magicblock-labs/ephemeral-rollups-sdk": "file:/Users/gabrielepicco/Documents/Solana/ephemeral-rollups-sdk/ts/web3js",
+        "@magicblock-labs/ephemeral-rollups-sdk": "0.7.2,
         "@solana/spl-token": "^0.4.9",
         "@solana/wallet-adapter-base": "^0.9.23",
         "@solana/wallet-adapter-react": "^0.15.35",

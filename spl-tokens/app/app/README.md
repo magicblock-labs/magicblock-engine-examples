@@ -1,25 +1,47 @@
+## SPL Tokens Example UI (Ephemeral Rollups)
+
+A React UI that demonstrates SPL Token flows across Solana and MagicBlock Ephemeral Rollups. It pairs with the programs/spl-tokens on-chain program in this repository.
+
+### What this UI shows
+- Create or load a temporary SPL token mint (for demo purposes)
+- Create Associated Token Accounts (ATAs) for users
+- Mint demo tokens to accounts
+- Delegate tokens to the Ephemeral Rollup chain
+- Perform token transfers on the Ephemeral chain
+- Undelegate and withdraw tokens back to Solana
+
+---
+
 ## 🚀 Getting Started
 
-### Npm
+### Prerequisites
+- Node.js (18+ recommended)
+- npm or yarn
 
-```bash
-npm install
+### Install & run
+From this folder (app/app):
+
+Using npm
 ```
-
-```bash
+npm install
 npm run start
 ```
 
-### Yarn
-
-```bash
-yarn install
+Using yarn
 ```
-
-```bash
+yarn install
 yarn start
 ```
 
-## 💚 Open Source
+The dev server will start on http://localhost:3000.
 
-Open Source is at the heart of what we do at MagicBlock. We believe building software in the open, with thriving communities, helps leave the world a little better than we found it.
+---
+
+## ⚙️ Configure RPC endpoints
+This UI talks to two RPC endpoints:
+- REACT_APP_PROVIDER_ENDPOINT: Solana RPC (e.g., local validator or a public devnet RPC)
+- REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT: Ephemeral Rollup RPC
+
+You can set them via environment variables when starting the app. If not provided, the app defaults to MagicBlock public endpoints:
+- REACT_APP_PROVIDER_ENDPOINT → https://rpc.magicblock.app/devnet
+- REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT → https://devnet.magicblock.app
