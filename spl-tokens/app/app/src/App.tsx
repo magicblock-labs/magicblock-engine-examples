@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import * as anchor from "@coral-xyz/anchor";
 import {useConnection} from '@solana/wallet-adapter-react';
-import {WalletMultiButton} from "@solana/wallet-adapter-react-ui";
 import Alert from "./components/Alert";
 import {
     Connection,
@@ -464,15 +464,43 @@ const App: React.FC = () => {
             })();
             if (amountBn <= 0) throw new Error('Invalid amount');
 
-            ixs.push(createTransferInstruction(srcAta, dstAta, src.keypair.publicKey, Number(amountBn)));
+            // Transfer instruction
+            const ixTransfer = createTransferInstruction(
+                srcAta, // source
+                dstAta, // destination
+                src.keypair.publicKey, // owner
+                amountBn,
+                [],
+                TOKEN_PROGRAM_ID
+            );
+            ixs.push(ixTransfer);
 
-            const tx = new Transaction().add(...ixs);
-            tx.feePayer = src.keypair.publicKey;
-            const { blockhash } = await conn.getLatestBlockhash();
-            tx.recentBlockhash = blockhash;
-            tx.sign(src.keypair);
-            const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-            await conn.confirmTransaction(sig, 'confirmed');
+            if (useEphemeral) {
+                // Use Anchor provider on Ephemeral rollup per requested flow
+                const wallet = {
+                    publicKey: src.keypair.publicKey,
+                    signTransaction: async (tx: anchor.web3.Transaction) => {
+                        tx.partialSign(src.keypair);
+                        return tx;
+                    },
+                    signAllTransactions: async (txs: anchor.web3.Transaction[]) => {
+                        txs.forEach((t) => t.partialSign(src.keypair));
+                        return txs;
+                    },
+                } as unknown as anchor.Wallet;
+                const providerEphemeralRollup = new anchor.AnchorProvider(conn, wallet, { commitment: 'confirmed' });
+                const tx = new anchor.web3.Transaction().add(...ixs);
+                await providerEphemeralRollup.sendAndConfirm(tx, [src.keypair], { commitment: 'confirmed' });
+            } else {
+                // L1 path: keep existing send via web3.js
+                const tx = new Transaction().add(...ixs);
+                tx.feePayer = src.keypair.publicKey;
+                const { blockhash } = await conn.getLatestBlockhash();
+                tx.recentBlockhash = blockhash;
+                tx.sign(src.keypair);
+                const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+                await conn.confirmTransaction(sig, 'confirmed');
+            }
             setTransactionSuccess('Transfer confirmed');
             await refreshBalances();
         } catch (e: any) {
@@ -481,6 +509,85 @@ const App: React.FC = () => {
             setIsSubmitting(false);
         }
     }, [accounts, amountStr, connection, decimals, ensureAirdropLamports, ensureAta, refreshBalances, srcIndex, dstIndex, useEphemeral, mint]);
+
+    // Quick transfer helper used by drag-and-drop buttons
+    const performQuickTransfer = useCallback(async (fromIdx: number, toIdx: number, amountUi: string) => {
+        setTransactionError(null);
+        setTransactionSuccess(null);
+        const eConn = ephemeralConnection.current;
+        if (!eConn) return;
+        if (!mint) {
+            setTransactionError('Mint not initialized. Run Setup first.');
+            return;
+        }
+        const src = accounts[fromIdx];
+        const dst = accounts[toIdx];
+        if (!src || !dst) return setTransactionError('Invalid source/destination');
+        if (fromIdx === toIdx) return setTransactionError('Source and destination must be different');
+        const conn = useEphemeral ? eConn : connection;
+        try {
+            setIsSubmitting(true);
+            await ensureAirdropLamports(conn, src.keypair.publicKey);
+            const srcAta = await ensureAta(conn, src.keypair.publicKey);
+            const dstAta = getAssociatedTokenAddressSync(mint, dst.keypair.publicKey, false, TOKEN_PROGRAM_ID);
+            const dstInfo = await conn.getAccountInfo(dstAta);
+
+            const ixs = [] as any[];
+            if (!dstInfo) {
+                ixs.push(createAssociatedTokenAccountInstruction(src.keypair.publicKey, dstAta, dst.keypair.publicKey, mint));
+            }
+
+            // amount to base units
+            const amountBn = (() => {
+                const [w, f = ''] = amountUi.trim().split('.');
+                const frac = (f + '0'.repeat(decimals)).slice(0, decimals);
+                return BigInt(`${w || '0'}${frac}`);
+            })();
+            if (amountBn <= 0) throw new Error('Invalid amount');
+
+            // Transfer instruction
+            const ixTransfer = createTransferInstruction(
+                srcAta,
+                dstAta,
+                src.keypair.publicKey,
+                amountBn,
+                [],
+                TOKEN_PROGRAM_ID
+            );
+            ixs.push(ixTransfer);
+
+            if (useEphemeral) {
+                const wallet = {
+                    publicKey: src.keypair.publicKey,
+                    signTransaction: async (tx: anchor.web3.Transaction) => {
+                        tx.partialSign(src.keypair);
+                        return tx;
+                    },
+                    signAllTransactions: async (txs: anchor.web3.Transaction[]) => {
+                        txs.forEach((t) => t.partialSign(src.keypair));
+                        return txs;
+                    },
+                } as unknown as anchor.Wallet;
+                const providerEphemeralRollup = new anchor.AnchorProvider(conn, wallet, { commitment: 'confirmed' });
+                const tx = new anchor.web3.Transaction().add(...ixs);
+                await providerEphemeralRollup.sendAndConfirm(tx, [src.keypair], { commitment: 'confirmed' });
+            } else {
+                const tx = new Transaction().add(...ixs);
+                tx.feePayer = src.keypair.publicKey;
+                const { blockhash } = await conn.getLatestBlockhash();
+                tx.recentBlockhash = blockhash;
+                tx.sign(src.keypair);
+                const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+                await conn.confirmTransaction(sig, 'confirmed');
+            }
+            setTransactionSuccess('Transfer confirmed');
+            await refreshBalances();
+        } catch (e: any) {
+            setTransactionError(String(e?.message || e));
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [accounts, connection, decimals, ensureAirdropLamports, ensureAta, refreshBalances, useEphemeral, mint]);
 
     const setupAll = useCallback(async () => {
         const eConn = ephemeralConnection.current;
@@ -587,14 +694,30 @@ const App: React.FC = () => {
               }
             `}</style>
             <div className="counter-ui" style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 64 }}>
-            <div className="wallet-buttons" style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <WalletMultiButton/>
-            </div>
-            <h1 style={{ textAlign: 'center', marginBottom: 16 }}>Wallet Balances</h1>
+            <h1 style={{ textAlign: 'center', marginBottom: 16, marginTop: 16 }}> </h1>
 
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
                 {accounts.map((a, i) => (
-                    <div key={i} style={{
+                    <div key={i}
+                         onDragOver={(e) => {
+                             // Allow dropping quick-transfer buttons
+                             e.preventDefault();
+                         }}
+                         onDrop={(e) => {
+                             try {
+                                 const raw = e.dataTransfer.getData('text/plain');
+                                 if (!raw) return;
+                                 const payload = JSON.parse(raw);
+                                 if (payload && payload.type === 'quickTransfer') {
+                                     const fromIdx = Number(payload.from);
+                                     const amountUi = String(payload.amountUi);
+                                     if (!Number.isNaN(fromIdx) && amountUi) {
+                                         performQuickTransfer(fromIdx, i, amountUi).catch(console.error);
+                                     }
+                                 }
+                             } catch (_) { /* ignore malformed payloads */ }
+                         }}
+                         style={{
                         minWidth: 250,
                         background: 'linear-gradient(180deg, #0f172a 0%, #0b1220 100%)',
                         border: '1px solid rgba(255,255,255,0.08)',
@@ -663,12 +786,59 @@ const App: React.FC = () => {
                                 <div style={{ fontWeight: 700, color: '#a78bfa', fontSize: 16 }}>{a.eDelegated ? fmt(a.eBalance, decimals) : '-'}</div>
                             </div>
                         </div>
-                        <div style={{ height: 8 }} />
+                        <div style={{ height: 2 }} />
+                        {/* Quick transfer draggable chips (1, 3, 10) */}
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
+                            {[1, 3, 10].map((amt) => (
+                                <button
+                                    key={`qt-${i}-${amt}`}
+                                    draggable
+                                    onDragStart={(e) => {
+                                        const payload = JSON.stringify({ type: 'quickTransfer', from: i, amountUi: String(amt) });
+                                        e.dataTransfer.setData('text/plain', payload);
+                                        // Optional drag image tweak for better UX
+                                        const el = document.createElement('div');
+                                        el.style.padding = '2px 8px';
+                                        el.style.background = 'rgba(167,139,250,0.2)';
+                                        el.style.color = '#e5e7eb';
+                                        el.style.border = '1px solid rgba(167,139,250,0.35)';
+                                        el.style.borderRadius = '999px';
+                                        el.style.fontSize = '12px';
+                                        el.style.position = 'absolute';
+                                        el.style.top = '-9999px';
+                                        el.textContent = `${amt}`;
+                                        document.body.appendChild(el);
+                                        e.dataTransfer.setDragImage(el, 0, 0);
+                                        setTimeout(() => document.body.removeChild(el), 0);
+                                    }}
+                                    title={`Drag to another wallet to transfer ${amt}`}
+                                    aria-label={`Drag to another wallet to transfer ${amt}`}
+                                    style={{
+                                        background: 'rgba(255,255,255,0.06)',
+                                        border: '1px solid rgba(167,139,250,0.35)',
+                                        color: '#e5e7eb',
+                                        borderRadius: 999,
+                                        padding: '2px 8px',
+                                        fontSize: 12,
+                                        lineHeight: 1,
+                                        cursor: 'grab',
+                                        userSelect: 'none'
+                                    }}
+                                    onClick={() => {
+                                        // Click fallback: set up transfer form and execute using existing handler
+                                        setSrcIndex(i);
+                                        setAmountStr(String(amt));
+                                    }}
+                                >
+                                    {amt}
+                                </button>
+                            ))}
+                        </div>
+                        <div style={{ height: 2 }} />
                         {/* Delegation status on Ephemeral chain */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                            <div style={{ fontSize: 12, color: '#9ca3af' }}>Delegation</div>
                             <div style={{ fontWeight: 700, fontSize: 14, color: a.eDelegated ? '#34d399' : '#f87171' }}>
-                                {a.eDelegated ? 'Delegated' : 'Not delegated'}
+                                {a.eDelegated ? 'eATA Delegated' : 'eAta not delegated'}
                             </div>
                         </div>
                         <div style={{ height: 8 }} />
@@ -722,6 +892,8 @@ const App: React.FC = () => {
                                     });
                                     setTransactionError(null);
                                     setTransactionSuccess(null);
+                                    const eConn = ephemeralConnection.current;
+                                    if (!eConn) return;
                                     if (!connection) return;
                                     if (!mint) {
                                         setTransactionError('Mint not initialized. Run Setup first.');
@@ -737,6 +909,23 @@ const App: React.FC = () => {
                                         const frac = (f + '0'.repeat(decimals)).slice(0, decimals);
                                         const amountBn = BigInt(`${w || '0'}${frac}`);
                                         if (amountBn <= 0n) throw new Error('Invalid amount');
+
+                                        if (a.eDelegated) {
+                                            // 1) Send undelegate instruction on Ephemeral rollup
+                                            await ensureAirdropLamports(eConn, a.keypair.publicKey);
+                                            const ixU = undelegateIx(a.keypair.publicKey, mint);
+                                            const txU = new Transaction().add(ixU);
+                                            txU.feePayer = a.keypair.publicKey;
+                                            const {blockhash: bhU} = await eConn.getLatestBlockhash();
+                                            txU.recentBlockhash = bhU;
+                                            txU.sign(a.keypair);
+                                            const sigU = await eConn.sendRawTransaction(txU.serialize(), {skipPreflight: true});
+                                            await eConn.confirmTransaction(sigU, 'confirmed');
+
+                                            // Wait for commitment signature, then confirm on L1
+                                            const txCommitSgn = await GetCommitmentSignature(sigU, eConn);
+                                            await connection.confirmTransaction(txCommitSgn, 'confirmed');
+                                        }
 
                                         // Build instructions via SDK
                                         const ixs = await delegateSpl(a.keypair.publicKey, mint, amountBn, {validator: validator.current});
@@ -818,7 +1007,7 @@ const App: React.FC = () => {
                             />
                             <button
                                 onClick={async () => {
-                                    // Undelegate on Ephemeral first, then withdraw on L1, for this specific account
+                                    // Undelegate on Ephemeral first (if delegated), then withdraw on L1, for this specific account
                                     setTransactionError(null);
                                     setTransactionSuccess(null);
                                     const eConn = ephemeralConnection.current;
@@ -838,20 +1027,22 @@ const App: React.FC = () => {
                                         const amountBn = BigInt(`${w || '0'}${frac}`);
                                         if (amountBn <= 0n) throw new Error('Invalid amount');
 
-                                        // 1) Send undelegate instruction on Ephemeral rollup
-                                        await ensureAirdropLamports(eConn, a.keypair.publicKey);
-                                        const ixU = undelegateIx(a.keypair.publicKey, mint);
-                                        const txU = new Transaction().add(ixU);
-                                        txU.feePayer = a.keypair.publicKey;
-                                        const { blockhash: bhU } = await eConn.getLatestBlockhash();
-                                        txU.recentBlockhash = bhU;
-                                        txU.sign(a.keypair);
-                                        const sigU = await eConn.sendRawTransaction(txU.serialize(), { skipPreflight: true });
-                                        await eConn.confirmTransaction(sigU, 'confirmed');
+                                        if (a.eDelegated) {
+                                            // 1) Send undelegate instruction on Ephemeral rollup
+                                            await ensureAirdropLamports(eConn, a.keypair.publicKey);
+                                            const ixU = undelegateIx(a.keypair.publicKey, mint);
+                                            const txU = new Transaction().add(ixU);
+                                            txU.feePayer = a.keypair.publicKey;
+                                            const {blockhash: bhU} = await eConn.getLatestBlockhash();
+                                            txU.recentBlockhash = bhU;
+                                            txU.sign(a.keypair);
+                                            const sigU = await eConn.sendRawTransaction(txU.serialize(), {skipPreflight: true});
+                                            await eConn.confirmTransaction(sigU, 'confirmed');
 
-                                        // Wait for commitment signature, then confirm on L1
-                                        const txCommitSgn = await GetCommitmentSignature(sigU, eConn);
-                                        await connection.confirmTransaction(txCommitSgn, 'confirmed');
+                                            // Wait for commitment signature, then confirm on L1
+                                            const txCommitSgn = await GetCommitmentSignature(sigU, eConn);
+                                            await connection.confirmTransaction(txCommitSgn, 'confirmed');
+                                        }
 
                                         // 2) Withdraw on L1 for the requested amount
                                         const ixW = withdrawSplIx(a.keypair.publicKey, mint, amountBn);

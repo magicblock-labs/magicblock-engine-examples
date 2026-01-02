@@ -1,8 +1,8 @@
 import * as anchor from "@coral-xyz/anchor";
-import {Program} from "@coral-xyz/anchor";
+import {BN, Program} from "@coral-xyz/anchor";
 import {
     Keypair,
-    LAMPORTS_PER_SOL,
+    LAMPORTS_PER_SOL, PublicKey,
     SystemProgram,
 } from "@solana/web3.js";
 
@@ -27,16 +27,25 @@ describe("spl-tokens", () => {
     const provider = anchor.AnchorProvider.env();
     anchor.setProvider(provider);
     const connection = provider.connection;
+    let validator: PublicKey;
 
     const providerEphemeralRollup = new anchor.AnchorProvider(
-      new anchor.web3.Connection(
-        process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
-          "http://localhost:7799",
-        {
-          wsEndpoint:
-            process.env.EPHEMERAL_WS_ENDPOINT || "ws://localhost:7800",
-        },
-      ),
+      // new anchor.web3.Connection(
+      //   process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
+      //     "https://devnet-as.magicblock.app/",
+      //     {
+      //         wsEndpoint:
+      //             process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
+      //     },
+      // ),
+        new anchor.web3.Connection(
+            process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
+            "http://localhost:7799",
+            {
+                wsEndpoint:
+                    process.env.EPHEMERAL_WS_ENDPOINT || "ws://localhost:7800",
+            },
+        ),
       anchor.Wallet.local(),
     );
     console.log(
@@ -143,11 +152,13 @@ describe("spl-tokens", () => {
         if (acctB.amount !== amount) {
             throw new Error(`Recipient B expected ${amount}, got ${acctB.amount}`);
         }
+
+        // Get the validator identity
+        validator = new PublicKey((await (ephemeralConnection as any)._rpcRequest("getIdentity", []))!.result!.identity);
+        console.log("Validator: ", validator.toBase58());
     });
 
-    const program = anchor.workspace.SplTokens as Program<SplTokens>;
-
-    it("Delegate SPL tokens", async () => {
+    it("Delegate SPL tokens, do a transfer and undelegate", async () => {
         console.log("\nUser1: ", recipientA.publicKey.toBase58());
         console.log("User2: ", recipientB.publicKey.toBase58());
         const ataA = getAssociatedTokenAddressSync(
@@ -168,17 +179,17 @@ describe("spl-tokens", () => {
 
         // Delegate 50 tokens for recipientA
         // multiply amount if decimals > 0: * (10n ** BigInt(decimals))
-        const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 50n);
+        const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 50n, {validator: validator});
         const tx = new anchor.web3.Transaction();
         ixs.forEach(ix => tx.add(ix));
-        await provider.sendAndConfirm(tx, [recipientA], { commitment: "confirmed" });
+        await provider.sendAndConfirm(tx, [recipientA], { commitment: "confirmed", skipPreflight: true });
 
         // Delegate 10 tokens for recipientB
-        const ixs2 = await delegateSpl(recipientB.publicKey, mint.publicKey, 10n);
+        const ixs2 = await delegateSpl(recipientB.publicKey, mint.publicKey, 10n, {validator: validator});
         const tx2 = new anchor.web3.Transaction();
         ixs2.forEach(ix => tx2.add(ix));
 
-        await provider.sendAndConfirm(tx2, [recipientB], { commitment: "confirmed" });
+        await provider.sendAndConfirm(tx2, [recipientB], { commitment: "confirmed", skipPreflight: true });
 
         /// Transfer some tokens in the ER
         const amountToTransfer = 2;
@@ -190,7 +201,7 @@ describe("spl-tokens", () => {
             [],
             TOKEN_PROGRAM_ID
         );
-        let sgn = await providerEphemeralRollup.sendAndConfirm(new anchor.web3.Transaction().add(ixTransfer), [recipientA], { commitment: "confirmed" });
+        let sgn = await providerEphemeralRollup.sendAndConfirm(new anchor.web3.Transaction().add(ixTransfer), [recipientA], { commitment: "confirmed", skipPreflight: true });
         console.log(`\nTransfer signature: ${sgn}`)
 
         // Check balances in the ER
@@ -222,4 +233,48 @@ describe("spl-tokens", () => {
         assert(acctA.amount == 998n);
         assert(acctB.amount == 1002n);
     });
+
+    const program = anchor.workspace.SplTokens as Program<SplTokens>;
+
+    it("Delegate SPL tokens and do a transfer trough a program", async () => {
+        const ataA = getAssociatedTokenAddressSync(
+            mint.publicKey,
+            recipientA.publicKey
+        );
+
+        const ataB = getAssociatedTokenAddressSync(
+            mint.publicKey,
+            recipientB.publicKey
+        );
+
+        let acctA = await getAccount(connection, ataA);
+        let acctB = await getAccount(connection, ataB);
+
+        // Delegate 10 tokens for recipientA
+        // multiply amount if decimals > 0: * (10n ** BigInt(decimals))
+        const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 10n, {validator: validator});
+        const tx = new anchor.web3.Transaction();
+        ixs.forEach(ix => tx.add(ix));
+        await provider.sendAndConfirm(tx, [recipientA], { commitment: "confirmed" });
+
+        // Delegate 10 tokens for recipientB
+        const ixs2 = await delegateSpl(recipientB.publicKey, mint.publicKey, 10n, {validator: validator});
+        const tx2 = new anchor.web3.Transaction();
+        ixs2.forEach(ix => tx2.add(ix));
+
+        await provider.sendAndConfirm(tx2, [recipientB], { commitment: "confirmed" });
+
+        /// Transfer some tokens in the ER through a program
+        const txT = await program.methods.transfer(new BN(2)).accounts({
+            payer: recipientA.publicKey,
+            from: ataA,
+            to: ataB,
+        }).transaction();
+        txT.recentBlockhash = (await ephemeralConnection.getLatestBlockhash()).blockhash;
+        txT.sign(recipientA);
+        const sgn = await ephemeralConnection.sendRawTransaction(txT.serialize(), { skipPreflight: true });
+        await ephemeralConnection.confirmTransaction(sgn, "confirmed");
+        console.log(`\nTransfer signature: ${sgn}`);
+    });
+
 });
