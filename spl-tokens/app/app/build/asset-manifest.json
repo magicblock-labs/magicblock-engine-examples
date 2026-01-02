@@ -1,0 +1,21 @@
+{
+  "files": {
+    "main.css": "./static/css/main.efb66fa8.css",
+    "main.js": "./static/js/main.6cd2807b.js",
+    "static/js/974.52a5d672.chunk.js": "./static/js/974.52a5d672.chunk.js",
+    "static/js/918.dcbf265b.chunk.js": "./static/js/918.dcbf265b.chunk.js",
+    "static/js/37.d081e02b.chunk.js": "./static/js/37.d081e02b.chunk.js",
+    "static/media/dcap-qvl-web_bg.wasm": "./static/media/dcap-qvl-web_bg.b7c487cd088fce458a56.wasm",
+    "static/media/index.browser.cjs": "./static/media/index.browser.4e2990590bd9cd8b0e2c.cjs",
+    "index.html": "./index.html",
+    "main.efb66fa8.css.map": "./static/css/main.efb66fa8.css.map",
+    "main.6cd2807b.js.map": "./static/js/main.6cd2807b.js.map",
+    "974.52a5d672.chunk.js.map": "./static/js/974.52a5d672.chunk.js.map",
+    "918.dcbf265b.chunk.js.map": "./static/js/918.dcbf265b.chunk.js.map",
+    "37.d081e02b.chunk.js.map": "./static/js/37.d081e02b.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.efb66fa8.css",
+    "static/js/main.6cd2807b.js"
+  ]
+}

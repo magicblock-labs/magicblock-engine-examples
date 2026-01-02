@@ -1,0 +1,34 @@
+.active {
+  display: grid;
+  place-items: center;
+  margin: -5px 20px 5px;
+  width: 100%;
+  height: 100%;
+
+  .circle {
+    display: block;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    transition: border-color 0.3s ease;
+
+    &.on {
+      border: 4px solid #ccc;
+      background-color: green;
+    }
+
+    &.off {
+      border: 4px solid #ccc;
+      background-color: transparent;
+    }
+  }
+}
+
+.active-div {
+  display: flex;
+  justify-content: center;
+  margin: 15px auto;
+  width: fit-content;
+  position: relative;
+  border-radius: 10px;
+}
