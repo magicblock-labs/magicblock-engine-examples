@@ -30,22 +30,14 @@ describe("spl-tokens", () => {
     let validator: PublicKey;
 
     const providerEphemeralRollup = new anchor.AnchorProvider(
-      // new anchor.web3.Connection(
-      //   process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
-      //     "https://devnet-as.magicblock.app/",
-      //     {
-      //         wsEndpoint:
-      //             process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
-      //     },
-      // ),
-        new anchor.web3.Connection(
-            process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
-            "http://localhost:7799",
-            {
-                wsEndpoint:
-                    process.env.EPHEMERAL_WS_ENDPOINT || "ws://localhost:7800",
-            },
-        ),
+      new anchor.web3.Connection(
+        process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
+          "https://devnet-as.magicblock.app/",
+          {
+              wsEndpoint:
+                  process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
+          },
+      ),
       anchor.Wallet.local(),
     );
     console.log(

@@ -16,5 +16,5 @@
 
 # But don't ignore the target/idl/ directory
 !**/anchor-minter/target/idl/
-!programs/spl-tokens/target/idl/
+!**programs/spl-tokens/target/idl/
 !**/anchor-minter/target/deploy/
