@@ -9,7 +9,7 @@ skip-lint = false
 spl-tokens = "FgvEeit1djLPPjozq9zW9R8Ahu5JpijcdWQxqL4P887"
 
 [programs.localnet]
-spl-tokens= "FgvEeit1djLPPjozq9zW9R8Ahu5JpijcdWQxqL4P887"
+spl-tokens = "FgvEeit1djLPPjozq9zW9R8Ahu5JpijcdWQxqL4P887"
 
 
 [registry]
