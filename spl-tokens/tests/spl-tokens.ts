@@ -236,7 +236,7 @@ describe("spl-tokens", () => {
 
     const program = anchor.workspace.SplTokens as Program<SplTokens>;
 
-    it("Delegate SPL tokens and do a transfer trough a program", async () => {
+    it("Delegate SPL tokens and do a transfer through a program", async () => {
         const ataA = getAssociatedTokenAddressSync(
             mint.publicKey,
             recipientA.publicKey
