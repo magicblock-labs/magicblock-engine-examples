@@ -1,6 +1,6 @@
 # Ephemeral Counter UI
 
-
+https://spl-demo.magicblock.app/
 
 This is a React-based UI for the Ephemeral Counter program, which is part of the documentation for integrating with the Ephemeral Rollups.
 
