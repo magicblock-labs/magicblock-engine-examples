@@ -9,7 +9,17 @@ import {
 
 const COUNTER_SEED = "counter";
 
-describe("magic-router-and-multiple-atomic-ixs", () => {
+const anchorProvider = anchor.AnchorProvider.env();
+const isLocalnet = anchorProvider.connection.rpcEndpoint.includes("localhost") || 
+                   anchorProvider.connection.rpcEndpoint.includes("127.0.0.1");
+
+if (isLocalnet) {
+  console.log("Skipping 'magic-router-and-multiple-atomic-ixs' test suite because it's running on localnet");
+}
+
+const testSuite = isLocalnet ? describe.skip : describe;
+
+testSuite("magic-router-and-multiple-atomic-ixs", () => {
     console.log("advanced-magic.ts")
     
     const connection = new ConnectionMagicRouter(
