@@ -223,13 +223,10 @@ const App: React.FC = () => {
         return () => { cancelled = true };
     }, [connection, mint]);
 
-    const ensureAirdropLamports = useCallback(async (conn: Connection, pubkey: PublicKey, minLamports = 0.05 * LAMPORTS_PER_SOL) => {
-        const info = await conn.getAccountInfo(pubkey);
-        if (!info || info.lamports < minLamports) {
-            // Request only 0.1 SOL when balance is below 0.05 SOL
-            const amount = 0.1 * LAMPORTS_PER_SOL;
-            try { await conn.requestAirdrop(pubkey, amount); } catch (_) { /* ignore */ }
-        }
+    const ensureAirdropLamports = useCallback(async (conn: Connection, pubkey: PublicKey) => {
+        // Request only 0.1 SOL when balance is below 0.05 SOL
+        const amount = 0.1 * LAMPORTS_PER_SOL;
+        try { await conn.requestAirdrop(pubkey, amount); } catch (_) { /* ignore */ }
     }, []);
 
     const ensureAta = useCallback(async (conn: Connection, owner: PublicKey): Promise<PublicKey> => {
@@ -246,12 +243,11 @@ const App: React.FC = () => {
             // We assume owner is a temp Keypair we control
             const kp = accounts.find(a => a.keypair.publicKey.equals(owner))?.keypair;
             if (!kp) throw new Error('Missing keypair for owner');
-            await ensureAirdropLamports(conn, owner);
             tx.sign(kp);
             await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
         }
         return ata;
-    }, [accounts, ensureAirdropLamports, mint]);
+    }, [accounts, mint]);
 
     const refreshBalances = useCallback(async () => {
         const eConn = ephemeralConnection.current;
@@ -474,7 +470,6 @@ const App: React.FC = () => {
         const conn = useEphemeral ? eConn : connection;
         try {
             setIsSubmitting(true);
-            await ensureAirdropLamports(conn, src.keypair.publicKey);
             const srcAta = await ensureAta(conn, src.keypair.publicKey);
             const dstAta = getAssociatedTokenAddressSync(mint, dst.keypair.publicKey, false, TOKEN_PROGRAM_ID);
             const dstInfo = await conn.getAccountInfo(dstAta);
@@ -549,7 +544,7 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, decimals, ensureAirdropLamports, ensureAta, mint, refreshBalances, useEphemeral]);
+    }, [accounts, connection, decimals, ensureAta, mint, refreshBalances, useEphemeral]);
 
     const handleTransfer = useCallback(async () => {
         await performTransfer(srcIndex, dstIndex, amountStr);
@@ -635,6 +630,12 @@ const App: React.FC = () => {
             setMint(mintKp.publicKey);
             setDecimals(mintDecimals);
             setTransactionSuccess('Mint created, ATAs initialized, and tokens minted on all accounts');
+
+            // Airdrop a small amount of SOL to each local wallet to cover fees
+            for (const a of accounts) {
+                await ensureAirdropLamports(connection, a.keypair.publicKey);
+            }
+
             await refreshBalances();
         } catch (e: any) {
             setTransactionError(String(e?.message || e));
@@ -861,7 +862,7 @@ const App: React.FC = () => {
                                     if (!eConn) return;
                                     if (!connection) return;
                                     if (!mint) {
-                                        setTransactionError('Mint not initialized. Run Setup first.');
+                                        setTransactionError('Mint not initialized. Airdrops funds manually if rate-limited');
                                         return;
                                     }
                                     try {
@@ -877,7 +878,6 @@ const App: React.FC = () => {
 
                                         if (a.eDelegated) {
                                             // 1) Send undelegate instruction on Ephemeral rollup
-                                            await ensureAirdropLamports(eConn, a.keypair.publicKey);
                                             const ixU = undelegateIx(a.keypair.publicKey, mint);
                                             const txU = new Transaction().add(ixU);
                                             txU.feePayer = a.keypair.publicKey;
@@ -994,7 +994,6 @@ const App: React.FC = () => {
 
                                         if (a.eDelegated) {
                                             // 1) Send undelegate instruction on Ephemeral rollup
-                                            await ensureAirdropLamports(eConn, a.keypair.publicKey);
                                             const ixU = undelegateIx(a.keypair.publicKey, mint);
                                             const txU = new Transaction().add(ixU);
                                             txU.feePayer = a.keypair.publicKey;
