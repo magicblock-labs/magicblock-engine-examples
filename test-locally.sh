@@ -6,11 +6,23 @@ set +m
 
 SOLANA_PID=""
 EPHEMERAL_PID=""
+SOLANA_STARTED_BY_US=false
+EPHEMERAL_STARTED_BY_US=false
 PASSED_TESTS=()
 FAILED_TESTS=()
 FAILED_TESTS_NAMES=()
 FAILED_TESTS_ERRORS=()
 TEST_COUNT=0
+
+# Check if a port is in use
+check_port() {
+  local port=$1
+  if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+    return 0  # Port is in use
+  else
+    return 1  # Port is not in use
+  fi
+}
 
 # Test runner function
 run_test() {
@@ -251,39 +263,70 @@ cleanup() {
   # Clear current line
   echo -ne "\r                                                                                  \r"
   echo ""
-  echo -n "Stopping validators... "
   
-  # Kill by PID if available
-  if [ -n "$SOLANA_PID" ]; then
-    kill -TERM $SOLANA_PID 2>/dev/null || true
-  fi
-  if [ -n "$EPHEMERAL_PID" ]; then
-    kill -TERM $EPHEMERAL_PID 2>/dev/null || true
-  fi
-  
-  # Give them a moment to gracefully shutdown
-  sleep 1
-  
-  # Force kill any remaining processes
-  if [ -n "$SOLANA_PID" ]; then
-    kill -9 $SOLANA_PID 2>/dev/null || true
-  fi
-  if [ -n "$EPHEMERAL_PID" ]; then
-    kill -9 $EPHEMERAL_PID 2>/dev/null || true
-  fi
-  
-  # Also kill by process name as fallback
-  pkill -f "solana-test-validator" 2>/dev/null || true
-  pkill -f "ephemeral-validator" 2>/dev/null || true
-  
-  # Wait for background jobs silently
-  { wait 2>/dev/null || true; } 2>/dev/null
-  
-  # Check if validators are actually stopped
-  if ! pgrep -f "solana-test-validator" >/dev/null 2>&1 && ! pgrep -f "ephemeral-validator" >/dev/null 2>&1; then
-    echo "✓ Stopped"
+  # Only stop validators if we started them
+  if [ "$SOLANA_STARTED_BY_US" = true ] || [ "$EPHEMERAL_STARTED_BY_US" = true ]; then
+    echo -n "Stopping validators... "
+    
+    # Kill by PID if available and we started them
+    if [ "$SOLANA_STARTED_BY_US" = true ] && [ -n "$SOLANA_PID" ]; then
+      kill -TERM $SOLANA_PID 2>/dev/null || true
+    fi
+    if [ "$EPHEMERAL_STARTED_BY_US" = true ] && [ -n "$EPHEMERAL_PID" ]; then
+      kill -TERM $EPHEMERAL_PID 2>/dev/null || true
+    fi
+    
+    # Give them a moment to gracefully shutdown
+    sleep 1
+    
+    # Force kill any remaining processes
+    if [ "$SOLANA_STARTED_BY_US" = true ] && [ -n "$SOLANA_PID" ]; then
+      kill -9 $SOLANA_PID 2>/dev/null || true
+    fi
+    if [ "$EPHEMERAL_STARTED_BY_US" = true ] && [ -n "$EPHEMERAL_PID" ]; then
+      kill -9 $EPHEMERAL_PID 2>/dev/null || true
+    fi
+    
+    # Also kill by process name as fallback (only if we started them)
+    if [ "$SOLANA_STARTED_BY_US" = true ]; then
+      pkill -f "solana-test-validator" 2>/dev/null || true
+    fi
+    if [ "$EPHEMERAL_STARTED_BY_US" = true ]; then
+      pkill -f "ephemeral-validator" 2>/dev/null || true
+    fi
+    
+    # Wait for background jobs silently
+    { wait 2>/dev/null || true; } 2>/dev/null
+    
+    # Check if validators are actually stopped
+    local should_check=false
+    if [ "$SOLANA_STARTED_BY_US" = true ] && [ "$EPHEMERAL_STARTED_BY_US" = true ]; then
+      should_check=true
+    elif [ "$SOLANA_STARTED_BY_US" = true ]; then
+      if ! pgrep -f "solana-test-validator" >/dev/null 2>&1; then
+        echo "✓ Stopped"
+      else
+        echo "✗ Failed to stop"
+      fi
+      should_check=false
+    elif [ "$EPHEMERAL_STARTED_BY_US" = true ]; then
+      if ! pgrep -f "ephemeral-validator" >/dev/null 2>&1; then
+        echo "✓ Stopped"
+      else
+        echo "✗ Failed to stop"
+      fi
+      should_check=false
+    fi
+    
+    if [ "$should_check" = true ]; then
+      if ! pgrep -f "solana-test-validator" >/dev/null 2>&1 && ! pgrep -f "ephemeral-validator" >/dev/null 2>&1; then
+        echo "✓ Stopped"
+      else
+        echo "✗ Failed to stop"
+      fi
+    fi
   else
-    echo "✗ Failed to stop"
+    echo "Validators were already running, leaving them running..."
   fi
   
   exit 0
@@ -302,46 +345,64 @@ if [ ! -f ~/.config/solana/id.json ]; then
   solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
 fi
 
-# Start Solana Test Validator
-echo "Starting Solana Test Validator..."
-solana-test-validator \
-  --ledger ./test-ledger \
-  --reset \
-  --clone mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev \
-  --clone EpJnX7ueXk7fKojBymqmVuCuwyhDQsYcLVL1XMsBbvDX \
-  --clone 7JrkjmZPprHwtuvtuGTXp9hwfGYFAQLnLeFM52kqAgXg \
-  --clone noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV \
-  --clone-upgradeable-program DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh \
-  --clone Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh \
-  --clone 5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc \
-  --clone F72HqCR8nwYsVyeVd38pgKkjXmXFzVAM8rjZZsXWbdE \
-  --clone vrfkfM4uoisXZQPrFiS2brY4oMkU9EWjyvmvqaFd5AS \
-  --clone-upgradeable-program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz \
-  --clone-upgradeable-program BTWAqWNBmF2TboMh3fxMJfgR16xGHYD7Kgr2dPwbRPBi \
-  --url https://api.devnet.solana.com > ./test-ledger.log 2>&1 &
+# Check if Solana Test Validator is already running on port 8899
+if check_port 8899; then
+  echo "Solana Test Validator is already running on port 8899, skipping startup..."
+  SOLANA_STARTED_BY_US=false
+  # Try to get the PID of the running validator
+  SOLANA_PID=$(lsof -ti :8899 | head -1)
+else
+  # Start Solana Test Validator
+  echo "Starting Solana Test Validator..."
+  solana-test-validator \
+    --ledger ./test-ledger \
+    --reset \
+    --clone mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev \
+    --clone EpJnX7ueXk7fKojBymqmVuCuwyhDQsYcLVL1XMsBbvDX \
+    --clone 7JrkjmZPprHwtuvtuGTXp9hwfGYFAQLnLeFM52kqAgXg \
+    --clone noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV \
+    --clone-upgradeable-program DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh \
+    --clone Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh \
+    --clone 5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc \
+    --clone F72HqCR8nwYsVyeVd38pgKkjXmXFzVAM8rjZZsXWbdE \
+    --clone vrfkfM4uoisXZQPrFiS2brY4oMkU9EWjyvmvqaFd5AS \
+    --clone-upgradeable-program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz \
+    --clone-upgradeable-program BTWAqWNBmF2TboMh3fxMJfgR16xGHYD7Kgr2dPwbRPBi \
+    --url https://api.devnet.solana.com > ./test-ledger.log 2>&1 &
+  
+  SOLANA_PID=$!
+  SOLANA_STARTED_BY_US=true
+  
+  # Wait for validator to be ready
+  echo "Waiting for Solana validator..."
+  for i in {1..30}; do
+    if solana cluster-version --url http://localhost:8899 >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+  echo "Solana validator is ready, waiting for RPC to stabilize..."
+fi
 
-SOLANA_PID=$!
-
-# Wait for validator to be ready
-echo "Waiting for Solana validator..."
-for i in {1..30}; do
-  if solana cluster-version --url http://localhost:8899 >/dev/null 2>&1; then
-    break
-  fi
-  sleep 1
-done
-echo "Solana validator is ready, waiting for RPC to stabilize..."
-
-# Start MagicBlock Ephemeral Validator
-echo "Starting MagicBlock Ephemeral Validator..."
-RUST_LOG=info ephemeral-validator \
-  --accounts-lifecycle ephemeral \
-  --remote-cluster development \
-  --remote-url http://localhost:8899 \
-  --remote-ws-url ws://localhost:8900 \
-  --rpc-port 7799 > ./ephemeral-validator.log 2>&1 &
-
-EPHEMERAL_PID=$!
+# Check if MagicBlock Ephemeral Validator is already running on port 7799
+if check_port 7799; then
+  echo "MagicBlock Ephemeral Validator is already running on port 7799, skipping startup..."
+  EPHEMERAL_STARTED_BY_US=false
+  # Try to get the PID of the running validator
+  EPHEMERAL_PID=$(lsof -ti :7799 | head -1)
+else
+  # Start MagicBlock Ephemeral Validator
+  echo "Starting MagicBlock Ephemeral Validator..."
+  RUST_LOG=info ephemeral-validator \
+    --accounts-lifecycle ephemeral \
+    --remote-cluster development \
+    --remote-url http://localhost:8899 \
+    --remote-ws-url ws://localhost:8900 \
+    --rpc-port 7799 > ./ephemeral-validator.log 2>&1 &
+  
+  EPHEMERAL_PID=$!
+  EPHEMERAL_STARTED_BY_US=true
+fi
 
 echo "Validators ready. Running tests..."
 echo ""
