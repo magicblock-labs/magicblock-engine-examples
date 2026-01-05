@@ -68,25 +68,98 @@ type StoredMint = { version: 1; secret: string; pubkey: string; decimals: number
 export const BLOCKHASH_CACHE_MAX_AGE_MS = 30000
 
 const toBase64 = (u8: Uint8Array): string => {
-    // Convert Uint8Array to base64 using btoa/atob without extra deps
+    if (typeof Buffer !== 'undefined') return Buffer.from(u8).toString('base64');
     let binary = '';
     for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]);
-    // btoa expects binary string
-    // Guard for environments without btoa (SSR), though this app runs in browser
-    // @ts-ignore
-    const btoaFn: (s: string) => string = typeof btoa !== 'undefined' ? btoa : (s: string) => Buffer.from(s, 'binary').toString('base64');
-    return btoaFn(binary);
+    return btoa(binary);
 };
 
 const fromBase64 = (b64: string): Uint8Array => {
-    // @ts-ignore
-    const atobFn: (s: string) => string = typeof atob !== 'undefined' ? atob : (s: string) => Buffer.from(s, 'base64').toString('binary');
-    const binary = atobFn(b64);
-    const len = binary.length;
-    const out = new Uint8Array(len);
-    for (let i = 0; i < len; i++) out[i] = binary.charCodeAt(i);
+    if (typeof Buffer !== 'undefined') return new Uint8Array(Buffer.from(b64, 'base64'));
+    const binary = atob(b64);
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
     return out;
 };
+
+// Utility: Parse UI amount string to base units (bigint)
+const parseAmount = (amountUi: string, decimals: number): bigint => {
+    const [w, f = ''] = amountUi.trim().split('.');
+    const frac = (f + '0'.repeat(decimals)).slice(0, decimals);
+    return BigInt(`${w || '0'}${frac}`);
+};
+
+// Utility: Safe localStorage operations
+const safeLocalStorage = {
+    get: <T,>(key: string, defaultValue: T): T => {
+        try {
+            if (typeof window === 'undefined' || !window.localStorage) return defaultValue;
+            const raw = window.localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : defaultValue;
+        } catch {
+            return defaultValue;
+        }
+    },
+    set: (key: string, value: any): void => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem(key, JSON.stringify(value));
+            }
+        } catch {
+            // ignore
+        }
+    },
+    remove: (key: string): void => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.removeItem(key);
+            }
+        } catch {
+            // ignore
+        }
+    }
+};
+
+// Utility: Validate and clean numeric input for amounts
+const cleanNumericInput = (value: string, decimals: number): string => {
+    let v = value.replace(/[^0-9.]/g, '');
+    const firstDot = v.indexOf('.');
+    if (firstDot !== -1) {
+        const head = v.slice(0, firstDot + 1);
+        const tail = v.slice(firstDot + 1).replace(/\./g, '');
+        const [w, f = ''] = (head + tail).split('.');
+        v = w + '.' + f.slice(0, Math.min(decimals, 6));
+    }
+    return v;
+};
+
+// Common styles
+const CARD_STYLE = {
+    background: 'linear-gradient(180deg, #0f172a 0%, #0b1220 100%)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    padding: 16,
+    color: '#e5e7eb',
+    boxShadow: '0 10px 25px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)'
+} as const;
+
+const INPUT_STYLE = {
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    color: '#e5e7eb',
+    borderRadius: 6,
+    padding: '8px 12px',
+    outline: 'none',
+} as const;
+
+const BUTTON_STYLE = {
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    color: '#e5e7eb',
+    borderRadius: 8,
+    padding: '8px 12px',
+    cursor: 'pointer',
+} as const;
 
 const App: React.FC = () => {
     const { connection } = useConnection();
@@ -104,35 +177,12 @@ const App: React.FC = () => {
 
     // Config
     const [mint, setMint] = useState<PublicKey | null>(() => {
-        // Try to load previously created random mint from localStorage; no fallback to env
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                const raw = window.localStorage.getItem(LS_MINT_KEY);
-                if (raw) {
-                    const parsed: StoredMint = JSON.parse(raw);
-                    if (parsed && parsed.version === 1 && parsed.pubkey) {
-                        return new PublicKey(parsed.pubkey);
-                    }
-                }
-            }
-        } catch (_) {
-            // ignore
-        }
-        return null;
+        const stored = safeLocalStorage.get<StoredMint | null>(LS_MINT_KEY, null);
+        return stored?.version === 1 && stored.pubkey ? new PublicKey(stored.pubkey) : null;
     });
     const [decimals, setDecimals] = useState<number>(() => {
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                const raw = window.localStorage.getItem(LS_MINT_KEY);
-                if (raw) {
-                    const parsed: StoredMint = JSON.parse(raw);
-                    if (parsed && parsed.version === 1 && typeof parsed.decimals === 'number') {
-                        return parsed.decimals;
-                    }
-                }
-            }
-        } catch (_) { /* ignore */ }
-        return 6;
+        const stored = safeLocalStorage.get<StoredMint | null>(LS_MINT_KEY, null);
+        return stored?.version === 1 && typeof stored.decimals === 'number' ? stored.decimals : 6;
     });
 
     // Per-card delegate/undelegate input values (by index)
@@ -141,43 +191,25 @@ const App: React.FC = () => {
 
     // Temp accounts (persist across refresh via localStorage)
     const [accounts, setAccounts] = useState<TempAccount[]>(() => {
-        // Try to load from localStorage; else generate and persist
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                const raw = window.localStorage.getItem(LS_KEY);
-                if (raw) {
-                    const parsed: StoredAccounts = JSON.parse(raw);
-                    if (parsed && parsed.version === 1 && Array.isArray(parsed.keys)) {
-                        const keys = [...parsed.keys];
-                        const list: TempAccount[] = keys.slice(0, 4).map((k) => ({
-                            keypair: Keypair.fromSecretKey(fromBase64(k)),
-                        }));
-                        while (list.length < 4) {
-                            const kp = Keypair.generate();
-                            list.push({ keypair: kp });
-                            keys.push(toBase64(kp.secretKey));
-                        }
-                        // Ensure storage reflects exactly 4 keys
-                        const toStore: StoredAccounts = { version: 1, keys: keys.slice(0, 4) };
-                        window.localStorage.setItem(LS_KEY, JSON.stringify(toStore));
-                        return list;
-                    }
-                }
-            }
-        } catch (_) {
-            // ignore and fall back to generation
+        const stored = safeLocalStorage.get<StoredAccounts | null>(LS_KEY, null);
+        let list: TempAccount[] = [];
+
+        if (stored?.version === 1 && Array.isArray(stored.keys)) {
+            list = stored.keys.slice(0, 4).map(k => ({ keypair: Keypair.fromSecretKey(fromBase64(k)) }));
         }
-        const generated = Array.from({ length: 4 }, () => ({ keypair: Keypair.generate() }));
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                const keys = generated.map((a) => toBase64(a.keypair.secretKey));
-                const toStore: StoredAccounts = { version: 1, keys };
-                window.localStorage.setItem(LS_KEY, JSON.stringify(toStore));
-            }
-        } catch (_) {
-            // ignore storage errors
+
+        // Ensure exactly 4 accounts
+        while (list.length < 4) {
+            list.push({ keypair: Keypair.generate() });
         }
-        return generated;
+
+        // Persist to storage
+        safeLocalStorage.set(LS_KEY, {
+            version: 1,
+            keys: list.map(a => toBase64(a.keypair.secretKey))
+        });
+
+        return list;
     });
 
 
@@ -198,7 +230,6 @@ const App: React.FC = () => {
     const [useEphemeral, setUseEphemeral] = useState(true);
 
     // Cached Blockhash
-    const cachedBaseBlockhashRef = useRef<CachedBlockhash | null>(null)
     const cachedEphemeralBlockhashRef = useRef<CachedBlockhash | null>(null)
 
     // Periodically refresh the ephemeral blockhash cache
@@ -276,9 +307,11 @@ const App: React.FC = () => {
     }, [connection, mint]);
 
     const ensureAirdropLamports = useCallback(async (conn: Connection, pubkey: PublicKey) => {
-        // Request only 0.1 SOL when balance is below 0.05 SOL
-        const amount = 0.1 * LAMPORTS_PER_SOL;
-        try { await conn.requestAirdrop(pubkey, amount); } catch (_) { /* ignore */ }
+        try {
+            await conn.requestAirdrop(pubkey, 0.1 * LAMPORTS_PER_SOL);
+        } catch {
+            // ignore airdrop errors
+        }
     }, []);
 
     const ensureAta = useCallback(async (conn: Connection, owner: PublicKey): Promise<PublicKey> => {
@@ -303,81 +336,52 @@ const App: React.FC = () => {
 
     const refreshBalances = useCallback(async () => {
         const eConn = ephemeralConnection.current;
-        if (!eConn) return;
-        const base = accountsRef.current;
-        const updated = await Promise.all(base.map(async (acc) => {
-            let ata: PublicKey | undefined;
-            let balance: bigint | undefined = undefined;
-            let eBalance: bigint | undefined = undefined;
-            let eAta: PublicKey | undefined;
-            let eDelegated: boolean | undefined = undefined;
-            if (mint) {
-                ata = getAssociatedTokenAddressSync(mint, acc.keypair.publicKey, false, TOKEN_PROGRAM_ID);
-                [eAta] = deriveEphemeralAta(acc.keypair.publicKey, mint);
-                try {
-                    const ai = await connection.getAccountInfo(ata);
-                    if (ai) {
-                        const b = await connection.getTokenAccountBalance(ata, 'processed');
-                        balance = BigInt(b.value.amount);
-                        try {
-                            const eAtaAcc = await connection.getAccountInfo(eAta);
-                            eDelegated = eAtaAcc?.owner.equals(DELEGATION_PROGRAM_ID);
-                        } catch (err) {
-                            console.error(err);
-                            // ignore decode errors
-                            eDelegated = undefined;
-                        }
-                    } else {
-                        balance = 0n;
-                    }
-                } catch (_) {
-                    balance = 0n;
+        if (!eConn || !mint) return;
+
+        const updated = await Promise.all(accountsRef.current.map(async (acc) => {
+            const ata = getAssociatedTokenAddressSync(mint, acc.keypair.publicKey, false, TOKEN_PROGRAM_ID);
+            const [eAta] = deriveEphemeralAta(acc.keypair.publicKey, mint);
+
+            let balance = 0n;
+            let eDelegated: boolean | undefined;
+
+            // Fetch L1 balance and delegation status
+            try {
+                const ai = await connection.getAccountInfo(ata);
+                if (ai) {
+                    const b = await connection.getTokenAccountBalance(ata, 'processed');
+                    balance = BigInt(b.value.amount);
+                    const eAtaAcc = await connection.getAccountInfo(eAta);
+                    eDelegated = eAtaAcc?.owner.equals(DELEGATION_PROGRAM_ID);
                 }
-                try {
-                    // Fetch eATA info and balance from the ephemeral connection
-                    const aiE = await eConn.getAccountInfo(ata);
-                    if (aiE) {
-                        const bE = await eConn.getTokenAccountBalance(ata, 'confirmed');
-                        eBalance = BigInt(bE.value.amount);
-                    } else {
-                        eBalance = 0n;
-                        eDelegated = undefined;
-                    }
-                } catch (_) {
-                    eBalance = 0n;
-                    eDelegated = undefined;
-                }
+            } catch {
+                // defaults are fine
             }
 
-            // Native SOL (L1) balance
-            let solLamports: bigint | undefined = 0n;
+            // Fetch ephemeral balance
+            let eBalance = 0n;
             try {
-                const lamports = await connection.getBalance(acc.keypair.publicKey, 'confirmed');
-                solLamports = BigInt(lamports);
-            } catch (_) {
-                solLamports = 0n;
+                const aiE = await eConn.getAccountInfo(ata);
+                if (aiE) {
+                    const bE = await eConn.getTokenAccountBalance(ata, 'confirmed');
+                    eBalance = BigInt(bE.value.amount);
+                }
+            } catch {
+                // default is fine
             }
+
+            // Fetch SOL balance
+            let solLamports = 0n;
+            try {
+                solLamports = BigInt(await connection.getBalance(acc.keypair.publicKey, 'confirmed'));
+            } catch {
+                // default is fine
+            }
+
             return { ...acc, ata, eAta, balance, eBalance, solLamports, eDelegated } as TempAccount;
         }));
-        // Only update state if something actually changed to avoid re-renders/loops
-        const prev = accountsRef.current;
-        let changed = updated.length !== prev.length;
-        if (!changed) {
-            for (let i = 0; i < updated.length; i++) {
-                const u = updated[i];
-                const p = prev[i];
-                if (!p) { changed = true; break; }
-                const ataEq = (u.ata?.toBase58() ?? '') === (p.ata?.toBase58() ?? '');
-                const eAtaEq = (u.eAta?.toBase58() ?? '') === (p.eAta?.toBase58() ?? '');
-                const balEq = (u.balance ?? 0n) === (p.balance ?? 0n);
-                const eBalEq = (u.eBalance ?? 0n) === (p.eBalance ?? 0n);
-                const solEq = (u.solLamports ?? 0n) === (p.solLamports ?? 0n);
-                const delEq = (u.eDelegated ?? false) === (p.eDelegated ?? false);
-                // keypair is stable, no need to compare
-                if (!(ataEq && eAtaEq && balEq && eBalEq && solEq && delEq)) { changed = true; break; }
-            }
-        }
-        if (changed) setAccounts(updated);
+
+        setAccounts(updated);
     }, [connection, mint]);
 
     // Refresh on mount and whenever the key set or connections change
@@ -396,16 +400,10 @@ const App: React.FC = () => {
         [accounts]
     );
     useEffect(() => {
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                const keys = accounts.map((a) => toBase64(a.keypair.secretKey));
-                const toStore: StoredAccounts = { version: 1, keys };
-                window.localStorage.setItem(LS_KEY, JSON.stringify(toStore));
-            }
-        } catch (_) {
-            // ignore
-        }
-        // We only want to run this when the key set (fingerprint) changes
+        safeLocalStorage.set(LS_KEY, {
+            version: 1,
+            keys: accounts.map(a => toBase64(a.keypair.secretKey))
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [accountKeysFingerprint]);
 
@@ -432,18 +430,10 @@ const App: React.FC = () => {
             try {
                 const id = eConn.onAccountChange(
                     a.ata,
-                    async (accountInfo, _context) => {
+                    async (accountInfo) => {
                         try {
                             const amount = parseTokenAmount(accountInfo);
                             if (amount === null) return;
-
-                            // let eDelegated: boolean | undefined = undefined;
-                            // try {
-                            //     const tokenAcc = await getAccount(eConn, a.eAta!, "processed");
-                            //     eDelegated = tokenAcc.owner.equals(DELEGATION_PROGRAM_ID);
-                            // } catch (_) {
-                            //     /* ignore */
-                            // }
 
                             setAccounts((prev) =>
                                 prev.map((p) =>
@@ -453,7 +443,7 @@ const App: React.FC = () => {
                                 )
                             );
                         } catch (err) {
-                            console.log(err);
+                            console.error('Error parsing token amount:', err);
                         }
                     },
                     "processed"
@@ -484,24 +474,21 @@ const App: React.FC = () => {
     }, [accountKeysFingerprint]);
 
     const copyPk = useCallback(async (pk: PublicKey) => {
-        const text = pk.toBase58();
         try {
-            if (navigator.clipboard && (window as any).isSecureContext !== false) {
-                await navigator.clipboard.writeText(text);
-            } else {
-                // Fallback for non-secure contexts
+            await navigator.clipboard.writeText(pk.toBase58());
+        } catch {
+            // Fallback for non-secure contexts
+            try {
                 const ta = document.createElement('textarea');
-                ta.value = text;
-                ta.style.position = 'fixed';
-                ta.style.left = '-9999px';
+                ta.value = pk.toBase58();
+                Object.assign(ta.style, { position: 'fixed', left: '-9999px' });
                 document.body.appendChild(ta);
-                ta.focus();
                 ta.select();
                 document.execCommand('copy');
                 document.body.removeChild(ta);
+            } catch {
+                // ignore copy errors
             }
-        } catch (_) {
-            // ignore copy errors silently
         }
     }, []);
 
@@ -528,15 +515,9 @@ const App: React.FC = () => {
                 await ensureAta(conn, src.keypair.publicKey);
             }
 
-            const ixs = [] as any[];
-
-            // amount to base units
-            const amountBn = (() => {
-                const [w, f = ''] = amountUi.trim().split('.');
-                const frac = (f + '0'.repeat(decimals)).slice(0, decimals);
-                return BigInt(`${w || '0'}${frac}`);
-            })();
-            if (amountBn <= 0) throw new Error('Invalid amount');
+            const ixs: TransactionInstruction[] = [];
+            const amountBn = parseAmount(amountUi, decimals);
+            if (amountBn <= 0n) throw new Error('Invalid amount');
 
             // If using ephemeral and destination hasn't been delegated/initialized, do it first
             if (!accounts[toIdx].eDelegated) {
@@ -608,16 +589,11 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, decimals, ensureAta, mint, refreshBalances, useEphemeral]);
+    }, [accounts, connection, decimals, ensureAta, getCachedEphemeralBlockhash, mint, refreshBalances, useEphemeral]);
 
     const handleTransfer = useCallback(async () => {
         await performTransfer(srcIndex, dstIndex, amountStr);
     }, [performTransfer, srcIndex, dstIndex, amountStr]);
-
-    // Quick transfer helper used by drag-and-drop buttons
-    const performQuickTransfer = useCallback(async (fromIdx: number, toIdx: number, amountUi: string) => {
-        await performTransfer(fromIdx, toIdx, amountUi);
-    }, [performTransfer]);
 
     const setupAll = useCallback(async () => {
         const eConn = ephemeralConnection.current;
@@ -683,17 +659,12 @@ const App: React.FC = () => {
             await setupOn(connection);
 
             // Persist mint
-            try {
-                if (typeof window !== 'undefined' && window.localStorage) {
-                    const toStore: StoredMint = {
-                        version: 1,
-                        secret: toBase64(mintKp.secretKey),
-                        pubkey: mintKp.publicKey.toBase58(),
-                        decimals: mintDecimals,
-                    };
-                    window.localStorage.setItem(LS_MINT_KEY, JSON.stringify(toStore));
-                }
-            } catch (_) { /* ignore */ }
+            safeLocalStorage.set(LS_MINT_KEY, {
+                version: 1,
+                secret: toBase64(mintKp.secretKey),
+                pubkey: mintKp.publicKey.toBase58(),
+                decimals: mintDecimals,
+            });
 
             // Update state and refresh
             setMint(mintKp.publicKey);
@@ -704,7 +675,7 @@ const App: React.FC = () => {
         } catch (e: any) {
             setTransactionError(String(e?.message || e));
         }
-    }, [accounts, connection, refreshBalances]);
+    }, [accounts, connection, ensureAirdropLamports, refreshBalances]);
 
     // Auto-run setup once on start if no mint is set
     useEffect(() => {
@@ -716,11 +687,7 @@ const App: React.FC = () => {
     }, [mint, setupAll]);
 
     const resetMint = useCallback(async () => {
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.removeItem(LS_MINT_KEY);
-            }
-        } catch (_) { /* ignore */ }
+        safeLocalStorage.remove(LS_MINT_KEY);
         setMint(null);
         setDecimals(6);
         setTransactionSuccess('Mint reset. Run Setup to create a new mint.');
@@ -752,24 +719,16 @@ const App: React.FC = () => {
                                  const raw = e.dataTransfer.getData('text/plain');
                                  if (!raw) return;
                                  const payload = JSON.parse(raw);
-                                 if (payload && payload.type === 'quickTransfer') {
+                                 if (payload?.type === 'quickTransfer') {
                                      const fromIdx = Number(payload.from);
                                      const amountUi = String(payload.amountUi);
                                      if (!Number.isNaN(fromIdx) && amountUi) {
-                                         performQuickTransfer(fromIdx, i, amountUi).catch(console.error);
+                                         performTransfer(fromIdx, i, amountUi).catch(console.error);
                                      }
                                  }
-                             } catch (_) { /* ignore malformed payloads */ }
+                             } catch (_) { /* ignore */ }
                          }}
-                         style={{
-                        minWidth: 250,
-                        background: 'linear-gradient(180deg, #0f172a 0%, #0b1220 100%)',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: 12,
-                        padding: 16,
-                        color: '#e5e7eb',
-                        boxShadow: '0 10px 25px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)'
-                    }}>
+                         style={{ ...CARD_STYLE, minWidth: 250 }}>
                         <div style={{ height: 4, borderRadius: 999, background: 'linear-gradient(90deg,#22d3ee,#a78bfa)', marginBottom: 12, opacity: 0.9 }} />
                         <div style={{ fontSize: 12, color: '#9ca3af' }}>Address</div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
@@ -894,35 +853,13 @@ const App: React.FC = () => {
                                 step={1/10**Math.min(decimals, 6)}
                                 value={delegateAmounts[i] ?? ''}
                                 onChange={(e) => {
-                                    // Keep only valid numeric input (non-negative, single decimal point, limited fractional digits)
-                                    let v = e.target.value.replace(/[^0-9.]/g, '');
-                                    const firstDot = v.indexOf('.');
-                                    if (firstDot !== -1) {
-                                        // Remove extra dots
-                                        const head = v.slice(0, firstDot + 1);
-                                        const tail = v.slice(firstDot + 1).replace(/\./g, '');
-                                        v = head + tail;
-                                        const [w, f = ''] = v.split('.');
-                                        v = w + '.' + f.slice(0, Math.min(decimals, 6));
-                                    }
                                     const next = delegateAmounts.slice();
-                                    next[i] = v;
+                                    next[i] = cleanNumericInput(e.target.value, decimals);
                                     setDelegateAmounts(next);
                                 }}
                                 placeholder=""
                                 inputMode="decimal"
-                                style={{
-                                    width: '100%', // equals 70% of the row due to 7fr/3fr grid
-                                    background: 'rgba(255,255,255,0.06)',
-                                    border: '1px solid rgba(255,255,255,0.1)',
-                                    color: '#e5e7eb',
-                                    borderRadius: 6,
-                                    padding: '8px 12px',
-                                    margin: 0,
-                                    outline: 'none',
-                                    boxSizing: 'border-box',
-                                    height: 40
-                                }}
+                                style={{ ...INPUT_STYLE, width: '100%', margin: 0, boxSizing: 'border-box', height: 40 }}
                             />
                             <button
                                 onClick={async () => {
@@ -940,13 +877,9 @@ const App: React.FC = () => {
                                     }
                                     try {
                                         setIsSubmitting(true);
-                                        //
-                                        // Parse amount from UI into base units (respecting decimals)
                                         const raw = (delegateAmounts[i] ?? '').trim();
                                         if (!raw) throw new Error('Enter amount to delegate');
-                                        const [w, f = ''] = raw.split('.');
-                                        const frac = (f + '0'.repeat(decimals)).slice(0, decimals);
-                                        const amountBn = BigInt(`${w || '0'}${frac}`);
+                                        const amountBn = parseAmount(raw, decimals);
                                         if (amountBn <= 0n) throw new Error('Invalid amount');
 
                                         if (a.eDelegated) {
@@ -1015,33 +948,13 @@ const App: React.FC = () => {
                                 step={1/10**Math.min(decimals, 6)}
                                 value={undelegateAmounts[i] ?? ''}
                                 onChange={(e) => {
-                                    let v = e.target.value.replace(/[^0-9.]/g, '');
-                                    const firstDot = v.indexOf('.');
-                                    if (firstDot !== -1) {
-                                        const head = v.slice(0, firstDot + 1);
-                                        const tail = v.slice(firstDot + 1).replace(/\./g, '');
-                                        v = head + tail;
-                                        const [w, f = ''] = v.split('.');
-                                        v = w + '.' + f.slice(0, Math.min(decimals, 6));
-                                    }
                                     const next = undelegateAmounts.slice();
-                                    next[i] = v;
+                                    next[i] = cleanNumericInput(e.target.value, decimals);
                                     setUndelegateAmounts(next);
                                 }}
                                 placeholder=""
                                 inputMode="decimal"
-                                style={{
-                                    width: '100%', // equals 70% of the row due to 7fr/3fr grid
-                                    background: 'rgba(255,255,255,0.06)',
-                                    border: '1px solid rgba(255,255,255,0.1)',
-                                    color: '#e5e7eb',
-                                    borderRadius: 6,
-                                    padding: '8px 12px',
-                                    margin: 0,
-                                    outline: 'none',
-                                    boxSizing: 'border-box',
-                                    height: 40
-                                }}
+                                style={{ ...INPUT_STYLE, width: '100%', margin: 0, boxSizing: 'border-box', height: 40 }}
                             />
                             <button
                                 onClick={async () => {
@@ -1056,13 +969,9 @@ const App: React.FC = () => {
                                     }
                                     try {
                                         setIsSubmitting(true);
-
-                                        // Parse amount from UI into base units (respecting decimals)
                                         const raw = (undelegateAmounts[i] ?? '').trim();
                                         if (!raw) throw new Error('Enter amount to undelegate & withdraw');
-                                        const [w, f = ''] = raw.split('.');
-                                        const frac = (f + '0'.repeat(decimals)).slice(0, decimals);
-                                        const amountBn = BigInt(`${w || '0'}${frac}`);
+                                        const amountBn = parseAmount(raw, decimals);
                                         if (amountBn <= 0n) throw new Error('Invalid amount');
 
                                         if (a.eDelegated) {
@@ -1128,14 +1037,7 @@ const App: React.FC = () => {
             {mint && (
                 <>
                     <div style={{ height: 16 }} />
-                    <div style={{
-                        background: 'linear-gradient(180deg, #0f172a 0%, #0b1220 100%)',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: 12,
-                        padding: 16,
-                        color: '#e5e7eb',
-                        boxShadow: '0 10px 25px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)'
-                    }}>
+                    <div style={CARD_STYLE}>
                         <div style={{ height: 4, borderRadius: 999, background: 'linear-gradient(90deg,#22d3ee,#a78bfa)', marginBottom: 12, opacity: 0.9 }} />
                         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                             <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
@@ -1143,13 +1045,7 @@ const App: React.FC = () => {
                                 <select
                                     value={srcIndex}
                                     onChange={e => setSrcIndex(Number(e.target.value))}
-                                    style={{
-                                        background: 'rgba(255,255,255,0.06)',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        color: '#e5e7eb',
-                                        borderRadius: 6,
-                                        padding: '6px 8px'
-                                    }}
+                                    style={{ ...INPUT_STYLE, padding: '6px 8px' }}
                                 >
                                     {accounts.map((_, i) => <option key={`s-${i}`} value={i}>#{i+1}</option>)}
                                 </select>
@@ -1160,13 +1056,7 @@ const App: React.FC = () => {
                                 <select
                                     value={dstIndex}
                                     onChange={e => setDstIndex(Number(e.target.value))}
-                                    style={{
-                                        background: 'rgba(255,255,255,0.06)',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        color: '#e5e7eb',
-                                        borderRadius: 6,
-                                        padding: '6px 8px'
-                                    }}
+                                    style={{ ...INPUT_STYLE, padding: '6px 8px' }}
                                 >
                                     {accounts.map((_, i) => <option key={`d-${i}`} value={i}>#{i+1}</option>)}
                                 </select>
@@ -1180,14 +1070,7 @@ const App: React.FC = () => {
                                     step={1/10**Math.min(decimals, 6)}
                                     value={amountStr}
                                     onChange={e => setAmountStr(e.target.value)}
-                                    style={{
-                                        width: '70%',
-                                        background: 'rgba(255,255,255,0.06)',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        color: '#e5e7eb',
-                                        borderRadius: 6,
-                                        padding: '6px 8px'
-                                    }}
+                                    style={{ ...INPUT_STYLE, width: '70%', padding: '6px 8px' }}
                                 />
                             </label>
 
@@ -1199,17 +1082,9 @@ const App: React.FC = () => {
                             <button
                                 onClick={handleTransfer}
                                 disabled={isSubmitting || !mint}
-                                style={{
-                                    background: 'rgba(255,255,255,0.06)',
-                                    border: '1px solid rgba(255,255,255,0.1)',
-                                    color: '#e5e7eb',
-                                    borderRadius: 8,
-                                    padding: '8px 12px',
-                                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                                    opacity: isSubmitting ? 0.6 : 1
-                                }}
+                                style={{ ...BUTTON_STYLE, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
                             >
-                                {isSubmitting ? 'Transferring…' : ('Transfer')}
+                                {isSubmitting ? 'Transferring…' : 'Transfer'}
                             </button>
                         </div>
                     </div>
@@ -1218,14 +1093,7 @@ const App: React.FC = () => {
 
             <div style={{ height: 24 }} />
 
-            <div style={{
-                background: 'linear-gradient(180deg, #0f172a 0%, #0b1220 100%)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 12,
-                padding: 16,
-                color: '#e5e7eb',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)'
-            }}>
+            <div style={CARD_STYLE}>
                 <div style={{ height: 4, borderRadius: 999, background: 'linear-gradient(90deg,#22d3ee,#a78bfa)', marginBottom: 12, opacity: 0.9 }} />
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                     {!mint ? (
@@ -1245,26 +1113,12 @@ const App: React.FC = () => {
                             <button
                                 onClick={() => copyPk(mint)}
                                 title="Copy mint address"
-                                style={{
-                                    background: 'rgba(255,255,255,0.06)',
-                                    border: '1px solid rgba(255,255,255,0.1)',
-                                    color: '#e5e7eb',
-                                    borderRadius: 6,
-                                    padding: '4px 6px',
-                                    cursor: 'pointer'
-                                }}
+                                style={{ ...BUTTON_STYLE, borderRadius: 6, padding: '4px 6px' }}
                             >Copy</button>
                             <button
                                 onClick={() => resetMint()}
                                 title="Reset mint"
-                                style={{
-                                    background: 'rgba(239,68,68,0.15)',
-                                    border: '1px solid rgba(239,68,68,0.35)',
-                                    color: '#fecaca',
-                                    borderRadius: 6,
-                                    padding: '4px 6px',
-                                    cursor: 'pointer'
-                                }}
+                                style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#fecaca', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}
                             >Reset</button>
                         </div>
                     )}
@@ -1272,15 +1126,7 @@ const App: React.FC = () => {
                         <button
                             onClick={() => setupAll()}
                             disabled={isSubmitting}
-                            style={{
-                                background: 'rgba(255,255,255,0.06)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                color: '#e5e7eb',
-                                borderRadius: 8,
-                                padding: '8px 12px',
-                                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                                opacity: isSubmitting ? 0.6 : 1
-                            }}
+                            style={{ ...BUTTON_STYLE, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
                         >
                             Setup
                         </button>
