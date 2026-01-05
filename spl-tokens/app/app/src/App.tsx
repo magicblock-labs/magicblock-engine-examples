@@ -8,7 +8,7 @@ import {
     LAMPORTS_PER_SOL,
     PublicKey,
     Transaction,
-    SystemProgram
+    SystemProgram, TransactionInstruction
 } from "@solana/web3.js";
 import {
     TOKEN_PROGRAM_ID,
@@ -65,6 +65,8 @@ type StoredAccounts = { version: 1; keys: string[] };
 const LS_MINT_KEY = 'tempMintV1';
 type StoredMint = { version: 1; secret: string; pubkey: string; decimals: number };
 
+export const BLOCKHASH_CACHE_MAX_AGE_MS = 30000
+
 const toBase64 = (u8: Uint8Array): string => {
     // Convert Uint8Array to base64 using btoa/atob without extra deps
     let binary = '';
@@ -91,6 +93,14 @@ const App: React.FC = () => {
     const ephemeralConnection = useRef<Connection | null>(null);
     const validator = useRef<PublicKey | undefined>(undefined);
     const accountsRef = useRef<TempAccount[]>([]);
+    // Ensure auto-setup runs only once on first load when no mint is present
+    const autoSetupTriggeredRef = useRef(false);
+
+    type CachedBlockhash = {
+        blockhash: string
+        lastValidBlockHeight: number
+        timestamp: number
+    }
 
     // Config
     const [mint, setMint] = useState<PublicKey | null>(() => {
@@ -186,6 +196,48 @@ const App: React.FC = () => {
     const [dstIndex, setDstIndex] = useState(1);
     const [amountStr, setAmountStr] = useState('1');
     const [useEphemeral, setUseEphemeral] = useState(true);
+
+    // Cached Blockhash
+    const cachedBaseBlockhashRef = useRef<CachedBlockhash | null>(null)
+    const cachedEphemeralBlockhashRef = useRef<CachedBlockhash | null>(null)
+
+    // Periodically refresh the ephemeral blockhash cache
+    const refreshEphemeralBlockhash = useCallback(async () => {
+        const eConn = ephemeralConnection.current;
+        if (!eConn) return;
+        try {
+            const { blockhash, lastValidBlockHeight } = await eConn.getLatestBlockhash();
+            cachedEphemeralBlockhashRef.current = {
+                blockhash,
+                lastValidBlockHeight,
+                timestamp: Date.now(),
+            };
+        } catch (_) {
+            // ignore refresh errors; keep previous cache
+        }
+    }, []);
+
+    // Getter for cached ephemeral blockhash (refreshes if stale)
+    const getCachedEphemeralBlockhash = useCallback(async (): Promise<string> => {
+        const now = Date.now();
+        const cached = cachedEphemeralBlockhashRef.current;
+        if (!cached || now - cached.timestamp >= BLOCKHASH_CACHE_MAX_AGE_MS) {
+            await refreshEphemeralBlockhash();
+        }
+        const latest = cachedEphemeralBlockhashRef.current;
+        if (!latest) throw new Error('Ephemeral connection not available');
+        return latest.blockhash;
+    }, [refreshEphemeralBlockhash]);
+
+    // Start the periodic refresher
+    useEffect(() => {
+        // Kick an initial refresh shortly after mount
+        refreshEphemeralBlockhash();
+        const id = setInterval(() => {
+            refreshEphemeralBlockhash();
+        }, BLOCKHASH_CACHE_MAX_AGE_MS);
+        return () => clearInterval(id);
+    }, [refreshEphemeralBlockhash]);
 
     // Initialize ephemeral connection
     useEffect(() => {
@@ -470,14 +522,13 @@ const App: React.FC = () => {
         const conn = useEphemeral ? eConn : connection;
         try {
             setIsSubmitting(true);
-            const srcAta = await ensureAta(conn, src.keypair.publicKey);
+            const srcAta = getAssociatedTokenAddressSync(mint, src.keypair.publicKey, false, TOKEN_PROGRAM_ID);
             const dstAta = getAssociatedTokenAddressSync(mint, dst.keypair.publicKey, false, TOKEN_PROGRAM_ID);
-            const dstInfo = await conn.getAccountInfo(dstAta);
+            if (!accounts[fromIdx].eDelegated) {
+                await ensureAta(conn, src.keypair.publicKey);
+            }
 
             const ixs = [] as any[];
-            if (!dstInfo) {
-                ixs.push(createAssociatedTokenAccountInstruction(src.keypair.publicKey, dstAta, dst.keypair.publicKey, mint));
-            }
 
             // amount to base units
             const amountBn = (() => {
@@ -488,23 +539,29 @@ const App: React.FC = () => {
             if (amountBn <= 0) throw new Error('Invalid amount');
 
             // If using ephemeral and destination hasn't been delegated/initialized, do it first
-            if (useEphemeral && !accounts[toIdx].eDelegated) {
-                const delIxs = await delegateSpl(
-                    dst.keypair.publicKey,
-                    mint,
-                    0n,
-                    { validator: validator.current }
-                );
-                const delTx = new Transaction().add(...delIxs);
-                delTx.feePayer = dst.keypair.publicKey;
-                const { blockhash: delBh } = await connection.getLatestBlockhash();
-                delTx.recentBlockhash = delBh;
-                delTx.sign(dst.keypair);
-                const delSig = await connection.sendRawTransaction(delTx.serialize());
-                await connection.confirmTransaction(delSig, 'confirmed');
-                const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-                await delay(2000);
-                await refreshBalances();
+            if (!accounts[toIdx].eDelegated) {
+                const dstInfo = await conn.getAccountInfo(dstAta);
+                if (!dstInfo) {
+                    ixs.push(createAssociatedTokenAccountInstruction(src.keypair.publicKey, dstAta, dst.keypair.publicKey, mint));
+                }
+                if (useEphemeral) {
+                    const delIxs = await delegateSpl(
+                        dst.keypair.publicKey,
+                        mint,
+                        0n,
+                        {validator: validator.current}
+                    );
+                    const delTx = new Transaction().add(...delIxs);
+                    delTx.feePayer = dst.keypair.publicKey;
+                    const {blockhash: delBh} = await connection.getLatestBlockhash();
+                    delTx.recentBlockhash = delBh;
+                    delTx.sign(dst.keypair);
+                    const delSig = await connection.sendRawTransaction(delTx.serialize());
+                    await connection.confirmTransaction(delSig, 'confirmed');
+                    const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+                    await delay(2000);
+                    await refreshBalances();
+                }
             }
 
             // Transfer instruction
@@ -516,6 +573,13 @@ const App: React.FC = () => {
                 [],
                 TOKEN_PROGRAM_ID
             );
+            // Add instruction to print to the noop program and make the transaction unique
+            const noopInstruction = new TransactionInstruction({
+                programId: new PublicKey('noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV'),
+                keys: [],
+                data: Buffer.from(crypto.getRandomValues(new Uint8Array(5))),
+            });
+            ixs.push(noopInstruction);
             ixs.push(ixTransfer);
             let sig;
             if (useEphemeral) {
@@ -523,7 +587,7 @@ const App: React.FC = () => {
                 const eConn = ephemeralConnection.current;
                 const tx = new anchor.web3.Transaction().add(...ixs);
                 tx.feePayer = src.keypair.publicKey;
-                const { blockhash } = await eConn.getLatestBlockhash();
+                const blockhash = await getCachedEphemeralBlockhash();
                 tx.recentBlockhash = blockhash;
                 tx.sign(src.keypair);
                 sig = await eConn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
@@ -562,6 +626,11 @@ const App: React.FC = () => {
         setTransactionSuccess(null);
         const payer = accounts[0].keypair;
         try {
+            // Airdrop a small amount of SOL to each local wallet to cover fees
+            for (const a of accounts) {
+                await ensureAirdropLamports(connection, a.keypair.publicKey);
+            }
+
             // 1) Create a random mint and store it in localStorage
             const mintKp = Keypair.generate();
             const mintDecimals = 6; // default; can be parameterized
@@ -631,16 +700,20 @@ const App: React.FC = () => {
             setDecimals(mintDecimals);
             setTransactionSuccess('Mint created, ATAs initialized, and tokens minted on all accounts');
 
-            // Airdrop a small amount of SOL to each local wallet to cover fees
-            for (const a of accounts) {
-                await ensureAirdropLamports(connection, a.keypair.publicKey);
-            }
-
             await refreshBalances();
         } catch (e: any) {
             setTransactionError(String(e?.message || e));
         }
     }, [accounts, connection, refreshBalances]);
+
+    // Auto-run setup once on start if no mint is set
+    useEffect(() => {
+        if (mint) return; // already set or loaded from storage
+        if (autoSetupTriggeredRef.current) return; // guard against multiple triggers (e.g., StrictMode)
+        autoSetupTriggeredRef.current = true;
+        // Fire and forget; internal errors are surfaced via state
+        setupAll().catch(console.error);
+    }, [mint, setupAll]);
 
     const resetMint = useCallback(async () => {
         try {
@@ -881,7 +954,7 @@ const App: React.FC = () => {
                                             const ixU = undelegateIx(a.keypair.publicKey, mint);
                                             const txU = new Transaction().add(ixU);
                                             txU.feePayer = a.keypair.publicKey;
-                                            const {blockhash: bhU} = await eConn.getLatestBlockhash();
+                                            const bhU = await getCachedEphemeralBlockhash();
                                             txU.recentBlockhash = bhU;
                                             txU.sign(a.keypair);
                                             const sigU = await eConn.sendRawTransaction(txU.serialize(), {skipPreflight: true});
@@ -997,7 +1070,7 @@ const App: React.FC = () => {
                                             const ixU = undelegateIx(a.keypair.publicKey, mint);
                                             const txU = new Transaction().add(ixU);
                                             txU.feePayer = a.keypair.publicKey;
-                                            const {blockhash: bhU} = await eConn.getLatestBlockhash();
+                                            const bhU = await getCachedEphemeralBlockhash();
                                             txU.recentBlockhash = bhU;
                                             txU.sign(a.keypair);
                                             const sigU = await eConn.sendRawTransaction(txU.serialize(), {skipPreflight: true});
