@@ -438,7 +438,8 @@ describe("anchor-rock-paper-scissor", () => {
     const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
     
     if (gameAccount.result?.winner) {
-      console.log("🏆 Winner is:", gameAccount.result.winner.toBase58());
+      const winnerStr = gameAccount.result.winner["0"];
+      console.log("🏆 Winner is:", winnerStr);
     } else if (gameAccount.result) {
       console.log("🏆 Result: Tie");
     } else {
