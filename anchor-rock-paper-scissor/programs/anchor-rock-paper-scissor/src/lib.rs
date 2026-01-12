@@ -7,7 +7,7 @@ use ephemeral_rollups_sdk::access_control::types::{Member, MembersArgs};
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 
-declare_id!("2tGmgH6gKyyur6oijz18opMMiXnRHfKbZL4zqAd45mfx");
+declare_id!("6DzQuGsim4A3WtvCQC97LtuS1hReKvGtJqw3eUkAiCxD");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";

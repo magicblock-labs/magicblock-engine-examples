@@ -10,7 +10,6 @@ import {
   getAuthToken,
   getPermissionStatus,
   waitUntilPermissionActive,
-  GetCommitmentSignature,
   MEMBER_FLAG_AUTHORITY,
   Member,
   createDelegatePermissionInstruction,
@@ -181,7 +180,8 @@ describe("anchor-rock-paper-scissor", () => {
     const delegatePermissionGame = createDelegatePermissionInstruction({
       payer: player1.publicKey,
       validator: ER_VALIDATOR,
-      permissionedAccount: gamePda,
+      permissionedAccount: [gamePda, false],
+      authority: [player1.publicKey, true],
     })
     
 
@@ -207,7 +207,8 @@ describe("anchor-rock-paper-scissor", () => {
     const delegatePermission1 = createDelegatePermissionInstruction({
       payer: player1.publicKey,
       validator: ER_VALIDATOR,
-      permissionedAccount: player1ChoicePda,
+      permissionedAccount: [player1ChoicePda, false],
+      authority: [player1.publicKey, true],
     })
 
     const delegatePlayerChoice1Ix = await program.methods
@@ -278,7 +279,8 @@ describe("anchor-rock-paper-scissor", () => {
     const delegatePermission2 = createDelegatePermissionInstruction({
       payer: player2.publicKey,
       validator: ER_VALIDATOR,
-      permissionedAccount: player2ChoicePda,
+      permissionedAccount: [player2ChoicePda, false],
+      authority: [player2.publicKey, true],
     })
     
     const delegateGameIx = await program.methods
@@ -438,7 +440,7 @@ describe("anchor-rock-paper-scissor", () => {
     const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
     
     if (gameAccount.result?.winner) {
-      const winnerStr = gameAccount.result.winner["0"];
+      const winnerStr = gameAccount.result.winner["0"].toBase58();
       console.log("🏆 Winner is:", winnerStr);
     } else if (gameAccount.result) {
       console.log("🏆 Result: Tie");
