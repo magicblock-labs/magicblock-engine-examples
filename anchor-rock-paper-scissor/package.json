@@ -5,7 +5,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",
-    "@magicblock-labs/ephemeral-rollups-sdk": "file:/Users/jonasxchen/GitHub/MagicBlock/ephemeral-rollups-sdk/ts/web3js",
+    "@magicblock-labs/ephemeral-rollups-sdk": "0.8.0",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {

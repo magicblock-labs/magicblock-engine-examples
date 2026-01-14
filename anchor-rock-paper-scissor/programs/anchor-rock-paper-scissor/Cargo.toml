@@ -21,4 +21,4 @@ anchor-debug = []
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
-ephemeral-rollups-sdk = { path = "/Users/jonasxchen/GitHub/MagicBlock/ephemeral-rollups-sdk/rust/sdk", features = ["anchor", "access-control"] }
+ephemeral-rollups-sdk = { version = "0.8.0", features = ["anchor", "access-control"] }
