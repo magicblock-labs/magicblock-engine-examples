@@ -2,12 +2,13 @@ use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::access_control::instructions::{
     CreatePermissionCpiBuilder, UpdatePermissionCpiBuilder,
 };
-use ephemeral_rollups_sdk::access_control::programs::MAGICBLOCK_PERMISSION_API_ID;
-use ephemeral_rollups_sdk::access_control::types::{Member, MembersArgs};
+use ephemeral_rollups_sdk::access_control::structs::{Member, MembersArgs};
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::consts::PERMISSION_PROGRAM_ID;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
+use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 
-declare_id!("6DzQuGsim4A3WtvCQC97LtuS1hReKvGtJqw3eUkAiCxD");
+declare_id!("9SBBpJa9rd8DRP6tkcqnyad4LaCWWB3FgSFmZ2tFVhq");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";
@@ -26,7 +27,7 @@ pub mod anchor_rock_paper_scissor {
         game.game_id = game_id;
         game.player1 = Some(player1);
         game.player2 = None;
-        game.result = GameResult::Tie;
+        game.result = GameResult::None;
 
         msg!("Game ID: {}", game_id);
         msg!("Player 1 PDA: {}", player1);
@@ -38,6 +39,7 @@ pub mod anchor_rock_paper_scissor {
         player_choice.choice = None;
 
         msg!("Game {} created and joined by {}", game_id, player1);
+
         Ok(())
     }
 
@@ -81,16 +83,22 @@ pub mod anchor_rock_paper_scissor {
         let game = &mut ctx.accounts.game;
         let player1_choice = &ctx.accounts.player1_choice;
         let player2_choice = &ctx.accounts.player2_choice;
-        let permission_program = &ctx.accounts.permission_program;
-        let permission_game = &ctx.accounts.permission_game;
-        let permission1 = &ctx.accounts.permission1;
-        let permission2 = &ctx.accounts.permission2;
+        let permission_program = &ctx.accounts.permission_program.to_account_info();
+        let permission_game = &ctx.accounts.permission_game.to_account_info();
+        let permission1 = &ctx.accounts.permission1.to_account_info();
+        let permission2 = &ctx.accounts.permission2.to_account_info();
+        let magic_program = &ctx.accounts.magic_program.to_account_info();
+        let magic_context = &ctx.accounts.magic_context.to_account_info();
 
         // 1️⃣ Clone choices into game
         game.player1_choice = player1_choice.choice.clone().into();
         game.player2_choice = player2_choice.choice.clone().into();
 
-        // 2️⃣ Ensure both players made a choice
+        // 2️⃣ Ensure both players exist
+        let player1 = game.player1.ok_or(GameError::MissingOpponent)?;
+        let player2 = game.player2.ok_or(GameError::MissingOpponent)?;
+
+        // 3️⃣ Ensure both players made a choice
         let choice1 = game
             .player1_choice
             .clone()
@@ -100,11 +108,7 @@ pub mod anchor_rock_paper_scissor {
             .clone()
             .ok_or(GameError::MissingChoice)?;
 
-        // 3️⃣ Ensure both players exist
-        let player1 = game.player1.ok_or(GameError::MissingOpponent)?;
-        let player2 = game.player2.ok_or(GameError::MissingOpponent)?;
-
-        // 4️⃣ Determine winner
+        // 4️⃣ Determine winner based on choices
         game.result = match (choice1, choice2) {
             (Choice::Rock, Choice::Scissors)
             | (Choice::Paper, Choice::Rock)
@@ -118,16 +122,16 @@ pub mod anchor_rock_paper_scissor {
         };
 
         UpdatePermissionCpiBuilder::new(&permission_program)
-            .permission(&permission_game.to_account_info())
             .permissioned_account(&game.to_account_info(), true)
             .authority(&game.to_account_info(), false)
+            .permission(&permission_game.to_account_info())
             .args(MembersArgs { members: None })
             .invoke_signed(&[&[GAME_SEED, &game.game_id.to_le_bytes(), &[ctx.bumps.game]]])?;
 
         UpdatePermissionCpiBuilder::new(&permission_program)
-            .permission(&permission1.to_account_info())
             .permissioned_account(&player1_choice.to_account_info(), true)
             .authority(&player1_choice.to_account_info(), false)
+            .permission(&permission1.to_account_info())
             .args(MembersArgs { members: None })
             .invoke_signed(&[&[
                 PLAYER_CHOICE_SEED,
@@ -137,9 +141,9 @@ pub mod anchor_rock_paper_scissor {
             ]])?;
 
         UpdatePermissionCpiBuilder::new(&permission_program)
-            .permission(&permission2.to_account_info())
             .permissioned_account(&player2_choice.to_account_info(), true)
             .authority(&player2_choice.to_account_info(), false)
+            .permission(&permission2.to_account_info())
             .args(MembersArgs { members: None })
             .invoke_signed(&[&[
                 PLAYER_CHOICE_SEED,
@@ -148,22 +152,16 @@ pub mod anchor_rock_paper_scissor {
                 &[ctx.bumps.player2_choice],
             ]])?;
 
-        // game.exit(&crate::ID)?;
-        // player1_choice.exit(&crate::ID)?;
-        // player2_choice.exit(&crate::ID)?;
-
-        // commit_and_undelegate_accounts(
-        //     &ctx.accounts.payer,
-        //     vec![
-        //         &game.to_account_info(),
-        //         &player1_choice.to_account_info(),
-        //         &player2_choice.to_account_info(),
-        //     ],
-        //     &ctx.accounts.magic_context,
-        //     &ctx.accounts.magic_program,
-        // )?;
-
         msg!("Result: {:?}", &game.result);
+
+        game.exit(&crate::ID)?;
+
+        commit_and_undelegate_accounts(
+            &ctx.accounts.payer,
+            vec![&game.to_account_info()],
+            magic_context,
+            magic_program,
+        )?;
 
         Ok(())
     }
@@ -213,10 +211,10 @@ pub mod anchor_rock_paper_scissor {
         let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
 
         CreatePermissionCpiBuilder::new(&permission_program)
-            .permission(&permission)
             .permissioned_account(&permissioned_account.to_account_info())
+            .permission(&permission)
             .payer(&payer)
-            .system_program(system_program)
+            .system_program(&system_program)
             .args(MembersArgs { members })
             .invoke_signed(&[seed_refs.as_slice()])?;
         Ok(())
@@ -321,7 +319,7 @@ pub struct RevealWinner<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     /// CHECK: PERMISSION PROGRAM
-    #[account(address = MAGICBLOCK_PERMISSION_API_ID)]
+    #[account(address = PERMISSION_PROGRAM_ID)]
     pub permission_program: UncheckedAccount<'info>,
 }
 
@@ -347,7 +345,7 @@ pub struct CreatePermission<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     /// CHECK: PERMISSION PROGRAM
-    #[account(address = MAGICBLOCK_PERMISSION_API_ID)]
+    #[account(address = PERMISSION_PROGRAM_ID)]
     pub permission_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
@@ -372,6 +370,7 @@ impl Game {
 pub enum GameResult {
     Winner(Pubkey),
     Tie,
+    None,
 }
 
 #[account]

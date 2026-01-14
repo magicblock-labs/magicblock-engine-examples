@@ -10,10 +10,10 @@ import {
   getAuthToken,
   getPermissionStatus,
   waitUntilPermissionActive,
-  MEMBER_FLAG_AUTHORITY,
+  AUTHORITY_FLAG,
   Member,
   createDelegatePermissionInstruction,
-  MEMBER_FLAG_TX_LOGS
+  TX_LOGS_FLAG,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 
@@ -156,11 +156,11 @@ describe("anchor-rock-paper-scissor", () => {
     const permissionForGame = permissionPdaFromAccount(gamePda);
     let membersForGame : Member[] | null = [ 
       {
-        flags: MEMBER_FLAG_AUTHORITY | MEMBER_FLAG_TX_LOGS,
+        flags: AUTHORITY_FLAG | TX_LOGS_FLAG,
         pubkey: player1.publicKey
       },
       {
-        flags: MEMBER_FLAG_AUTHORITY | MEMBER_FLAG_TX_LOGS,
+        flags: AUTHORITY_FLAG | TX_LOGS_FLAG,
         pubkey: player2.publicKey
       }
     ]
@@ -188,7 +188,7 @@ describe("anchor-rock-paper-scissor", () => {
     // Create permission group and permission for player choice account
     let members : Member[] | null = [ 
       {
-        flags: MEMBER_FLAG_AUTHORITY | MEMBER_FLAG_TX_LOGS,
+        flags: AUTHORITY_FLAG | TX_LOGS_FLAG,
         pubkey: player1.publicKey
       }
     ]
@@ -259,7 +259,7 @@ describe("anchor-rock-paper-scissor", () => {
     // Create permission group and permission for player choice account
     let members : Member[] | null = [ 
       {
-        flags: MEMBER_FLAG_AUTHORITY | MEMBER_FLAG_TX_LOGS,
+        flags: AUTHORITY_FLAG | TX_LOGS_FLAG,
         pubkey: player2.publicKey
       }
     ]
@@ -438,15 +438,7 @@ describe("anchor-rock-paper-scissor", () => {
 
     const accountInfo = await providerTeePlayer1.connection.getAccountInfo(gamePda);
     const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
-    
-    if (gameAccount.result?.winner) {
-      const winnerStr = gameAccount.result.winner["0"].toBase58();
-      console.log("🏆 Winner is:", winnerStr);
-    } else if (gameAccount.result) {
-      console.log("🏆 Result: Tie");
-    } else {
-      console.log("🏆 Result: Game not revealed");
-    }
+    console.log("🎲 Game Result Account Data:", gameAccount);
 
   })
 
