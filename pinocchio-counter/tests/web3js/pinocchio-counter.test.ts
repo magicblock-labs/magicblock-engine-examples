@@ -28,7 +28,7 @@ dotenv.config()
 
 
 
-describe.skip("basic-test", async () => {
+describe("basic-test", async () => {
     const TEST_TIMEOUT = 60_000;
     console.log("pinocchio-counter.ts")
 
@@ -459,7 +459,6 @@ describe.skip("basic-test", async () => {
         // Await for the commitment on the base layer
         const txCommitSgn = await GetCommitmentSignature(
             txHash,
-            // tx,
             connectionEphemeralRollup
         );
         const commitDuration = Date.now() - comfirmCommitStart;
