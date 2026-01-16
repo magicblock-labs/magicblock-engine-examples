@@ -1,6 +1,7 @@
 use pinocchio::error::ProgramError;
+use pinocchio_log::log;
 
-pub enum ProgramInstruction {
+pub enum ProgramInstruction<'a> {
     InitializeCounter,
     IncreaseCounter { increase_by: u64 },
     Delegate,
@@ -8,12 +9,13 @@ pub enum ProgramInstruction {
     Commit,
     IncrementAndCommit { increase_by: u64 },
     IncrementAndUndelegate { increase_by: u64 },
-    UndelegationCallback,
+    UndelegationCallback { ix_data: &'a [u8] },
 }
 
-impl ProgramInstruction {
-    pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
+impl<'a> ProgramInstruction<'a> {
+    pub fn unpack(input: &'a [u8]) -> Result<Self, ProgramError> {
         if input.len() < 8 {
+            log!("ERROR: input too short, expected at least 8 bytes");
             return Err(ProgramError::InvalidInstructionData);
         }
 
@@ -51,7 +53,10 @@ impl ProgramInstruction {
                 let increase_by = u64::from_le_bytes(bytes);
                 Self::IncrementAndUndelegate { increase_by }
             }
-            [196, 0, 0, 0, 0, 0, 0, 0] => Self::UndelegationCallback,
+            [196, 28, 41, 206, 48, 37, 51, 167] => {
+                log!("UndelegationCallback matched, rest length: {}", rest.len());
+                Self::UndelegationCallback { ix_data: rest }
+            }
             _ => return Err(ProgramError::InvalidInstructionData),
         })
     }

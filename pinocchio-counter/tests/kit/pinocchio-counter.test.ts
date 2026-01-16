@@ -34,10 +34,9 @@ import {
 import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system"
 import { describe, it, beforeAll, expect } from "vitest";
 
-
 dotenv.config();
 
-describe.skip("basic-test", async () => {
+describe("basic-test", async () => {
   const TEST_TIMEOUT = 60_000;
 
   console.log("🧪 Running pinocchio-counter.ts test suite...");
@@ -49,7 +48,6 @@ describe.skip("basic-test", async () => {
   );
   const keypair = await createKeyPairFromBytes(secretKeyArray);
   const PROGRAM_ID = await getAddressFromPublicKey(keypair.publicKey)
-  console.log("Program ID:", PROGRAM_ID);
 
   // Connections
   const connection = await Connection.create(
@@ -77,6 +75,7 @@ describe.skip("basic-test", async () => {
           addressEncoder.encode(userPubkey)
       ],
   });
+  console.log("Progam ID:", PROGRAM_ID);
   console.log("Counter PDA:", counterPda);
 
   // Ensure test wallet has SOL
@@ -169,13 +168,18 @@ describe.skip("basic-test", async () => {
 
       // Add local validator identity to the remaining accounts if running on localnet
       const remainingAccounts = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1")
-          ? [
-              {
-                address: address("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
-                role: AccountRole.READONLY
-              },
-          ]
-      : [];
+        ? [
+            {
+              address: address("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+              role: AccountRole.READONLY
+            }
+        ]
+        : [
+            {
+              address: address("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"),
+              role: AccountRole.READONLY
+            }
+        ];
 
       // Prepare transaction
       const accounts = [

@@ -1,6 +1,7 @@
+use crate::{instruction::ProgramInstruction, state::Counter};
 use ephemeral_rollups_pinocchio::instruction::delegate_account;
 use ephemeral_rollups_pinocchio::instruction::{
-    commit, commit_accounts, commit_and_undelegate_accounts, undelegate,
+    commit_accounts, commit_and_undelegate_accounts, undelegate,
 };
 use ephemeral_rollups_pinocchio::types::DelegateConfig;
 use pinocchio::{
@@ -9,9 +10,8 @@ use pinocchio::{
     error::ProgramError,
     Address, ProgramResult,
 };
+use pinocchio_log::log;
 use pinocchio_system::instructions::CreateAccount;
-
-use crate::{instruction::ProgramInstruction, state::Counter};
 
 pub fn process_instruction(
     program_id: &Address,
@@ -36,8 +36,8 @@ pub fn process_instruction(
         ProgramInstruction::IncrementAndUndelegate { increase_by } => {
             process_increment_undelegate(program_id, accounts, increase_by)
         }
-        ProgramInstruction::UndelegationCallback => {
-            process_undelegation_callback(program_id, accounts, instruction_data)
+        ProgramInstruction::UndelegationCallback { ix_data } => {
+            process_undelegation_callback(program_id, accounts, &ix_data)
         }
     }
 }
@@ -296,19 +296,13 @@ pub fn process_increment_undelegate(
 pub fn process_undelegation_callback(
     program_id: &Address,
     accounts: &[AccountView],
-    instruction_data: &[u8],
+    ix_data: &[u8],
 ) -> ProgramResult {
     let [delegated_acc, buffer_acc, payer, _system_program, ..] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
-
-    undelegate(
-        delegated_acc,
-        program_id,
-        buffer_acc,
-        payer,
-        &instruction_data[7..],
-    )?;
-
+    log!("Undelegating ...");
+    undelegate(delegated_acc, program_id, buffer_acc, payer, &ix_data)?;
+    log!("Undelegated successfully.");
     Ok(())
 }
