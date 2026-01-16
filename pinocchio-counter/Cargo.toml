@@ -1,0 +1,16 @@
+[package]
+name = "pinocchio-counter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pinocchio = { version = "0.10", features = ["cpi", "alloc", "copy"] }
+pinocchio-log = { version = "0.5" }
+pinocchio-pubkey = { version = "0.3", features = ["const"] }
+pinocchio-system = { version = "0.5" }
+pinocchio-token = { version = "0.5" }
+ephemeral-rollups-pinocchio = { version = "0.8.0", features = ["address-find-program-address"] }
+
+[lib]
+name = "pinocchio_counter"
+crate-type = ["cdylib", "lib"]
