@@ -638,7 +638,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.7.2"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e297c23952d2d819d57c0d883a96ad3608d8d7518ee28ffc8bfa5a9c6a6febf"
 dependencies = [
  "anchor-lang",
  "base64ct",
@@ -653,13 +655,15 @@ dependencies = [
  "num-derive",
  "num-traits",
  "solana-program 2.3.0",
- "solana-system-interface 1.0.0",
+ "solana-system-interface 2.0.0",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-action"
-version = "0.7.2"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fe4ffa05252c7fdcbb7d988aeaf6b994d1733f01a453da08fbbd68a947c3522"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -667,7 +671,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.7.2"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7fb0e49b21ab944937b118eeb8e26a157b21af821d8b258e27f9eaac287b835"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -675,7 +681,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.7.2"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48562329c3fbe3e8fb152e07fbc4a5b3abe804e157ecfc996d27082a651a08c6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -684,7 +692,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.7.2"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5df9d12dfdd80be030c8b4143be6c8303d1047d7d36017f10d66f64a4c7d4b9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2775,6 +2785,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e1790547bfc3061f1ee68ea9d8dc6c973c02a163697b24263a8e9f2e6d4afa2"
 dependencies = [
  "num-traits",
+ "serde",
+ "serde_derive",
+ "solana-instruction 3.1.0",
  "solana-msg 3.0.0",
  "solana-program-error 3.0.0",
  "solana-pubkey 3.0.0",
