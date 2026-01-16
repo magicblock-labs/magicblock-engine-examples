@@ -371,12 +371,12 @@ describe("basic-test", async () => {
             Buffer.from(CounterInstruction.IncreaseCounter, 'hex'),
             borsh.serialize(IncreaseCounterPayload.schema, new IncreaseCounterPayload(1))
         ])
-        const initializeIx = new TransactionInstruction({
+        const incrementIx = new TransactionInstruction({
             keys: keys,
             programId: PROGRAM_ID,
             data: serializedInstructionData
         });
-        tx.add(initializeIx);
+        tx.add(incrementIx);
         const txHash = await sendAndConfirmTransaction(connectionEphemeralRollup, tx, [userKeypair],
             {
                 skipPreflight: true,
