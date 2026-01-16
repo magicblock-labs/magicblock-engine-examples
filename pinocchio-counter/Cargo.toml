@@ -9,7 +9,7 @@ pinocchio-log = { version = "0.5" }
 pinocchio-pubkey = { version = "0.3", features = ["const"] }
 pinocchio-system = { version = "0.5" }
 pinocchio-token = { version = "0.5" }
-ephemeral-rollups-pinocchio = { version = "0.8.0" }
+ephemeral-rollups-pinocchio = { version = "0.8.0", features = ["address-find-program-address"] }
 
 [lib]
 name = "pinocchio_counter"
