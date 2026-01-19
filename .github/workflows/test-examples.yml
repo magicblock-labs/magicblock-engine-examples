@@ -69,7 +69,6 @@ jobs:
           sudo sysctl fs.inotify.max_user_instances=1280
           sudo sysctl fs.inotify.max_user_watches=655360
           RUST_LOG=info ephemeral-validator \
-            --accounts-lifecycle ephemeral \
             --remote-cluster development \
             --remote-url http://127.0.0.1:8899 \
             --remote-ws-url ws://127.0.0.1:8900 \
