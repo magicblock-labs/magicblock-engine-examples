@@ -1,0 +1,37 @@
+{
+  "name": "pinocchio-counter-client",
+  "version": "0.1.0",
+  "description": "Client tests for pinocchio-counter program",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run tests/",
+    "test:watch": "vitest watch tests/",
+    "test:legacy": "ts-node tests/client.test.ts",
+    "build": "cargo build --release",
+    "build:dev": "cargo build",
+    "check": "cargo check"
+  },
+  "keywords": [
+    "solana",
+    "pinocchio",
+    "counter",
+    "program"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0",
+    "vitest": "^0.34.0"
+  },
+  "dependencies": {
+    "@magicblock-labs/ephemeral-rollups-kit": "^0.8.0",
+    "@magicblock-labs/ephemeral-rollups-sdk": "^0.8.0",
+    "@solana-program/system": "^0.10.0",
+    "@solana/kit": "^5.4.0",
+    "@solana/web3.js": "^1.93.0",
+    "borsh": "^0.7.0",
+    "dotenv": "^16.0.0"
+  }
+}
