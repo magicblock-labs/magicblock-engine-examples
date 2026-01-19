@@ -71,7 +71,7 @@ jobs:
           RUST_LOG=info ephemeral-validator \
             --remotes "http://localhost:8899" \
             --remotes "ws://localhost:8900"  \
-            -l "127.0.0.1:7799"
+            -l "127.0.0.1:7799" &
 
           # Wait for validator to be ready
           timeout 20 bash -c 'until curl -s http://localhost:7799 >/dev/null 2>&1; do sleep 1; done'
