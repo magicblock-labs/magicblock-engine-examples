@@ -3,7 +3,7 @@ use ephemeral_rollups_pinocchio::instruction::{
     commit_accounts, commit_and_undelegate_accounts, create_permission, delegate_account,
     delegate_permission, undelegate,
 };
-use ephemeral_rollups_pinocchio::types::{DelegateConfig, MembersArgs};
+use ephemeral_rollups_pinocchio::types::{DelegateConfig, Member, MemberFlags, MembersArgs};
 use pinocchio::{
     account::AccountView,
     cpi::{Seed, Signer},
@@ -93,41 +93,57 @@ pub fn process_initialize_counter(program_id: &Address, accounts: &[AccountView]
     counter_data.count = 0;
     counter_data.to_bytes(&mut counter_account.try_borrow_mut()?)?;
 
-    // Create permission for the counter account
-    let members = MembersArgs { members: None };
-    let _ = create_permission(
-        &[
+    // Create permission for the counter account if it doesn't already exist
+    if permission.lamports() == 0 {
+        let members_array = [Member {
+            flags: MemberFlags::default(),
+            pubkey: *initializer_account.address(),
+        }];
+        let members = MembersArgs {
+            members: Some(&members_array),
+        };
+        let _ = create_permission(
+            &[
+                &counter_account,
+                &permission,
+                &initializer_account,
+                &system_program,
+            ],
+            &permission_program.address(),
+            members,
+            Some(signer_seeds.clone()),
+        );
+        log!("Permission created successfully.");
+    } else {
+        log!("Permission already exists.");
+    }
+
+    // Delegate permission if not already delegated
+    if unsafe { permission.owner() } == permission_program.address() {
+        let mut delegate_accounts = vec![
+            &initializer_account,
+            &initializer_account,
             &counter_account,
             &permission,
-            &initializer_account,
             &system_program,
-        ],
-        &permission_program.address(),
-        members,
-        Some(signer_seeds.clone()),
-    );
-    log!("Permission created successfully.");
-    let mut delegate_accounts = vec![
-        &initializer_account,
-        &initializer_account,
-        &counter_account,
-        &permission,
-        &system_program,
-        &permission_program,
-        &delegation_buffer,
-        &delegation_record,
-        &delegation_metadata,
-        &delegation_program,
-    ];
-    delegate_accounts.extend(accounts[9..].iter());
-    let _ = delegate_permission(
-        &delegate_accounts,
-        &permission_program.address(),
-        true,
-        true,
-        Some(signer_seeds.clone()),
-    );
-    log!("Permission delegated successfully");
+            &permission_program,
+            &delegation_buffer,
+            &delegation_record,
+            &delegation_metadata,
+            &delegation_program,
+        ];
+        delegate_accounts.extend(accounts[9..].iter());
+        let _ = delegate_permission(
+            &delegate_accounts,
+            &permission_program.address(),
+            false,
+            true,
+            Some(signer_seeds.clone()),
+        );
+        log!("Permission delegated successfully");
+    } else {
+        log!("Permission already delegated");
+    }
 
     Ok(())
 }
