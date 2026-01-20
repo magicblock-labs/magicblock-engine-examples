@@ -19,7 +19,6 @@ import {
     MAGIC_CONTEXT_ID, 
     MAGIC_PROGRAM_ID, 
     PERMISSION_PROGRAM_ID,
-    GetCommitmentSignature,
     getAuthToken
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import * as nacl from 'tweetnacl';
@@ -31,7 +30,7 @@ dotenv.config()
 
 
 
-describe("basic-test", async () => {
+describe.skip("basic-test", async () => {
     const TEST_TIMEOUT = 60_000;
     console.log("pinocchio-counter.ts")
 
@@ -352,10 +351,10 @@ describe("basic-test", async () => {
             data: serializedInstructionData
         });
         tx.add(increaseCounterIx);
-        const txHash = await sendAndConfirmTransaction(connectionEphemeralRollup, tx, [userKeypair],
-            {
-                skipPreflight: true,
-                commitment: "confirmed"
+        const txHash = await sendAndConfirmTransaction(connectionEphemeralRollup, tx, [userKeypair], 
+            { 
+                commitment: "confirmed", 
+                skipPreflight: true 
             }
         ); 
         const duration = Date.now() - start;
@@ -411,17 +410,6 @@ describe("basic-test", async () => {
         ); 
         const duration = Date.now() - start;
         console.log(`${duration}ms (ER) Commit txHash: ${txHash}`);
-
-        // Get the commitment signature on the base layer
-        const comfirmCommitStart = Date.now();
-        // Await for the commitment on the base layer
-        const txCommitSgn = await GetCommitmentSignature(
-            txHash,
-            // tx,
-            connectionEphemeralRollup
-        );
-        const commitDuration = Date.now() - comfirmCommitStart;
-        console.log(`${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`);
         expect(txHash).toBeDefined();
 
     }, TEST_TIMEOUT);
@@ -529,16 +517,6 @@ describe("basic-test", async () => {
         ); 
         const duration = Date.now() - start;
         console.log(`${duration}ms (ER) Undelegate txHash: ${txHash}`);
-
-        // Get the commitment signature on the base layer
-        const comfirmCommitStart = Date.now();
-        // Await for the commitment on the base layer
-        const txCommitSgn = await GetCommitmentSignature(
-            txHash,
-            connectionEphemeralRollup
-        );
-        const commitDuration = Date.now() - comfirmCommitStart;
-        console.log(`${commitDuration}ms (Base Layer) Undelegate txHash: ${txCommitSgn}`);
         expect(txHash).toBeDefined();
 
     }, TEST_TIMEOUT);

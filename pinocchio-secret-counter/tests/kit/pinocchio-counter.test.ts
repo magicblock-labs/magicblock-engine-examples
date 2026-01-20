@@ -40,7 +40,7 @@ import { describe, it, beforeAll, expect } from "vitest";
 
 dotenv.config();
 
-describe.skip("basic-test", async () => {
+describe("basic-test", async () => {
   const TEST_TIMEOUT = 60_000;
 
   console.log("🧪 Running pinocchio-counter.ts test suite...");
@@ -289,7 +289,7 @@ describe.skip("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
+      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
 
       console.log(`${Date.now() - start}ms (ER) Increment txHash: ${txHash}`);
       expect(txHash).toBeDefined();
@@ -324,7 +324,7 @@ describe.skip("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
+      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
 
 
       const duration = Date.now() - start;
@@ -361,7 +361,7 @@ describe.skip("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
+      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
 
       console.log(`${Date.now() - start}ms (ER) Increment txHash: ${txHash}`);
 
@@ -399,7 +399,7 @@ describe.skip("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
+      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
 
       const duration = Date.now() - start;
       console.log(`${duration}ms (ER) Undelegate txHash: ${txHash}`);
