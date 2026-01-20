@@ -1,7 +1,7 @@
 use crate::{instruction::ProgramInstruction, state::Counter};
 use ephemeral_rollups_pinocchio::instruction::{
-    commit_accounts, commit_and_undelegate_accounts, create_permission, delegate_account,
-    delegate_permission, undelegate,
+    commit_accounts, commit_and_undelegate_accounts, commit_and_undelegate_permission,
+    create_permission, delegate_account, delegate_permission, undelegate,
 };
 use ephemeral_rollups_pinocchio::types::{DelegateConfig, Member, MemberFlags, MembersArgs};
 use pinocchio::{
@@ -57,6 +57,10 @@ pub fn process_initialize_counter(program_id: &Address, accounts: &[AccountView]
     let delegation_metadata = accounts[7];
     let delegation_program = accounts[8];
 
+    // Check initializer is signer and counter PDA is correct
+    if !initializer_account.is_signer() {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
     let (counter_pda, bump_seed) = Address::find_program_address(
         &[b"counter", initializer_account.address().as_ref()],
         program_id,
@@ -248,27 +252,58 @@ pub fn process_commit(_program_id: &Address, accounts: &[AccountView]) -> Progra
 }
 
 pub fn process_commit_and_undelegate(
-    _program_id: &Address,
+    program_id: &Address,
     accounts: &[AccountView],
 ) -> ProgramResult {
-    if accounts.len() < 4 {
+    if accounts.len() < 6 {
         return Err(ProgramError::NotEnoughAccountKeys);
     }
 
     let initializer = &accounts[0];
     let counter_account = &accounts[1];
-    let magic_program = &accounts[2];
-    let magic_context = &accounts[3];
+    let permission_program = &accounts[2];
+    let permission = &accounts[3];
+    let magic_program = &accounts[4];
+    let magic_context = &accounts[5];
 
+    // Check initializer is signer and counter PDA is correct
     if !initializer.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
     }
+    let (counter_pda, bump_seed) =
+        Address::find_program_address(&[b"counter", initializer.address().as_ref()], program_id);
+
+    if counter_pda != *counter_account.address() {
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    // Prepare signer seeds
+    let seed_array: [Seed; 3] = [
+        Seed::from(b"counter"),
+        Seed::from(initializer.address().as_ref()),
+        Seed::from(core::slice::from_ref(&bump_seed)),
+    ];
+    let signer_seeds = Signer::from(&seed_array);
 
     commit_and_undelegate_accounts(
         initializer,
         &[*counter_account],
         magic_context,
         magic_program,
+    )?;
+
+    commit_and_undelegate_permission(
+        &[
+            initializer,
+            counter_account,
+            permission,
+            magic_program,
+            magic_context,
+        ],
+        permission_program.address(),
+        true,
+        true,
+        Some(signer_seeds.clone()),
     )?;
 
     Ok(())

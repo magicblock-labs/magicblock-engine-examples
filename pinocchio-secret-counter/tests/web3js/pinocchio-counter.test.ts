@@ -19,8 +19,10 @@ import {
     MAGIC_CONTEXT_ID, 
     MAGIC_PROGRAM_ID, 
     PERMISSION_PROGRAM_ID,
-    GetCommitmentSignature
+    GetCommitmentSignature,
+    getAuthToken
 } from "@magicblock-labs/ephemeral-rollups-sdk";
+import * as nacl from 'tweetnacl';
 
 import { describe, it, beforeAll, expect } from "vitest";
 
@@ -29,7 +31,7 @@ dotenv.config()
 
 
 
-describe.skip("basic-test", async () => {
+describe("basic-test", async () => {
     const TEST_TIMEOUT = 60_000;
     console.log("pinocchio-counter.ts")
 
@@ -38,6 +40,17 @@ describe.skip("basic-test", async () => {
     const secretKeyArray = Uint8Array.from(JSON.parse(fs.readFileSync(keypairPath, "utf8")));
     const keypair = Keypair.fromSecretKey(secretKeyArray);
     const PROGRAM_ID = keypair.publicKey;
+
+    // Create user keypair and airdrop SOL if needed
+    const userKeypair = initializeSolSignerKeypair(); 
+
+    // Set up PER connection
+    const teeUrl = process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://tee.magicblock.app";
+    const teeWsUrl = process.env.EPHEMERAL_WS_ENDPOINT || "wss://tee.magicblock.app";
+    const authToken = teeUrl.startsWith("https://tee") ? (await getAuthToken(teeUrl, userKeypair.publicKey, (message: Uint8Array) => Promise.resolve(nacl.sign.detached(message, userKeypair.secretKey)))).token : "";
+    const teeUserUrl = `${teeUrl}?token=${authToken}`;
+    const teeUserWsUrl = `${teeWsUrl}?token=${authToken}`;
+    console.log("User Explorer URL:", `https://solscan.io/?cluster=custom&customUrl=${teeUserUrl}`);
   
     // Set up a connection to blockchain cluster
     const connectionBaseLayer = new Connection(
@@ -45,15 +58,13 @@ describe.skip("basic-test", async () => {
         {wsEndpoint:process.env.WS_ENDPOINT || "wss://api.devnet.solana.com"}
     );
     const connectionEphemeralRollup = new Connection(
-        process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/",
-        {wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/"}
+        process.env.EPHEMERAL_PROVIDER_ENDPOINT || teeUserUrl,
+        {wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || teeUserWsUrl}
     );
     console.log("Base Layer Connection: ", connectionBaseLayer.rpcEndpoint);
     console.log("Ephemeral Rollup Connection: ", connectionEphemeralRollup.rpcEndpoint);
 
-  
-    // Create user keypair and airdrop SOL if needed
-    const userKeypair = initializeSolSignerKeypair(); 
+
   
     // Run this once before all tests
     beforeAll( async () => {
@@ -68,14 +79,21 @@ describe.skip("basic-test", async () => {
     console.log("Program ID: ", PROGRAM_ID.toString())
     console.log("Counter PDA: ", counterPda.toString())
 
+    // Get permission PDA
+    const [permissionPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("permission:"), counterPda.toBuffer()],
+        PERMISSION_PROGRAM_ID
+    );
+    console.log("Permission PDA: ", permissionPda.toString())
+
 
     // Add local validator identity to the remaining accounts if running on localnet
     const remainingAccounts =
     connectionEphemeralRollup.rpcEndpoint.includes("localhost") ||
-    connectionEphemeralRollup.rpcEndpoint.includes("127.0.0.1")
+    connectionEphemeralRollup.rpcEndpoint.includes("127.0.0.1") || process.env.VALIDATOR
     ? [
         {
-            pubkey: new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+            pubkey: new PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
             isSigner: false,
             isWritable: false,
         },
@@ -96,16 +114,10 @@ describe.skip("basic-test", async () => {
         // Create, send and confirm transaction
         const tx = new Transaction();
         
-        // Get permission PDA
-        const [permissionPda] = PublicKey.findProgramAddressSync(
-            [Buffer.from("permission"), counterPda.toBuffer()],
-            PERMISSION_PROGRAM_ID
-        );
-        
-        // Get delegation PDAs
-        const delegateBufferPda = delegateBufferPdaFromDelegatedAccountAndOwnerProgram(counterPda, PERMISSION_PROGRAM_ID);
-        const delegationRecordPda = delegationRecordPdaFromDelegatedAccount(counterPda);
-        const delegationMetadataPda = delegationMetadataPdaFromDelegatedAccount(counterPda);
+        // Get delegation PDAs for Permission
+        const delegateBufferPda = delegateBufferPdaFromDelegatedAccountAndOwnerProgram(permissionPda, PERMISSION_PROGRAM_ID);
+        const delegationRecordPda = delegationRecordPdaFromDelegatedAccount(permissionPda);
+        const delegationMetadataPda = delegationMetadataPdaFromDelegatedAccount(permissionPda);
         
         const keys = [
             // Initializer
@@ -162,7 +174,7 @@ describe.skip("basic-test", async () => {
                 isSigner: false,
                 isWritable: false,
             },
-            // ER Validator
+            // PER Validator
             ...remainingAccounts
         ]
         const serializedInstructionData =  Buffer.concat([
@@ -288,7 +300,7 @@ describe.skip("basic-test", async () => {
                 isSigner: false,
                 isWritable: false,
             },
-            // ER Validator
+            // PER Validator
             ...remainingAccounts
         ]
         const serializedInstructionData =  Buffer.from(CounterInstruction.Delegate, 'hex')
@@ -474,6 +486,18 @@ describe.skip("basic-test", async () => {
             // Counter Account
             {
                 pubkey: counterPda,
+                isSigner: false,
+                isWritable: true,
+            },
+            // Permission Program
+            {
+                pubkey: PERMISSION_PROGRAM_ID,
+                isSigner: false,
+                isWritable: false,
+            },
+            // Permission
+            {
+                pubkey: permissionPda,
                 isSigner: false,
                 isWritable: true,
             },

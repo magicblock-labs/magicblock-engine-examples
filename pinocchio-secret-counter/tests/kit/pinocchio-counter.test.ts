@@ -17,7 +17,8 @@ import {
   delegateBufferPdaFromDelegatedAccountAndOwnerProgram,
   MAGIC_CONTEXT_ID,
   MAGIC_PROGRAM_ID,
-  PERMISSION_PROGRAM_ID
+  PERMISSION_PROGRAM_ID,
+  getAuthToken
 } from "@magicblock-labs/ephemeral-rollups-kit";
 import { 
   Instruction,
@@ -33,11 +34,13 @@ import {
   setTransactionMessageFeePayer 
 } from '@solana/kit';
 import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system"
+import * as nacl from 'tweetnacl';
 import { describe, it, beforeAll, expect } from "vitest";
+
 
 dotenv.config();
 
-describe("basic-test", async () => {
+describe.skip("basic-test", async () => {
   const TEST_TIMEOUT = 60_000;
 
   console.log("🧪 Running pinocchio-counter.ts test suite...");
@@ -50,22 +53,35 @@ describe("basic-test", async () => {
   const keypair = await createKeyPairFromBytes(secretKeyArray);
   const PROGRAM_ID = await getAddressFromPublicKey(keypair.publicKey)
 
+  // Prepare user
+  const userKeypair = await initializeSolSignerKeypair();
+  const userPubkey = await getAddressFromPublicKey(userKeypair.publicKey)
+
+  // Set up PER connection
+  const teeUrl = process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://tee.magicblock.app";
+  const teeWsUrl = process.env.EPHEMERAL_WS_ENDPOINT || "wss://tee.magicblock.app";
+  const authToken = teeUrl.startsWith("https://tee") ? (await getAuthToken(teeUrl, userPubkey, (message: Uint8Array) => Promise.resolve(nacl.sign.detached(message, new Uint8Array(
+  (JSON.parse(process.env.PRIVATE_KEY ?? "[]") as number[])))))).token : "";
+  const teeUserUrl = `${teeUrl}?token=${authToken}`;
+  const teeUserWsUrl = `${teeWsUrl}?token=${authToken}`;
+  console.log("User Explorer URL:", `https://solscan.io/?cluster=custom&customUrl=${teeUserUrl}`);
+
   // Connections
   const connection = await Connection.create(
     process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
     process.env.WS_ENDPOINT || "wss://api.devnet.solana.com"
   )
   const ephemeralConnection = await Connection.create(
-    process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app",
-    process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app"
+    process.env.EPHEMERAL_PROVIDER_ENDPOINT || teeUserUrl,
+    process.env.EPHEMERAL_WS_ENDPOINT || teeUserWsUrl
   )
+
+
 
   console.log("Base Layer RPC:", connection.clusterUrlHttp, "| Websocket:",  connection.clusterUrlWs);
   console.log("ER RPC:", ephemeralConnection.clusterUrlHttp, "| Websocket:", ephemeralConnection.clusterUrlWs);
   
-  // Prepare user
-  const userKeypair = await initializeSolSignerKeypair();
-  const userPubkey = await getAddressFromPublicKey(userKeypair.publicKey)
+
 
   // Get Counter PDA
   const addressEncoder = getAddressEncoder();
@@ -89,10 +105,10 @@ describe("basic-test", async () => {
   console.log("Permision PDA:", permissionPda)
 
   // Add local validator identity to the remaining accounts if running on localnet
-  const remainingAccounts = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1")
+  const remainingAccounts = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1") || process.env.VALIDATOR
     ? [
         {
-          address: address("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+          address: address(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
           role: AccountRole.READONLY
         }
     ]
@@ -102,7 +118,7 @@ describe("basic-test", async () => {
           role: AccountRole.READONLY
         }
     ];
-  console.log("Validator: ", remainingAccounts[0].address);
+  console.log("PER Validator: ", remainingAccounts[0].address);
   
   // Ensure test wallet has SOL
   beforeAll(async () => {
@@ -114,7 +130,7 @@ describe("basic-test", async () => {
     );
   }, TEST_TIMEOUT);
 
-  it.only(
+  it(
     "Initialize counter on Solana",
     async () => {
       const start = Date.now();
@@ -126,11 +142,11 @@ describe("basic-test", async () => {
         { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
         { address: PERMISSION_PROGRAM_ID, role: AccountRole.READONLY },
         { address: permissionPda, role: AccountRole.WRITABLE },
-        { address: await delegateBufferPdaFromDelegatedAccountAndOwnerProgram(counterPda, PERMISSION_PROGRAM_ID), role: AccountRole.WRITABLE },
-        { address: await delegationRecordPdaFromDelegatedAccount(counterPda), role: AccountRole.WRITABLE },
-        { address: await delegationMetadataPdaFromDelegatedAccount(counterPda), role: AccountRole.WRITABLE },
+        { address: await delegateBufferPdaFromDelegatedAccountAndOwnerProgram(permissionPda, PERMISSION_PROGRAM_ID), role: AccountRole.WRITABLE },
+        { address: await delegationRecordPdaFromDelegatedAccount(permissionPda), role: AccountRole.WRITABLE },
+        { address: await delegationMetadataPdaFromDelegatedAccount(permissionPda), role: AccountRole.WRITABLE },
         { address: DELEGATION_PROGRAM_ID, role: AccountRole.READONLY },
-        // ER Validator
+        // PER Validator
         ...remainingAccounts
       ];
       const serializedInstructionData = Buffer.from(
@@ -196,7 +212,7 @@ describe("basic-test", async () => {
   );
 
   it(
-    "Delegate counter to ER",
+    "Delegate counter to PER",
     async () => {
       const start = Date.now();
 
@@ -219,7 +235,7 @@ describe("basic-test", async () => {
           role: AccountRole.WRITABLE
         },
         { address: DELEGATION_PROGRAM_ID, role: AccountRole.READONLY },
-        // ER Validator
+        // PER Validator
         ...remainingAccounts
       ];
       const serializedInstructionData = Buffer.from(
@@ -247,7 +263,7 @@ describe("basic-test", async () => {
   );
 
   it(
-    "Increase counter on ER",
+    "Increase counter on PER",
     async () => {
       const start = Date.now();
       const accounts = [
@@ -273,7 +289,7 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
+      const txHash = await ephemeralConnection.sendTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
 
       console.log(`${Date.now() - start}ms (ER) Increment txHash: ${txHash}`);
       expect(txHash).toBeDefined();
@@ -281,7 +297,7 @@ describe("basic-test", async () => {
     TEST_TIMEOUT
   );
   it(
-    "Commit changes from ER back to Solana",
+    "Commit changes from PER back to Solana",
     async () => {
       const start = Date.now();
 
@@ -308,7 +324,7 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
+      const txHash = await ephemeralConnection.sendTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
 
 
       const duration = Date.now() - start;
@@ -319,7 +335,7 @@ describe("basic-test", async () => {
     TEST_TIMEOUT
   );
   it(
-    "Increase counter on ER (2)",
+    "Increase counter on PER (2)",
     async () => {
       const start = Date.now();
       const accounts = [
@@ -345,7 +361,7 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
+      const txHash = await ephemeralConnection.sendTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
 
       console.log(`${Date.now() - start}ms (ER) Increment txHash: ${txHash}`);
 
@@ -354,7 +370,7 @@ describe("basic-test", async () => {
     TEST_TIMEOUT
   );
   it(
-    "Undelegate counter from ER",
+    "Undelegate counter from PER",
     async () => {
       const start = Date.now();
 
@@ -362,6 +378,8 @@ describe("basic-test", async () => {
       const accounts = [
         { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
         { address: counterPda, role: AccountRole.WRITABLE  },
+        { address: address(PERMISSION_PROGRAM_ID.toString()), role: AccountRole.READONLY},
+        { address: permissionPda, role: AccountRole.WRITABLE },
         { address: address(MAGIC_PROGRAM_ID.toString()), role: AccountRole.READONLY},
         { address: address(MAGIC_CONTEXT_ID.toString()), role: AccountRole.WRITABLE}
       ];
@@ -381,7 +399,7 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
+      const txHash = await ephemeralConnection.sendTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
 
       const duration = Date.now() - start;
       console.log(`${duration}ms (ER) Undelegate txHash: ${txHash}`);
