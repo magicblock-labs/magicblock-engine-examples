@@ -1,4 +1,4 @@
-use crate::{instruction::ProgramInstruction, state::Counter};
+use crate::state::Counter;
 use ephemeral_rollups_pinocchio::instruction::delegate_account;
 use ephemeral_rollups_pinocchio::instruction::{
     commit_accounts, commit_and_undelegate_accounts, undelegate,
@@ -10,46 +10,12 @@ use pinocchio::{
     error::ProgramError,
     Address, ProgramResult,
 };
-use pinocchio_log::log;
 use pinocchio_system::instructions::CreateAccount;
 
-pub fn process_instruction(
-    program_id: &Address,
-    accounts: &[AccountView],
-    instruction_data: &[u8],
-) -> ProgramResult {
-    let instruction = ProgramInstruction::unpack(instruction_data)?;
-
-    match instruction {
-        ProgramInstruction::InitializeCounter => process_initialize_counter(program_id, accounts),
-        ProgramInstruction::IncreaseCounter { increase_by } => {
-            process_increase_counter(program_id, accounts, increase_by)
-        }
-        ProgramInstruction::Delegate => process_delegate(program_id, accounts),
-        ProgramInstruction::CommitAndUndelegate => {
-            process_commit_and_undelegate(program_id, accounts)
-        }
-        ProgramInstruction::Commit => process_commit(program_id, accounts),
-        ProgramInstruction::IncrementAndCommit { increase_by } => {
-            process_increment_commit(program_id, accounts, increase_by)
-        }
-        ProgramInstruction::IncrementAndUndelegate { increase_by } => {
-            process_increment_undelegate(program_id, accounts, increase_by)
-        }
-        ProgramInstruction::UndelegationCallback { ix_data } => {
-            process_undelegation_callback(program_id, accounts, &ix_data)
-        }
-    }
-}
-
 pub fn process_initialize_counter(program_id: &Address, accounts: &[AccountView]) -> ProgramResult {
-    if accounts.len() < 3 {
+    let [initializer_account, counter_account, _system_program] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
-    }
-
-    let initializer_account = accounts[0];
-    let counter_account = accounts[1];
-    let _system_program = accounts[2];
+    };
 
     let (counter_pda, bump_seed) = Address::find_program_address(
         &[b"counter", initializer_account.address().as_ref()],
@@ -82,9 +48,9 @@ pub fn process_initialize_counter(program_id: &Address, accounts: &[AccountView]
     }
 
     // Initialize counter to 0
-    let mut counter_data = Counter::from_bytes(&counter_account.try_borrow()?)?;
+    let mut data = counter_account.try_borrow_mut()?;
+    let counter_data = Counter::load_mut(&mut data)?;
     counter_data.count = 0;
-    counter_data.to_bytes(&mut counter_account.try_borrow_mut()?)?;
 
     Ok(())
 }
@@ -94,12 +60,9 @@ pub fn process_increase_counter(
     accounts: &[AccountView],
     increase_by: u64,
 ) -> ProgramResult {
-    if accounts.len() < 2 {
+    let [initializer_account, counter_account] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
-    }
-
-    let initializer_account = accounts[0];
-    let counter_account = accounts[1];
+    };
 
     let (counter_pda, _bump_seed) = Address::find_program_address(
         &[b"counter", initializer_account.address().as_ref()],
@@ -110,30 +73,20 @@ pub fn process_increase_counter(
         return Err(ProgramError::InvalidArgument);
     }
 
-    let mut counter_data = Counter::from_bytes(&counter_account.try_borrow()?)?;
+    let mut data = counter_account.try_borrow_mut()?;
+    let counter_data = Counter::load_mut(&mut data)?;
     counter_data.count += increase_by;
-    counter_data.to_bytes(&mut counter_account.try_borrow_mut()?)?;
 
     Ok(())
 }
 
 pub fn process_delegate(_program_id: &Address, accounts: &[AccountView]) -> ProgramResult {
-    if accounts.len() < 9 {
+    let [initializer, pda_to_delegate, owner_program, delegation_buffer, delegation_record, delegation_metadata, _delegation_program, system_program, rest @ ..] =
+        accounts
+    else {
         return Err(ProgramError::NotEnoughAccountKeys);
-    }
-
-    let initializer = &accounts[0];
-    let system_program = &accounts[1];
-    let pda_to_delegate = &accounts[2];
-    let owner_program = &accounts[3];
-    let delegation_buffer = &accounts[4];
-    let delegation_record = &accounts[5];
-    let delegation_metadata = &accounts[6];
-    let validator = if accounts.len() > 8 {
-        Some(*accounts[8].address())
-    } else {
-        None
     };
+    let validator = rest.first().map(|account| *account.address());
 
     let seed_1 = b"counter";
     let seed_2 = initializer.address().as_ref();
@@ -165,14 +118,9 @@ pub fn process_delegate(_program_id: &Address, accounts: &[AccountView]) -> Prog
 }
 
 pub fn process_commit(_program_id: &Address, accounts: &[AccountView]) -> ProgramResult {
-    if accounts.len() < 4 {
+    let [initializer, counter_account, magic_program, magic_context] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
-    }
-
-    let initializer = &accounts[0];
-    let counter_account = &accounts[1];
-    let magic_program = &accounts[2];
-    let magic_context = &accounts[3];
+    };
 
     if !initializer.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
@@ -192,14 +140,9 @@ pub fn process_commit_and_undelegate(
     _program_id: &Address,
     accounts: &[AccountView],
 ) -> ProgramResult {
-    if accounts.len() < 4 {
+    let [initializer, counter_account, magic_program, magic_context] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
-    }
-
-    let initializer = &accounts[0];
-    let counter_account = &accounts[1];
-    let magic_program = &accounts[2];
-    let magic_context = &accounts[3];
+    };
 
     if !initializer.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
@@ -220,14 +163,9 @@ pub fn process_increment_commit(
     accounts: &[AccountView],
     increase_by: u64,
 ) -> ProgramResult {
-    if accounts.len() < 4 {
+    let [initializer, counter_account, magic_program, magic_context] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
-    }
-
-    let initializer = &accounts[0];
-    let counter_account = &accounts[1];
-    let magic_program = &accounts[2];
-    let magic_context = &accounts[3];
+    };
 
     let (counter_pda, _bump_seed) =
         Address::find_program_address(&[b"counter", initializer.address().as_ref()], program_id);
@@ -236,9 +174,9 @@ pub fn process_increment_commit(
         return Err(ProgramError::InvalidArgument);
     }
 
-    let mut counter_data = Counter::from_bytes(&counter_account.try_borrow()?)?;
+    let mut data = counter_account.try_borrow_mut()?;
+    let counter_data = Counter::load_mut(&mut data)?;
     counter_data.count += increase_by;
-    counter_data.to_bytes(&mut counter_account.try_borrow_mut()?)?;
 
     if !initializer.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
@@ -259,14 +197,9 @@ pub fn process_increment_undelegate(
     accounts: &[AccountView],
     increase_by: u64,
 ) -> ProgramResult {
-    if accounts.len() < 4 {
+    let [initializer, counter_account, magic_program, magic_context] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
-    }
-
-    let initializer = &accounts[0];
-    let counter_account = &accounts[1];
-    let magic_program = &accounts[2];
-    let magic_context = &accounts[3];
+    };
 
     let (counter_pda, _bump_seed) =
         Address::find_program_address(&[b"counter", initializer.address().as_ref()], program_id);
@@ -275,9 +208,9 @@ pub fn process_increment_undelegate(
         return Err(ProgramError::InvalidArgument);
     }
 
-    let mut counter_data = Counter::from_bytes(&counter_account.try_borrow()?)?;
+    let mut data = counter_account.try_borrow_mut()?;
+    let counter_data = Counter::load_mut(&mut data)?;
     counter_data.count += increase_by;
-    counter_data.to_bytes(&mut counter_account.try_borrow_mut()?)?;
 
     if !initializer.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
@@ -301,8 +234,8 @@ pub fn process_undelegation_callback(
     let [delegated_acc, buffer_acc, payer, _system_program, ..] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
-    log!("Undelegating ...");
+    #[cfg(feature = "logging")]
+    pinocchio_log::log!("Undelegating ...");
     undelegate(delegated_acc, program_id, buffer_acc, payer, &ix_data)?;
-    log!("Undelegated successfully.");
     Ok(())
 }

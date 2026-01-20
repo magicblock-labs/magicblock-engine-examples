@@ -3,14 +3,36 @@ name = "pinocchio-counter"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+logging = []
+
 [dependencies]
-pinocchio = { version = "0.10", features = ["cpi", "alloc", "copy"] }
+pinocchio = { version = "0.10.1", features = ["cpi", "copy"] }
 pinocchio-log = { version = "0.5" }
-pinocchio-pubkey = { version = "0.3", features = ["const"] }
 pinocchio-system = { version = "0.5" }
-pinocchio-token = { version = "0.5" }
-ephemeral-rollups-pinocchio = { version = "0.8.0", features = ["address-find-program-address"] }
+ephemeral-rollups-pinocchio = { version = "0.8.1" }
+
+[dev-dependencies]
+solana-instruction = "3.0.0"
+solana-program = "3.0.0"
+solana-program-test = "=3.0.2"
+solana-pubkey = "4.0.0"
+solana-signer = "3.0.0"
+solana-transaction = "3.0.1"
+solana-system-interface = { version = "2.0.0", features = ["bincode"] }
 
 [lib]
 name = "pinocchio_counter"
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib"]
+
+[[test]]
+name = "delegate_counter"
+path = "tests-rs/delegate_counter.rs"
+
+[[test]]
+name = "increase_counter"
+path = "tests-rs/increase_counter.rs"
+
+[[test]]
+name = "initialize_counter"
+path = "tests-rs/initialize_counter.rs"
