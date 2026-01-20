@@ -89,6 +89,14 @@ const parseAmount = (amountUi: string, decimals: number): bigint => {
     return BigInt(`${w || '0'}${frac}`);
 };
 
+// Utility: Create a noop instruction with random data to make transactions unique
+const NOOP_PROGRAM_ID = new PublicKey('noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV');
+const createNoopInstruction = (): TransactionInstruction => new TransactionInstruction({
+    programId: NOOP_PROGRAM_ID,
+    keys: [],
+    data: Buffer.from(crypto.getRandomValues(new Uint8Array(5))),
+});
+
 // Utility: Safe localStorage operations
 const safeLocalStorage = {
     get: <T,>(key: string, defaultValue: T): T => {
@@ -554,13 +562,8 @@ const App: React.FC = () => {
                 [],
                 TOKEN_PROGRAM_ID
             );
-            // Add instruction to print to the noop program and make the transaction unique
-            const noopInstruction = new TransactionInstruction({
-                programId: new PublicKey('noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV'),
-                keys: [],
-                data: Buffer.from(crypto.getRandomValues(new Uint8Array(5))),
-            });
-            ixs.push(noopInstruction);
+            // Add noop instruction to make the transaction unique
+            ixs.push(createNoopInstruction());
             ixs.push(ixTransfer);
             let sig;
             if (useEphemeral) {
@@ -885,7 +888,7 @@ const App: React.FC = () => {
                                         if (a.eDelegated) {
                                             // 1) Send undelegate instruction on Ephemeral rollup
                                             const ixU = undelegateIx(a.keypair.publicKey, mint);
-                                            const txU = new Transaction().add(ixU);
+                                            const txU = new Transaction().add(createNoopInstruction(), ixU);
                                             txU.feePayer = a.keypair.publicKey;
                                             const bhU = await getCachedEphemeralBlockhash();
                                             txU.recentBlockhash = bhU;
@@ -977,7 +980,7 @@ const App: React.FC = () => {
                                         if (a.eDelegated) {
                                             // 1) Send undelegate instruction on Ephemeral rollup
                                             const ixU = undelegateIx(a.keypair.publicKey, mint);
-                                            const txU = new Transaction().add(ixU);
+                                            const txU = new Transaction().add(createNoopInstruction(), ixU);
                                             txU.feePayer = a.keypair.publicKey;
                                             const bhU = await getCachedEphemeralBlockhash();
                                             txU.recentBlockhash = bhU;
