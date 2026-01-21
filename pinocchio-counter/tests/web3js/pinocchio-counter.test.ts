@@ -194,12 +194,6 @@ describe("basic-test", async () => {
                 isSigner: true,
                 isWritable: true,
             },
-            // System Program
-            {
-                pubkey: SystemProgram.programId,
-                isSigner: false,
-                isWritable: false,
-            },
             // Counter Account
             {
                 pubkey: counterPda,
@@ -233,6 +227,12 @@ describe("basic-test", async () => {
             // Delegation Program
             {
                 pubkey: DELEGATION_PROGRAM_ID,
+                isSigner: false,
+                isWritable: false,
+            },
+            // System Program
+            {
+                pubkey: SystemProgram.programId,
                 isSigner: false,
                 isWritable: false,
             },

@@ -184,7 +184,6 @@ describe("basic-test", async () => {
       // Prepare transaction
       const accounts = [
         { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
         { address: counterPda, role: AccountRole.WRITABLE  },
         { address: PROGRAM_ID, role: AccountRole.READONLY },
         {
@@ -200,6 +199,7 @@ describe("basic-test", async () => {
           role: AccountRole.WRITABLE
         },
         { address: DELEGATION_PROGRAM_ID, role: AccountRole.READONLY },
+        { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
         ...remainingAccounts,
       ];
       const serializedInstructionData = Buffer.from(
