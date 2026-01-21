@@ -14,6 +14,7 @@ impl Counter {
             return Err(ProgramError::InvalidArgument);
         }
         let ptr = data.as_mut_ptr() as *mut Self;
+        #[allow(clippy::manual_is_multiple_of)]
         if (ptr as usize) % core::mem::align_of::<Self>() != 0 {
             return Err(ProgramError::InvalidAccountData);
         }

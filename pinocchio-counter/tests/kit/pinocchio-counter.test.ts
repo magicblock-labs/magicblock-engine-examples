@@ -75,6 +75,7 @@ describe("basic-test", async () => {
           addressEncoder.encode(userPubkey)
       ],
   });
+  const bumpBytes = Buffer.from([bump]);
   console.log("Progam ID:", PROGRAM_ID);
   console.log("Counter PDA:", counterPda);
 
@@ -99,10 +100,10 @@ describe("basic-test", async () => {
         { address: counterPda, role: AccountRole.WRITABLE  },
         { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
       ];
-      const serializedInstructionData = Buffer.from(
-        CounterInstruction.InitializeCounter,
-        "hex"
-      );
+      const serializedInstructionData = Buffer.concat([
+        Buffer.from(CounterInstruction.InitializeCounter, "hex"),
+        bumpBytes,
+      ]);
       const initializeIx : Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
@@ -136,6 +137,7 @@ describe("basic-test", async () => {
       ];
       const serializedInstructionData = Buffer.concat([
         Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
+        bumpBytes,
         borsh.serialize(
           IncreaseCounterPayload.schema,
           new IncreaseCounterPayload(1)
@@ -202,10 +204,10 @@ describe("basic-test", async () => {
         { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
         ...remainingAccounts,
       ];
-      const serializedInstructionData = Buffer.from(
-        CounterInstruction.Delegate,
-        "hex"
-      );
+      const serializedInstructionData = Buffer.concat([
+        Buffer.from(CounterInstruction.Delegate, "hex"),
+        bumpBytes,
+      ]);
       const delegateIx : Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
@@ -236,6 +238,7 @@ describe("basic-test", async () => {
       ];
       const serializedInstructionData = Buffer.concat([
         Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
+        bumpBytes,
         borsh.serialize(
           IncreaseCounterPayload.schema,
           new IncreaseCounterPayload(1)
@@ -308,6 +311,7 @@ describe("basic-test", async () => {
       ];
       const serializedInstructionData = Buffer.concat([
         Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
+        bumpBytes,
         borsh.serialize(
           IncreaseCounterPayload.schema,
           new IncreaseCounterPayload(1)

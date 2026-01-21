@@ -8,6 +8,28 @@ pub const INITIALIZE_COUNTER: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 0];
 pub const INCREASE_COUNTER: [u8; 8] = [1, 0, 0, 0, 0, 0, 0, 0];
 pub const DELEGATE_COUNTER: [u8; 8] = [2, 0, 0, 0, 0, 0, 0, 0];
 
+pub fn initialize_counter_ix_data(bump: u8) -> Vec<u8> {
+    let mut data = Vec::with_capacity(9);
+    data.extend_from_slice(&INITIALIZE_COUNTER);
+    data.push(bump);
+    data
+}
+
+pub fn increase_counter_ix_data(bump: u8, increase_by: u64) -> Vec<u8> {
+    let mut data = Vec::with_capacity(17);
+    data.extend_from_slice(&INCREASE_COUNTER);
+    data.push(bump);
+    data.extend_from_slice(&increase_by.to_le_bytes());
+    data
+}
+
+pub fn delegate_counter_ix_data(bump: u8) -> Vec<u8> {
+    let mut data = Vec::with_capacity(9);
+    data.extend_from_slice(&DELEGATE_COUNTER);
+    data.push(bump);
+    data
+}
+
 pub fn counter_pda(program_id: Pubkey, initializer: Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(
         &[b"counter", initializer.to_bytes().as_slice()],

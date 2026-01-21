@@ -9,6 +9,43 @@ use pinocchio::{
     Address, ProgramResult, MAX_TX_ACCOUNTS, SUCCESS,
 };
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum InstructionDiscriminator {
+    InitializeCounter,
+    IncreaseCounter,
+    Delegate,
+    CommitAndUndelegate,
+    Commit,
+    IncrementAndCommit,
+    IncrementAndUndelegate,
+    UndelegationCallback,
+}
+
+impl InstructionDiscriminator {
+    const INITIALIZE_COUNTER: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 0];
+    const INCREASE_COUNTER: [u8; 8] = [1, 0, 0, 0, 0, 0, 0, 0];
+    const DELEGATE: [u8; 8] = [2, 0, 0, 0, 0, 0, 0, 0];
+    const COMMIT_AND_UNDELEGATE: [u8; 8] = [3, 0, 0, 0, 0, 0, 0, 0];
+    const COMMIT: [u8; 8] = [4, 0, 0, 0, 0, 0, 0, 0];
+    const INCREMENT_AND_COMMIT: [u8; 8] = [5, 0, 0, 0, 0, 0, 0, 0];
+    const INCREMENT_AND_UNDELEGATE: [u8; 8] = [6, 0, 0, 0, 0, 0, 0, 0];
+    const UNDELEGATION_CALLBACK: [u8; 8] = [196, 28, 41, 206, 48, 37, 51, 167];
+
+    fn from_bytes(bytes: [u8; 8]) -> Result<Self, ProgramError> {
+        match bytes {
+            Self::INITIALIZE_COUNTER => Ok(Self::InitializeCounter),
+            Self::INCREASE_COUNTER => Ok(Self::IncreaseCounter),
+            Self::DELEGATE => Ok(Self::Delegate),
+            Self::COMMIT_AND_UNDELEGATE => Ok(Self::CommitAndUndelegate),
+            Self::COMMIT => Ok(Self::Commit),
+            Self::INCREMENT_AND_COMMIT => Ok(Self::IncrementAndCommit),
+            Self::INCREMENT_AND_UNDELEGATE => Ok(Self::IncrementAndUndelegate),
+            Self::UNDELEGATION_CALLBACK => Ok(Self::UndelegationCallback),
+            _ => Err(ProgramError::InvalidInstructionData),
+        }
+    }
+}
+
 // Do not allocate memory.
 no_allocator!();
 // Use the no_std panic handler.
@@ -20,10 +57,11 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
     const UNINIT: MaybeUninit<AccountView> = MaybeUninit::<AccountView>::uninit();
     let mut accounts = [UNINIT; { MAX_TX_ACCOUNTS }];
 
-    let (program_id, count, instruction_data) = deserialize::<MAX_TX_ACCOUNTS>(input, &mut accounts);
+    let (program_id, count, instruction_data) =
+        deserialize::<MAX_TX_ACCOUNTS>(input, &mut accounts);
 
     match process_instruction(
-        &program_id,
+        program_id,
         from_raw_parts(accounts.as_ptr() as _, count),
         instruction_data,
     ) {
@@ -61,30 +99,40 @@ pub(crate) fn inner_process_instruction(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let discriminator = &instruction_data[..8];
+    let discriminator: [u8; 8] = instruction_data[..8]
+        .try_into()
+        .map_err(|_| ProgramError::InvalidInstructionData)?;
+    let discriminator = InstructionDiscriminator::from_bytes(discriminator)?;
     let payload = &instruction_data[8..];
 
     match discriminator {
-        [0, 0, 0, 0, 0, 0, 0, 0] => process_initialize_counter(program_id, accounts),
-        [1, 0, 0, 0, 0, 0, 0, 0] => {
-            let increase_by = read_u64(payload)?;
-            process_increase_counter(program_id, accounts, increase_by)
+        InstructionDiscriminator::InitializeCounter => {
+            let bump = read_u8(payload)?;
+            process_initialize_counter(program_id, accounts, bump)
         }
-        [2, 0, 0, 0, 0, 0, 0, 0] => process_delegate(program_id, accounts),
-        [3, 0, 0, 0, 0, 0, 0, 0] => process_commit_and_undelegate(program_id, accounts),
-        [4, 0, 0, 0, 0, 0, 0, 0] => process_commit(program_id, accounts),
-        [5, 0, 0, 0, 0, 0, 0, 0] => {
-            let increase_by = read_u64(payload)?;
-            process_increment_commit(program_id, accounts, increase_by)
+        InstructionDiscriminator::IncreaseCounter => {
+            let (bump, increase_by) = read_bump_and_u64(payload)?;
+            process_increase_counter(program_id, accounts, bump, increase_by)
         }
-        [6, 0, 0, 0, 0, 0, 0, 0] => {
-            let increase_by = read_u64(payload)?;
-            process_increment_undelegate(program_id, accounts, increase_by)
+        InstructionDiscriminator::Delegate => {
+            let bump = read_u8(payload)?;
+            process_delegate(program_id, accounts, bump)
         }
-        [196, 28, 41, 206, 48, 37, 51, 167] => {
+        InstructionDiscriminator::CommitAndUndelegate => {
+            process_commit_and_undelegate(program_id, accounts)
+        }
+        InstructionDiscriminator::Commit => process_commit(program_id, accounts),
+        InstructionDiscriminator::IncrementAndCommit => {
+            let (bump, increase_by) = read_bump_and_u64(payload)?;
+            process_increment_commit(program_id, accounts, bump, increase_by)
+        }
+        InstructionDiscriminator::IncrementAndUndelegate => {
+            let (bump, increase_by) = read_bump_and_u64(payload)?;
+            process_increment_undelegate(program_id, accounts, bump, increase_by)
+        }
+        InstructionDiscriminator::UndelegationCallback => {
             process_undelegation_callback(program_id, accounts, payload)
         }
-        _ => Err(ProgramError::InvalidInstructionData),
     }
 }
 
@@ -95,4 +143,20 @@ fn read_u64(input: &[u8]) -> Result<u64, ProgramError> {
     let mut bytes = [0u8; 8];
     bytes.copy_from_slice(&input[..8]);
     Ok(u64::from_le_bytes(bytes))
+}
+
+fn read_u8(input: &[u8]) -> Result<u8, ProgramError> {
+    if input.is_empty() {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+    Ok(input[0])
+}
+
+fn read_bump_and_u64(input: &[u8]) -> Result<(u8, u64), ProgramError> {
+    if input.len() < 9 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+    let bump = read_u8(input)?;
+    let value = read_u64(&input[1..])?;
+    Ok((bump, value))
 }

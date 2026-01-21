@@ -15,8 +15,7 @@ mod utils;
 #[tokio::test]
 async fn delegate_counter() {
     let mut program_test = ProgramTest::new("pinocchio_counter", utils::PROGRAM, None);
-    let delegation_program =
-        Pubkey::new_from_array(*DELEGATION_PROGRAM_ID.as_array());
+    let delegation_program = Pubkey::new_from_array(*DELEGATION_PROGRAM_ID.as_array());
     program_test.prefer_bpf(false);
     program_test.add_program(
         "magicblock_delegation_program",
@@ -26,7 +25,7 @@ async fn delegate_counter() {
     let context = program_test.start_with_context().await;
 
     let initializer = context.payer.pubkey();
-    let (counter_pda, _bump) = utils::counter_pda(utils::PROGRAM, initializer);
+    let (counter_pda, bump) = utils::counter_pda(utils::PROGRAM, initializer);
 
     let init_ix = Instruction {
         program_id: utils::PROGRAM,
@@ -35,7 +34,7 @@ async fn delegate_counter() {
             AccountMeta::new(counter_pda, false),
             AccountMeta::new_readonly(solana_system_interface::program::ID, false),
         ],
-        data: utils::INITIALIZE_COUNTER.to_vec(),
+        data: utils::initialize_counter_ix_data(bump),
     };
 
     let counter_address = Address::new_from_array(counter_pda.to_bytes());
@@ -65,7 +64,7 @@ async fn delegate_counter() {
             AccountMeta::new_readonly(solana_system_interface::program::ID, false),
             AccountMeta::new_readonly(validator, false),
         ],
-        data: utils::DELEGATE_COUNTER.to_vec(),
+        data: utils::delegate_counter_ix_data(bump),
     };
 
     let tx = Transaction::new_signed_with_payer(
@@ -88,10 +87,6 @@ async fn delegate_counter() {
     assert!(counter_account.data.iter().all(|byte| *byte == 0));
 }
 
-fn delegate_stub(
-    _program_id: &Pubkey,
-    _accounts: &[AccountInfo],
-    _data: &[u8],
-) -> ProgramResult {
+fn delegate_stub(_program_id: &Pubkey, _accounts: &[AccountInfo], _data: &[u8]) -> ProgramResult {
     Ok(())
 }

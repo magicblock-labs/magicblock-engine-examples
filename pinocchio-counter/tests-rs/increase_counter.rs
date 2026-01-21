@@ -12,7 +12,7 @@ async fn increase_counter() {
         .await;
 
     let initializer = context.payer.pubkey();
-    let (counter_pda, _bump) = utils::counter_pda(utils::PROGRAM, initializer);
+    let (counter_pda, bump) = utils::counter_pda(utils::PROGRAM, initializer);
 
     let init_ix = Instruction {
         program_id: utils::PROGRAM,
@@ -21,13 +21,11 @@ async fn increase_counter() {
             AccountMeta::new(counter_pda, false),
             AccountMeta::new_readonly(solana_system_interface::program::ID, false),
         ],
-        data: utils::INITIALIZE_COUNTER.to_vec(),
+        data: utils::initialize_counter_ix_data(bump),
     };
 
     let increase_amount: u64 = 3;
-    let mut data = Vec::with_capacity(16);
-    data.extend_from_slice(&utils::INCREASE_COUNTER);
-    data.extend_from_slice(&increase_amount.to_le_bytes());
+    let data = utils::increase_counter_ix_data(bump, increase_amount);
     let increase_ix = Instruction {
         program_id: utils::PROGRAM,
         accounts: vec![

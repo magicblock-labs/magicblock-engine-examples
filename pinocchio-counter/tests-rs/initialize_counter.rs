@@ -12,7 +12,7 @@ async fn initialize_counter() {
         .await;
 
     let initializer = context.payer.pubkey();
-    let (counter_pda, _bump) = utils::counter_pda(utils::PROGRAM, initializer);
+    let (counter_pda, bump) = utils::counter_pda(utils::PROGRAM, initializer);
 
     let ix = Instruction {
         program_id: utils::PROGRAM,
@@ -21,7 +21,7 @@ async fn initialize_counter() {
             AccountMeta::new(counter_pda, false),
             AccountMeta::new_readonly(solana_system_interface::program::ID, false),
         ],
-        data: utils::INITIALIZE_COUNTER.to_vec(),
+        data: utils::initialize_counter_ix_data(bump),
     };
 
     let tx = Transaction::new_signed_with_payer(
