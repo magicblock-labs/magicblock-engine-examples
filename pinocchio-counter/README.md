@@ -18,6 +18,12 @@ This is a port of the Rust Counter program to use Pinocchio instead of Borsh for
 cargo build-sbf
 ```
 
+## Test
+
+```bash
+cargo test-sbf --features logging
+```
+
 ## Key Differences from Rust Counter
 
 - **No Borsh**: Uses manual serialization with `to_le_bytes()` and `from_le_bytes()` for simplicity

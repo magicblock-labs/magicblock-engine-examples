@@ -106,7 +106,10 @@ pub fn process_increase_counter(
 
     let mut data = counter_account.try_borrow_mut()?;
     let counter_data = Counter::load_mut(&mut data)?;
-    counter_data.count += increase_by;
+    counter_data.count = counter_data
+        .count
+        .checked_add(increase_by)
+        .ok_or(ProgramError::ArithmeticOverflow)?;
 
     Ok(())
 }
@@ -278,8 +281,6 @@ pub fn process_undelegation_callback(
     let [delegated_acc, buffer_acc, payer, _system_program, ..] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
-    #[cfg(feature = "logging")]
-    pinocchio_log::log!("Undelegating...");
     undelegate(delegated_acc, program_id, buffer_acc, payer, ix_data)?;
     Ok(())
 }

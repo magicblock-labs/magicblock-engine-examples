@@ -29,6 +29,7 @@ impl InstructionDiscriminator {
     const COMMIT: [u8; 8] = [4, 0, 0, 0, 0, 0, 0, 0];
     const INCREMENT_AND_COMMIT: [u8; 8] = [5, 0, 0, 0, 0, 0, 0, 0];
     const INCREMENT_AND_UNDELEGATE: [u8; 8] = [6, 0, 0, 0, 0, 0, 0, 0];
+    // Undelegation callback called by the delegation program
     const UNDELEGATION_CALLBACK: [u8; 8] = [196, 28, 41, 206, 48, 37, 51, 167];
 
     fn from_bytes(bytes: [u8; 8]) -> Result<Self, ProgramError> {
@@ -105,6 +106,8 @@ pub(crate) fn inner_process_instruction(
     let discriminator = InstructionDiscriminator::from_bytes(discriminator)?;
     let payload = &instruction_data[8..];
 
+    log_instruction(discriminator);
+
     match discriminator {
         InstructionDiscriminator::InitializeCounter => {
             let bump = read_u8(payload)?;
@@ -159,4 +162,37 @@ fn read_bump_and_u64(input: &[u8]) -> Result<(u8, u64), ProgramError> {
     let bump = read_u8(input)?;
     let value = read_u64(&input[1..])?;
     Ok((bump, value))
+}
+
+#[allow(unused_variables)]
+fn log_instruction(discriminator: InstructionDiscriminator) {
+    #[cfg(feature = "logging")]
+    {
+        match discriminator {
+            InstructionDiscriminator::InitializeCounter => {
+                pinocchio_log::log!("InitializeCounter");
+            }
+            InstructionDiscriminator::IncreaseCounter => {
+                pinocchio_log::log!("IncreaseCounter");
+            }
+            InstructionDiscriminator::Delegate => {
+                pinocchio_log::log!("Delegate");
+            }
+            InstructionDiscriminator::CommitAndUndelegate => {
+                pinocchio_log::log!("CommitAndUndelegate");
+            }
+            InstructionDiscriminator::Commit => {
+                pinocchio_log::log!("Commit");
+            }
+            InstructionDiscriminator::IncrementAndCommit => {
+                pinocchio_log::log!("IncrementAndCommit");
+            }
+            InstructionDiscriminator::IncrementAndUndelegate => {
+                pinocchio_log::log!("IncrementAndUndelegate");
+            }
+            InstructionDiscriminator::UndelegationCallback => {
+                pinocchio_log::log!("UndelegationCallback");
+            }
+        }
+    }
 }
