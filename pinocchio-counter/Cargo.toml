@@ -10,7 +10,7 @@ logging = []
 pinocchio = { version = "0.10.1", features = ["cpi", "copy"] }
 pinocchio-log = { version = "0.5" }
 pinocchio-system = { version = "0.5" }
-ephemeral-rollups-pinocchio = { version = "0.8.1" }
+ephemeral-rollups-pinocchio = { version = "0.8.2" }
 
 [target.'cfg(not(any(target_os = "solana", target_arch = "bpf")))'.dependencies]
 solana-pubkey = { version = "4.0.0", features = ["curve25519"] }

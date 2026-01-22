@@ -154,10 +154,10 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
-"@magicblock-labs/ephemeral-rollups-kit@^0.8.0":
-  version "0.8.0"
-  resolved "https://registry.npmjs.org/@magicblock-labs/ephemeral-rollups-kit/-/ephemeral-rollups-kit-0.8.0.tgz"
-  integrity sha512-E2ZTCYJibPwZLVdOaau9PnnK/rwDB+uuHkMuD0NhZl1syiENmozDQX61jYWZoEB34fxiOJBx7f4dyUrO8aUmLg==
+"@magicblock-labs/ephemeral-rollups-kit@^0.8.2":
+  version "0.8.2"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-kit/-/ephemeral-rollups-kit-0.8.2.tgz#eec50e502827ded23683d39b84275e641d1a91c2"
+  integrity sha512-PL4/yWaNG0e/dGFbgQUEqfkVXXuNkDGm97s6JcUr4yJJHY25IfFdMAxXNAvzJDr+fbiJXL51o/Xf9SasVCuyCA==
   dependencies:
     "@phala/dcap-qvl-web" "^0.2.7"
     "@solana-program/system" "^0.9.0"
@@ -167,10 +167,10 @@
     rpc-websockets "^9.0.4"
     typescript "^5.3.0"
 
-"@magicblock-labs/ephemeral-rollups-sdk@^0.8.0":
-  version "0.8.0"
-  resolved "https://registry.npmjs.org/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.8.0.tgz"
-  integrity sha512-Eelgua6ub0+8sB+YgwceW5PNLTNCkJVE66QeEUwkxjVl3ulUu8iCbPQk0E4huHLGlSeoG9UxDypAIhdlmimuyQ==
+"@magicblock-labs/ephemeral-rollups-sdk@^0.8.2":
+  version "0.8.2"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.8.2.tgz#77304887b634031205ce7722d3b19479e5a6d7ae"
+  integrity sha512-5P93cAm+bGTsAFjK4Tm/tycVld9s7k5HIkD6G27dbs8bfw+ffD7ZFg0buXKHhx41t2Um5dRn2n2/iIia76AK/Q==
   dependencies:
     "@phala/dcap-qvl-web" "^0.2.7"
     "@solana/spl-token" "^0.4.9"
