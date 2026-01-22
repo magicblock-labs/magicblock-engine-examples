@@ -71,12 +71,13 @@ describe.skip("basic-test", async () => {
     }, TEST_TIMEOUT);
 
     // Get pda of counter_account
-    const [counterPda] = PublicKey.findProgramAddressSync(
+    const [counterPda, bump] = PublicKey.findProgramAddressSync(
         [Buffer.from("counter"), userKeypair.publicKey.toBuffer()],
         PROGRAM_ID
     );
     console.log("Program ID: ", PROGRAM_ID.toString())
     console.log("Counter PDA: ", counterPda.toString())
+    console.log("Bump: ", bump)
 
     // Get permission PDA
     const [permissionPda] = PublicKey.findProgramAddressSync(
@@ -178,6 +179,7 @@ describe.skip("basic-test", async () => {
         ]
         const serializedInstructionData =  Buffer.concat([
             Buffer.from(CounterInstruction.InitializeCounter, 'hex'),
+            Buffer.from([bump]),
         ])
         const initializeIx = new TransactionInstruction({
             keys: keys,
@@ -224,6 +226,7 @@ describe.skip("basic-test", async () => {
         ]
         const serializedInstructionData =  Buffer.concat([
             Buffer.from(CounterInstruction.IncreaseCounter, 'hex'),
+            Buffer.from([bump]),
             borsh.serialize(IncreaseCounterPayload.schema, new IncreaseCounterPayload(1))
         ])
         const increaseCounterIx = new TransactionInstruction({
@@ -256,12 +259,6 @@ describe.skip("basic-test", async () => {
                 pubkey: userKeypair.publicKey,
                 isSigner: true,
                 isWritable: true,
-            },
-            // System Program
-            {
-                pubkey: SystemProgram.programId,
-                isSigner: false,
-                isWritable: false,
             },
             // Counter Account
             {
@@ -299,10 +296,31 @@ describe.skip("basic-test", async () => {
                 isSigner: false,
                 isWritable: false,
             },
+            // System Program
+            {
+                pubkey: SystemProgram.programId,
+                isSigner: false,
+                isWritable: false,
+            },
             // PER Validator
-            ...remainingAccounts
+            ...remainingAccounts,
+            // Permission account
+            {
+                pubkey: permissionPda,
+                isSigner: false,
+                isWritable: false,
+            },
+            // Permission Program
+            {
+                pubkey: PERMISSION_PROGRAM_ID,
+                isSigner: false,
+                isWritable: false,
+            }
         ]
-        const serializedInstructionData =  Buffer.from(CounterInstruction.Delegate, 'hex')
+        const serializedInstructionData =  Buffer.concat([
+            Buffer.from(CounterInstruction.Delegate, 'hex'),
+            Buffer.from([bump]),
+        ])
         const delegateIx = new TransactionInstruction({
             keys: keys,
             programId: PROGRAM_ID,
@@ -343,6 +361,7 @@ describe.skip("basic-test", async () => {
         ]
         const serializedInstructionData =  Buffer.concat([
             Buffer.from(CounterInstruction.IncreaseCounter, 'hex'),
+            Buffer.from([bump]),
             borsh.serialize(IncreaseCounterPayload.schema, new IncreaseCounterPayload(1))
         ])
         const increaseCounterIx = new TransactionInstruction({
@@ -437,6 +456,7 @@ describe.skip("basic-test", async () => {
         ]
         const serializedInstructionData =  Buffer.concat([
             Buffer.from(CounterInstruction.IncreaseCounter, 'hex'),
+            Buffer.from([bump]),
             borsh.serialize(IncreaseCounterPayload.schema, new IncreaseCounterPayload(1))
         ])
         const initializeIx = new TransactionInstruction({
@@ -476,12 +496,6 @@ describe.skip("basic-test", async () => {
                 pubkey: counterPda,
                 isSigner: false,
                 isWritable: true,
-            },
-            // Permission Program
-            {
-                pubkey: PERMISSION_PROGRAM_ID,
-                isSigner: false,
-                isWritable: false,
             },
             // Permission
             {

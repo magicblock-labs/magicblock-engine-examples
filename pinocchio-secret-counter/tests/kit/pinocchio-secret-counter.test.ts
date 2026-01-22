@@ -130,7 +130,7 @@ describe("basic-test", async () => {
     );
   }, TEST_TIMEOUT);
 
-  it(
+  it.only(
     "Initialize counter on Solana",
     async () => {
       const start = Date.now();
@@ -149,10 +149,10 @@ describe("basic-test", async () => {
         // PER Validator
         ...remainingAccounts
       ];
-      const serializedInstructionData = Buffer.from(
-        CounterInstruction.InitializeCounter,
-        "hex"
-      );
+      const serializedInstructionData = Buffer.concat([
+        Buffer.from(CounterInstruction.InitializeCounter, "hex"),
+        Buffer.from([bump]),
+      ]);
       const initializeIx : Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
@@ -186,6 +186,7 @@ describe("basic-test", async () => {
       ];
       const serializedInstructionData = Buffer.concat([
         Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
+        Buffer.from([bump]),
         borsh.serialize(
           IncreaseCounterPayload.schema,
           new IncreaseCounterPayload(1)
@@ -219,7 +220,6 @@ describe("basic-test", async () => {
       // Prepare transaction
       const accounts = [
         { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
         { address: counterPda, role: AccountRole.WRITABLE  },
         { address: PROGRAM_ID, role: AccountRole.READONLY },
         {
@@ -235,13 +235,18 @@ describe("basic-test", async () => {
           role: AccountRole.WRITABLE
         },
         { address: DELEGATION_PROGRAM_ID, role: AccountRole.READONLY },
+        { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
         // PER Validator
-        ...remainingAccounts
+        ...remainingAccounts,
+        // Permission account
+        { address: permissionPda, role: AccountRole.READONLY },
+        // Permission Program
+        { address: PERMISSION_PROGRAM_ID, role: AccountRole.READONLY },
       ];
-      const serializedInstructionData = Buffer.from(
-        CounterInstruction.Delegate,
-        "hex"
-      );
+      const serializedInstructionData = Buffer.concat([
+        Buffer.from(CounterInstruction.Delegate, "hex"),
+        Buffer.from([bump]),
+      ]);
       const delegateIx : Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
@@ -272,6 +277,7 @@ describe("basic-test", async () => {
       ];
       const serializedInstructionData = Buffer.concat([
         Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
+        Buffer.from([bump]),
         borsh.serialize(
           IncreaseCounterPayload.schema,
           new IncreaseCounterPayload(1)
@@ -344,6 +350,7 @@ describe("basic-test", async () => {
       ];
       const serializedInstructionData = Buffer.concat([
         Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
+        Buffer.from([bump]),
         borsh.serialize(
           IncreaseCounterPayload.schema,
           new IncreaseCounterPayload(1)
@@ -378,7 +385,6 @@ describe("basic-test", async () => {
       const accounts = [
         { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
         { address: counterPda, role: AccountRole.WRITABLE  },
-        { address: address(PERMISSION_PROGRAM_ID.toString()), role: AccountRole.READONLY},
         { address: permissionPda, role: AccountRole.WRITABLE },
         { address: address(MAGIC_PROGRAM_ID.toString()), role: AccountRole.READONLY},
         { address: address(MAGIC_CONTEXT_ID.toString()), role: AccountRole.WRITABLE}

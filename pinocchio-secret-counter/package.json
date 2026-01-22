@@ -26,8 +26,8 @@
     "vitest": "^0.34.0"
   },
   "dependencies": {
-    "@magicblock-labs/ephemeral-rollups-kit": "^0.8.0",
-    "@magicblock-labs/ephemeral-rollups-sdk": "^0.8.0",
+    "@magicblock-labs/ephemeral-rollups-kit": "^0.8.2",
+    "@magicblock-labs/ephemeral-rollups-sdk": "^0.8.2",
     "@solana-program/system": "^0.10.0",
     "@solana/kit": "^5.4.0",
     "@solana/web3.js": "^1.93.0",
