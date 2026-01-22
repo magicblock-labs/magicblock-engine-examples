@@ -122,7 +122,6 @@ pub fn process_initialize_counter(
         .seeds(&[b"counter", initializer_account.address().as_ref()])
         .bump(bump)
         .invoke();
-
         result.map_err(|_| {
             log!("Permission creation failed with error");
             ProgramError::Custom(100)
