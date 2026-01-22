@@ -97,9 +97,11 @@ pub fn process_initialize_counter(
     }
 
     // Initialize counter to 0.
-    let mut data = counter_account.try_borrow_mut()?;
-    let counter_data = Counter::load_mut(&mut data)?;
-    counter_data.count = 0;
+    {
+        let mut data = counter_account.try_borrow_mut()?;
+        let counter_data = Counter::load_mut(&mut data)?;
+        counter_data.count = 0;
+    } // Explicitly drop borrow before CPI
 
     // Create permission for the counter account if it doesn't already exist
     if permission.lamports() == 0 {
@@ -112,21 +114,43 @@ pub fn process_initialize_counter(
             members: Some(&members_array),
         };
         let result = CreatePermissionCpiBuilder::new(
-            &counter_account,
-            &permission,
-            &initializer_account,
-            &system_program,
+            counter_account,
+            permission,
+            initializer_account,
+            system_program,
             &permission_program.address(),
         )
         .members(members_args)
         .seeds(&[b"counter", initializer_account.address().as_ref()])
         .bump(bump)
         .invoke();
-        result.map_err(|_| {
-            log!("Permission creation failed with error");
-            ProgramError::Custom(100)
-        })?;
-        log!("Permission created successfully");
+        match result {
+            Ok(_) => {
+                log!("Permission created successfully");
+            }
+            Err(e) => {
+                log!("Permission creation failed");
+                // Try to log error code if available
+                match e {
+                    ProgramError::Custom(_code) => {
+                        log!("Custom error code");
+                    }
+                    ProgramError::InvalidArgument => {
+                        log!("InvalidArgument error");
+                    }
+                    ProgramError::InvalidAccountData => {
+                        log!("InvalidAccountData error");
+                    }
+                    ProgramError::NotEnoughAccountKeys => {
+                        log!("NotEnoughAccountKeys error");
+                    }
+                    _ => {
+                        log!("Other error type");
+                    }
+                }
+                return Err(e);
+            }
+        }
     } else {
         log!("Permission account already exists, skipping creation");
     }
@@ -134,7 +158,7 @@ pub fn process_initialize_counter(
     // Delegate permisison if not delegated
     if unsafe { permission.owner() } == permission_program.address() {
         log!("Delegating permission");
-        DelegatePermissionCpiBuilder::new(
+        let result = DelegatePermissionCpiBuilder::new(
             &initializer_account,
             &initializer_account,
             &counter_account,
@@ -149,23 +173,38 @@ pub fn process_initialize_counter(
             permission_program.address(),
         )
         .signer_seeds(signer.clone())
-        .invoke()
-        .map_err(|_| {
-            log!("Permission delegation failed");
-            ProgramError::Custom(100)
-        })?;
-        log!("Permission delegated successfully");
+        .invoke();
+
+        match result {
+            Ok(_) => {
+                log!("Permission delegated successfully");
+            }
+            Err(e) => {
+                log!("Permission delegation failed");
+                // Try to log error code if available
+                match e {
+                    ProgramError::Custom(_code) => {
+                        log!("Custom error code");
+                    }
+                    ProgramError::InvalidArgument => {
+                        log!("InvalidArgument error");
+                    }
+                    ProgramError::InvalidAccountData => {
+                        log!("InvalidAccountData error");
+                    }
+                    ProgramError::NotEnoughAccountKeys => {
+                        log!("NotEnoughAccountKeys error");
+                    }
+                    _ => {
+                        log!("Other error type");
+                    }
+                }
+                return Err(e);
+            }
+        }
     } else {
         log!("Permission already delegated");
     }
-
-    // Verify permission was created and delegated before returning success
-    if unsafe { permission.owner() } != permission_program.address() {
-        log!("Permission was not properly delegated, failing instruction");
-        return Err(ProgramError::Custom(3));
-    }
-
-    log!("Permission verified as created and delegated");
     Ok(())
 }
 
@@ -186,12 +225,14 @@ pub fn process_increase_counter(
         return Err(ProgramError::InvalidArgument);
     }
 
-    let mut data = counter_account.try_borrow_mut()?;
-    let counter_data = Counter::load_mut(&mut data)?;
-    counter_data.count = counter_data
-        .count
-        .checked_add(increase_by)
-        .ok_or(ProgramError::ArithmeticOverflow)?;
+    {
+        let mut data = counter_account.try_borrow_mut()?;
+        let counter_data = Counter::load_mut(&mut data)?;
+        counter_data.count = counter_data
+            .count
+            .checked_add(increase_by)
+            .ok_or(ProgramError::ArithmeticOverflow)?;
+    }
 
     Ok(())
 }
@@ -227,7 +268,7 @@ pub fn process_delegate(
 
     // Verify permission was created and delegated before delegating counter
     log!("Checking permission delegation status");
-    if unsafe { permission.owner() } != permission_program.address() {
+    if unsafe { permission.owner() } == permission_program.address() {
         log!("Permission not delegated, cannot delegate counter");
         return Err(ProgramError::Custom(4));
     }
@@ -342,9 +383,11 @@ pub fn process_increment_commit(
         return Err(ProgramError::InvalidArgument);
     }
 
-    let mut data = counter_account.try_borrow_mut()?;
-    let counter_data = Counter::load_mut(&mut data)?;
-    counter_data.count += increase_by;
+    {
+        let mut data = counter_account.try_borrow_mut()?;
+        let counter_data = Counter::load_mut(&mut data)?;
+        counter_data.count += increase_by;
+    }
 
     if !initializer.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);

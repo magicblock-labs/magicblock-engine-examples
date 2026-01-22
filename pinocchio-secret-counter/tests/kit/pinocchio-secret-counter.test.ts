@@ -130,7 +130,7 @@ describe("basic-test", async () => {
     );
   }, TEST_TIMEOUT);
 
-  it.only(
+  it(
     "Initialize counter on Solana",
     async () => {
       const start = Date.now();
@@ -385,6 +385,7 @@ describe("basic-test", async () => {
       const accounts = [
         { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
         { address: counterPda, role: AccountRole.WRITABLE  },
+        { address: PERMISSION_PROGRAM_ID, role: AccountRole.READONLY },
         { address: permissionPda, role: AccountRole.WRITABLE },
         { address: address(MAGIC_PROGRAM_ID.toString()), role: AccountRole.READONLY},
         { address: address(MAGIC_CONTEXT_ID.toString()), role: AccountRole.WRITABLE}

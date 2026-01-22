@@ -30,7 +30,7 @@ dotenv.config()
 
 
 
-describe.skip("basic-test", async () => {
+describe("basic-test", async () => {
     const TEST_TIMEOUT = 60_000;
     console.log("pinocchio-counter.ts")
 
@@ -496,6 +496,12 @@ describe.skip("basic-test", async () => {
                 pubkey: counterPda,
                 isSigner: false,
                 isWritable: true,
+            },
+            // Permission Program
+            {
+                pubkey: PERMISSION_PROGRAM_ID,
+                isSigner: false,
+                isWritable: false,
             },
             // Permission
             {
