@@ -307,6 +307,7 @@ echo "Starting Solana Test Validator..."
 solana-test-validator \
   --ledger ./test-ledger \
   --reset \
+  --clone-upgradeable-program DmnRGfyyftzacFb1XadYhWF6vWqXwtQk5tbr6XgR3BA1 \
   --clone mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev \
   --clone EpJnX7ueXk7fKojBymqmVuCuwyhDQsYcLVL1XMsBbvDX \
   --clone 7JrkjmZPprHwtuvtuGTXp9hwfGYFAQLnLeFM52kqAgXg \
@@ -318,6 +319,7 @@ solana-test-validator \
   --clone vrfkfM4uoisXZQPrFiS2brY4oMkU9EWjyvmvqaFd5AS \
   --clone-upgradeable-program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz \
   --clone-upgradeable-program BTWAqWNBmF2TboMh3fxMJfgR16xGHYD7Kgr2dPwbRPBi \
+  --clone-upgradeable-program ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1 \
   --url https://api.devnet.solana.com > ./test-ledger.log 2>&1 &
 
 SOLANA_PID=$!
@@ -346,7 +348,7 @@ EPHEMERAL_PID=$!
 echo "Validators ready. Running tests..."
 echo ""
 
-# run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT='http://localhost:7799' EPHEMERAL_WS_ENDPOINT='ws://localhost:7800' PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --provider.cluster localnet --skip-local-validator --skip-deploy; cd .."
+run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT='http://localhost:7799' EPHEMERAL_WS_ENDPOINT='ws://localhost:7800' PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --provider.cluster localnet --skip-local-validator --skip-deploy; cd .."
 
 run_test "anchor-minter" "cd anchor-minter && anchor build && anchor deploy --provider.cluster localnet && yarn install && anchor test  --skip-build --skip-deploy --skip-local-validator; cd .."
 
@@ -354,13 +356,13 @@ run_test "anchor-rock-paper-scissor" "cd anchor-rock-paper-scissor && anchor bui
 
 run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
-run_test "magic-actions" "cd magic-actions && yarn install && anchor build && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
+run_test "magic-actions" "cd magic-actions && yarn install && anchor build && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
 run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test-web3js; cd .."
 
 run_test "roll-dice + roll-dice-delegated" "cd roll-dice && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
-# run_test "rust-counter" "cd rust-counter && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test; cd .."
+run_test "rust-counter" "cd rust-counter && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test; cd .."
 
 run_test "session-keys" "cd session-keys && anchor build && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
