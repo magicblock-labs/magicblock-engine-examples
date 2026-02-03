@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useRef, useState} from "react";
+import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import Button from "./components/Button";
 import Square from "./components/Square";
 import {useConnection, useWallet} from '@solana/wallet-adapter-react';
@@ -26,7 +26,10 @@ const App: React.FC = () => {
     const ephemeralConnection  = useRef<Connection | null>(null);
     const provider = useRef<Provider>(new SimpleProvider(connection));
     const { publicKey, signTransaction: walletSignTransaction } = useWallet();
-    const signTransaction = walletSignTransaction || (async (tx: Transaction) => { throw new Error('Wallet not connected'); });
+    const signTransaction = useMemo(() => 
+        walletSignTransaction || (async (tx: Transaction) => { throw new Error('Wallet not connected'); }),
+        [walletSignTransaction]
+    );
     const tempKeypair = useRef<Keypair | null>(null);
     const [counter, setCounter] = useState<number>(0);
     const [ephemeralCounter, setEphemeralCounter] = useState<number>(0);

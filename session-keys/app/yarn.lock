@@ -2052,7 +2052,7 @@
     rpc-websockets "^9.0.4"
     typescript "^5.3.0"
 
-"@magicblock-labs/gum-sdk@^1.0.0":
+"@magicblock-labs/gum-sdk@^3.0.10":
   version "3.0.10"
   resolved "https://registry.yarnpkg.com/@magicblock-labs/gum-sdk/-/gum-sdk-3.0.10.tgz#09ccdc0f2606285750b3afcea09b85f3027b38eb"
   integrity sha512-t+0VjH29ul7NMvDIySbmrja16kLqmYI7dB+Ir70DSDcYpVgmGqqVJc5ODkSthcH1Duaoj6EjGmAM7NJo5udCPA==
