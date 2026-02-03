@@ -128,7 +128,7 @@ const App: React.FC = () => {
 
     // Initialize session manager
     useEffect(() => {
-        if (!publicKey || !tempKeypair.current || !counterProgramClient.current) return;
+        if (!publicKey || !tempKeypair.current) return;
         
         const initSessionManager = async () => {
             sessionTokenManager.current = new SessionTokenManager(provider.current as any, connection);
@@ -355,8 +355,7 @@ const App: React.FC = () => {
      * Create session transaction
      */
     const createSessionTx = useCallback(async () => {
-        if (!publicKey || !tempKeypair.current || !sessionTokenManager.current) return;
-        if (!counterPda) return;
+        if (!publicKey || !tempKeypair.current || !sessionTokenManager.current || !counterProgramClient.current || !counterPda) return;
         
         const topUp = true;
         const validUntilBN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600); // valid for 1 hour
@@ -409,7 +408,7 @@ const App: React.FC = () => {
             } finally {
             setIsSubmitting(false);
             }
-            }, [publicKey, connection, signTransaction, tempKeypair]);
+            }, [publicKey, connection, signTransaction, counterPda]);
 
     /**
      * Delegate PDA transaction

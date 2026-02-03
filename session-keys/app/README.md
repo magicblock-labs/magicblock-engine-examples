@@ -1,54 +1,54 @@
-# Ephemeral Counter UI
+## 📝 About
 
-This is a React-based UI for the Ephemeral Counter program, which is part of the documentation for integrating with the Ephemeral Rollups.
+This is a session keys counter example demonstrating:
 
-## Overview
+- **Session Token Management**: Create and revoke session tokens
+- **Counter Delegation**: Delegate counter operations to ephemeral rollups
+- **Ephemeral Rollups**: Execute transactions on fast, low-cost ephemeral environments
+- **Temporary Keypairs**: Use derived keypairs for temporary session transactions
 
-The UI demonstrates the use of Solana's ephemeral rollups with a simple counter program. It showcases an `increment` instruction that can run both on the main network and ephemeral rollup.
+The app displays two counters:
 
-## Documentation
+- **Regular Counter**: Incremented on the main Solana network
+- **Ephemeral Counter**: Incremented on the MagicBlock ephemeral rollup (when delegated)
 
-For more information, visit: [Ephemeral Rollups Documentation](https://docs.magicblock.gg/Accelerate/ephemeral_rollups).
-
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js
-- npm
+- Node.js (v16+)
+- Solana wallet browser extension (e.g., Phantom)
+- Connection to Solana Devnet
 
 ### Installation
 
-1. Navigate to the `app` directory
-2. Install the dependencies:
-   
+Using Npm:
 
-    npm install
-   
+```bash
+npm install
+npm run start
+```
 
-### Running the Application
+Using Yarn:
 
-To start the application, run:
+```bash
+yarn install
+yarn start
+```
 
+The app will open at `http://localhost:3000`
 
-    npm run dev
+## 🎮 Usage
 
+1. **Connect Wallet**: Click "Select Wallet" and connect your Solana wallet
+2. **Create Session**: Click "Create Session" to create a session token
+3. **Delegate**: Click "Delegate" to move operations to the ephemeral rollup
+4. **Increment**: Click on the counter squares to increment
+   - Regular counter: incremented with your wallet
+   - Ephemeral counter: incremented with session token (when delegated)
+5. **Revoke Session**: Click "Revoke Session" to revoke the session token
+6. **Undelegate**: Click "Undelegate" to move operations back to mainnet
 
-### Configure RPC endpoints
+## 💚 Open Source
 
-This UI talks to two RPC endpoints:
-- REACT_APP_PROVIDER_ENDPOINT: the Solana RPC used by the wallet and on-chain counter (e.g., your local validator or a public RPC).
-- REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT: the Ephemeral Rollup RPC used for the ephemeral counter.
-
-You can set them via environment variables when starting the app.
-
-Examples
-- Using localhost (same machine):
-    REACT_APP_PROVIDER_ENDPOINT=http://localhost:8899 \
-    REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-    npm run start
-
-If these variables are not provided, the app will default to MagicBlock’s public endpoints:
-- REACT_APP_PROVIDER_ENDPOINT → https://rpc.magicblock.app/devnet
-- REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT → https://devnet.magicblock.app
-
+Open Source is at the heart of what we do at MagicBlock. We believe building software in the open, with thriving communities, helps leave the world a little better than we found it.
