@@ -31,10 +31,10 @@ cargo build-sbf
 solana program deploy target/deploy/rust_counter.so
 ````
 
-Add wallet (if not a new keypair will be generated) and RPC endpoints to the file example.env and update filename to .env:
+Add wallet (if not a new keypair will be generated) and RPC endpoints to the file `example.env` and update filename to `.env`:
 
 ```bash
-PRIVATE_KEY=
+PRIVATE_KEY=<YOUR-PRIVATE-KEY>
 ```
 
 Run the tests:
