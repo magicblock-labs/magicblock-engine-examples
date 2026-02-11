@@ -20,7 +20,6 @@ agave-install init 2.3.13
 # Check and initialize your Rust version
 rustup show
 rustup install 1.85.0
-````
 
 ## ✨ Build and Test
 
