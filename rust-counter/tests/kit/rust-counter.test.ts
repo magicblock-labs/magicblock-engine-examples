@@ -92,7 +92,7 @@ describe("basic-test", async () => {
   it(
     "Initialize counter on Solana",
     async () => {
-      const start = Date.now();``
+      const start = Date.now();
 
       // Prepare transaction
       const accounts = [

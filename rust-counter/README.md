@@ -4,7 +4,7 @@ Simple counter program using Rust Native and Ephemeral Rollups
 
 ## Software Packages
 
-This program has utilized the following sofware packages.
+This program has utilized the following software packages.
 
 | Software   | Version | Installation Guide                                      |
 | ---------- | ------- | ------------------------------------------------------- |
@@ -21,7 +21,6 @@ agave-install init 2.3.13
 rustup show
 rustup install 1.85.0
 
-
 ## ✨ Build and Test
 
 Build and deploy the program:
@@ -31,10 +30,10 @@ cargo build-sbf
 solana program deploy target/deploy/rust_counter.so
 ````
 
-Add wallet (if not a new keypair will be generated) and RPC endpoints to the file example.env and update filename to .env:
+Add wallet (if not a new keypair will be generated) and RPC endpoints to the file `example.env` and update filename to `.env`:
 
 ```bash
-PRIVATE_KEY=
+PRIVATE_KEY=<YOUR-PRIVATE-KEY>
 ```
 
 Run the tests:
