@@ -61,6 +61,9 @@ cleanup() {
         rm -rf test-ledger 2>/dev/null || true
         rm -rf test-ledger-magicblock 2>/dev/null || true
       fi
+      if [ "$EPHEMERAL_VALIDATOR_STARTED_BY_US" = true ]; then
+        rm -rf magicblock-test-storage 2>/dev/null || true
+      fi
       echo -e "\033[2K${GREEN}Cleanup complete${NC}"
     else
       echo -e "\n[SETUP] ${GREEN}Validators were already running, leaving them running...${NC}"
@@ -72,6 +75,14 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [ "$CLUSTER" = "localnet" ]; then
+  # Check if anchor started its own validator (port 8899 occupied but not by mb-test-validator)
+  if check_port 8899 && ! pgrep -f "mb-test-validator" > /dev/null 2>&1; then
+    echo -e "${YELLOW}Non-MagicBlock validator detected on port 8899, killing it...${NC}"
+    echo -e "${YELLOW}Tip: run with 'anchor test --skip-local-validator --skip-build --skip-deploy' to avoid this${NC}"
+    lsof -ti :8899 | xargs kill 2>/dev/null
+    sleep 1
+  fi
+
   # Check if ephemeral-validator is installed
   if ! command -v ephemeral-validator &> /dev/null; then
     echo -e "${RED}Error: ephemeral-validator is not installed${NC}"
@@ -80,7 +91,7 @@ if [ "$CLUSTER" = "localnet" ]; then
   fi
 
   # Set solana config to localhost
-  solana config set --url localhost
+  solana config set --url localhost 2>/dev/null
 
   # Check if mb-test-validator (Solana validator) is already running on port 8899
   if check_port 8899; then
@@ -120,11 +131,10 @@ if [ "$CLUSTER" = "localnet" ]; then
     # Start ephemeral-validator
     echo -ne "[SETUP] ${GREEN}Starting ephemeral-validator...${NC}\r"
     RUST_LOG=info ephemeral-validator \
-      --accounts-lifecycle ephemeral \
-      --remote-cluster development \
-      --remote-url http://127.0.0.1:8899 \
-      --remote-ws-url ws://127.0.0.1:8900 \
-      --rpc-port 7799 \
+      --remotes "http://127.0.0.1:8899" \
+      --remotes "ws://127.0.0.1:8900" \
+      -l "127.0.0.1:7799" \
+      --reset \
       > /tmp/ephemeral-validator.log 2>&1 &
     EPHEMERAL_VALIDATOR_PID=$!
     EPHEMERAL_VALIDATOR_STARTED_BY_US=true
@@ -152,7 +162,7 @@ if [ "$CLUSTER" = "localnet" ]; then
   echo -e "${GREEN}Running anchor test...${NC}"
   anchor build && anchor deploy --provider.cluster localnet
   
-  yarn ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --provider.cluster localnet --skip-local-validator --skip-build --skip-deploy
+  yarn ts-mocha -p ./tsconfig.json -t 1000000 --exit tests/**/*.ts --provider.cluster localnet --skip-local-validator --skip-build --skip-deploy
   TEST_EXIT_CODE=$?
   
   if [ $TEST_EXIT_CODE -ne 0 ]; then

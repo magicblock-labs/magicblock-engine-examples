@@ -108,6 +108,7 @@ describe("anchor-counter", () => {
     });
     const duration = Date.now() - start;
     console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
   });
 
   it("Increase counter on ER", async () => {
