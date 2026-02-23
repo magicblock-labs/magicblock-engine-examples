@@ -38,7 +38,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 2. Install Solana CLI:
 ```bash
-sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"
+sh -c "$(curl -sSfL https://release.solana.com/v2.3.13/install)"
 ```
 
 3. Install Anchor:
