@@ -44,8 +44,8 @@ sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"
 3. Install Anchor:
 ```bash
 cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-avm install latest
-avm use latest
+avm install 0.32.1
+avm use 0.32.1
 ```
 
 4. Configure Solana (optional, for devnet):
