@@ -12,12 +12,15 @@ import {
 } from "@solana/web3.js";
 import {
     DELEGATION_PROGRAM_ID,
+    EPHEMERAL_SPL_TOKEN_PROGRAM_ID,
     GetCommitmentSignature,
     deriveEphemeralAta,
     deriveShuttleEphemeralAta,
     deriveShuttleAta,
     deriveShuttleWalletAta,
     deriveTransferQueue,
+    deriveVault,
+    deriveVaultAta,
     ensureTransferQueueCrankIx,
     initTransferQueueIx,
     mergeShuttleIntoAtaIx,
@@ -104,6 +107,44 @@ function createTransferInstruction(
     return new TransactionInstruction({
         programId,
         keys,
+        data,
+    });
+}
+
+function createDepositAndQueueTransferInstruction(
+    queue: PublicKey,
+    vault: PublicKey,
+    mint: PublicKey,
+    source: PublicKey,
+    vaultAta: PublicKey,
+    destination: PublicKey,
+    owner: PublicKey,
+    amount: bigint,
+    delaySeconds: bigint = 0n,
+    split: number = 1,
+): TransactionInstruction {
+    if (!Number.isInteger(split) || split <= 0 || split > 0xffff_ffff) {
+        throw new Error('split must fit in u32');
+    }
+
+    const data = Buffer.alloc(21);
+    data[0] = 16; // DepositAndQueueTransfer
+    data.writeBigUInt64LE(amount, 1);
+    data.writeBigUInt64LE(delaySeconds, 9);
+    data.writeUInt32LE(split, 17);
+
+    return new TransactionInstruction({
+        programId: EPHEMERAL_SPL_TOKEN_PROGRAM_ID,
+        keys: [
+            { pubkey: queue, isSigner: false, isWritable: true },
+            { pubkey: vault, isSigner: false, isWritable: false },
+            { pubkey: mint, isSigner: false, isWritable: false },
+            { pubkey: source, isSigner: false, isWritable: true },
+            { pubkey: vaultAta, isSigner: false, isWritable: true },
+            { pubkey: destination, isSigner: false, isWritable: false },
+            { pubkey: owner, isSigner: true, isWritable: false },
+            { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        ],
         data,
     });
 }
@@ -415,6 +456,9 @@ const App: React.FC = () => {
     const [dstIndex, setDstIndex] = useState(1);
     const [amountStr, setAmountStr] = useState('1');
     const [useEphemeral, setUseEphemeral] = useState(true);
+    const [usePrivateTransfer, setUsePrivateTransfer] = useState(false);
+    const [privateDelaySeconds, setPrivateDelaySeconds] = useState('0');
+    const [privateSplitCount, setPrivateSplitCount] = useState('1');
 
     // Cached Blockhash
     const cachedEphemeralBlockhashRef = useRef<CachedBlockhash | null>(null)
@@ -684,80 +728,117 @@ const App: React.FC = () => {
         setTransactionError(null);
         setTransactionSuccess(null);
         const eConn = ephemeralConnection.current;
-        if (!eConn) return;
         if (!mint) {
             setTransactionError('Mint not initialized. Run Setup first.');
             return;
         }
+        if ((useEphemeral || usePrivateTransfer) && !eConn) return;
         const src = accounts[fromIdx];
         const dst = accounts[toIdx];
         if (!src || !dst) return setTransactionError('Invalid source/destination');
         if (fromIdx === toIdx) return setTransactionError('Source and destination must be different');
-        const conn = useEphemeral ? eConn : connection;
+        const conn = usePrivateTransfer ? connection : (useEphemeral ? eConn : connection);
+        if (!conn) return;
         try {
             setIsSubmitting(true);
             const srcAta = getAssociatedTokenAddressSync(mint, src.keypair.publicKey, false, TOKEN_PROGRAM_ID);
             const dstAta = getAssociatedTokenAddressSync(mint, dst.keypair.publicKey, false, TOKEN_PROGRAM_ID);
-            if (!accounts[fromIdx].eDelegated) {
-                await ensureAta(conn, src.keypair.publicKey);
-            }
-
-            const ixs: TransactionInstruction[] = [];
             const amountBn = parseAmount(amountUi, decimals);
             if (amountBn <= 0n) throw new Error('Invalid amount');
 
-            // If using ephemeral and destination hasn't been delegated/initialized, do it first
-            if (!accounts[toIdx].eDelegated) {
-                const dstInfo = await conn.getAccountInfo(dstAta);
+            const ixs: TransactionInstruction[] = [];
+
+            if (usePrivateTransfer) {
+                const delaySecondsNumber = Number(privateDelaySeconds);
+                const splitCountNumber = Number(privateSplitCount);
+                if (!Number.isInteger(delaySecondsNumber) || delaySecondsNumber < 0) {
+                    throw new Error('Private delay must be a non-negative integer');
+                }
+                if (!Number.isInteger(splitCountNumber) || splitCountNumber <= 0) {
+                    throw new Error('Private split must be a positive integer');
+                }
+                if (BigInt(splitCountNumber) > amountBn) {
+                    throw new Error('Private split cannot exceed the transfer amount in base units');
+                }
+
+                const dstInfo = await connection.getAccountInfo(dstAta);
                 if (!dstInfo) {
                     ixs.push(createAssociatedTokenAccountInstruction(src.keypair.publicKey, dstAta, dst.keypair.publicKey, mint));
                 }
-                if (useEphemeral) {
-                    const delIxs = await delegateSpl(
-                        dst.keypair.publicKey,
+                const [transferQueue] = deriveTransferQueue(mint);
+                const [vault] = deriveVault(mint);
+                const vaultAta = deriveVaultAta(mint, vault);
+                ixs.push(
+                    createDepositAndQueueTransferInstruction(
+                        transferQueue,
+                        vault,
                         mint,
-                        0n,
-                        {
-                            validator: validator.current,
-                            initIfMissing: true,
-                        }
-                    );
-                    const delTx = new Transaction().add(...delIxs);
-                    delTx.feePayer = dst.keypair.publicKey;
-                    const {blockhash: delBh} = await connection.getLatestBlockhash();
-                    delTx.recentBlockhash = delBh;
-                    delTx.sign(dst.keypair);
-                    const delSig = await connection.sendRawTransaction(delTx.serialize());
-                    await connection.confirmTransaction(delSig, 'confirmed');
-                    const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-                    await delay(2000);
-                    await refreshBalances();
+                        srcAta,
+                        vaultAta,
+                        dstAta,
+                        src.keypair.publicKey,
+                        amountBn,
+                        BigInt(delaySecondsNumber),
+                        splitCountNumber,
+                    ),
+                );
+            } else {
+                if (!accounts[fromIdx].eDelegated) {
+                    await ensureAta(conn, src.keypair.publicKey);
                 }
+
+                // If using ephemeral and destination hasn't been delegated/initialized, do it first
+                if (!accounts[toIdx].eDelegated) {
+                    const dstInfo = await conn.getAccountInfo(dstAta);
+                    if (!dstInfo) {
+                        ixs.push(createAssociatedTokenAccountInstruction(src.keypair.publicKey, dstAta, dst.keypair.publicKey, mint));
+                    }
+                    if (useEphemeral) {
+                        const delIxs = await delegateSpl(
+                            dst.keypair.publicKey,
+                            mint,
+                            0n,
+                            {
+                                validator: validator.current,
+                                initIfMissing: true,
+                            }
+                        );
+                        const delTx = new Transaction().add(...delIxs);
+                        delTx.feePayer = dst.keypair.publicKey;
+                        const {blockhash: delBh} = await connection.getLatestBlockhash();
+                        delTx.recentBlockhash = delBh;
+                        delTx.sign(dst.keypair);
+                        const delSig = await connection.sendRawTransaction(delTx.serialize());
+                        await connection.confirmTransaction(delSig, 'confirmed');
+                        const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+                        await delay(2000);
+                        await refreshBalances();
+                    }
+                }
+
+                const ixTransfer = createTransferInstruction(
+                    srcAta,
+                    dstAta,
+                    src.keypair.publicKey,
+                    amountBn,
+                    [],
+                    TOKEN_PROGRAM_ID
+                );
+                // Add noop instruction to make the transaction unique
+                ixs.push(createNoopInstruction());
+                ixs.push(ixTransfer);
             }
 
-            // Transfer instruction
-            const ixTransfer = createTransferInstruction(
-                srcAta,
-                dstAta,
-                src.keypair.publicKey,
-                amountBn,
-                [],
-                TOKEN_PROGRAM_ID
-            );
-            // Add noop instruction to make the transaction unique
-            ixs.push(createNoopInstruction());
-            ixs.push(ixTransfer);
             let sig;
-            if (useEphemeral) {
-                if (!ephemeralConnection.current) return ;
-                const eConn = ephemeralConnection.current;
-                const tx = new anchor.web3.Transaction().add(...ixs);
-                tx.feePayer = src.keypair.publicKey;
+            if (usePrivateTransfer || useEphemeral) {
+                if (!ephemeralConnection.current) return;
+                const eTx = new anchor.web3.Transaction().add(...ixs);
+                eTx.feePayer = src.keypair.publicKey;
                 const blockhash = await getCachedEphemeralBlockhash();
-                tx.recentBlockhash = blockhash;
-                tx.sign(src.keypair);
-                sig = await eConn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-                await eConn.confirmTransaction(sig, 'confirmed');
+                eTx.recentBlockhash = blockhash;
+                eTx.sign(src.keypair);
+                sig = await ephemeralConnection.current.sendRawTransaction(eTx.serialize(), { skipPreflight: true });
+                await ephemeralConnection.current.confirmTransaction(sig, 'confirmed');
             } else {
                 const tx = new Transaction().add(...ixs);
                 tx.feePayer = src.keypair.publicKey;
@@ -767,14 +848,14 @@ const App: React.FC = () => {
                 sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
                 await conn.confirmTransaction(sig, 'confirmed');
             }
-            setTransactionSuccess(`Transfer confirmed: ${sig.substring(0, 10)}...${sig.substring(sig.length - 10, sig.length)}`);
+            setTransactionSuccess(`${usePrivateTransfer ? 'Private transfer queued' : 'Transfer confirmed'}: ${sig.substring(0, 10)}...${sig.substring(sig.length - 10, sig.length)}`);
             await refreshBalances();
         } catch (e: any) {
             setTransactionError(await formatTransactionError(e, conn));
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, decimals, ensureAta, getCachedEphemeralBlockhash, mint, refreshBalances, useEphemeral]);
+    }, [accounts, connection, decimals, ensureAta, getCachedEphemeralBlockhash, mint, privateDelaySeconds, privateSplitCount, refreshBalances, useEphemeral, usePrivateTransfer]);
 
     const handleTransfer = useCallback(async () => {
         await performTransfer(srcIndex, dstIndex, amountStr);
@@ -1362,7 +1443,61 @@ const App: React.FC = () => {
                             </label>
 
                             <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#9ca3af', fontSize: 12 }}>
-                                <input type="checkbox" checked={useEphemeral} onChange={e => setUseEphemeral(e.target.checked)} />
+                                <input
+                                    type="checkbox"
+                                    checked={usePrivateTransfer}
+                                    onChange={e => {
+                                        const checked = e.target.checked;
+                                        setUsePrivateTransfer(checked);
+                                        if (checked) {
+                                            setUseEphemeral(true);
+                                        }
+                                    }}
+                                />
+                                Private
+                            </label>
+
+                            {usePrivateTransfer && (
+                                <>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
+                                        Delay (s)
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step={1}
+                                            value={privateDelaySeconds}
+                                            onChange={e => setPrivateDelaySeconds(e.target.value)}
+                                            style={{ ...INPUT_STYLE, width: 96, padding: '6px 8px' }}
+                                        />
+                                    </label>
+
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
+                                        Split
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            step={1}
+                                            value={privateSplitCount}
+                                            onChange={e => setPrivateSplitCount(e.target.value)}
+                                            style={{ ...INPUT_STYLE, width: 80, padding: '6px 8px' }}
+                                        />
+                                    </label>
+                                </>
+                            )}
+
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#9ca3af', fontSize: 12, opacity: usePrivateTransfer ? 0.5 : 1 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={useEphemeral}
+                                    disabled={usePrivateTransfer}
+                                    onChange={e => {
+                                        const checked = e.target.checked;
+                                        setUseEphemeral(checked);
+                                        if (!checked) {
+                                            setUsePrivateTransfer(false);
+                                        }
+                                    }}
+                                />
                                 Ephemeral
                             </label>
 
@@ -1371,7 +1506,7 @@ const App: React.FC = () => {
                                 disabled={isSubmitting || !mint}
                                 style={{ ...BUTTON_STYLE, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
                             >
-                                {isSubmitting ? 'Transferring…' : 'Transfer'}
+                                {isSubmitting ? (usePrivateTransfer ? 'Queueing…' : 'Transferring…') : (usePrivateTransfer ? 'Queue Transfer' : 'Transfer')}
                             </button>
                         </div>
                     </div>
