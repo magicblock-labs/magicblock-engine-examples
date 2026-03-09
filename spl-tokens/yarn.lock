@@ -76,13 +76,10 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
-"@magicblock-labs/ephemeral-rollups-sdk@0.7.1":
-  version "0.7.1"
-  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.7.1.tgz#c598540059ed2155e6f43a5b581ca0bbab9c7f10"
-  integrity sha512-NwkjUROMngZHUa4vkKs2BPO+N5OZI6MfwnoITT1U0Uiszb2iXpcK+VU5E1m96uwUiHxeaCc2IO4k1aXCznV1RA==
+"@magicblock-labs/ephemeral-rollups-sdk@file:../../ephemeral-rollups-sdk/ts/web3js":
+  version "0.8.5"
   dependencies:
     "@phala/dcap-qvl-web" "^0.2.7"
-    "@solana/spl-token" "^0.4.9"
     "@solana/web3.js" "^1.98.0"
     bs58 "^6.0.0"
     rpc-websockets "^9.0.4"
@@ -227,7 +224,7 @@
   dependencies:
     "@solana/codecs" "2.0.0-rc.1"
 
-"@solana/spl-token@^0.4.14", "@solana/spl-token@^0.4.9":
+"@solana/spl-token@^0.4.14":
   version "0.4.14"
   resolved "https://registry.yarnpkg.com/@solana/spl-token/-/spl-token-0.4.14.tgz#b86bc8a17f50e9680137b585eca5f5eb9d55c025"
   integrity sha512-u09zr96UBpX4U685MnvQsNzlvw9TiY005hk1vJmJr7gMJldoPG1eYU5/wNEyOA5lkMLiR/gOi9SFD4MefOYEsA==

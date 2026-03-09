@@ -6,7 +6,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.1",
-    "@magicblock-labs/ephemeral-rollups-sdk": "0.7.1"
+    "@magicblock-labs/ephemeral-rollups-sdk": "file:/Users/gabrielepicco/Documents/Solana/ephemeral-rollups-sdk/ts/web3js"
   },
   "devDependencies": {
     "@solana/spl-token": "^0.4.14",

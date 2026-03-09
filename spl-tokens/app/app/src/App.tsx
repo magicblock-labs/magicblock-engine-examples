@@ -8,27 +8,186 @@ import {
     LAMPORTS_PER_SOL,
     PublicKey,
     Transaction,
-    SystemProgram, TransactionInstruction
+    SystemProgram, TransactionInstruction, SYSVAR_RENT_PUBKEY, SendTransactionError
 } from "@solana/web3.js";
 import {
-    TOKEN_PROGRAM_ID,
-    getAssociatedTokenAddressSync,
-    createAssociatedTokenAccountInstruction,
-    createTransferInstruction,
-    getMint,
-    MINT_SIZE,
-    getMinimumBalanceForRentExemptMint,
-    createInitializeMintInstruction,
-    createMintToInstruction
-} from "@solana/spl-token";
-import {
-    delegateSpl,
     DELEGATION_PROGRAM_ID,
     GetCommitmentSignature,
     deriveEphemeralAta,
+    deriveShuttleEphemeralAta,
+    deriveShuttleAta,
+    deriveShuttleWalletAta,
+    deriveTransferQueue,
+    ensureTransferQueueCrankIx,
+    initTransferQueueIx,
+    mergeShuttleIntoAtaIx,
+    undelegateAndCloseShuttleEphemeralAtaIx,
     undelegateIx,
-    withdrawSplIx
+    withdrawSplIx, delegateSpl
 } from "@magicblock-labs/ephemeral-rollups-sdk";
+
+// Minimal SPL helpers (vendored) to avoid importing "@solana/spl-token" in the browser.
+const TOKEN_PROGRAM_ID = new PublicKey(
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+);
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+    "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+);
+const MINT_SIZE = 82;
+
+function getAssociatedTokenAddressSync(
+    mint: PublicKey,
+    owner: PublicKey,
+    allowOwnerOffCurve: boolean = false,
+    programId: PublicKey = TOKEN_PROGRAM_ID,
+    associatedTokenProgramId: PublicKey = ASSOCIATED_TOKEN_PROGRAM_ID,
+): PublicKey {
+    if (!allowOwnerOffCurve && !PublicKey.isOnCurve(owner.toBuffer())) {
+        throw new Error("Owner public key is off-curve");
+    }
+    const [ata] = PublicKey.findProgramAddressSync(
+        [owner.toBuffer(), programId.toBuffer(), mint.toBuffer()],
+        associatedTokenProgramId,
+    );
+    return ata;
+}
+
+function createAssociatedTokenAccountInstruction(
+    payer: PublicKey,
+    associatedToken: PublicKey,
+    owner: PublicKey,
+    mint: PublicKey,
+    programId: PublicKey = TOKEN_PROGRAM_ID,
+    associatedTokenProgramId: PublicKey = ASSOCIATED_TOKEN_PROGRAM_ID,
+): TransactionInstruction {
+    return new TransactionInstruction({
+        programId: associatedTokenProgramId,
+        keys: [
+            { pubkey: payer, isSigner: true, isWritable: true },
+            { pubkey: associatedToken, isSigner: false, isWritable: true },
+            { pubkey: owner, isSigner: false, isWritable: false },
+            { pubkey: mint, isSigner: false, isWritable: false },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: programId, isSigner: false, isWritable: false },
+            { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+        ],
+        data: Buffer.alloc(0),
+    });
+}
+
+function createTransferInstruction(
+    source: PublicKey,
+    destination: PublicKey,
+    owner: PublicKey,
+    amount: bigint | number,
+    multiSigners: PublicKey[] = [],
+    programId: PublicKey = TOKEN_PROGRAM_ID,
+): TransactionInstruction {
+    const data = Buffer.alloc(9);
+    data[0] = 3; // TokenInstruction::Transfer
+    data.writeBigUInt64LE(BigInt(amount), 1);
+
+    const keys = [
+        { pubkey: source, isSigner: false, isWritable: true },
+        { pubkey: destination, isSigner: false, isWritable: true },
+    ];
+
+    if (multiSigners.length === 0) {
+        keys.push({ pubkey: owner, isSigner: true, isWritable: false });
+    } else {
+        keys.push({ pubkey: owner, isSigner: false, isWritable: false });
+        for (const signer of multiSigners) {
+            keys.push({ pubkey: signer, isSigner: true, isWritable: false });
+        }
+    }
+
+    return new TransactionInstruction({
+        programId,
+        keys,
+        data,
+    });
+}
+
+function createInitializeMintInstruction(
+    mint: PublicKey,
+    decimals: number,
+    mintAuthority: PublicKey,
+    freezeAuthority: PublicKey | null,
+    programId: PublicKey = TOKEN_PROGRAM_ID,
+): TransactionInstruction {
+    const data = Buffer.alloc(67);
+    data[0] = 0; // TokenInstruction::InitializeMint
+    data[1] = decimals;
+    mintAuthority.toBuffer().copy(data, 2);
+    if (freezeAuthority) {
+        data.writeUInt32LE(1, 34);
+        freezeAuthority.toBuffer().copy(data, 38);
+    } else {
+        data.writeUInt32LE(0, 34);
+    }
+
+    return new TransactionInstruction({
+        programId,
+        keys: [
+            { pubkey: mint, isSigner: false, isWritable: true },
+            { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+        ],
+        data,
+    });
+}
+
+function createMintToInstruction(
+    mint: PublicKey,
+    destination: PublicKey,
+    authority: PublicKey,
+    amount: bigint | number,
+    multiSigners: PublicKey[] = [],
+    programId: PublicKey = TOKEN_PROGRAM_ID,
+): TransactionInstruction {
+    const data = Buffer.alloc(9);
+    data[0] = 7; // TokenInstruction::MintTo
+    data.writeBigUInt64LE(BigInt(amount), 1);
+
+    const keys = [
+        { pubkey: mint, isSigner: false, isWritable: true },
+        { pubkey: destination, isSigner: false, isWritable: true },
+    ];
+
+    if (multiSigners.length === 0) {
+        keys.push({ pubkey: authority, isSigner: true, isWritable: false });
+    } else {
+        keys.push({ pubkey: authority, isSigner: false, isWritable: false });
+        for (const signer of multiSigners) {
+            keys.push({ pubkey: signer, isSigner: true, isWritable: false });
+        }
+    }
+
+    return new TransactionInstruction({
+        programId,
+        keys,
+        data,
+    });
+}
+
+async function getMint(
+    connection: Connection,
+    address: PublicKey,
+    commitment?: "processed" | "confirmed" | "finalized",
+    programId: PublicKey = TOKEN_PROGRAM_ID,
+): Promise<{ decimals: number }> {
+    const info = await connection.getAccountInfo(address, commitment);
+    if (!info) throw new Error("Mint not found");
+    if (!info.owner.equals(programId)) throw new Error("Invalid mint owner");
+    if (info.data.length < MINT_SIZE) throw new Error("Invalid mint account size");
+    // Mint layout decimals offset.
+    return { decimals: info.data[44] };
+}
+
+async function getMinimumBalanceForRentExemptMint(
+    connection: Connection,
+): Promise<number> {
+    return connection.getMinimumBalanceForRentExemption(MINT_SIZE);
+}
 
 type TempAccount = {
     keypair: Keypair;
@@ -87,6 +246,26 @@ const parseAmount = (amountUi: string, decimals: number): bigint => {
     const [w, f = ''] = amountUi.trim().split('.');
     const frac = (f + '0'.repeat(decimals)).slice(0, decimals);
     return BigInt(`${w || '0'}${frac}`);
+};
+
+const formatTransactionError = async (
+    error: unknown,
+    logsConnection?: Connection,
+): Promise<string> => {
+    const message = String((error as { message?: string } | null | undefined)?.message || error);
+
+    if (error instanceof SendTransactionError && logsConnection) {
+        try {
+            const logs = await error.getLogs(logsConnection);
+            if (logs && logs.length > 0) {
+                return `${message}\nLogs:\n${logs.join('\n')}`;
+            }
+        } catch {
+            // Ignore getLogs failures and keep the base message.
+        }
+    }
+
+    return message;
 };
 
 // Utility: Create a noop instruction with random data to make transactions unique
@@ -538,7 +717,10 @@ const App: React.FC = () => {
                         dst.keypair.publicKey,
                         mint,
                         0n,
-                        {validator: validator.current}
+                        {
+                            validator: validator.current,
+                            initIfMissing: true,
+                        }
                     );
                     const delTx = new Transaction().add(...delIxs);
                     delTx.feePayer = dst.keypair.publicKey;
@@ -588,7 +770,7 @@ const App: React.FC = () => {
             setTransactionSuccess(`Transfer confirmed: ${sig.substring(0, 10)}...${sig.substring(sig.length - 10, sig.length)}`);
             await refreshBalances();
         } catch (e: any) {
-            setTransactionError(String(e?.message || e));
+            setTransactionError(await formatTransactionError(e, conn));
         } finally {
             setIsSubmitting(false);
         }
@@ -618,7 +800,9 @@ const App: React.FC = () => {
             // Helper to create mint + ATAs + mintTo on a given connection
             const setupOn = async (conn: Connection) => {
                 const ataPubkeys = accounts.map(a => getAssociatedTokenAddressSync(mintKp.publicKey, a.keypair.publicKey));
-                const tx = new Transaction().add(
+                const [transferQueue] = deriveTransferQueue(mintKp.publicKey);
+
+                const mintTx = new Transaction().add(
                     SystemProgram.createAccount({
                         fromPubkey: payer.publicKey,
                         newAccountPubkey: mintKp.publicKey,
@@ -651,12 +835,30 @@ const App: React.FC = () => {
                         )
                     )
                 );
-                tx.feePayer = payer.publicKey;
-                const { blockhash } = await conn.getLatestBlockhash();
-                tx.recentBlockhash = blockhash;
-                tx.sign(payer, mintKp);
-                const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-                await conn.confirmTransaction(sig, 'confirmed');
+                mintTx.feePayer = payer.publicKey;
+                const { blockhash: mintBlockhash } = await conn.getLatestBlockhash();
+                mintTx.recentBlockhash = mintBlockhash;
+                mintTx.sign(payer, mintKp);
+                const mintSig = await conn.sendRawTransaction(mintTx.serialize(), { skipPreflight: true });
+                await conn.confirmTransaction(mintSig, 'confirmed');
+
+                const queueTx = new Transaction().add(
+                    initTransferQueueIx(
+                        transferQueue,
+                        payer.publicKey,
+                        mintKp.publicKey,
+                    ),
+                    ensureTransferQueueCrankIx(
+                        transferQueue,
+                        payer.publicKey,
+                    ),
+                );
+                queueTx.feePayer = payer.publicKey;
+                const { blockhash: queueBlockhash } = await conn.getLatestBlockhash();
+                queueTx.recentBlockhash = queueBlockhash;
+                queueTx.sign(payer);
+                const queueSig = await conn.sendRawTransaction(queueTx.serialize(), { skipPreflight: true });
+                await conn.confirmTransaction(queueSig, 'confirmed');
             };
 
             await setupOn(connection);
@@ -672,11 +874,11 @@ const App: React.FC = () => {
             // Update state and refresh
             setMint(mintKp.publicKey);
             setDecimals(mintDecimals);
-            setTransactionSuccess('Mint created, ATAs initialized, and tokens minted on all accounts');
+            setTransactionSuccess('Mint created, ATAs initialized, tokens minted, queue initialized, and crank started');
 
             await refreshBalances();
         } catch (e: any) {
-            setTransactionError(String(e?.message || e));
+            setTransactionError(await formatTransactionError(e, connection));
         }
     }, [accounts, connection, ensureAirdropLamports, refreshBalances]);
 
@@ -885,24 +1087,36 @@ const App: React.FC = () => {
                                         const amountBn = parseAmount(raw, decimals);
                                         if (amountBn <= 0n) throw new Error('Invalid amount');
 
-                                        if (a.eDelegated) {
-                                            // 1) Send undelegate instruction on Ephemeral rollup
-                                            const ixU = undelegateIx(a.keypair.publicKey, mint);
-                                            const txU = new Transaction().add(createNoopInstruction(), ixU);
-                                            txU.feePayer = a.keypair.publicKey;
-                                            const bhU = await getCachedEphemeralBlockhash();
-                                            txU.recentBlockhash = bhU;
-                                            txU.sign(a.keypair);
-                                            const sigU = await eConn.sendRawTransaction(txU.serialize(), {skipPreflight: true});
-                                            await eConn.confirmTransaction(sigU, 'confirmed');
-
-                                            // Wait for commitment signature, then confirm on L1
-                                            const txCommitSgn = await GetCommitmentSignature(sigU, eConn);
-                                            await connection.confirmTransaction(txCommitSgn, 'confirmed');
-                                        }
+                                        // if (a.eDelegated) {
+                                        //     // 1) Send undelegate instruction on Ephemeral rollup
+                                        //     const ixU = undelegateIx(a.keypair.publicKey, mint);
+                                        //     const txU = new Transaction().add(createNoopInstruction(), ixU);
+                                        //     txU.feePayer = a.keypair.publicKey;
+                                        //     const bhU = await getCachedEphemeralBlockhash();
+                                        //     txU.recentBlockhash = bhU;
+                                        //     txU.sign(a.keypair);
+                                        //     const sigU = await eConn.sendRawTransaction(txU.serialize(), {skipPreflight: true});
+                                        //     await eConn.confirmTransaction(sigU, 'confirmed');
+                                        //
+                                        //     // Wait for commitment signature, then confirm on L1
+                                        //     const txCommitSgn = await GetCommitmentSignature(sigU, eConn);
+                                        //     await connection.confirmTransaction(txCommitSgn, 'confirmed');
+                                        // }
 
                                         // Build instructions via SDK
-                                        const ixs = await delegateSpl(a.keypair.publicKey, mint, amountBn, {validator: validator.current});
+                                        const shuttleId = crypto.getRandomValues(new Uint32Array(1))[0];
+                                        const ixs = await delegateSpl(
+                                            a.keypair.publicKey,
+                                            mint,
+                                            amountBn,
+                                            {
+                                                validator: validator.current,
+                                                initIfMissing: true,
+                                                initVaultIfMissing: true,
+                                                idempotent: true,
+                                                shuttleId,
+                                            }
+                                        );
                                         const tx = new Transaction();
                                         ixs.forEach((ix) => tx.add(ix));
                                         tx.feePayer = a.keypair.publicKey;
@@ -913,9 +1127,79 @@ const App: React.FC = () => {
                                         const sig = await connection.sendRawTransaction(tx.serialize());
                                         await connection.confirmTransaction(sig, 'confirmed');
                                         setTransactionSuccess('Delegation confirmed');
+                                        console.log("Delegation: ", sig);
+
+                                        // TODO: Send tx to the ephemeral to merge_shuttle_ephemeral_ata
+                                        const [shuttleEphemeralAta] = deriveShuttleEphemeralAta(
+                                            a.keypair.publicKey,
+                                            mint,
+                                            shuttleId,
+                                        );
+                                        const shuttleWalletAta = deriveShuttleWalletAta(
+                                            mint,
+                                            shuttleEphemeralAta,
+                                        );
+                                        const [shuttleAta] = deriveShuttleAta(shuttleEphemeralAta, mint);
+                                        const ownerAta = getAssociatedTokenAddressSync(
+                                            mint,
+                                            a.keypair.publicKey,
+                                            false,
+                                            TOKEN_PROGRAM_ID,
+                                        );
+                                        const mergeIx = mergeShuttleIntoAtaIx(
+                                            a.keypair.publicKey,
+                                            ownerAta,
+                                            shuttleEphemeralAta,
+                                            shuttleWalletAta,
+                                            mint,
+                                        );
+                                        const txMerge = new Transaction().add(createNoopInstruction(), mergeIx);
+                                        txMerge.feePayer = a.keypair.publicKey;
+                                        const bhMerge = await getCachedEphemeralBlockhash();
+                                        txMerge.recentBlockhash = bhMerge;
+                                        txMerge.sign(a.keypair);
+
+                                        const sigMerge = await eConn.sendRawTransaction(txMerge.serialize(), {
+                                            skipPreflight: false,
+                                        });
+                                        console.log("Merging: " + sigMerge);
+                                        console.log("Shuttle ephemeral Ata: ", shuttleEphemeralAta.toBase58());
+                                        console.log("Owner Ata: ", ownerAta.toBase58());
+
+                                        // TODO: call undelegate_and_close_shuttle_ephemeral_ata in the ER
+                                        try {
+                                            await eConn.confirmTransaction(sigMerge, 'confirmed');
+                                        } catch (confirmErr) {
+                                            console.warn(
+                                                "Merge confirmation failed on first attempt, retrying once...",
+                                                confirmErr,
+                                            );
+                                            await new Promise((resolve) => setTimeout(resolve, 400));
+                                            await eConn.confirmTransaction(sigMerge, 'confirmed');
+                                        }
+                                        const closeShuttleIx = undelegateAndCloseShuttleEphemeralAtaIx(
+                                            a.keypair.publicKey,
+                                            shuttleEphemeralAta,
+                                            shuttleAta,
+                                            shuttleWalletAta,
+                                        );
+                                        const txCloseShuttle = new Transaction().add(
+                                            createNoopInstruction(),
+                                            closeShuttleIx,
+                                        );
+                                        txCloseShuttle.feePayer = a.keypair.publicKey;
+                                        txCloseShuttle.recentBlockhash = await getCachedEphemeralBlockhash();
+                                        txCloseShuttle.sign(a.keypair);
+                                        const sigCloseShuttle = await eConn.sendRawTransaction(
+                                            txCloseShuttle.serialize(),
+                                            { skipPreflight: true },
+                                        );
+                                        console.log("Closing: ", sigCloseShuttle);
+                                        await eConn.confirmTransaction(sigCloseShuttle, 'confirmed');
+
                                         await refreshBalances();
                                     } catch (e: any) {
-                                        setTransactionError(String(e?.message || e));
+                                        setTransactionError(await formatTransactionError(e, connection));
                                     } finally {
                                         setIsSubmitting(false);
                                     }
@@ -1006,7 +1290,7 @@ const App: React.FC = () => {
                                         setTransactionSuccess('Undelegation and withdraw confirmed');
                                         await refreshBalances();
                                     } catch (e: any) {
-                                        setTransactionError(String(e?.message || e));
+                                        setTransactionError(await formatTransactionError(e, connection));
                                     } finally {
                                         setIsSubmitting(false);
                                     }
