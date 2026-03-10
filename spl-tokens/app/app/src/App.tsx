@@ -768,6 +768,7 @@ const App: React.FC = () => {
                 const [transferQueue] = deriveTransferQueue(mint);
                 const [vault] = deriveVault(mint);
                 const vaultAta = deriveVaultAta(mint, vault);
+                ixs.push(createNoopInstruction());
                 ixs.push(
                     createDepositAndQueueTransferInstruction(
                         transferQueue,
