@@ -15,7 +15,7 @@ rewards_delegated_vrf = "D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "https://rpc.magicblock.app/devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

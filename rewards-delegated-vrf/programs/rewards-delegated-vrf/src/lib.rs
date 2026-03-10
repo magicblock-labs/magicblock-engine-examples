@@ -6,22 +6,20 @@ use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-declare_id!("D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM");
+declare_id!("HuGRGfqr7BNdeogipmidXL21PjF4qSoXFDaCBhetviwZ");
 
 pub const REWARD_DISTRIBUTOR_SEED: &[u8] = b"reward_distributor";
-pub const REWARD_METADATA_SEED: &[u8] = b"reward_metadata";
+pub const REWARD_LIST_SEED: &[u8] = b"reward_list";
+pub const TRANSFER_LOOKUP_ACCOUNTS_SEED: &[u8] = b"transfer_lookup_accounts";
+pub const PROGRAM_AUTHORITY: Pubkey = pubkey!("EyBRt4Acr7b4s3exfnVvJ4EgL8oa6Lc4JK1Leonud34W");
 
 #[ephemeral]
 #[program]
-pub mod random_dice_delegated {
+pub mod rewards_delegated_vrf {
     use super::*;
 
     pub fn initialize_reward_distributor(
         ctx: Context<InitializeRewardDistributor>,
-        start_timestamp: i64,
-        end_timestamp: i64,
-        min_roll: u32,
-        max_roll: u32,
         admins: Vec<Pubkey>,
     ) -> Result<()> {
         msg!(
@@ -35,58 +33,61 @@ pub mod random_dice_delegated {
         let super_admin = ctx.accounts.initializer.key();
         reward_distributor.super_admin = super_admin;
         reward_distributor.bump = ctx.bumps.reward_distributor;
-        reward_distributor.start_timestamp = start_timestamp;
-        reward_distributor.end_timestamp = end_timestamp;
-        reward_distributor.min_roll = min_roll;
-        reward_distributor.max_roll = max_roll;
         let mut all_admins = vec![super_admin];
         all_admins.extend(admins.into_iter().filter(|k| *k != super_admin));
         reward_distributor.admins = all_admins;
         Ok(())
     }
 
-    pub fn initialize_reward_metadata(
-        ctx: Context<InitializeRewardMetadata>,
-        reward_name: String,
-        reward_type: RewardType,
-        limit: u32,
-        asset_accounts: Vec<Pubkey>,
-        ix_accounts: Vec<Pubkey>,
+    pub fn set_reward_list(
+        ctx: Context<SetRewardList>,
+        rewards: Vec<Reward>,
+        start_timestamp: i64,
+        end_timestamp: i64,
+        global_range_min: u32,
+        global_range_max: u32,
     ) -> Result<()> {
-        msg!(
-            "Initializing reward metadata: {:?}",
-            ctx.accounts.reward_metadata.key()
-        );
-        let reward_metadata = &mut ctx.accounts.reward_metadata;
-        if reward_metadata.reward_distributor != Pubkey::default() {
-            return Ok(());
-        }
-        reward_metadata.reward_name = reward_name;
-        reward_metadata.bump = ctx.bumps.reward_metadata;
-        reward_metadata.reward_distributor = ctx.accounts.reward_distributor.key();
-        reward_metadata.reward_type = reward_type;
-        reward_metadata.limit = limit;
-        reward_metadata.count = 0;
-        reward_metadata.draws = vec![];
-        reward_metadata.asset_accounts = asset_accounts;
-        reward_metadata.ix_accounts = ix_accounts;
+        msg!("Setting reward list: {:?}", ctx.accounts.reward_list.key());
+        let reward_list = &mut ctx.accounts.reward_list;
+        reward_list.reward_distributor = ctx.accounts.reward_distributor.key();
+        reward_list.bump = ctx.bumps.reward_list;
+        reward_list.rewards = rewards;
+        reward_list.start_timestamp = start_timestamp;
+        reward_list.end_timestamp = end_timestamp;
+        reward_list.global_range_min = global_range_min;
+        reward_list.global_range_max = global_range_max;
         Ok(())
     }
 
-    pub fn delegate_reward_metadata(
-        ctx: Context<DelegateRewardMetadata>,
-        reward_name: String,
+    pub fn initialize_transfer_lookup_accounts(
+        ctx: Context<InitializeTransferLookupAccounts>,
+        reward_type: RewardType,
+        accounts: Vec<Pubkey>,
     ) -> Result<()> {
         msg!(
-            "Delegating reward metadata: {:?}",
-            ctx.accounts.reward_metadata.key()
+            "Initializing transfer lookup accounts: {:?}",
+            ctx.accounts.transfer_lookup_accounts.key()
         );
-        ctx.accounts.delegate_reward_metadata(
+        let lookup = &mut ctx.accounts.transfer_lookup_accounts;
+        if lookup.is_initialized {
+            return Ok(());
+        }
+        lookup.is_initialized = true;
+        lookup.reward_type = reward_type;
+        lookup.accounts = accounts;
+        Ok(())
+    }
+
+    pub fn delegate_reward_list(ctx: Context<DelegateRewardList>) -> Result<()> {
+        msg!(
+            "Delegating reward list: {:?}",
+            ctx.accounts.reward_list.key()
+        );
+        ctx.accounts.delegate_reward_list(
             &ctx.accounts.admin,
             &[
-                REWARD_METADATA_SEED,
-                ctx.accounts.reward_distributor.key().to_bytes().as_slice(),
-                reward_name.as_bytes(),
+                REWARD_LIST_SEED,
+                ctx.accounts.reward_distributor.key().as_ref(),
             ],
             DelegateConfig {
                 validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
@@ -98,20 +99,48 @@ pub mod random_dice_delegated {
 
     pub fn request_random_reward(ctx: Context<RequestRandomReward>, client_seed: u8) -> Result<()> {
         msg!("Requesting randomness for reward...");
+
+        let reward_list = &ctx.accounts.reward_list;
+        let current_timestamp = Clock::get()?.unix_timestamp;
+
+        // Check if current time is within reward distribution window
+        if current_timestamp < reward_list.start_timestamp {
+            msg!(
+                "Reward distribution not started yet. Current: {}, Start: {}",
+                current_timestamp,
+                reward_list.start_timestamp
+            );
+            return Ok(());
+        }
+
+        if current_timestamp > reward_list.end_timestamp {
+            msg!(
+                "Reward distribution has ended. Current: {}, End: {}",
+                current_timestamp,
+                reward_list.end_timestamp
+            );
+            return Ok(());
+        }
+
         let ix = create_request_randomness_ix(RequestRandomnessParams {
-            payer: ctx.accounts.user.key(),
+            payer: ctx.accounts.admin.key(),
             oracle_queue: ctx.accounts.oracle_queue.key(),
             callback_program_id: ID,
             callback_discriminator: instruction::ConsumeRandomReward::DISCRIMINATOR.to_vec(),
             caller_seed: [client_seed; 32],
             accounts_metas: Some(vec![
                 SerializableAccountMeta {
-                    pubkey: ctx.accounts.reward_metadata.key(),
+                    pubkey: ctx.accounts.user.key(),
                     is_signer: false,
-                    is_writable: true,
+                    is_writable: false,
                 },
                 SerializableAccountMeta {
-                    pubkey: ctx.accounts.reward_metadata.key(),
+                    pubkey: ctx.accounts.reward_distributor.key(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                SerializableAccountMeta {
+                    pubkey: ctx.accounts.reward_list.key(),
                     is_signer: false,
                     is_writable: true,
                 },
@@ -119,7 +148,11 @@ pub mod random_dice_delegated {
             ..Default::default()
         });
         ctx.accounts
-            .invoke_signed_vrf(&ctx.accounts.user.to_account_info(), &ix)?;
+            .invoke_signed_vrf(&ctx.accounts.admin.to_account_info(), &ix)?;
+        msg!(
+            "VRF randomness request successfully triggered for user: {:?}",
+            ctx.accounts.user.key()
+        );
         Ok(())
     }
 
@@ -127,37 +160,56 @@ pub mod random_dice_delegated {
         ctx: Context<ConsumeRandomReward>,
         randomness: [u8; 32],
     ) -> Result<()> {
-        let reward_metadata = &mut ctx.accounts.reward_metadata;
-        // Consume the randomness to update the reward metadata and trigger the reward distribution logic
-        // For example, you can use the randomness to determine the reward tier and update the count of rewards distributed
-        let rnd_u32 = ephemeral_vrf_sdk::rnd::random_u32(&randomness);
-        msg!("Consuming random number for reward: {:?}", rnd_u32);
-
-        reward_metadata.count = reward_metadata.count.saturating_add(1);
-        reward_metadata.draws.push(rnd_u32);
-        Ok(())
-    }
-
-    pub fn transfer_random_reward(ctx: Context<TransferRandomReward>) -> Result<()> {
-        let reward_metadata = &ctx.accounts.reward_metadata;
         let reward_distributor = &ctx.accounts.reward_distributor;
-        // Implement the logic to transfer the reward from the reward distributor to the user based on the reward metadata and the randomness consumed
-        // For example, you can check the reward tier based on the last random number and transfer a specific SPL token or NFT to the user
-        msg!("Transferring reward to user based on reward metadata and randomness...");
+        let user = &ctx.accounts.user;
+        let reward_list = &mut ctx.accounts.reward_list;
+        let rnd_u32 = ephemeral_vrf_sdk::rnd::random_u32(&randomness);
+        let range = (reward_list.global_range_max as u64)
+            .checked_sub(reward_list.global_range_min as u64)
+            .unwrap()
+            + 1;
+        let result = reward_list.global_range_min + (rnd_u32 % range as u32);
+        msg!("Random result: {:?} for user: {:?}", result, user.key());
+
+        let mut found_reward = false;
+        for reward in reward_list.rewards.iter_mut() {
+            if result >= reward.draw_range_min && result <= reward.draw_range_max {
+                found_reward = true;
+                if reward.redemption_count < reward.redemption_limit {
+                    reward.redemption_count = reward.redemption_count.saturating_add(1);
+                    msg!(
+                        "Won reward '{}' (range {}-{})",
+                        reward.name,
+                        reward.draw_range_min,
+                        reward.draw_range_max
+                    );
+                } else {
+                    msg!(
+                        "Reward '{}' is exhausted ({}/{})",
+                        reward.name,
+                        reward.redemption_count,
+                        reward.redemption_limit
+                    );
+                }
+                break;
+            }
+        }
+
+        if !found_reward {
+            msg!("No reward found for result: {:?}", result);
+        }
+
         Ok(())
     }
 
-    pub fn undelegate_reward_metadata(
-        ctx: Context<UndelegateRewardMetadata>,
-        reward_name: String,
-    ) -> Result<()> {
+    pub fn undelegate_reward_list(ctx: Context<UndelegateRewardList>) -> Result<()> {
         msg!(
-            "Undelegating reward metadata: {:?}",
-            ctx.accounts.reward_metadata.key()
+            "Undelegating reward list: {:?}",
+            ctx.accounts.reward_list.key()
         );
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
-            vec![&ctx.accounts.reward_metadata.to_account_info()],
+            vec![&ctx.accounts.reward_list.to_account_info()],
             &ctx.accounts.magic_context,
             &ctx.accounts.magic_program,
         )?;
@@ -177,40 +229,48 @@ pub struct InitializeRewardDistributor<'info> {
     pub system_program: Program<'info, System>,
 }
 
-// Admin initializes the reward metadata for a specific reward under a reward distributor with the rules of the reward (reward type, limit, etc)
+// Admin sets the reward list for a reward distributor with all reward tiers
 #[derive(Accounts)]
-#[instruction(reward_name: String)]
-pub struct InitializeRewardMetadata<'info> {
-    #[account(mut)]
+pub struct SetRewardList<'info> {
+    #[account(mut, constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
     pub admin: Signer<'info>,
-    #[account(init_if_needed, payer = admin, space = 8 + 36 + 1 + 32 + 1 + 4 + 4 + 4 + 4 + 4, seeds = [REWARD_METADATA_SEED, reward_distributor.key().as_ref(), reward_name.as_bytes()], bump)]
-    pub reward_metadata: Account<'info, RewardMetadata>,
+    #[account(init_if_needed, payer = admin, space = 8 + RewardsList::MAX_SIZE + 10 * Reward::MAX_SIZE, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
+    pub reward_list: Account<'info, RewardsList>,
     pub reward_distributor: Account<'info, RewardDistributor>,
     pub system_program: Program<'info, System>,
 }
 
-// Admin delegated the reward metadata account to a specific validator on ER to allow them to consume the randomness and distribute the rewards based on the rules defined in the reward metadata and reward distributor accounts
+// Only the program upgrade authority can initialize the transfer lookup accounts
+#[derive(Accounts)]
+#[instruction(reward_type: RewardType)]
+pub struct InitializeTransferLookupAccounts<'info> {
+    #[account(mut, constraint = authority.key() == PROGRAM_AUTHORITY)]
+    pub authority: Signer<'info>,
+    #[account(init_if_needed, payer = authority, space = 8 + 1 + 1 + 4 + 32 * 20, seeds = [TRANSFER_LOOKUP_ACCOUNTS_SEED, &[reward_type.to_seed()]], bump)]
+    pub transfer_lookup_accounts: Account<'info, RewardTransferLookupAccounts>,
+    pub system_program: Program<'info, System>,
+}
+
+// Admin delegates the reward list to ER
 #[delegate]
 #[derive(Accounts)]
-#[instruction(reward_name: String)]
-pub struct DelegateRewardMetadata<'info> {
+pub struct DelegateRewardList<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
-    /// CHECK The pda to delegate
-    #[account(mut, del, seeds = [REWARD_METADATA_SEED, reward_distributor.key().as_ref(), reward_name.as_bytes()], bump)]
-    pub reward_metadata: Account<'info, RewardMetadata>,
+    /// CHECK: The pda to delegate
+    #[account(mut, del, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
+    pub reward_list: Account<'info, RewardsList>,
     pub reward_distributor: Account<'info, RewardDistributor>,
 }
 
-// Admin undelegates the reward metadata account
+// Admin undelegates the reward list
 #[commit]
 #[derive(Accounts)]
-#[instruction(reward_name: String)]
-pub struct UndelegateRewardMetadata<'info> {
+pub struct UndelegateRewardList<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut, seeds = [REWARD_METADATA_SEED, reward_distributor.key().as_ref(), reward_name.as_bytes()], bump)]
-    pub reward_metadata: Account<'info, RewardMetadata>,
+    #[account(mut, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
+    pub reward_list: Account<'info, RewardsList>,
     pub reward_distributor: Account<'info, RewardDistributor>,
 }
 
@@ -220,60 +280,69 @@ pub struct UndelegateRewardMetadata<'info> {
 #[vrf]
 #[derive(Accounts)]
 pub struct RequestRandomReward<'info> {
-    #[account(mut)]
     pub user: Signer<'info>,
-    #[account(mut)]
-    pub reward_metadata: Account<'info, RewardMetadata>,
+    #[account(constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
+    pub admin: Signer<'info>,
+    pub reward_list: Account<'info, RewardsList>,
     pub reward_distributor: Account<'info, RewardDistributor>,
     /// CHECK: Validated by address constraint against the known VRF oracle queue
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
     pub oracle_queue: AccountInfo<'info>,
 }
 
-// 2. Callback from VRF Oracle with proof of randomness on ER that would initiate the reward transfer to the user as Magic Action
+// 2. Callback from VRF Oracle with proof of randomness on ER
 #[derive(Accounts)]
 pub struct ConsumeRandomReward<'info> {
-    /// This check ensure that the vrf_program_identity (which is a PDA) is a singer
-    /// enforcing the callback is executed by the VRF program trough CPI
+    /// This check ensure that the vrf_program_identity (which is a PDA) is a signer
+    /// enforcing the callback is executed by the VRF program through CPI
     #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
     pub vrf_program_identity: Signer<'info>,
-    #[account(mut)]
-    pub reward_metadata: Account<'info, RewardMetadata>,
+    /// CHECK: The user account is passed from the request_random_reward and used for the reward recipient
+    pub user: AccountInfo<'info>,
     pub reward_distributor: Account<'info, RewardDistributor>,
-}
-
-// 3. Magic Action on Solana to transfer the reward from the reward distributor to the user after consuming the randomness
-#[derive(Accounts)]
-pub struct TransferRandomReward<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(mut)]
-    pub reward_metadata: Account<'info, RewardMetadata>,
-    pub reward_distributor: Account<'info, RewardDistributor>,
+    #[account(mut, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
+    pub reward_list: Account<'info, RewardsList>,
 }
 
 #[account]
 pub struct RewardDistributor {
     pub super_admin: Pubkey,
     pub bump: u8,
-    pub start_timestamp: i64,
-    pub end_timestamp: i64,
-    pub min_roll: u32,
-    pub max_roll: u32,
     pub admins: Vec<Pubkey>,
 }
 
 #[account]
-pub struct RewardMetadata {
-    pub reward_name: String,
-    pub bump: u8,
+pub struct RewardsList {
     pub reward_distributor: Pubkey,
+    pub bump: u8,
+    pub rewards: Vec<Reward>,
+    pub start_timestamp: i64,
+    pub end_timestamp: i64,
+    pub global_range_min: u32,
+    pub global_range_max: u32,
+}
+
+impl RewardsList {
+    // Fixed fields: 32 (Pubkey) + 1 (u8) + 4 (vec header) + 8 (i64) + 8 (i64) + 4 (u32) + 4 (u32) = 61
+    pub const MAX_SIZE: usize = 32 + 1 + 4 + 8 + 8 + 4 + 4;
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct Reward {
+    pub name: String,
+    pub draw_range_min: u32,
+    pub draw_range_max: u32,
     pub reward_type: RewardType,
-    pub limit: u32,
-    pub count: u32,
-    pub draws: Vec<u32>,
-    pub asset_accounts: Vec<Pubkey>,
-    pub ix_accounts: Vec<Pubkey>,
+    pub reward_mints: Vec<Pubkey>,
+    pub reward_amount: u64,
+    pub redemption_count: u64,
+    pub redemption_limit: u64,
+}
+
+impl Reward {
+    // 36 (string) + 4 + 4 + 1 + 4 + (32 * 10) + 8 + 8 + 8 = 191
+    // name: 36, draw_range_min: 4, draw_range_max: 4, reward_type: 1, reward_mints vec header: 4, reward_mints (10 max): 320, reward_amount: 8, redemption_count: 8, redemption_limit: 8
+    pub const MAX_SIZE: usize = 36 + 4 + 4 + 1 + 4 + (32 * 10) + 8 + 8 + 8;
 }
 
 /*
@@ -312,12 +381,14 @@ pub struct RewardMetadata {
 */
 #[account]
 pub struct RewardTransferLookupAccounts {
+    pub is_initialized: bool,
     pub reward_type: RewardType,
-    pub readable_accounts: Vec<Pubkey>,
+    pub accounts: Vec<Pubkey>,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Default)]
 pub enum RewardType {
+    #[default]
     SplToken,
     Nft,
 }
@@ -327,6 +398,13 @@ impl RewardType {
         match self {
             RewardType::SplToken => 4,
             RewardType::Nft => 17,
+        }
+    }
+
+    pub fn to_seed(&self) -> u8 {
+        match self {
+            RewardType::SplToken => 0,
+            RewardType::Nft => 1,
         }
     }
 }
