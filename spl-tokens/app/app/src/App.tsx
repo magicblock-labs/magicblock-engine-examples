@@ -7,6 +7,7 @@ import {
     Keypair,
     LAMPORTS_PER_SOL,
     PublicKey,
+    sendAndConfirmTransaction,
     Transaction,
     SystemProgram, TransactionInstruction, SYSVAR_RENT_PUBKEY, SendTransactionError
 } from "@solana/web3.js";
@@ -21,6 +22,7 @@ import {
     deriveTransferQueue,
     deriveVault,
     deriveVaultAta,
+    delegateTransferQueueIx,
     ensureTransferQueueCrankIx,
     initTransferQueueIx,
     mergeShuttleIntoAtaIx,
@@ -539,7 +541,9 @@ const App: React.FC = () => {
 
     const ensureAirdropLamports = useCallback(async (conn: Connection, pubkey: PublicKey) => {
         try {
-            await conn.requestAirdrop(pubkey, 0.1 * LAMPORTS_PER_SOL);
+            const signature = await conn.requestAirdrop(pubkey, 0.1 * LAMPORTS_PER_SOL);
+            const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
+            await conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
         } catch {
             // ignore airdrop errors
         }
@@ -761,10 +765,6 @@ const App: React.FC = () => {
                     throw new Error('Private split cannot exceed the transfer amount in base units');
                 }
 
-                const dstInfo = await connection.getAccountInfo(dstAta);
-                if (!dstInfo) {
-                    ixs.push(createAssociatedTokenAccountInstruction(src.keypair.publicKey, dstAta, dst.keypair.publicKey, mint));
-                }
                 const [transferQueue] = deriveTransferQueue(mint);
                 const [vault] = deriveVault(mint);
                 const vaultAta = deriveVaultAta(mint, vault);
@@ -849,6 +849,7 @@ const App: React.FC = () => {
                 await conn.confirmTransaction(sig, 'confirmed');
             }
             setTransactionSuccess(`${usePrivateTransfer ? 'Private transfer queued' : 'Transfer confirmed'}: ${sig.substring(0, 10)}...${sig.substring(sig.length - 10, sig.length)}`);
+            console.log("Private transfer: ", sig);
             await refreshBalances();
         } catch (e: any) {
             setTransactionError(await formatTransactionError(e, conn));
@@ -914,32 +915,51 @@ const App: React.FC = () => {
                             payer.publicKey,
                             Number(amountBase)
                         )
-                    )
-                );
-                mintTx.feePayer = payer.publicKey;
-                const { blockhash: mintBlockhash } = await conn.getLatestBlockhash();
-                mintTx.recentBlockhash = mintBlockhash;
-                mintTx.sign(payer, mintKp);
-                const mintSig = await conn.sendRawTransaction(mintTx.serialize(), { skipPreflight: true });
-                await conn.confirmTransaction(mintSig, 'confirmed');
-
-                const queueTx = new Transaction().add(
+                    ),
                     initTransferQueueIx(
+                        payer.publicKey,
+                        transferQueue,
+                        mintKp.publicKey,
+                    ),
+                    delegateTransferQueueIx(
                         transferQueue,
                         payer.publicKey,
                         mintKp.publicKey,
                     ),
+                );
+                mintTx.feePayer = payer.publicKey;
+                const mintSig = await sendAndConfirmTransaction(
+                    conn,
+                    mintTx,
+                    [payer, mintKp],
+                    {
+                        commitment: 'confirmed',
+                        preflightCommitment: 'confirmed',
+                        skipPreflight: true,
+                    },
+                );
+                console.log("Mint and queue setup tx: ", mintSig)
+
+                const startCrankQueueTx = new Transaction().add(
+
                     ensureTransferQueueCrankIx(
-                        transferQueue,
                         payer.publicKey,
+                        // payer.publicKey,
+                        transferQueue,
                     ),
                 );
-                queueTx.feePayer = payer.publicKey;
-                const { blockhash: queueBlockhash } = await conn.getLatestBlockhash();
-                queueTx.recentBlockhash = queueBlockhash;
-                queueTx.sign(payer);
-                const queueSig = await conn.sendRawTransaction(queueTx.serialize(), { skipPreflight: true });
-                await conn.confirmTransaction(queueSig, 'confirmed');
+                startCrankQueueTx.feePayer = payer.publicKey;
+                const crankQueueSig = await sendAndConfirmTransaction(
+                    eConn,
+                    startCrankQueueTx,
+                    [payer],
+                    {
+                        commitment: 'confirmed',
+                        preflightCommitment: 'confirmed',
+                        skipPreflight: true,
+                    },
+                );
+                console.log("Crank queue setup tx: ", crankQueueSig)
             };
 
             await setupOn(connection);
@@ -1407,107 +1427,109 @@ const App: React.FC = () => {
                     <div style={{ height: 16 }} />
                     <div style={CARD_STYLE}>
                         <div style={{ height: 4, borderRadius: 999, background: 'linear-gradient(90deg,#22d3ee,#a78bfa)', marginBottom: 12, opacity: 0.9 }} />
-                        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
-                                From
-                                <select
-                                    value={srcIndex}
-                                    onChange={e => setSrcIndex(Number(e.target.value))}
-                                    style={{ ...INPUT_STYLE, padding: '6px 8px' }}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
+                                    From
+                                    <select
+                                        value={srcIndex}
+                                        onChange={e => setSrcIndex(Number(e.target.value))}
+                                        style={{ ...INPUT_STYLE, padding: '6px 8px' }}
+                                    >
+                                        {accounts.map((_, i) => <option key={`s-${i}`} value={i}>#{i+1}</option>)}
+                                    </select>
+                                </label>
+
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
+                                    To
+                                    <select
+                                        value={dstIndex}
+                                        onChange={e => setDstIndex(Number(e.target.value))}
+                                        style={{ ...INPUT_STYLE, padding: '6px 8px' }}
+                                    >
+                                        {accounts.map((_, i) => <option key={`d-${i}`} value={i}>#{i+1}</option>)}
+                                    </select>
+                                </label>
+
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
+                                    Amount
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step={1/10**Math.min(decimals, 6)}
+                                        value={amountStr}
+                                        onChange={e => setAmountStr(e.target.value)}
+                                        style={{ ...INPUT_STYLE, width: '70%', padding: '6px 8px' }}
+                                    />
+                                </label>
+
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#9ca3af', fontSize: 12 }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={usePrivateTransfer}
+                                        onChange={e => {
+                                            const checked = e.target.checked;
+                                            setUsePrivateTransfer(checked);
+                                            if (checked) {
+                                                setUseEphemeral(true);
+                                            }
+                                        }}
+                                    />
+                                    Private
+                                </label>
+
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#9ca3af', fontSize: 12, opacity: usePrivateTransfer ? 0.5 : 1 }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={useEphemeral}
+                                        disabled={usePrivateTransfer}
+                                        onChange={e => {
+                                            const checked = e.target.checked;
+                                            setUseEphemeral(checked);
+                                            if (!checked) {
+                                                setUsePrivateTransfer(false);
+                                            }
+                                        }}
+                                    />
+                                    Ephemeral
+                                </label>
+
+                                <button
+                                    onClick={handleTransfer}
+                                    disabled={isSubmitting || !mint}
+                                    style={{ ...BUTTON_STYLE, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
                                 >
-                                    {accounts.map((_, i) => <option key={`s-${i}`} value={i}>#{i+1}</option>)}
-                                </select>
-                            </label>
+                                    {isSubmitting ? (usePrivateTransfer ? 'Queueing…' : 'Transferring…') : (usePrivateTransfer ? 'Queue Transfer' : 'Transfer')}
+                                </button>
+                            </div>
 
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
-                                To
-                                <select
-                                    value={dstIndex}
-                                    onChange={e => setDstIndex(Number(e.target.value))}
-                                    style={{ ...INPUT_STYLE, padding: '6px 8px' }}
-                                >
-                                    {accounts.map((_, i) => <option key={`d-${i}`} value={i}>#{i+1}</option>)}
-                                </select>
-                            </label>
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12, opacity: usePrivateTransfer ? 1 : 0.5 }}>
+                                    Delay (s)
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step={1}
+                                        value={privateDelaySeconds}
+                                        disabled={!usePrivateTransfer}
+                                        onChange={e => setPrivateDelaySeconds(e.target.value)}
+                                        style={{ ...INPUT_STYLE, width: 96, padding: '6px 8px' }}
+                                    />
+                                </label>
 
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
-                                Amount
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step={1/10**Math.min(decimals, 6)}
-                                    value={amountStr}
-                                    onChange={e => setAmountStr(e.target.value)}
-                                    style={{ ...INPUT_STYLE, width: '70%', padding: '6px 8px' }}
-                                />
-                            </label>
-
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#9ca3af', fontSize: 12 }}>
-                                <input
-                                    type="checkbox"
-                                    checked={usePrivateTransfer}
-                                    onChange={e => {
-                                        const checked = e.target.checked;
-                                        setUsePrivateTransfer(checked);
-                                        if (checked) {
-                                            setUseEphemeral(true);
-                                        }
-                                    }}
-                                />
-                                Private
-                            </label>
-
-                            {usePrivateTransfer && (
-                                <>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
-                                        Delay (s)
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step={1}
-                                            value={privateDelaySeconds}
-                                            onChange={e => setPrivateDelaySeconds(e.target.value)}
-                                            style={{ ...INPUT_STYLE, width: 96, padding: '6px 8px' }}
-                                        />
-                                    </label>
-
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
-                                        Split
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            step={1}
-                                            value={privateSplitCount}
-                                            onChange={e => setPrivateSplitCount(e.target.value)}
-                                            style={{ ...INPUT_STYLE, width: 80, padding: '6px 8px' }}
-                                        />
-                                    </label>
-                                </>
-                            )}
-
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#9ca3af', fontSize: 12, opacity: usePrivateTransfer ? 0.5 : 1 }}>
-                                <input
-                                    type="checkbox"
-                                    checked={useEphemeral}
-                                    disabled={usePrivateTransfer}
-                                    onChange={e => {
-                                        const checked = e.target.checked;
-                                        setUseEphemeral(checked);
-                                        if (!checked) {
-                                            setUsePrivateTransfer(false);
-                                        }
-                                    }}
-                                />
-                                Ephemeral
-                            </label>
-
-                            <button
-                                onClick={handleTransfer}
-                                disabled={isSubmitting || !mint}
-                                style={{ ...BUTTON_STYLE, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
-                            >
-                                {isSubmitting ? (usePrivateTransfer ? 'Queueing…' : 'Transferring…') : (usePrivateTransfer ? 'Queue Transfer' : 'Transfer')}
-                            </button>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12, opacity: usePrivateTransfer ? 1 : 0.5 }}>
+                                    Split
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        step={1}
+                                        value={privateSplitCount}
+                                        disabled={!usePrivateTransfer}
+                                        onChange={e => setPrivateSplitCount(e.target.value)}
+                                        style={{ ...INPUT_STYLE, width: 80, padding: '6px 8px' }}
+                                    />
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </>
