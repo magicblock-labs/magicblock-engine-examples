@@ -945,7 +945,6 @@ const App: React.FC = () => {
 
                     ensureTransferQueueCrankIx(
                         payer.publicKey,
-                        // payer.publicKey,
                         transferQueue,
                     ),
                 );
