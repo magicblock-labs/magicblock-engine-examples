@@ -1,21 +1,23 @@
 use anchor_lang::prelude::*;
-use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::anchor::{action, commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
+use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-declare_id!("HuGRGfqr7BNdeogipmidXL21PjF4qSoXFDaCBhetviwZ");
+declare_id!("EY1No1nHd348KiZPx2SdTBhXnq8Zrx1Vmx4Ghs1T1WL9");
 
 pub const REWARD_DISTRIBUTOR_SEED: &[u8] = b"reward_distributor";
 pub const REWARD_LIST_SEED: &[u8] = b"reward_list";
-pub const TRANSFER_LOOKUP_ACCOUNTS_SEED: &[u8] = b"transfer_lookup_accounts";
+pub const TRANSFER_LOOKUP_TABLE_SEED: &[u8] = b"transfer_lookup_table";
 pub const PROGRAM_AUTHORITY: Pubkey = pubkey!("EyBRt4Acr7b4s3exfnVvJ4EgL8oa6Lc4JK1Leonud34W");
 
 #[ephemeral]
 #[program]
 pub mod rewards_delegated_vrf {
+
     use super::*;
 
     pub fn initialize_reward_distributor(
@@ -39,6 +41,13 @@ pub mod rewards_delegated_vrf {
         Ok(())
     }
 
+    pub fn set_whitelist(ctx: Context<SetWhitelist>, whitelist: Vec<Pubkey>) -> Result<()> {
+        msg!("Setting whitelist for reward distributor");
+        let reward_distributor = &mut ctx.accounts.reward_distributor;
+        reward_distributor.whitelist = whitelist;
+        Ok(())
+    }
+
     pub fn set_reward_list(
         ctx: Context<SetRewardList>,
         rewards: Vec<Reward>,
@@ -59,22 +68,20 @@ pub mod rewards_delegated_vrf {
         Ok(())
     }
 
-    pub fn initialize_transfer_lookup_accounts(
-        ctx: Context<InitializeTransferLookupAccounts>,
-        reward_type: RewardType,
-        accounts: Vec<Pubkey>,
+    pub fn initialize_transfer_lookup_table(
+        ctx: Context<InitializeTransferLookupTable>,
+        lookup_accounts: Vec<RewardTypeLookupAccounts>,
     ) -> Result<()> {
         msg!(
-            "Initializing transfer lookup accounts: {:?}",
-            ctx.accounts.transfer_lookup_accounts.key()
+            "Initializing transfer lookup table: {:?}",
+            ctx.accounts.transfer_lookup_table.key()
         );
-        let lookup = &mut ctx.accounts.transfer_lookup_accounts;
-        if lookup.is_initialized {
-            return Ok(());
-        }
-        lookup.is_initialized = true;
-        lookup.reward_type = reward_type;
-        lookup.accounts = accounts;
+        let table = &mut ctx.accounts.transfer_lookup_table;
+        table.lookup_accounts = lookup_accounts;
+        msg!(
+            "Initialized {} reward type lookup accounts",
+            table.lookup_accounts.len()
+        );
         Ok(())
     }
 
@@ -144,6 +151,11 @@ pub mod rewards_delegated_vrf {
                     is_signer: false,
                     is_writable: true,
                 },
+                SerializableAccountMeta {
+                    pubkey: ctx.accounts.transfer_lookup_table.key(),
+                    is_signer: false,
+                    is_writable: false,
+                },
             ]),
             ..Default::default()
         });
@@ -161,8 +173,10 @@ pub mod rewards_delegated_vrf {
         randomness: [u8; 32],
     ) -> Result<()> {
         let reward_distributor = &ctx.accounts.reward_distributor;
+        let vrf_oracle = &ctx.accounts.vrf_program_identity;
         let user = &ctx.accounts.user;
         let reward_list = &mut ctx.accounts.reward_list;
+        let transfer_lookup_table = &ctx.accounts.transfer_lookup_table;
         let rnd_u32 = ephemeral_vrf_sdk::rnd::random_u32(&randomness);
         let range = (reward_list.global_range_max as u64)
             .checked_sub(reward_list.global_range_min as u64)
@@ -183,6 +197,26 @@ pub mod rewards_delegated_vrf {
                         reward.draw_range_min,
                         reward.draw_range_max
                     );
+
+                    // Find the lookup accounts for this reward type
+                    if let Some(reward_lookup) = transfer_lookup_table
+                        .lookup_accounts
+                        .iter()
+                        .find(|r| r.reward_type == reward.reward_type)
+                    {
+                        msg!("Transfer Lookup Accounts for {:?}:", reward.reward_type);
+                        msg!("Account count: {}", reward_lookup.accounts.len());
+                        for (index, account) in reward_lookup.accounts.iter().enumerate() {
+                            msg!("  {}. {}", index + 1, account);
+                        }
+
+                        // COMMIT AND ACTION
+                    } else {
+                        msg!(
+                            "Warning: No lookup accounts found for reward type {:?}",
+                            reward.reward_type
+                        );
+                    }
                 } else {
                     msg!(
                         "Reward '{}' is exhausted ({}/{})",
@@ -199,6 +233,12 @@ pub mod rewards_delegated_vrf {
             msg!("No reward found for result: {:?}", result);
         }
 
+        Ok(())
+    }
+
+    pub fn transfer_reward(ctx: Context<TransferReward>, destination: Pubkey) -> Result<()> {
+        msg!("Transferring reward to destination: {:?}", destination);
+        // Implement the logic to transfer the reward to the user based on the reward type and the lookup accounts
         Ok(())
     }
 
@@ -224,9 +264,18 @@ pub mod rewards_delegated_vrf {
 pub struct InitializeRewardDistributor<'info> {
     #[account(mut)]
     pub initializer: Signer<'info>,
-    #[account(init_if_needed, payer = initializer, space = 8 + 32 + 1 + 8 + 8 + 4 + 4 + 4 + 32 * 5, seeds = [REWARD_DISTRIBUTOR_SEED, initializer.key().as_ref()], bump)]
+    #[account(init_if_needed, payer = initializer, space = 8 + 32 + 1 + 4 + (32 * 10) + 4 + (32 * 10), seeds = [REWARD_DISTRIBUTOR_SEED, initializer.key().as_ref()], bump)]
     pub reward_distributor: Account<'info, RewardDistributor>,
     pub system_program: Program<'info, System>,
+}
+
+// Admin sets the whitelist for a reward distributor
+#[derive(Accounts)]
+pub struct SetWhitelist<'info> {
+    #[account(mut, constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
+    pub admin: Signer<'info>,
+    #[account(mut)]
+    pub reward_distributor: Account<'info, RewardDistributor>,
 }
 
 // Admin sets the reward list for a reward distributor with all reward tiers
@@ -234,20 +283,19 @@ pub struct InitializeRewardDistributor<'info> {
 pub struct SetRewardList<'info> {
     #[account(mut, constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
     pub admin: Signer<'info>,
+    pub reward_distributor: Account<'info, RewardDistributor>,
     #[account(init_if_needed, payer = admin, space = 8 + RewardsList::MAX_SIZE + 10 * Reward::MAX_SIZE, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
     pub reward_list: Account<'info, RewardsList>,
-    pub reward_distributor: Account<'info, RewardDistributor>,
     pub system_program: Program<'info, System>,
 }
 
-// Only the program upgrade authority can initialize the transfer lookup accounts
+// Only the program upgrade authority can initialize the transfer lookup table
 #[derive(Accounts)]
-#[instruction(reward_type: RewardType)]
-pub struct InitializeTransferLookupAccounts<'info> {
+pub struct InitializeTransferLookupTable<'info> {
     #[account(mut, constraint = authority.key() == PROGRAM_AUTHORITY)]
     pub authority: Signer<'info>,
-    #[account(init_if_needed, payer = authority, space = 8 + 1 + 1 + 4 + 32 * 20, seeds = [TRANSFER_LOOKUP_ACCOUNTS_SEED, &[reward_type.to_seed()]], bump)]
-    pub transfer_lookup_accounts: Account<'info, RewardTransferLookupAccounts>,
+    #[account(init_if_needed, payer = authority, space = 8 + 4 + (1 + 4 + 32 * 3) + (1 + 4 + 32 * 10) + (1 + 4 + 32 * 10) + (1 + 4 + 32 * 10), seeds = [TRANSFER_LOOKUP_TABLE_SEED], bump)]
+    pub transfer_lookup_table: Account<'info, TransferLookupTable>,
     pub system_program: Program<'info, System>,
 }
 
@@ -257,10 +305,10 @@ pub struct InitializeTransferLookupAccounts<'info> {
 pub struct DelegateRewardList<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
+    pub reward_distributor: Account<'info, RewardDistributor>,
     /// CHECK: The pda to delegate
     #[account(mut, del, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
     pub reward_list: Account<'info, RewardsList>,
-    pub reward_distributor: Account<'info, RewardDistributor>,
 }
 
 // Admin undelegates the reward list
@@ -269,9 +317,9 @@ pub struct DelegateRewardList<'info> {
 pub struct UndelegateRewardList<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
+    pub reward_distributor: Account<'info, RewardDistributor>,
     #[account(mut, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
     pub reward_list: Account<'info, RewardsList>,
-    pub reward_distributor: Account<'info, RewardDistributor>,
 }
 
 /// USER FLOW
@@ -281,10 +329,12 @@ pub struct UndelegateRewardList<'info> {
 #[derive(Accounts)]
 pub struct RequestRandomReward<'info> {
     pub user: Signer<'info>,
-    #[account(constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
+    #[account(constraint = (admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key())) && reward_distributor.whitelist.contains(&admin.key()))]
     pub admin: Signer<'info>,
-    pub reward_list: Account<'info, RewardsList>,
     pub reward_distributor: Account<'info, RewardDistributor>,
+    pub reward_list: Account<'info, RewardsList>,
+    #[account(seeds = [TRANSFER_LOOKUP_TABLE_SEED], bump)]
+    pub transfer_lookup_table: Account<'info, TransferLookupTable>,
     /// CHECK: Validated by address constraint against the known VRF oracle queue
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
     pub oracle_queue: AccountInfo<'info>,
@@ -302,6 +352,19 @@ pub struct ConsumeRandomReward<'info> {
     pub reward_distributor: Account<'info, RewardDistributor>,
     #[account(mut, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
     pub reward_list: Account<'info, RewardsList>,
+    #[account(seeds = [TRANSFER_LOOKUP_TABLE_SEED], bump)]
+    pub transfer_lookup_table: Account<'info, TransferLookupTable>,
+}
+
+#[action]
+#[derive(Accounts)]
+pub struct TransferReward<'info> {
+    pub user: Signer<'info>,
+    pub reward_distributor: Account<'info, RewardDistributor>,
+    #[account(mut, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
+    pub reward_list: Account<'info, RewardsList>,
+    #[account(seeds = [TRANSFER_LOOKUP_TABLE_SEED], bump)]
+    pub transfer_lookup_table: Account<'info, TransferLookupTable>,
 }
 
 #[account]
@@ -309,6 +372,7 @@ pub struct RewardDistributor {
     pub super_admin: Pubkey,
     pub bump: u8,
     pub admins: Vec<Pubkey>,
+    pub whitelist: Vec<Pubkey>,
 }
 
 #[account]
@@ -354,7 +418,6 @@ impl Reward {
         5. System Program: 11111111111111111111111111111111
         6. Token Program: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
 
-
     SPL Token: Transfer `03` (Hex)
         1. Source Token Account (Reward Distributor's Token Account)
         2. Destination Token Account
@@ -378,33 +441,39 @@ impl Reward {
         15. Associated Token Program: ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL
         16. Authorization Rule Program: auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg
         17. Token Authorization Rules: ?
+
+    For SplToken Lookup Table:
+        1. Token Program
+        2. Associated Token Program
+        3. System Program
 */
-#[account]
-pub struct RewardTransferLookupAccounts {
-    pub is_initialized: bool,
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct RewardTypeLookupAccounts {
     pub reward_type: RewardType,
     pub accounts: Vec<Pubkey>,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Default)]
+#[account]
+pub struct TransferLookupTable {
+    pub lookup_accounts: Vec<RewardTypeLookupAccounts>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Default, Debug)]
 pub enum RewardType {
     #[default]
     SplToken,
     Nft,
+    SplToken2022,
+    CompressedNft,
 }
 
 impl RewardType {
-    pub fn ix_accounts_len(&self) -> u8 {
-        match self {
-            RewardType::SplToken => 4,
-            RewardType::Nft => 17,
-        }
-    }
-
     pub fn to_seed(&self) -> u8 {
         match self {
             RewardType::SplToken => 0,
             RewardType::Nft => 1,
+            RewardType::SplToken2022 => 2,
+            RewardType::CompressedNft => 3,
         }
     }
 }

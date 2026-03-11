@@ -2,7 +2,8 @@
   "license": "ISC",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "test:stress": "anchor test --skip-local-validator --skip-build --skip-deploy -- --grep \"Request Random Reward 100 times\""
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",

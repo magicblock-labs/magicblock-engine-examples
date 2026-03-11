@@ -3,18 +3,16 @@ import { Program, web3 } from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { RewardsDelegatedVrf } from "../target/types/rewards_delegated_vrf";
 import * as fs from "fs";
-import { ConnectionMagicRouter } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, createMint, mintTo, getOrCreateAssociatedTokenAccount, getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction } from "@solana/spl-token";
 
 const REWARD_DISTRIBUTOR_SEED = "reward_distributor";
 const REWARD_LIST_SEED = "reward_list";
-const TRANSFER_LOOKUP_ACCOUNTS_SEED = "transfer_lookup_accounts";
+const TRANSFER_LOOKUP_TABLE_SEED = "transfer_lookup_table";
 
-describe("rewards-delegated-vrf", () => {
+describe.only("rewards-delegated-vrf", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-
-  const rpcRouterConnection = new ConnectionMagicRouter("https://devnet-router.magicblock.app/")
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
     new anchor.web3.Connection(
@@ -59,15 +57,20 @@ describe("rewards-delegated-vrf", () => {
     program.programId
   );
 
-  const [transferLookupSplToken] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from(TRANSFER_LOOKUP_ACCOUNTS_SEED), Buffer.from([0])],
+  const [transferLookupTable] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from(TRANSFER_LOOKUP_TABLE_SEED)],
     program.programId
   );
 
-  const [transferLookupNft] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from(TRANSFER_LOOKUP_ACCOUNTS_SEED), Buffer.from([1])],
-    program.programId
-  );
+  // Whitelist for VRF requests
+  const whitelist = [wallet.publicKey, new PublicKey("Fr33vGLZtpuLJ6WVezhMQarEPityiwkqsnDANr4aTF8Q")];
+
+
+  // Token mint - will be set during the mint test
+  // let tokenMint: PublicKey; // for new mint created during test
+  let tokenMint: PublicKey = new PublicKey("BbhNpb7RpkfVd2EtMX4z7mEAZmzsAUZmSqYBmMFWUMM9"); // for existing mint with authority control
+  // Distributor token account - will be set during the mint test
+  let distributorTokenAccount: PublicKey;
 
   console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
   console.log(
@@ -173,6 +176,87 @@ describe("rewards-delegated-vrf", () => {
     console.log("Initialize Reward Distributor txHash: ", tx);
   });
 
+  it("Create mint (if not exists), and mint tokens to reward distributor", async () => {
+    console.log("\n=== Creating and Minting Tokens to Reward Distributor ===");
+    
+    try {
+      // Create a new token mint, if it doesn't exist
+      if (!tokenMint) {
+        tokenMint = await createMint(
+          provider.connection,
+          wallet.payer,
+          wallet.publicKey, // Mint authority
+          wallet.publicKey, // Freeze authority
+          6 // Decimals 
+        );
+
+        console.log("Token Mint created:", tokenMint.toString());
+      } else {
+        console.log("Token Mint already exists:", tokenMint.toString());
+      }
+      
+    } catch (err) {
+      console.log("Error creating mint:", (err as Error).message);
+    }
+    
+    try {
+      // Get the derived associated token account address for the PDA
+      distributorTokenAccount = getAssociatedTokenAddressSync(
+        tokenMint,
+        rewardDistributorPda,
+        true // allowOffCurve - allows PDAs
+      );
+      
+      console.log("Derived token account address for distributor PDA:", distributorTokenAccount.toString());
+
+      // Check if the account exists
+      const accountInfo = await provider.connection.getAccountInfo(distributorTokenAccount);
+      
+      if (!accountInfo) {
+        console.log("Creating token account for distributor PDA...");
+
+        // Use the Associated Token Program to create the account
+        const createAccountTx = new web3.Transaction().add(
+          createAssociatedTokenAccountInstruction(
+            wallet.publicKey, // payer
+            distributorTokenAccount, // associated token account
+            rewardDistributorPda, // owner
+            tokenMint, // mint
+            TOKEN_PROGRAM_ID,
+            ASSOCIATED_TOKEN_PROGRAM_ID
+          )
+        );
+
+        const createAccountSig = await provider.sendAndConfirm(createAccountTx);
+        console.log("Token account created. Signature:", createAccountSig);
+      } else {
+        console.log("Token account already exists");
+      }
+
+      // Mint tokens to distributor account
+      const distributorMintAmount = 5000 * Math.pow(10, 6); // 5000 tokens with 6 decimals
+      const distributorMintTx = await mintTo(
+        provider.connection,
+        wallet.payer as any,
+        tokenMint,
+        distributorTokenAccount,
+        wallet.payer,
+        distributorMintAmount
+      );
+
+      console.log("Tokens minted to distributor. Transaction:", distributorMintTx);
+      console.log(`Minted ${distributorMintAmount / Math.pow(10, 6)} tokens to distributor`);
+      
+      // Verify the token account balance
+      const distributorAccountBalance = await provider.connection.getTokenAccountBalance(distributorTokenAccount);
+      console.log("Distributor Token Account Balance:", distributorAccountBalance.value.uiAmount, distributorAccountBalance.value.uiAmountString);
+      
+    } catch (err) {
+      console.error("Error minting tokens to distributor:", err);
+      console.log("Error details:", (err as Error).message);
+    }
+  });
+
   it("Set Reward List with rewards", async () => {
     const rewards = [
       {
@@ -180,7 +264,7 @@ describe("rewards-delegated-vrf", () => {
         drawRangeMin: 1,
         drawRangeMax: 30,
         rewardType: { splToken: {} },
-        rewardMints: [new PublicKey("11111111111111111111111111111111")],
+        rewardMints: [tokenMint],
         rewardAmount: new anchor.BN(1000),
         redemptionCount: new anchor.BN(0),
         redemptionLimit: new anchor.BN(2),
@@ -190,7 +274,7 @@ describe("rewards-delegated-vrf", () => {
         drawRangeMin: 31,
         drawRangeMax: 65,
         rewardType: { splToken: {} },
-        rewardMints: [new PublicKey("11111111111111111111111111111111")],
+        rewardMints: [tokenMint],
         rewardAmount: new anchor.BN(500),
         redemptionCount: new anchor.BN(0),
         redemptionLimit: new anchor.BN(2),
@@ -200,7 +284,7 @@ describe("rewards-delegated-vrf", () => {
         drawRangeMin: 66,
         drawRangeMax: 100,
         rewardType: { splToken: {} },
-        rewardMints: [new PublicKey("11111111111111111111111111111111")],
+        rewardMints: [tokenMint],
         rewardAmount: new anchor.BN(100),
         redemptionCount: new anchor.BN(0),
         redemptionLimit: new anchor.BN(2),
@@ -220,8 +304,8 @@ describe("rewards-delegated-vrf", () => {
       )
       .accounts({
         admin: wallet.publicKey,
-        rewardList: rewardListPda,
         rewardDistributor: rewardDistributorPda,
+        rewardList: rewardListPda,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc({ skipPreflight: true });
@@ -232,39 +316,86 @@ describe("rewards-delegated-vrf", () => {
     await logRewardListDetails(rewardListPda);
   });
 
-  // it("Initialize Transfer Lookup Accounts - SPL Token", async () => {
-  //   const dummyAccounts = Array(5)
-  //     .fill(null)
-  //     .map(() => anchor.web3.Keypair.generate().publicKey);
+  it("Set Whitelist", async () => {
+    console.log("\n=== Setting Whitelist ===");
+    
+    try {
+      const tx = await program.methods
+        .setWhitelist(whitelist)
+        .accounts({
+          admin: wallet.publicKey,
+          rewardDistributor: rewardDistributorPda,
+        })
+        .rpc({ skipPreflight: true });
 
-  //   const tx = await program.methods
-  //     .initializeTransferLookupAccounts({ splToken: {} }, dummyAccounts)
-  //     .accounts({
-  //       authority: wallet.publicKey,
-  //       transferLookupAccounts: transferLookupSplToken,
-  //       systemProgram: anchor.web3.SystemProgram.programId,
-  //     })
-  //     .rpc({ skipPreflight: true });
+      console.log("Set Whitelist txHash: ", tx);
+      
+      // Verify the whitelist was set
+      const distributorAccount = await program.account.rewardDistributor.fetch(
+        rewardDistributorPda
+      );
+    
+      console.log("Total Whitelisted Users:", distributorAccount.whitelist.length);
+      distributorAccount.whitelist.forEach((address, index) => {
+        console.log(`${index + 1}. ${address.toString()}`);
+      });
+    } catch (err) {
+      console.log("Error setting whitelist:", (err as Error).message);
+    }
+  });
 
-  //   console.log("Initialize Transfer Lookup Accounts (SPL Token) txHash: ", tx);
-  // });
+  it("Initialize Transfer Lookup Table", async () => {
+    console.log("\n=== Initializing Transfer Lookup Table ===");
+    
+    console.log("Transfer Lookup Table PDA:", transferLookupTable.toString());
+    
+    // Lookup accounts for SplToken operations
+    const splTokenLookupAccounts = [
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      anchor.web3.SystemProgram.programId,
+    ];
 
-  // it("Initialize Transfer Lookup Accounts - NFT", async () => {
-  //   const dummyAccounts = Array(10)
-  //     .fill(null)
-  //     .map(() => anchor.web3.Keypair.generate().publicKey);
+    // Create the lookup accounts structure
+    const lookupAccounts = [
+      { splToken: {} } as any, splTokenLookupAccounts
+    ];
 
-  //   const tx = await program.methods
-  //     .initializeTransferLookupAccounts({ nft: {} }, dummyAccounts)
-  //     .accounts({
-  //       authority: wallet.publicKey,
-  //       transferLookupAccounts: transferLookupNft,
-  //       systemProgram: anchor.web3.SystemProgram.programId,
-  //     })
-  //     .rpc({ skipPreflight: true });
+    try {
+      const lookupAccountsPayload = [
+        {
+          rewardType: { splToken: {} },
+          accounts: splTokenLookupAccounts,
+        }
+      ];
 
-  //   console.log("Initialize Transfer Lookup Accounts (NFT) txHash: ", tx);
-  // });
+      const tx = await program.methods
+        .initializeTransferLookupTable(lookupAccountsPayload)
+        .accounts({
+          authority: wallet.publicKey, // Must be PROGRAM_AUTHORITY
+          transferLookupTable: transferLookupTable,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc({ skipPreflight: true });
+
+      console.log("\nInitialize Transfer Lookup Table txHash: ", tx);
+      
+      // Verify the lookup table was initialized
+      const lookupTable = await program.account.transferLookupTable.fetch(transferLookupTable);
+      
+      console.log("\n✓ Transfer Lookup Table Initialized");
+      console.log("Total Reward Types Registered:", lookupTable.lookupAccounts.length);
+      
+      lookupTable.lookupAccounts.forEach((lookup, index) => {
+        console.log(`\n${index + 1}. ${Object.keys(lookup.rewardType)[0].toUpperCase()} Accounts (${lookup.accounts.length}):`);
+        lookup.accounts.forEach((account, accIndex) => {
+          console.log(`     ${accIndex + 1}. ${account.toString()}`);
+        });
+      });
+    } catch (err) {
+      console.log("Error initializing transfer lookup table:", (err as Error).message);
+    }
+  });
 
   it("Delegate Reward List to ER", async () => {
     const remainingAccounts =
@@ -285,8 +416,9 @@ describe("rewards-delegated-vrf", () => {
       .delegateRewardList()
       .accounts({
         admin: wallet.publicKey,
-        rewardList: rewardListPda,
         rewardDistributor: rewardDistributorPda,
+        rewardList: rewardListPda,
+
       })
       .remainingAccounts(remainingAccounts)
       .rpc({ skipPreflight: true });
@@ -305,8 +437,8 @@ describe("rewards-delegated-vrf", () => {
         .accounts({
           user: user.publicKey,
           admin: user.publicKey,
-          rewardList: rewardListPda,
           rewardDistributor: rewardDistributorPda,
+          rewardList: rewardListPda,
         })
         .signers([user, user])
         .rpc({ skipPreflight: true })
@@ -331,8 +463,8 @@ describe("rewards-delegated-vrf", () => {
       .accounts({
         user: user.publicKey,
         admin: wallet.publicKey,
-        rewardList: rewardListPda,
         rewardDistributor: rewardDistributorPda,
+        rewardList: rewardListPda,
       })
       .transaction();
     
@@ -410,8 +542,8 @@ describe("rewards-delegated-vrf", () => {
       )
       .accounts({
         admin: wallet.publicKey,
-        rewardList: rewardListPda,
         rewardDistributor: rewardDistributorPda,
+        rewardList: rewardListPda,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc({ skipPreflight: true })
@@ -430,8 +562,8 @@ describe("rewards-delegated-vrf", () => {
       .undelegateRewardList()
       .accounts({
         payer: wallet.publicKey,
-        rewardList: rewardListPda,
         rewardDistributor: rewardDistributorPda,
+        rewardList: rewardListPda,
       })
       .transaction();
     

@@ -1,0 +1,502 @@
+[
+  {
+    "iteration": 1,
+    "clientSeed": 67,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 2,
+    "clientSeed": 187,
+    "randomResult": 55
+  },
+  {
+    "iteration": 3,
+    "clientSeed": 14,
+    "randomResult": 31
+  },
+  {
+    "iteration": 4,
+    "clientSeed": 229,
+    "randomResult": 31
+  },
+  {
+    "iteration": 5,
+    "clientSeed": 85,
+    "randomResult": 87
+  },
+  {
+    "iteration": 6,
+    "clientSeed": 198,
+    "randomResult": 62
+  },
+  {
+    "iteration": 7,
+    "clientSeed": 6,
+    "randomResult": 86
+  },
+  {
+    "iteration": 8,
+    "clientSeed": 63,
+    "randomResult": 6
+  },
+  {
+    "iteration": 9,
+    "clientSeed": 180,
+    "randomResult": 88
+  },
+  {
+    "iteration": 10,
+    "clientSeed": 132,
+    "randomResult": 78
+  },
+  {
+    "iteration": 11,
+    "clientSeed": 56,
+    "randomResult": 4
+  },
+  {
+    "iteration": 12,
+    "clientSeed": 181,
+    "randomResult": 85
+  },
+  {
+    "iteration": 13,
+    "clientSeed": 47,
+    "randomResult": 49
+  },
+  {
+    "iteration": 14,
+    "clientSeed": 206,
+    "randomResult": 78
+  },
+  {
+    "iteration": 15,
+    "clientSeed": 128,
+    "randomResult": 4
+  },
+  {
+    "iteration": 16,
+    "clientSeed": 231,
+    "randomResult": 85
+  },
+  {
+    "iteration": 17,
+    "clientSeed": 139,
+    "randomResult": 99
+  },
+  {
+    "iteration": 18,
+    "clientSeed": 225,
+    "randomResult": 28
+  },
+  {
+    "iteration": 19,
+    "clientSeed": 96,
+    "randomResult": 60
+  },
+  {
+    "iteration": 20,
+    "clientSeed": 139,
+    "randomResult": 87
+  },
+  {
+    "iteration": 21,
+    "clientSeed": 175,
+    "randomResult": 16
+  },
+  {
+    "iteration": 22,
+    "clientSeed": 181,
+    "randomResult": 86
+  },
+  {
+    "iteration": 23,
+    "clientSeed": 238,
+    "randomResult": 93
+  },
+  {
+    "iteration": 24,
+    "clientSeed": 52,
+    "randomResult": 28
+  },
+  {
+    "iteration": 25,
+    "clientSeed": 158,
+    "randomResult": 78
+  },
+  {
+    "iteration": 26,
+    "clientSeed": 175,
+    "randomResult": 51
+  },
+  {
+    "iteration": 27,
+    "clientSeed": 55,
+    "randomResult": 27
+  },
+  {
+    "iteration": 28,
+    "clientSeed": 133,
+    "randomResult": 97
+  },
+  {
+    "iteration": 29,
+    "clientSeed": 139,
+    "randomResult": 50
+  },
+  {
+    "iteration": 30,
+    "clientSeed": 151,
+    "randomResult": 51
+  },
+  {
+    "iteration": 31,
+    "clientSeed": 63,
+    "randomResult": 85
+  },
+  {
+    "iteration": 32,
+    "clientSeed": 232,
+    "randomResult": 49
+  },
+  {
+    "iteration": 33,
+    "clientSeed": 152,
+    "randomResult": 46
+  },
+  {
+    "iteration": 34,
+    "clientSeed": 158,
+    "randomResult": 94
+  },
+  {
+    "iteration": 35,
+    "clientSeed": 216,
+    "randomResult": 28
+  },
+  {
+    "iteration": 36,
+    "clientSeed": 140,
+    "randomResult": 60
+  },
+  {
+    "iteration": 37,
+    "clientSeed": 63,
+    "randomResult": 67
+  },
+  {
+    "iteration": 38,
+    "clientSeed": 54,
+    "randomResult": 88
+  },
+  {
+    "iteration": 39,
+    "clientSeed": 242,
+    "randomResult": 31
+  },
+  {
+    "iteration": 40,
+    "clientSeed": 9,
+    "randomResult": 40
+  },
+  {
+    "iteration": 41,
+    "clientSeed": 231,
+    "randomResult": 8
+  },
+  {
+    "iteration": 42,
+    "clientSeed": 221,
+    "randomResult": 50
+  },
+  {
+    "iteration": 43,
+    "clientSeed": 213,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 44,
+    "clientSeed": 139,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 45,
+    "clientSeed": 250,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 46,
+    "clientSeed": 144,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 47,
+    "clientSeed": 239,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 48,
+    "clientSeed": 194,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 49,
+    "clientSeed": 222,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 50,
+    "clientSeed": 111,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 51,
+    "clientSeed": 173,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 52,
+    "clientSeed": 110,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 53,
+    "clientSeed": 179,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 54,
+    "clientSeed": 41,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 55,
+    "clientSeed": 244,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 56,
+    "clientSeed": 10,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 57,
+    "clientSeed": 194,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 58,
+    "clientSeed": 149,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 59,
+    "clientSeed": 197,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 60,
+    "clientSeed": 50,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 61,
+    "clientSeed": 59,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 62,
+    "clientSeed": 159,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 63,
+    "clientSeed": 8,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 64,
+    "clientSeed": 83,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 65,
+    "clientSeed": 247,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 66,
+    "clientSeed": 209,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 67,
+    "clientSeed": 2,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 68,
+    "clientSeed": 39,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 69,
+    "clientSeed": 221,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 70,
+    "clientSeed": 179,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 71,
+    "clientSeed": 137,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 72,
+    "clientSeed": 51,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 73,
+    "clientSeed": 132,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 74,
+    "clientSeed": 182,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 75,
+    "clientSeed": 144,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 76,
+    "clientSeed": 174,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 77,
+    "clientSeed": 255,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 78,
+    "clientSeed": 234,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 79,
+    "clientSeed": 105,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 80,
+    "clientSeed": 68,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 81,
+    "clientSeed": 99,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 82,
+    "clientSeed": 127,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 83,
+    "clientSeed": 158,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 84,
+    "clientSeed": 239,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 85,
+    "clientSeed": 231,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 86,
+    "clientSeed": 148,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 87,
+    "clientSeed": 82,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 88,
+    "clientSeed": 12,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 89,
+    "clientSeed": 193,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 90,
+    "clientSeed": 101,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 91,
+    "clientSeed": 233,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 92,
+    "clientSeed": 46,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 93,
+    "clientSeed": 88,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 94,
+    "clientSeed": 233,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 95,
+    "clientSeed": 3,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 96,
+    "clientSeed": 71,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 97,
+    "clientSeed": 7,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 98,
+    "clientSeed": 24,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 99,
+    "clientSeed": 155,
+    "error": "Transaction failed"
+  },
+  {
+    "iteration": 100,
+    "clientSeed": 219,
+    "error": "Transaction failed"
+  }
+]
