@@ -79,6 +79,52 @@ describe("rewards-delegated-vrf", () => {
   console.log("Reward Distributor PDA: ", rewardDistributorPda.toString());
   console.log("Reward List PDA: ", rewardListPda.toString());
 
+  // Helper function to log reward list and distributor details
+  const logRewardListDetails = async (rewardListAddress: PublicKey, useEphemeral: boolean = false) => {
+    try {
+      const programToUse = useEphemeral ? ephemeralProgram : program;
+      const rewardListAccount = await programToUse.account.rewardsList.fetch(
+        rewardListAddress
+      );
+      
+      // Fetch distributor details
+      const distributorAccount = await program.account.rewardDistributor.fetch(
+        rewardListAccount.rewardDistributor
+      );
+      
+      console.log("\n=== Distributor Details ===");
+      console.log("Super Admin:", distributorAccount.superAdmin.toString());
+      console.log("Admin Count:", distributorAccount.admins.length);
+      if (distributorAccount.admins.length > 0) {
+        console.log("Admins:", distributorAccount.admins.map(a => a.toString()).join(", "));
+      }
+      
+      console.log("\n=== Reward List Details ===");
+      console.log("Distributor:", rewardListAccount.rewardDistributor.toString());
+      console.log("Start Timestamp:", rewardListAccount.startTimestamp.toNumber(), `(${new Date(rewardListAccount.startTimestamp.toNumber() * 1000).toISOString()})`);
+      console.log("End Timestamp:", rewardListAccount.endTimestamp.toNumber(), `(${new Date(rewardListAccount.endTimestamp.toNumber() * 1000).toISOString()})`);
+      console.log("Global Range Min:", rewardListAccount.globalRangeMin);
+      console.log("Global Range Max:", rewardListAccount.globalRangeMax);
+      console.log("Total Reward Count:", rewardListAccount.rewards.length);
+      
+      console.log("\n=== Individual Rewards ===");
+      rewardListAccount.rewards.forEach((reward, index) => {
+        const redemptionCount = typeof reward.redemptionCount === 'object' ? reward.redemptionCount.toNumber() : reward.redemptionCount;
+        const redemptionLimit = typeof reward.redemptionLimit === 'object' ? reward.redemptionLimit.toNumber() : reward.redemptionLimit;
+        const amount = typeof reward.rewardAmount === 'object' ? reward.rewardAmount.toNumber() : reward.rewardAmount;
+        
+        console.log(`\nReward ${index + 1}: ${reward.name}`);
+        console.log(`  Draw Range: ${reward.drawRangeMin} - ${reward.drawRangeMax}`);
+        console.log(`  Reward Type: ${Object.keys(reward.rewardType)[0]}`);
+        console.log(`  Mints: ${reward.rewardMints.map(m => m.toString()).join(", ")}`);
+        console.log(`  Amount: ${amount}`);
+        console.log(`  Redemption Count: ${redemptionCount}/${redemptionLimit}`);
+      });
+    } catch (err) {
+      console.log("Could not fetch reward list details:", (err as Error).message);
+    }
+  };
+
   before(async function () {
     const balance = await provider.connection.getBalance(wallet.publicKey);
     console.log(
@@ -125,12 +171,6 @@ describe("rewards-delegated-vrf", () => {
       .rpc({ skipPreflight: true });
 
     console.log("Initialize Reward Distributor txHash: ", tx);
-
-    // Verify the distributor was initialized correctly
-    const distributorAccount = await program.account.rewardDistributor.fetch(
-      rewardDistributorPda
-    );
-    console.log("Reward Distributor initialized:", distributorAccount);
   });
 
   it("Set Reward List with rewards", async () => {
@@ -188,11 +228,8 @@ describe("rewards-delegated-vrf", () => {
 
     console.log("Set Reward List txHash: ", tx);
 
-    // Verify the reward list was set
-    const rewardListAccount = await program.account.rewardsList.fetch(
-      rewardListPda
-    );
-    console.log("Reward List set with", rewardListAccount.rewards.length, "rewards");
+    // Log reward list details
+    await logRewardListDetails(rewardListPda);
   });
 
   // it("Initialize Transfer Lookup Accounts - SPL Token", async () => {
@@ -286,7 +323,7 @@ describe("rewards-delegated-vrf", () => {
     }
   });
 
-  it.only("Request Random Reward (authorized admin)", async () => {
+  it("Request Random Reward (authorized admin)", async () => {
     const clientSeed = Math.floor(Math.random() * 256);
 
     let tx = await ephemeralProgram.methods
@@ -323,11 +360,7 @@ describe("rewards-delegated-vrf", () => {
            program.programId,
            (logs) => {
              try {
-               console.log("Program logs received:", logs.logs);
-               const hasRandomResult = logs.logs.some(
-                 (log) => log.includes("Random result:")
-               );
-               
+               console.log("Program logs received:", logs.logs);               
                 console.log("VRF callback signature:", logs.signature);
                 console.log("VRF callback status: SUCCEEDED");
                 console.log("VRF callback logs:");
@@ -336,10 +369,8 @@ describe("rewards-delegated-vrf", () => {
                 );
                 relevantLogs.forEach((log) => console.log("  " + log));
                 if (listener !== null && !listenerRemoved) {
-                  console.log("Removing listener...");
                   ephemeralProgram.provider.connection.removeOnLogsListener(listener);
                   listenerRemoved = true;
-                  console.log("Listener removed, resolving promise.");
                 }
                 resolve();
              } catch (err) {
@@ -422,29 +453,9 @@ describe("rewards-delegated-vrf", () => {
     }
   });
 
-  it.only("Verify reward state after operations", async () => {
+  it("Verify reward state after operations", async () => {
     try {
-      const distributorAccount = await program.account.rewardDistributor.fetch(
-        rewardDistributorPda
-      );
-      console.log("\nFinal Distributor State:");
-      console.log("- Super Admin:", distributorAccount.superAdmin.toString());
-      console.log("- Admin Count:", distributorAccount.admins.length);
-
-      const rewardListAccount = await ephemeralProgram.account.rewardsList.fetch(
-        rewardListPda
-      );
-      console.log("\nFinal Reward List State:");
-      console.log("- Reward Count:", rewardListAccount.rewards.length);
-      console.log("- Global Range:", `${rewardListAccount.globalRangeMin}-${rewardListAccount.globalRangeMax}`);
-
-      for (const reward of rewardListAccount.rewards) {
-        const count = typeof reward.redemptionCount === 'object' ? reward.redemptionCount.toNumber() : reward.redemptionCount;
-        const limit = typeof reward.redemptionLimit === 'object' ? reward.redemptionLimit.toNumber() : reward.redemptionLimit;
-        console.log(
-          `- ${reward.name}: redeemed ${count}/${limit} times`
-        );
-      }
+      await logRewardListDetails(rewardListPda, true);
     } catch (err) {
       console.log("Could not fetch final state (accounts may not be accessible)");
     }
