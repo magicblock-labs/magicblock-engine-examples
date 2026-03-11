@@ -329,7 +329,7 @@ pub struct UndelegateRewardList<'info> {
 #[derive(Accounts)]
 pub struct RequestRandomReward<'info> {
     pub user: Signer<'info>,
-    #[account(constraint = (admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key())) && reward_distributor.whitelist.contains(&admin.key()))]
+    #[account(constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()) || reward_distributor.whitelist.contains(&admin.key()))]
     pub admin: Signer<'info>,
     pub reward_distributor: Account<'info, RewardDistributor>,
     pub reward_list: Account<'info, RewardsList>,
