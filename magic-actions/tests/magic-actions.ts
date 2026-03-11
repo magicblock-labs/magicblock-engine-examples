@@ -142,7 +142,7 @@ describe("magic-actions", () => {
       { skipPreflight: true }
     );
 
-    await sleepWithAnimation(10); // ensure the delegation is processed
+    await sleepWithAnimation(1);
     console.log("✅ Delegated Counter PDA! Signature:", signature);
   });
 
@@ -181,7 +181,7 @@ describe("magic-actions", () => {
         { skipPreflight: true }
       );
 
-      await sleepWithAnimation(5);
+      await sleepWithAnimation(2);
       await printCounter(program, pda, leaderboard_pda, routerConnection, signature, "✅ Updated Leaderboard While Delegated!");
   });
 

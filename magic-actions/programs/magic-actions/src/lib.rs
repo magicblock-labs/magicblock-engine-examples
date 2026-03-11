@@ -3,7 +3,7 @@ use anchor_lang::Discriminator;
 use ephemeral_rollups_sdk::anchor::{action, commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
-use ephemeral_rollups_sdk::ephem::{CallHandler, CommitType, MagicAction, MagicInstructionBuilder};
+use ephemeral_rollups_sdk::ephem::{CallHandler, MagicIntentBundleBuilder};
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 
 declare_id!("CrWQv121NBNzXjxVe5pNL7MsT2yW13dMheE4nemoudQ1");
@@ -96,19 +96,14 @@ pub mod magic_actions {
             compute_units: 200_000,
         };
 
-        // Build commit and action instruction
-        let magic_action = MagicInstructionBuilder {
-            payer: ctx.accounts.payer.to_account_info(),
-            magic_context: ctx.accounts.magic_context.to_account_info(),
-            magic_program: ctx.accounts.magic_program.to_account_info(),
-            magic_action: MagicAction::Commit(CommitType::WithHandler {
-                commited_accounts: vec![ctx.accounts.counter.to_account_info()],
-                call_handlers: vec![action],
-            }),
-        };
-
-        // Invoke
-        magic_action.build_and_invoke()?;
+        let magic_action = MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit(&[ctx.accounts.counter.to_account_info()])
+        .add_post_commit_actions(vec![action])
+        .build_and_invoke()?;
 
         Ok(())
     }
