@@ -20,6 +20,8 @@ custom-panic = []
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
-ephemeral-rollups-sdk = { version = "0.8.6", features = ["anchor"] }
+anchor-spl = { version = "0.32.1", features = ["idl-build"] }
+ephemeral-rollups-sdk = { version = "0.8.6", features = ["anchor", "disable-realloc"] }
 ephemeral-vrf-sdk = {version = "0.2.3", features = ["anchor"]}
+spl-associated-token-account = { version = "7", features = ["no-entrypoint"] }
 

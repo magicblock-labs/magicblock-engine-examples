@@ -349,16 +349,17 @@ describe.only("rewards-delegated-vrf", () => {
     
     console.log("Transfer Lookup Table PDA:", transferLookupTable.toString());
     
+    // Get program data account
+    const [programData] = anchor.web3.PublicKey.findProgramAddressSync(
+        [program.programId.toBuffer()],
+        new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111") // BPF Upgradeable Loader program ID
+    );
+    
     // Lookup accounts for SplToken operations
     const splTokenLookupAccounts = [
       TOKEN_PROGRAM_ID,
       ASSOCIATED_TOKEN_PROGRAM_ID,
       anchor.web3.SystemProgram.programId,
-    ];
-
-    // Create the lookup accounts structure
-    const lookupAccounts = [
-      { splToken: {} } as any, splTokenLookupAccounts
     ];
 
     try {
@@ -372,7 +373,8 @@ describe.only("rewards-delegated-vrf", () => {
       const tx = await program.methods
         .initializeTransferLookupTable(lookupAccountsPayload)
         .accounts({
-          authority: wallet.publicKey, // Must be PROGRAM_AUTHORITY
+          authority: wallet.publicKey,
+          programData: programData,
           transferLookupTable: transferLookupTable,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
@@ -424,6 +426,9 @@ describe.only("rewards-delegated-vrf", () => {
       .rpc({ skipPreflight: true });
 
     console.log("Delegate Reward List txHash: ", tx);
+    
+    // Wait 1 second
+    await new Promise(resolve => setTimeout(resolve, 1000));
   });
 
 
@@ -494,7 +499,7 @@ describe.only("rewards-delegated-vrf", () => {
              try {
                console.log("Program logs received:", logs.logs);               
                 console.log("VRF callback signature:", logs.signature);
-                console.log("VRF callback status: SUCCEEDED");
+                console.log("VRF callback status:", logs.err ? "Error" : "Success");
                 console.log("VRF callback logs:");
                 const relevantLogs = logs.logs.filter(
                   (log) => log.includes("Random result:") || log.includes("Won reward") || log.includes("exhausted")

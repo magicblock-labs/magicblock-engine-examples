@@ -1,22 +1,29 @@
 use anchor_lang::prelude::*;
+use anchor_spl::associated_token::{create_idempotent, get_associated_token_address, Create};
+use anchor_spl::token_interface::{
+    transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked,
+};
 use ephemeral_rollups_sdk::anchor::{action, commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
+use ephemeral_rollups_sdk::{ephem::CallHandler, ActionArgs, ShortAccountMeta};
 use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-declare_id!("EY1No1nHd348KiZPx2SdTBhXnq8Zrx1Vmx4Ghs1T1WL9");
+declare_id!("4XUU89RHJTUwdyMJcUHqzoyGsfbBfvnT1GDGufcsDst4");
 
 pub const REWARD_DISTRIBUTOR_SEED: &[u8] = b"reward_distributor";
 pub const REWARD_LIST_SEED: &[u8] = b"reward_list";
 pub const TRANSFER_LOOKUP_TABLE_SEED: &[u8] = b"transfer_lookup_table";
-pub const PROGRAM_AUTHORITY: Pubkey = pubkey!("EyBRt4Acr7b4s3exfnVvJ4EgL8oa6Lc4JK1Leonud34W");
 
 #[ephemeral]
 #[program]
 pub mod rewards_delegated_vrf {
+
+    use anchor_lang::prelude::program::invoke_signed;
+    use ephemeral_rollups_sdk::consts::{MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID};
 
     use super::*;
 
@@ -137,24 +144,34 @@ pub mod rewards_delegated_vrf {
             caller_seed: [client_seed; 32],
             accounts_metas: Some(vec![
                 SerializableAccountMeta {
-                    pubkey: ctx.accounts.user.key(),
+                    pubkey: ctx.accounts.user.key(), // User account passed for VRF callback to identify reward recipient
                     is_signer: false,
                     is_writable: false,
                 },
                 SerializableAccountMeta {
-                    pubkey: ctx.accounts.reward_distributor.key(),
+                    pubkey: ctx.accounts.reward_distributor.key(), // Reward Distributor PDA
                     is_signer: false,
                     is_writable: false,
                 },
                 SerializableAccountMeta {
-                    pubkey: ctx.accounts.reward_list.key(),
+                    pubkey: ctx.accounts.reward_list.key(), // Reward List PDA
                     is_signer: false,
                     is_writable: true,
                 },
                 SerializableAccountMeta {
-                    pubkey: ctx.accounts.transfer_lookup_table.key(),
+                    pubkey: ctx.accounts.transfer_lookup_table.key(), // Transfer Lookup Table
                     is_signer: false,
                     is_writable: false,
+                },
+                SerializableAccountMeta {
+                    pubkey: MAGIC_PROGRAM_ID, // Magic Program
+                    is_signer: false,
+                    is_writable: false,
+                },
+                SerializableAccountMeta {
+                    pubkey: MAGIC_CONTEXT_ID, // Magic Context
+                    is_signer: false,
+                    is_writable: true,
                 },
             ]),
             ..Default::default()
@@ -173,7 +190,6 @@ pub mod rewards_delegated_vrf {
         randomness: [u8; 32],
     ) -> Result<()> {
         let reward_distributor = &ctx.accounts.reward_distributor;
-        let vrf_oracle = &ctx.accounts.vrf_program_identity;
         let user = &ctx.accounts.user;
         let reward_list = &mut ctx.accounts.reward_list;
         let transfer_lookup_table = &ctx.accounts.transfer_lookup_table;
@@ -211,12 +227,116 @@ pub mod rewards_delegated_vrf {
                         }
 
                         // COMMIT AND ACTION
+                        let mint = reward.reward_mints[0];
+                        let token_program = transfer_lookup_table
+                            .lookup_accounts
+                            .iter()
+                            .find(|r| r.reward_type == reward.reward_type)
+                            .unwrap()
+                            .accounts[0]; // Token Program
+
+                        let ata_program = transfer_lookup_table
+                            .lookup_accounts
+                            .iter()
+                            .find(|r| r.reward_type == reward.reward_type)
+                            .unwrap()
+                            .accounts[1]; // ATA Program
+
+                        let system_program = transfer_lookup_table
+                            .lookup_accounts
+                            .iter()
+                            .find(|r| r.reward_type == reward.reward_type)
+                            .unwrap()
+                            .accounts[2]; // System Program
+
+                        // Create action instruction
+                        let instruction_data = anchor_lang::InstructionData::data(
+                            &crate::instruction::TransferRewardSplToken {
+                                amount: reward.reward_amount,
+                            },
+                        );
+                        // Calculate the associated token account address for source (Reward Distributor)
+                        let source_token_address = get_associated_token_address(
+                            &reward_distributor.key(), // owner
+                            &mint,                     // mint
+                        );
+                        // Calculate the associated token account address for recipient
+                        let destination_token_address = get_associated_token_address(
+                            &user.key(), // owner
+                            &mint,       // mint
+                        );
+
+                        let action_args = ActionArgs::new(instruction_data);
+                        let action_accounts = vec![
+                            ShortAccountMeta {
+                                pubkey: token_program, // Token Program
+                                is_writable: false,
+                            },
+                            ShortAccountMeta {
+                                pubkey: source_token_address.key(), // Sender Token Account
+                                is_writable: true,
+                            },
+                            ShortAccountMeta {
+                                pubkey: mint, // Mint
+                                is_writable: false,
+                            },
+                            ShortAccountMeta {
+                                pubkey: destination_token_address, // Destination Token Account
+                                is_writable: true,
+                            },
+                            ShortAccountMeta {
+                                pubkey: reward_distributor.key(), // Owner of Sender Token Account (Reward Distributor) & Fee Payer Signer
+                                is_writable: true,
+                            },
+                            ShortAccountMeta {
+                                pubkey: user.key(), // Recipient
+                                is_writable: false,
+                            },
+                            ShortAccountMeta {
+                                pubkey: ata_program, // Associated Token Program
+                                is_writable: false,
+                            },
+                            ShortAccountMeta {
+                                pubkey: system_program, // System Program
+                                is_writable: false,
+                            },
+                        ];
+                        let action = CallHandler {
+                            destination_program: crate::ID,
+                            accounts: action_accounts,
+                            args: action_args,
+                            escrow_authority: ctx.accounts.vrf_program_identity.to_account_info(), // Signer authorized to pay transaction fees for action from escrow PDA
+                            compute_units: 200_000,
+                        };
+
+                        // let (magic_action_account_infos, magic_action_instruction) =
+                        MagicIntentBundleBuilder::new(
+                            ctx.accounts.vrf_program_identity.to_account_info(), // Signer and fee payer for the entire bundle
+                            ctx.accounts.magic_context.to_account_info(),
+                            ctx.accounts.magic_program.to_account_info(),
+                        )
+                        .commit(&[ctx.accounts.reward_list.to_account_info()]) // Commit the updated reward list state
+                        .add_post_commit_actions([action])
+                        .build_and_invoke()?;
+
+                        // invoke_signed(
+                        //     &magic_action_instruction,
+                        //     &magic_action_account_infos,
+                        //     &[&[
+                        //         REWARD_DISTRIBUTOR_SEED,
+                        //         ctx.accounts.distributor_super_admin.key().as_ref(),
+                        //         ctx.accounts.reward_distributor.bump.to_le_bytes().as_ref(),
+                        //     ]],
+                        // )?;
+
+                        break;
                     } else {
                         msg!(
                             "Warning: No lookup accounts found for reward type {:?}",
                             reward.reward_type
                         );
                     }
+                    break;
                 } else {
                     msg!(
                         "Reward '{}' is exhausted ({}/{})",
@@ -236,9 +356,66 @@ pub mod rewards_delegated_vrf {
         Ok(())
     }
 
-    pub fn transfer_reward(ctx: Context<TransferReward>, destination: Pubkey) -> Result<()> {
-        msg!("Transferring reward to destination: {:?}", destination);
-        // Implement the logic to transfer the reward to the user based on the reward type and the lookup accounts
+    pub fn transfer_reward_spl_token(
+        ctx: Context<TransferRewardSplToken>,
+        amount: u64,
+    ) -> Result<()> {
+        msg!(
+            "Transferring SPL token reward: {} tokens to user {:?}",
+            amount,
+            ctx.accounts.user.key()
+        );
+
+        let super_admin = ctx.accounts.reward_distributor.super_admin.key();
+        let seeds = [
+            REWARD_DISTRIBUTOR_SEED,
+            super_admin.as_ref(),
+            &[ctx.accounts.reward_distributor.bump],
+        ];
+        let cpi_signer_seeds = &[seeds.as_slice()];
+
+        // // Instruction to create associated token account for recipient
+        // let create_destination_ata_idempotent_instruction =
+        //     spl_associated_token_account::instruction::create_associated_token_account_idempotent(
+        //         &ctx.accounts.reward_distributor.key(), // funding address
+        //         &ctx.accounts.user.key(),               // wallet address
+        //         &ctx.accounts.mint.key(),               // mint address
+        //         &ctx.accounts.token_program.key(),      // program id
+        //     );
+
+        // Use anchor_spl CPI to create_idempotent associated token account for recipient
+        let cpi_ata_accounts = Create {
+            payer: ctx.accounts.escrow.to_account_info(),
+            associated_token: ctx.accounts.destination_token_account.to_account_info(),
+            authority: ctx.accounts.user.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            token_program: ctx.accounts.token_program.to_account_info(),
+        };
+        let cpi_ata_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ata_ctx = CpiContext::new(cpi_ata_program, cpi_ata_accounts);
+        create_idempotent(cpi_ata_ctx)?;
+
+        // Use anchor_spl CPI to transfer_checked
+        let cpi_transfer_accounts = TransferChecked {
+            from: ctx.accounts.source_token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            to: ctx.accounts.destination_token_account.to_account_info(),
+            authority: ctx.accounts.reward_distributor.to_account_info(),
+        };
+        let cpi_transfer_program = ctx.accounts.token_program.to_account_info();
+        let cpi_transfer_ctx = CpiContext::new_with_signer(
+            cpi_transfer_program,
+            cpi_transfer_accounts,
+            cpi_signer_seeds,
+        );
+        transfer_checked(
+            cpi_transfer_ctx,
+            amount * (10u64.pow(ctx.accounts.mint.decimals as u32)),
+            ctx.accounts.mint.decimals,
+        )?;
+
+        msg!("Successfully transferred {} tokens to user", amount);
         Ok(())
     }
 
@@ -292,8 +469,10 @@ pub struct SetRewardList<'info> {
 // Only the program upgrade authority can initialize the transfer lookup table
 #[derive(Accounts)]
 pub struct InitializeTransferLookupTable<'info> {
-    #[account(mut, constraint = authority.key() == PROGRAM_AUTHORITY)]
+    #[account(mut, constraint = authority.key() == program_data.upgrade_authority_address.ok_or(ProgramError::InvalidArgument)?)]
     pub authority: Signer<'info>,
+    /// CHECK: Program data account to verify upgrade authority
+    pub program_data: Account<'info, ProgramData>,
     #[account(init_if_needed, payer = authority, space = 8 + 4 + (1 + 4 + 32 * 3) + (1 + 4 + 32 * 10) + (1 + 4 + 32 * 10) + (1 + 4 + 32 * 10), seeds = [TRANSFER_LOOKUP_TABLE_SEED], bump)]
     pub transfer_lookup_table: Account<'info, TransferLookupTable>,
     pub system_program: Program<'info, System>,
@@ -341,6 +520,7 @@ pub struct RequestRandomReward<'info> {
 }
 
 // 2. Callback from VRF Oracle with proof of randomness on ER
+#[commit]
 #[derive(Accounts)]
 pub struct ConsumeRandomReward<'info> {
     /// This check ensure that the vrf_program_identity (which is a PDA) is a signer
@@ -358,13 +538,28 @@ pub struct ConsumeRandomReward<'info> {
 
 #[action]
 #[derive(Accounts)]
-pub struct TransferReward<'info> {
-    pub user: Signer<'info>,
+pub struct TransferRewardSplToken<'info> {
+    pub token_program: Interface<'info, TokenInterface>,
+    #[account(mut)]
+    pub source_token_account: InterfaceAccount<'info, TokenAccount>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(mut)]
+    /// CHECK: Recipient Token Account
+    pub destination_token_account: UncheckedAccount<'info>,
     pub reward_distributor: Account<'info, RewardDistributor>,
-    #[account(mut, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
-    pub reward_list: Account<'info, RewardsList>,
-    #[account(seeds = [TRANSFER_LOOKUP_TABLE_SEED], bump)]
-    pub transfer_lookup_table: Account<'info, TransferLookupTable>,
+    /// CHECK: User/recipient
+    pub user: AccountInfo<'info>,
+    /// CHECK: Associated Token Program
+    pub associated_token_program: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+    /// CHECK: Source program
+    #[account(address = crate::ID)]
+    pub source_program: AccountInfo<'info>,
+    /// CHECK: Escrow Authority
+    pub escrow_auth: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: Escrow
+    pub escrow: UncheckedAccount<'info>,
 }
 
 #[account]
