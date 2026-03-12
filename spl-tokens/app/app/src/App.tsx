@@ -13,8 +13,8 @@ import {
 } from "@solana/web3.js";
 import {
     DELEGATION_PROGRAM_ID,
-    EPHEMERAL_SPL_TOKEN_PROGRAM_ID,
     GetCommitmentSignature,
+    depositAndQueueTransferIx,
     deriveEphemeralAta,
     deriveShuttleEphemeralAta,
     deriveShuttleAta,
@@ -109,44 +109,6 @@ function createTransferInstruction(
     return new TransactionInstruction({
         programId,
         keys,
-        data,
-    });
-}
-
-function createDepositAndQueueTransferInstruction(
-    queue: PublicKey,
-    vault: PublicKey,
-    mint: PublicKey,
-    source: PublicKey,
-    vaultAta: PublicKey,
-    destination: PublicKey,
-    owner: PublicKey,
-    amount: bigint,
-    delaySeconds: bigint = 0n,
-    split: number = 1,
-): TransactionInstruction {
-    if (!Number.isInteger(split) || split <= 0 || split > 0xffff_ffff) {
-        throw new Error('split must fit in u32');
-    }
-
-    const data = Buffer.alloc(21);
-    data[0] = 16; // DepositAndQueueTransfer
-    data.writeBigUInt64LE(amount, 1);
-    data.writeBigUInt64LE(delaySeconds, 9);
-    data.writeUInt32LE(split, 17);
-
-    return new TransactionInstruction({
-        programId: EPHEMERAL_SPL_TOKEN_PROGRAM_ID,
-        keys: [
-            { pubkey: queue, isSigner: false, isWritable: true },
-            { pubkey: vault, isSigner: false, isWritable: false },
-            { pubkey: mint, isSigner: false, isWritable: false },
-            { pubkey: source, isSigner: false, isWritable: true },
-            { pubkey: vaultAta, isSigner: false, isWritable: true },
-            { pubkey: destination, isSigner: false, isWritable: false },
-            { pubkey: owner, isSigner: true, isWritable: false },
-            { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        ],
         data,
     });
 }
@@ -459,7 +421,8 @@ const App: React.FC = () => {
     const [amountStr, setAmountStr] = useState('1');
     const [useEphemeral, setUseEphemeral] = useState(true);
     const [usePrivateTransfer, setUsePrivateTransfer] = useState(false);
-    const [privateDelaySeconds, setPrivateDelaySeconds] = useState('0');
+    const [privateMinDelayMs, setPrivateMinDelayMs] = useState('0');
+    const [privateMaxDelayMs, setPrivateMaxDelayMs] = useState('0');
     const [privateSplitCount, setPrivateSplitCount] = useState('1');
 
     // Cached Blockhash
@@ -753,10 +716,17 @@ const App: React.FC = () => {
             const ixs: TransactionInstruction[] = [];
 
             if (usePrivateTransfer) {
-                const delaySecondsNumber = Number(privateDelaySeconds);
+                const minDelayMsNumber = Number(privateMinDelayMs);
+                const maxDelayMsNumber = Number(privateMaxDelayMs);
                 const splitCountNumber = Number(privateSplitCount);
-                if (!Number.isInteger(delaySecondsNumber) || delaySecondsNumber < 0) {
-                    throw new Error('Private delay must be a non-negative integer');
+                if (!Number.isInteger(minDelayMsNumber) || minDelayMsNumber < 0) {
+                    throw new Error('Private min delay must be a non-negative integer');
+                }
+                if (!Number.isInteger(maxDelayMsNumber) || maxDelayMsNumber < 0) {
+                    throw new Error('Private max delay must be a non-negative integer');
+                }
+                if (maxDelayMsNumber < minDelayMsNumber) {
+                    throw new Error('Private max delay must be greater than or equal to min delay');
                 }
                 if (!Number.isInteger(splitCountNumber) || splitCountNumber <= 0) {
                     throw new Error('Private split must be a positive integer');
@@ -770,7 +740,7 @@ const App: React.FC = () => {
                 const vaultAta = deriveVaultAta(mint, vault);
                 ixs.push(createNoopInstruction());
                 ixs.push(
-                    createDepositAndQueueTransferInstruction(
+                    depositAndQueueTransferIx(
                         transferQueue,
                         vault,
                         mint,
@@ -779,7 +749,8 @@ const App: React.FC = () => {
                         dstAta,
                         src.keypair.publicKey,
                         amountBn,
-                        BigInt(delaySecondsNumber),
+                        BigInt(minDelayMsNumber),
+                        BigInt(maxDelayMsNumber),
                         splitCountNumber,
                     ),
                 );
@@ -857,7 +828,7 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, decimals, ensureAta, getCachedEphemeralBlockhash, mint, privateDelaySeconds, privateSplitCount, refreshBalances, useEphemeral, usePrivateTransfer]);
+    }, [accounts, connection, decimals, ensureAta, getCachedEphemeralBlockhash, mint, privateMaxDelayMs, privateMinDelayMs, privateSplitCount, refreshBalances, useEphemeral, usePrivateTransfer]);
 
     const handleTransfer = useCallback(async () => {
         await performTransfer(srcIndex, dstIndex, amountStr);
@@ -1505,14 +1476,27 @@ const App: React.FC = () => {
 
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12, opacity: usePrivateTransfer ? 1 : 0.5 }}>
-                                    Delay (s)
+                                    Min Delay (ms)
                                     <input
                                         type="number"
                                         min="0"
                                         step={1}
-                                        value={privateDelaySeconds}
+                                        value={privateMinDelayMs}
                                         disabled={!usePrivateTransfer}
-                                        onChange={e => setPrivateDelaySeconds(e.target.value)}
+                                        onChange={e => setPrivateMinDelayMs(e.target.value)}
+                                        style={{ ...INPUT_STYLE, width: 112, padding: '6px 8px' }}
+                                    />
+                                </label>
+
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12, opacity: usePrivateTransfer ? 1 : 0.5 }}>
+                                    Max Delay (ms)
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step={1}
+                                        value={privateMaxDelayMs}
+                                        disabled={!usePrivateTransfer}
+                                        onChange={e => setPrivateMaxDelayMs(e.target.value)}
                                         style={{ ...INPUT_STYLE, width: 96, padding: '6px 8px' }}
                                     />
                                 </label>
