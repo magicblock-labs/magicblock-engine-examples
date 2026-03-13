@@ -126,6 +126,48 @@
       "name": "Reward NFT #1",
       "distributorTokenAccount": "Ac15EtXBLadbCVrkXJ9pBogrxhpfqoC14UrLMGaE4xQ7",
       "metadataAddress": "HZ8Nn8WzrbXoVeXYCVWbeK62614jWbJ2rwRUV6Ns4PGJ"
+    },
+    {
+      "mint": "9D5354pRakGhMK4vajhtaydEKwMmKKyPHc4urdisf1KV",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "4cHA4PxbtENjso8rRxqnenhoSfos6vqSJMP8dxz4ZnqK",
+      "metadataAddress": "3HRq9zRW5VkjEeZmGbC6WkPNAEi62S7HWQphKmM7zPEr"
+    },
+    {
+      "mint": "5yMnwDjJ3ExnYtVDno8N9LHsVRSdx6QSBP6WPDvjzRiy",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "BQ53v9zsYYTN6xpXu2UgmUbuPcxwb7AA4n7PmG5hsc7a",
+      "metadataAddress": "61haG4W2gWvkhgrXTeWETWeynYfERmv84ENikh9ntsMk"
+    },
+    {
+      "mint": "4eRCeN6uVHA1t1KFt42KgcRrm7bCR7RJcE6xfrpDVXZJ",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "8SFPWyhCazGA92ivz5M6hu6RPtS8YjEzLsHDp5Vw4eNC",
+      "metadataAddress": "GoocDEr4sp6GrrSCdNxWoEar9TvT37tr2Ewecwj2PG4"
+    },
+    {
+      "mint": "4Q6kom4XxEkzHWmjcvms8srUiDrkucHM63Vant3N3EvT",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "Aaivxi8kF8QGTgwpgEdLxJAD9GXvihY4L9ZrVLwebnMo",
+      "metadataAddress": "J2jRbWiR5dnWa6TfKtGz7Ey2TCvjDfxNL3FMejSy26T6"
+    },
+    {
+      "mint": "4a9zeXUZrfLFaP1gVV2FPf6Yn7Z2qD8dZh95pgTUJqDS",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "2npCPosJax31TEoTQ9nWhT6bv2CfVicxKHdtzyd1QoC9",
+      "metadataAddress": "7WDAFNrv3L27znWcBTZDmKNSHsbGWbdvdjUgCLyyiVLn"
+    },
+    {
+      "mint": "5rs7UyrzKM7YF7Z49B99mfbfmd4Z9iTieruGcvAMznaS",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "FWwU6V5Ki2cnwYjTceNv1wFarjVt1R9cs8CUtXsCHcuq",
+      "metadataAddress": "4PvoF52wD1us8pZkBoaQmryC9CJKqkUTTBA4wBBT3VhS"
+    },
+    {
+      "mint": "HQ1Ktu9Qs3bjhpWq5EsFJn38sPG7S5frVQ3fXge4TeuQ",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "DoCFa8Rs4io9nVfwAcTxmc1gZcoikLjLxgmJJy5NDujv",
+      "metadataAddress": "A8FxvcdaUJa5eZmpxuWmQTMJ29ScegfSK21knK8iovZj"
     }
   ]
 }

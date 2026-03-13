@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program, web3 } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
+import { Program } from "@coral-xyz/anchor";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { RewardsDelegatedVrf } from "../target/types/rewards_delegated_vrf";
 import {
   TOKEN_PROGRAM_ID,
@@ -23,7 +23,7 @@ export async function getOrCreateDistributorTokenAccount(
   provider: anchor.AnchorProvider,
   tokenMint: PublicKey,
   rewardDistributorPda: PublicKey,
-  wallet: anchor.Wallet
+  payer: anchor.web3.Keypair
 ): Promise<PublicKey> {
   const distributorTokenAccount = getAssociatedTokenAddressSync(
     tokenMint,
@@ -43,9 +43,9 @@ export async function getOrCreateDistributorTokenAccount(
   if (!accountInfo) {
     console.log("Creating token account for distributor PDA...");
 
-    const createAccountTx = new web3.Transaction().add(
+    const createAccountTx = new Transaction().add(
       createAssociatedTokenAccountInstruction(
-        wallet.publicKey, // payer
+        payer.publicKey, // payer
         distributorTokenAccount, // associated token account
         rewardDistributorPda, // owner
         tokenMint, // mint
