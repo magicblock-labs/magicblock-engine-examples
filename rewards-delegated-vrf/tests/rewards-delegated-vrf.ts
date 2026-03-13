@@ -1,13 +1,16 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY } from "@solana/web3.js";
 import { RewardsDelegatedVrf } from "../target/types/rewards_delegated_vrf";
 import * as fs from "fs";
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, createMint, mintTo, getOrCreateAssociatedTokenAccount, getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction } from "@solana/spl-token";
+import { MPL_TOKEN_AUTH_RULES_PROGRAM_ID } from "@metaplex-foundation/mpl-token-auth-rules";
+import { createCreateMetadataAccountV3Instruction, createSetAndVerifyCollectionInstruction } from "@metaplex-foundation/mpl-token-metadata";
 
 const REWARD_DISTRIBUTOR_SEED = "reward_distributor";
 const REWARD_LIST_SEED = "reward_list";
 const TRANSFER_LOOKUP_TABLE_SEED = "transfer_lookup_table";
+const MPL_TOKEN_METADATA_PROGRAM_ID = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
 
 describe.only("rewards-delegated-vrf", () => {
   // Configure the client to use the local cluster.
@@ -46,6 +49,13 @@ describe.only("rewards-delegated-vrf", () => {
     console.log("Generated and saved new user keypair to", userKeypairPath);
   }
 
+  // Helper function to save NFT mints to JSON
+  const saveMints = (data: any) => {
+    const mintsPath = "tests/nft-mints.json";
+    fs.writeFileSync(mintsPath, JSON.stringify(data, null, 2));
+    console.log("Saved NFT mints to", mintsPath);
+  };
+
   // PDAs
   const [rewardDistributorPda] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(REWARD_DISTRIBUTOR_SEED), wallet.publicKey.toBytes()],
@@ -71,6 +81,9 @@ describe.only("rewards-delegated-vrf", () => {
   let tokenMint: PublicKey = new PublicKey("BbhNpb7RpkfVd2EtMX4z7mEAZmzsAUZmSqYBmMFWUMM9"); // for existing mint with authority control
   // Distributor token account - will be set during the mint test
   let distributorTokenAccount: PublicKey;
+  
+  // Collection variables
+  let collectionMint: PublicKey;
 
   console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
   console.log(
@@ -257,8 +270,266 @@ describe.only("rewards-delegated-vrf", () => {
     }
   });
 
+  it("Create NFT Collection", async () => {
+    console.log("\n=== Creating NFT Collection ===");
+
+    try {
+      // Check if collection already exists
+      const mintsPath = "tests/nft-mints.json";
+      if (fs.existsSync(mintsPath)) {
+        const mintsData = JSON.parse(fs.readFileSync(mintsPath, "utf-8"));
+        if (mintsData.collectionMint) {
+          collectionMint = new PublicKey(mintsData.collectionMint);
+          console.log("Collection already exists. Mint:", collectionMint.toString());
+          return;
+        }
+      }
+
+      // Create mint for collection
+      collectionMint = await createMint(
+        provider.connection,
+        wallet.payer,
+        wallet.publicKey,
+        wallet.publicKey,
+        0 // NFT has 0 decimals
+      );
+
+      console.log("Collection Mint created:", collectionMint.toString());
+
+      // Create metadata for collection NFT
+      const [collectionMetadataAddress] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("metadata"),
+          new PublicKey(MPL_TOKEN_METADATA_PROGRAM_ID).toBuffer(),
+          collectionMint.toBuffer(),
+        ],
+        new PublicKey(MPL_TOKEN_METADATA_PROGRAM_ID)
+      );
+
+      console.log("Collection Metadata PDA:", collectionMetadataAddress.toString());
+
+      const collectionMetadataIx = createCreateMetadataAccountV3Instruction(
+        {
+          metadata: collectionMetadataAddress,
+          mint: collectionMint,
+          mintAuthority: wallet.publicKey,
+          payer: wallet.publicKey,
+          updateAuthority: wallet.publicKey,
+          systemProgram: web3.SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
+        },
+        {
+          createMetadataAccountArgsV3: {
+            data: {
+              name: "Test Collection",
+              symbol: "TESTCOLL",
+              uri: "https://example.com/collection.json",
+              sellerFeeBasisPoints: 0,
+              creators: [
+                {
+                  address: wallet.publicKey,
+                  verified: true,
+                  share: 100,
+                },
+              ],
+              collection: null, // Collections don't have a parent collection
+              uses: null,
+            },
+            isMutable: true,
+            collectionDetails: { __kind: "V1", size: 0n }, // Mark as collection
+          },
+        }
+      );
+
+      const tx = new web3.Transaction().add(collectionMetadataIx);
+      const sig = await provider.sendAndConfirm(tx);
+      console.log("Collection Metadata created. Signature:", sig);
+
+      // Save collection mint to JSON
+      saveMints({
+        collectionMint: collectionMint.toString(),
+        nfts: []
+      });
+
+    } catch (err) {
+      console.error("Error creating NFT Collection:", err);
+      console.log("Error details:", (err as Error).message);
+    }
+  });
+
+  it("Create and mint Legacy NFT to reward distributor", async () => {
+    console.log("\n=== Creating and Minting Legacy NFT to Reward Distributor (part of collection) ===");
+    
+    try {
+      // Create NFT mint (0 decimals for NFTs)
+      const nftMint = await createMint(
+        provider.connection,
+        wallet.payer,
+        wallet.publicKey, // Mint authority
+        wallet.publicKey, // Freeze authority
+        0 // 0 decimals for NFTs
+      );
+      console.log("NFT Mint created:", nftMint.toString());
+
+      // Get or create the associated token account for the distributor
+      const distributorNftAccount = getAssociatedTokenAddressSync(
+        nftMint,
+        rewardDistributorPda,
+        true // allowOffCurve - allows PDAs
+      );
+      
+      console.log("Distributor NFT account:", distributorNftAccount.toString());
+
+      // Check if the account exists
+      const nftAccountInfo = await provider.connection.getAccountInfo(distributorNftAccount);
+      
+      if (!nftAccountInfo) {
+        console.log("Creating NFT account for distributor...");
+        
+        const createNftAccountTx = new web3.Transaction().add(
+          createAssociatedTokenAccountInstruction(
+            wallet.publicKey, // payer
+            distributorNftAccount, // associated token account
+            rewardDistributorPda, // owner
+            nftMint, // mint
+            TOKEN_PROGRAM_ID,
+            ASSOCIATED_TOKEN_PROGRAM_ID
+          )
+        );
+
+        const createNftAccountSig = await provider.sendAndConfirm(createNftAccountTx);
+        console.log("NFT account created. Signature:", createNftAccountSig);
+      } else {
+        console.log("NFT account already exists");
+      }
+
+      // Mint 1 NFT to the distributor's account
+      const nftMintTx = await mintTo(
+        provider.connection,
+        wallet.payer as any,
+        nftMint,
+        distributorNftAccount,
+        wallet.payer,
+        1 // Mint 1 NFT
+      );
+
+      console.log("NFT minted to distributor. Transaction:", nftMintTx);
+      
+      const nftBalance = await provider.connection.getTokenAccountBalance(distributorNftAccount);
+      console.log("Distributor NFT Account Balance:", nftBalance.value.uiAmount);
+
+      // Create metadata for the NFT with collection reference
+      const [metadataAddress] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("metadata"),
+          new PublicKey(MPL_TOKEN_METADATA_PROGRAM_ID).toBuffer(),
+          nftMint.toBuffer(),
+        ],
+        new PublicKey(MPL_TOKEN_METADATA_PROGRAM_ID)
+      );
+
+      console.log("Metadata PDA:", metadataAddress.toString());
+
+      const createMetadataIx = createCreateMetadataAccountV3Instruction(
+        {
+          metadata: metadataAddress,
+          mint: nftMint,
+          mintAuthority: wallet.publicKey,
+          payer: wallet.publicKey,
+          updateAuthority: wallet.publicKey,
+          systemProgram: web3.SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
+        },
+        {
+          createMetadataAccountArgsV3: {
+            data: {
+              name: "Reward NFT #1",
+              symbol: "REWNFT",
+              uri: "https://example.com/reward-nft.json",
+              sellerFeeBasisPoints: 0,
+              creators: [
+                {
+                  address: wallet.publicKey,
+                  verified: true,
+                  share: 100,
+                },
+              ],
+              collection: {
+                key: collectionMint,
+                verified: false, // Will be verified in separate instruction
+              },
+              uses: null,
+            },
+            isMutable: true,
+            collectionDetails: null, // Regular NFT, not a collection
+          },
+        }
+      );
+
+      const metadataTx = new web3.Transaction().add(createMetadataIx);
+      const metadataSig = await provider.sendAndConfirm(metadataTx);
+      console.log("NFT Metadata created. Signature:", metadataSig);
+
+      // Derive collection metadata address
+      const [collectionMetadataAddress] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("metadata"),
+          new PublicKey(MPL_TOKEN_METADATA_PROGRAM_ID).toBuffer(),
+          collectionMint.toBuffer(),
+        ],
+        new PublicKey(MPL_TOKEN_METADATA_PROGRAM_ID)
+      );
+
+      // Verify NFT collection membership
+      try {
+        const verifyCollectionIx = createSetAndVerifyCollectionInstruction(
+          {
+            metadata: metadataAddress,
+            collectionAuthority: wallet.publicKey,
+            collectionMint: collectionMint,
+            collectionMetadata: collectionMetadataAddress,
+            payer: wallet.publicKey,
+            systemProgram: web3.SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          }
+        );
+
+        const verifyTx = new web3.Transaction().add(verifyCollectionIx);
+        const verifySig = await provider.sendAndConfirm(verifyTx);
+        console.log("NFT Collection verified. Signature:", verifySig);
+      } catch (verifyErr) {
+        console.warn("Collection verification failed (optional):", (verifyErr as Error).message);
+      }
+      console.log("NFT successfully created and minted to distributor as part of collection");
+
+      // Load existing mints and add the new NFT
+      const mintsPath = "tests/nft-mints.json";
+      let mintsData = {
+        collectionMint: "",
+        nfts: [] as any[]
+      };
+
+      if (fs.existsSync(mintsPath)) {
+        mintsData = JSON.parse(fs.readFileSync(mintsPath, "utf-8"));
+      }
+
+      mintsData.nfts.push({
+        mint: nftMint.toString(),
+        name: "Reward NFT #1",
+        distributorTokenAccount: distributorNftAccount.toString(),
+        metadataAddress: metadataAddress.toString()
+      });
+
+      saveMints(mintsData);
+
+    } catch (err) {
+      console.error("Error creating/minting Legacy NFT:", err);
+      console.log("Error details:", (err as Error).message);
+    }
+  });
+
   it("Set Reward List with rewards", async () => {
-    const rewards = [
+    const rewards: any[] = [
       {
         name: "Gold Prize",
         drawRangeMin: 1,
@@ -268,6 +539,7 @@ describe.only("rewards-delegated-vrf", () => {
         rewardAmount: new anchor.BN(1000),
         redemptionCount: new anchor.BN(0),
         redemptionLimit: new anchor.BN(2),
+        additionalPubkeys: []
       },
       {
         name: "Silver Prize",
@@ -278,21 +550,29 @@ describe.only("rewards-delegated-vrf", () => {
         rewardAmount: new anchor.BN(500),
         redemptionCount: new anchor.BN(0),
         redemptionLimit: new anchor.BN(2),
+        additionalPubkeys: []
       },
       {
+        // Bronze Prize will be populated with NFTs via add_reward
         name: "Bronze Prize",
         drawRangeMin: 66,
         drawRangeMax: 100,
-        rewardType: { splToken: {} },
-        rewardMints: [tokenMint],
-        rewardAmount: new anchor.BN(100),
+        rewardType: { legacyNft: {} },
+        rewardMints: [],
+        rewardAmount: new anchor.BN(1), // NFTs always have amount = 1
         redemptionCount: new anchor.BN(0),
-        redemptionLimit: new anchor.BN(2),
+        redemptionLimit: new anchor.BN(0), // Will update as NFTs are added
+        additionalPubkeys: []
       },
     ];
 
     const startTimestamp = Math.floor(Date.now() / 1000);
     const endTimestamp = startTimestamp + 86400 * 30;
+
+    console.log("Rewards being sent:");
+    rewards.forEach((r, i) => {
+      console.log(`  Reward ${i}: name='${r.name}', type=${Object.keys(r.rewardType)[0]}, mints=${r.rewardMints.length}`);
+    });
 
     const tx = await program.methods
       .setRewardList(
@@ -308,12 +588,68 @@ describe.only("rewards-delegated-vrf", () => {
         rewardList: rewardListPda,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .rpc({ skipPreflight: true });
+      .rpc({ skipPreflight: false });
 
     console.log("Set Reward List txHash: ", tx);
 
     // Log reward list details
     await logRewardListDetails(rewardListPda);
+  });
+
+  it.skip("Add NFT Mint to Bronze Prize Reward", async () => {
+    console.log("\n=== Adding NFT Mint to Bronze Prize Reward ===");
+    try {
+      // Load NFT mints from file
+      const mintsPath = "tests/nft-mints.json";
+      if (!fs.existsSync(mintsPath)) {
+        console.log("No NFT mints found");
+        return;
+      }
+
+      const mintsData = JSON.parse(fs.readFileSync(mintsPath, "utf-8"));
+      if (!mintsData.nfts || mintsData.nfts.length === 0) {
+        console.log("No NFTs in mints data");
+        return;
+      }
+
+      // Use the first NFT
+      const nftData = mintsData.nfts[0];
+      const nftMint = new PublicKey(nftData.mint);
+      const distributorNftAccount = new PublicKey(nftData.distributorTokenAccount);
+      const metadataAddress = new PublicKey(nftData.metadataAddress);
+
+      // Adding NFT to "Bronze Prize" reward
+      const accountsObj: any = {
+        admin: wallet.publicKey,
+        rewardDistributor: rewardDistributorPda,
+        rewardList: rewardListPda,
+        mint: nftMint,
+        tokenAccount: distributorNftAccount,
+      };
+
+      // Add metadata account (it's optional but helpful for type detection)
+      accountsObj.metadata = metadataAddress;
+
+      const tx = await program.methods
+        .addReward(
+          "Bronze Prize",
+          null, // reward_amount (not needed for existing reward)
+          null, // redemption_limit (not needed for existing reward)
+          null, // draw_range_min (not needed for existing reward)
+          null  // draw_range_max (not needed for existing reward)
+        )
+        .accounts(accountsObj)
+        .rpc({ skipPreflight: true });
+
+      console.log("Add Reward txHash: ", tx);
+      console.log("Successfully added NFT to 'Bronze Prize' reward");
+
+      // Log updated reward list details
+      await logRewardListDetails(rewardListPda);
+    } catch (addRewardErr) {
+      console.error("Error adding reward:", addRewardErr);
+      console.log("Error details:", (addRewardErr as Error).message);
+    }
   });
 
   it("Set Whitelist", async () => {
@@ -344,7 +680,7 @@ describe.only("rewards-delegated-vrf", () => {
     }
   });
 
-  it("Initialize Transfer Lookup Table", async () => {
+  it("Initialize Transfer Lookup Table (once)", async () => {
     console.log("\n=== Initializing Transfer Lookup Table ===");
     
     console.log("Transfer Lookup Table PDA:", transferLookupTable.toString());
@@ -356,22 +692,22 @@ describe.only("rewards-delegated-vrf", () => {
     );
     
     // Lookup accounts for SplToken operations
-    const splTokenLookupAccounts = [
-      TOKEN_PROGRAM_ID,
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      anchor.web3.SystemProgram.programId,
+    const transferLookupAccounts = [
+      // For SPL Token and Legacy NFT
+      new PublicKey(TOKEN_PROGRAM_ID),
+      new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID),
+      new PublicKey(anchor.web3.SystemProgram.programId),
+      // Additional for programmable NFT
+      new PublicKey(MPL_TOKEN_METADATA_PROGRAM_ID),
+      new PublicKey(SYSVAR_INSTRUCTIONS_PUBKEY),
+      new PublicKey(MPL_TOKEN_AUTH_RULES_PROGRAM_ID)
     ];
+    
 
     try {
-      const lookupAccountsPayload = [
-        {
-          rewardType: { splToken: {} },
-          accounts: splTokenLookupAccounts,
-        }
-      ];
 
       const tx = await program.methods
-        .initializeTransferLookupTable(lookupAccountsPayload)
+        .initializeTransferLookupTable(transferLookupAccounts)
         .accounts({
           authority: wallet.publicKey,
           programData: programData,
@@ -386,13 +722,10 @@ describe.only("rewards-delegated-vrf", () => {
       const lookupTable = await program.account.transferLookupTable.fetch(transferLookupTable);
       
       console.log("\n✓ Transfer Lookup Table Initialized");
-      console.log("Total Reward Types Registered:", lookupTable.lookupAccounts.length);
+      console.log("Total Lookup Accounts Registered:", lookupTable.lookupAccounts.length);
       
-      lookupTable.lookupAccounts.forEach((lookup, index) => {
-        console.log(`\n${index + 1}. ${Object.keys(lookup.rewardType)[0].toUpperCase()} Accounts (${lookup.accounts.length}):`);
-        lookup.accounts.forEach((account, accIndex) => {
-          console.log(`     ${accIndex + 1}. ${account.toString()}`);
-        });
+      lookupTable.lookupAccounts.forEach((account, index) => {
+        console.log(`  ${index + 1}. ${account.toString()}`);
       });
     } catch (err) {
       console.log("Error initializing transfer lookup table:", (err as Error).message);
@@ -520,7 +853,7 @@ describe.only("rewards-delegated-vrf", () => {
     }
   });
 
-  it("Verify reward constraint - only super_admin can set reward list", async () => {
+  it("Verify reward constraint - super_admin can set reward list", async () => {
     const rewards = [
       {
         name: "Test Reward",
