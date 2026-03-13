@@ -114,6 +114,18 @@
       "name": "Reward NFT #1",
       "distributorTokenAccount": "7nYLYM7rncse4FzUSaihhEiBeXDzQT5Q2w4qxme22JDA",
       "metadataAddress": "CHqTegStcNCnTdP6b16HioN6kSkGt8UxpHars4ubef7s"
+    },
+    {
+      "mint": "BWungxBcE41a7vm4e5WZBTDhTJC2jLn7v73DbNYecKN9",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "jNv1ZY3FcyYZovheGZWLUDffGv8koVntCWucCsB74AN",
+      "metadataAddress": "DqMjWfYLrmVY93Bn7G3LFVyJGPUssh5tBpx9Fxm4BW3M"
+    },
+    {
+      "mint": "5sdkJxemnWjJQRAq8DcVZ4nduEYg8eNGfGBukPVCShi6",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "Ac15EtXBLadbCVrkXJ9pBogrxhpfqoC14UrLMGaE4xQ7",
+      "metadataAddress": "HZ8Nn8WzrbXoVeXYCVWbeK62614jWbJ2rwRUV6Ns4PGJ"
     }
   ]
 }
