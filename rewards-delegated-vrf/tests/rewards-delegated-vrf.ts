@@ -538,7 +538,7 @@ describe.only("rewards-delegated-vrf", () => {
         rewardMints: [tokenMint],
         rewardAmount: new anchor.BN(1000),
         redemptionCount: new anchor.BN(0),
-        redemptionLimit: new anchor.BN(2),
+        redemptionLimit: new anchor.BN(1000),
         additionalPubkeys: []
       },
       {

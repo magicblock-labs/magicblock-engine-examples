@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::{create_idempotent, get_associated_token_address, Create};
 use anchor_spl::metadata::{mpl_token_metadata, MetadataAccount};
 use anchor_spl::token;
+use anchor_spl::token_interface;
 use anchor_spl::token_interface::{
     transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
@@ -15,45 +16,19 @@ use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
+pub mod constants;
 pub mod errors;
+pub mod state;
+
+use constants::*;
 use errors::RewardError;
+use state::{Reward, RewardDistributor, RewardType, RewardsList, TransferLookupTable};
 
 declare_id!("6e7VampziFfZf3nDB5pA3QhQKB8xmCQuJxFh7oLgSUjg");
-
-pub const REWARD_DISTRIBUTOR_SEED: &[u8] = b"reward_distributor";
-pub const REWARD_LIST_SEED: &[u8] = b"reward_list";
-pub const TRANSFER_LOOKUP_TABLE_SEED: &[u8] = b"transfer_lookup_table";
-
-// Space calculation for reward list account
-// Discriminator: 8 bytes
-// RewardsList fixed fields: 32 (Pubkey) + 1 (u8) + 4 (Vec header) + 8 (i64) + 8 (i64) + 4 (u32) + 4 (u32) = 61 bytes
-// Per Reward (with buffer for dynamic String and Vec):
-//   - name (String with content): 50 bytes (4 byte length + 46 bytes content)
-//   - draw_range_min (u32): 4 bytes
-//   - draw_range_max (u32): 4 bytes
-//   - reward_type (enum): 1 byte
-//   - reward_mints (Vec): 4 (header) + 25 * 32 (Pubkey) = 804 bytes
-//   - reward_amount (u64): 8 bytes
-//   - redemption_count (u64): 8 bytes
-//   - redemption_limit (u64): 8 bytes
-//   - additional_pubkeys (Vec): 4 (header) + 3 * 32 (Pubkey) = 100 bytes
-//   Per reward subtotal: 50 + 4 + 4 + 1 + 804 + 8 + 8 + 8 + 100 = 987 bytes
-// 10 rewards: 10 * 987 = 9,870 bytes
-// TOTAL: 8 + 61 + (10 * 987) = 9,939 bytes (under 10KB realloc limit)
-pub const REWARD_LIST_SPACE: usize =
-    8 + 61 + (10 * (50 + 4 + 4 + 1 + (4 + 25 * 32) + 8 + 8 + 8 + (4 + 3 * 32)));
-
-// METAPLEX constants
-pub const RULE_SET_SEED: &[u8] = b"rule_set"; // FOR: Ruleset PDA
-pub const METADATA_SEED: &[u8] = b"metadata"; // FOR: 1) Metadata PDA and 2) Edition PDA
-pub const EDITION_SEED: &[u8] = b"edition"; // FOR: Edition PDA
-pub const TOKEN_RECORD_SEED: &[u8] = b"token_record"; // FOR: 1) Owner Token Record PDA and 2) Destination Token Record PDA
 
 #[ephemeral]
 #[program]
 pub mod rewards_delegated_vrf {
-
-    use anchor_spl::token_interface;
 
     use super::*;
 
@@ -175,7 +150,7 @@ pub mod rewards_delegated_vrf {
             caller_seed: [client_seed; 32],
             accounts_metas: Some(vec![
                 SerializableAccountMeta {
-                    pubkey: ctx.accounts.user.key(), // User account passed for VRF callback to identify reward recipient
+                    pubkey: ctx.accounts.user.key(), // User account passed for VRF callback to identify reward destination
                     is_signer: false,
                     is_writable: false,
                 },
@@ -284,7 +259,7 @@ pub mod rewards_delegated_vrf {
                                     &reward_distributor.key(), // owner
                                     &mint,                     // mint
                                 );
-                                // Calculate the associated token account address for recipient
+                                // Calculate the associated token account address for destination
                                 let destination_token_address = get_associated_token_address(
                                     &user.key(), // owner
                                     &mint,       // mint
@@ -313,7 +288,7 @@ pub mod rewards_delegated_vrf {
                                         is_writable: true,
                                     },
                                     ShortAccountMeta {
-                                        pubkey: user.key(), // Recipient
+                                        pubkey: user.key(), // destination
                                         is_writable: false,
                                     },
                                     ShortAccountMeta {
@@ -360,7 +335,7 @@ pub mod rewards_delegated_vrf {
                                     &reward_distributor.key(), // owner
                                     &mint,                     // mint
                                 );
-                                // Calculate the associated token account address for recipient
+                                // Calculate the associated token account address for destination
                                 let destination_token_address = get_associated_token_address(
                                     &user.key(), // owner
                                     &mint,       // mint
@@ -378,7 +353,7 @@ pub mod rewards_delegated_vrf {
                                         &mint,
                                         &source_token_address,
                                     );
-                                let (recipient_token_record_pda, _) =
+                                let (destination_token_record_pda, _) =
                                     mpl_token_metadata::accounts::TokenRecord::find_pda(
                                         &mint,
                                         &destination_token_address,
@@ -414,7 +389,7 @@ pub mod rewards_delegated_vrf {
                                         is_writable: true,
                                     },
                                     ShortAccountMeta {
-                                        pubkey: user.key(), // Recipient
+                                        pubkey: user.key(), // destination
                                         is_writable: false,
                                     },
                                     ShortAccountMeta {
@@ -450,7 +425,7 @@ pub mod rewards_delegated_vrf {
                                         is_writable: true,
                                     },
                                     ShortAccountMeta {
-                                        pubkey: recipient_token_record_pda, // Destination Token Record PDA
+                                        pubkey: destination_token_record_pda, // Destination Token Record PDA
                                         is_writable: true,
                                     },
                                     ShortAccountMeta {
@@ -532,7 +507,7 @@ pub mod rewards_delegated_vrf {
         ];
         let cpi_signer_seeds = &[seeds.as_slice()];
 
-        // Use anchor_spl CPI to create_idempotent associated token account for recipient
+        // Use anchor_spl CPI to create_idempotent associated token account for destination
         let cpi_ata_accounts = Create {
             payer: ctx.accounts.escrow.to_account_info(),
             associated_token: ctx.accounts.destination_token_account.to_account_info(),
@@ -581,28 +556,9 @@ pub mod rewards_delegated_vrf {
             amount,
             ctx.accounts.user.key()
         );
-        /*
-        Metaplex Token Metadata: Transfer `31` (Hex)
-            1. Token Account (Reward Distributor's Token Account)
-            2. Token Owner (Reward Distributor)
-            3. Destination Token Account
-            4. Destination Owner
-            5. Mint Account
-            6. Metadata Account - ["metadata", token_metadata_program_id, mint_pubkey]
-            7. Edition PDA - ["metadata", token_metadata_program_id, mint_pubkey, "edition"]
-            8. Owner Token PDA - ["token_record", token_metadata_program_id, mint_pubkey, token_account_pubkey]
-            9. Destination Token PDA - ["token_record", token_metadata_program_id, mint_pubkey, destination_token_account_pubkey]
-            10. Authority Record : Token Owner?
-            11. Payer : Validator Signer?
-            12. System Program: 11111111111111111111111111111111
-            13. Sysvar Instructions: Sysvar1nstructions1111111111111111111111111
-            14. SPL Token Program: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
-            15. Associated Token Program: ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL
-            16. Authorization Rule Program: auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg
-            17. Token Authorization Rules - [["rule_set", creator.as_ref(), rule_set_name.as_bytes()], mpl_token_auth_rules_program]
-         */
 
-        let super_admin = ctx.accounts.reward_distributor.super_admin.key();
+        // Create CPI seeds
+        let super_admin: Pubkey = ctx.accounts.reward_distributor.super_admin.key();
         let seeds = [
             REWARD_DISTRIBUTOR_SEED,
             super_admin.as_ref(),
@@ -610,7 +566,7 @@ pub mod rewards_delegated_vrf {
         ];
         let cpi_signer_seeds = &[seeds.as_slice()];
 
-        // Use anchor_spl CPI to create_idempotent associated token account for recipient
+        // Use anchor_spl CPI to create_idempotent associated token account for destination
         let cpi_ata_accounts = Create {
             payer: ctx.accounts.escrow.to_account_info(),
             associated_token: ctx.accounts.destination_token_account.to_account_info(),
@@ -623,7 +579,30 @@ pub mod rewards_delegated_vrf {
         let cpi_ata_ctx = CpiContext::new(cpi_ata_program, cpi_ata_accounts);
         create_idempotent(cpi_ata_ctx)?;
 
-        mpl_token_metadata::ID;
+        // Invoke CPI for NFT Transfer
+        mpl_token_metadata::instructions::TransferCpiBuilder::new(
+            &ctx.accounts.token_metadata_program.to_account_info(),
+        )
+        .token(&ctx.accounts.source_token_account.to_account_info())
+        .token_owner(&ctx.accounts.reward_distributor.to_account_info())
+        .destination_token(&ctx.accounts.destination_token_account.to_account_info())
+        .destination_owner(&ctx.accounts.user.to_account_info())
+        .mint(&ctx.accounts.mint.to_account_info())
+        .metadata(&ctx.accounts.metadata.to_account_info())
+        .edition(Some(&ctx.accounts.edition.to_account_info()))
+        .token_record(Some(&ctx.accounts.source_token_record.to_account_info()))
+        .destination_token_record(Some(
+            &ctx.accounts.destination_token_record.to_account_info(),
+        ))
+        .authority(&ctx.accounts.reward_distributor.to_account_info())
+        .payer(&ctx.accounts.escrow.to_account_info())
+        .system_program(&ctx.accounts.system_program.to_account_info())
+        .sysvar_instructions(&ctx.accounts.sysvar_instruction_program.to_account_info())
+        .spl_token_program(&ctx.accounts.token_program.to_account_info())
+        .spl_ata_program(&ctx.accounts.associated_token_program.to_account_info())
+        .authorization_rules_program(Some(&ctx.accounts.auth_rule_program.to_account_info()))
+        .authorization_rules(Some(&ctx.accounts.auth_rule.to_account_info()))
+        .invoke_signed(cpi_signer_seeds)?;
 
         msg!(
             "Successfully transferred {} {:?} NFT to user",
@@ -851,9 +830,12 @@ pub mod rewards_delegated_vrf {
     }
 }
 
+// ============================================================================
+// ACCOUNT CONTEXTS
+// ============================================================================
+
 /// ADMIN FLOW
 
-// Admin initializes the reward distributor with the rules of the reward distribution (start/end time, min/max roll, etc)
 #[derive(Accounts)]
 pub struct InitializeRewardDistributor<'info> {
     #[account(mut)]
@@ -863,7 +845,6 @@ pub struct InitializeRewardDistributor<'info> {
     pub system_program: Program<'info, System>,
 }
 
-// Admin sets the whitelist for a reward distributor
 #[derive(Accounts)]
 pub struct SetWhitelist<'info> {
     #[account(mut, constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
@@ -872,7 +853,6 @@ pub struct SetWhitelist<'info> {
     pub reward_distributor: Account<'info, RewardDistributor>,
 }
 
-// Admin sets the reward list for a reward distributor with all reward tiers
 #[derive(Accounts)]
 pub struct SetRewardList<'info> {
     #[account(mut, constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
@@ -883,7 +863,6 @@ pub struct SetRewardList<'info> {
     pub system_program: Program<'info, System>,
 }
 
-// Only the program upgrade authority can initialize the transfer lookup table
 #[derive(Accounts)]
 pub struct InitializeTransferLookupTable<'info> {
     #[account(mut, constraint = authority.key() == program_data.upgrade_authority_address.ok_or(ProgramError::InvalidArgument)?)]
@@ -895,7 +874,6 @@ pub struct InitializeTransferLookupTable<'info> {
     pub system_program: Program<'info, System>,
 }
 
-// Admin delegates the reward list to ER
 #[delegate]
 #[derive(Accounts)]
 pub struct DelegateRewardList<'info> {
@@ -907,7 +885,6 @@ pub struct DelegateRewardList<'info> {
     pub reward_list: Account<'info, RewardsList>,
 }
 
-// Admin undelegates the reward list
 #[commit]
 #[derive(Accounts)]
 pub struct UndelegateRewardList<'info> {
@@ -918,7 +895,6 @@ pub struct UndelegateRewardList<'info> {
     pub reward_list: Account<'info, RewardsList>,
 }
 
-// Only admins or whitelist can add mint to rewards
 #[derive(Accounts)]
 pub struct AddReward<'info> {
     #[account(constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()) || reward_distributor.whitelist.contains(&admin.key()))]
@@ -926,21 +902,17 @@ pub struct AddReward<'info> {
     pub reward_distributor: Account<'info, RewardDistributor>,
     #[account(mut, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
     pub reward_list: Account<'info, RewardsList>,
-    /// Mint to add to the reward
     pub mint: InterfaceAccount<'info, Mint>,
-    /// Token account (ATA) owned by reward_distributor
     #[account(
         constraint = token_account.owner == reward_distributor.key() @RewardError::TokenNotOwnedByDistributor,
         constraint = token_account.mint == mint.key() @RewardError::InvalidTokenAccount
     )]
     pub token_account: InterfaceAccount<'info, TokenAccount>,
-    /// Optional metadata account for NFTs (to detect ProgrammableNft vs LegacyNft)
     pub metadata: Option<Account<'info, MetadataAccount>>,
 }
 
 /// USER FLOW
 
-// 1. User request randomness on ER
 #[vrf]
 #[derive(Accounts)]
 pub struct RequestRandomReward<'info> {
@@ -956,7 +928,6 @@ pub struct RequestRandomReward<'info> {
     pub oracle_queue: AccountInfo<'info>,
 }
 
-// 2. Callback from VRF Oracle with proof of randomness on ER
 #[commit]
 #[derive(Accounts)]
 pub struct ConsumeRandomReward<'info> {
@@ -964,7 +935,7 @@ pub struct ConsumeRandomReward<'info> {
     /// enforcing the callback is executed by the VRF program through CPI
     #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
     pub vrf_program_identity: Signer<'info>,
-    /// CHECK: The user account is passed from the request_random_reward and used for the reward recipient
+    /// CHECK: The user account is passed from the request_random_reward and used for the reward destination
     pub user: AccountInfo<'info>,
     pub reward_distributor: Account<'info, RewardDistributor>,
     #[account(mut, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
@@ -981,10 +952,10 @@ pub struct TransferRewardSplToken<'info> {
     pub source_token_account: InterfaceAccount<'info, TokenAccount>,
     pub mint: InterfaceAccount<'info, Mint>,
     #[account(mut)]
-    /// CHECK: Recipient Token Account
+    /// CHECK: destination Token Account
     pub destination_token_account: UncheckedAccount<'info>,
     pub reward_distributor: Account<'info, RewardDistributor>,
-    /// CHECK: User/recipient
+    /// CHECK: User/destination
     pub user: AccountInfo<'info>,
     /// CHECK: Associated Token Program
     pub associated_token_program: AccountInfo<'info>,
@@ -1007,10 +978,10 @@ pub struct TransferRewardProgrammableNft<'info> {
     pub source_token_account: InterfaceAccount<'info, TokenAccount>,
     pub mint: InterfaceAccount<'info, Mint>,
     #[account(mut)]
-    /// CHECK: Recipient Token Account
+    /// CHECK: destination Token Account
     pub destination_token_account: UncheckedAccount<'info>,
     pub reward_distributor: Account<'info, RewardDistributor>,
-    /// CHECK: User/recipient
+    /// CHECK: User/destination
     pub user: AccountInfo<'info>,
     /// CHECK: Associated Token Program
     pub associated_token_program: AccountInfo<'info>,
@@ -1021,6 +992,16 @@ pub struct TransferRewardProgrammableNft<'info> {
     pub sysvar_instruction_program: UncheckedAccount<'info>,
     /// CHECK: Auth Rule Program
     pub auth_rule_program: UncheckedAccount<'info>,
+    /// CHECK: Metadata PDA
+    pub metadata: UncheckedAccount<'info>,
+    /// CHECK: Edition PDA
+    pub edition: UncheckedAccount<'info>,
+    /// CHECK: Source Token Record PDA
+    pub source_token_record: UncheckedAccount<'info>,
+    /// CHECK: Destination Token Record PDA
+    pub destination_token_record: UncheckedAccount<'info>,
+    /// CHECK: Auth Rule PDA
+    pub auth_rule: UncheckedAccount<'info>,
     /// CHECK: Source program
     #[account(address = crate::ID)]
     pub source_program: AccountInfo<'info>,
@@ -1029,75 +1010,4 @@ pub struct TransferRewardProgrammableNft<'info> {
     #[account(mut)]
     /// CHECK: Escrow
     pub escrow: UncheckedAccount<'info>,
-}
-
-#[account]
-pub struct RewardDistributor {
-    pub super_admin: Pubkey,
-    pub bump: u8,
-    pub admins: Vec<Pubkey>,
-    pub whitelist: Vec<Pubkey>,
-}
-
-#[account]
-pub struct RewardsList {
-    pub reward_distributor: Pubkey,
-    pub bump: u8,
-    pub rewards: Vec<Reward>,
-    pub start_timestamp: i64,
-    pub end_timestamp: i64,
-    pub global_range_min: u32,
-    pub global_range_max: u32,
-}
-
-impl RewardsList {
-    // Fixed fields: 32 (Pubkey) + 1 (u8) + 4 (vec header) + 8 (i64) + 8 (i64) + 4 (u32) + 4 (u32) = 61
-    pub const MAX_SIZE: usize = 32 + 1 + 4 + 8 + 8 + 4 + 4;
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct Reward {
-    pub name: String,
-    pub draw_range_min: u32,
-    pub draw_range_max: u32,
-    pub reward_type: RewardType,
-    pub reward_mints: Vec<Pubkey>,
-    pub reward_amount: u64,
-    pub redemption_count: u64,
-    pub redemption_limit: u64,
-    pub additional_pubkeys: Vec<Pubkey>,
-}
-
-impl Reward {
-    // 50 + 4 + 4 + 1 + 4 + (32 * 25) + 8 + 8 + 8 + 4 + (32 * 3) = 987
-    // name: 4 (length) + 46 (content) = 50, draw_range_min: 4, draw_range_max: 4, reward_type: 1, reward_mints vec header: 4, reward_mints (25 max): 800, reward_amount: 8, redemption_count: 8, redemption_limit: 8, additional_pubkeys vec header: 4, additional_pubkeys (3 max): 96
-    pub const MAX_SIZE: usize = 50 + 4 + 4 + 1 + 4 + (32 * 25) + 8 + 8 + 8 + 4 + (32 * 3);
-}
-
-#[account]
-pub struct TransferLookupTable {
-    pub bump: u8,
-    pub lookup_accounts: Vec<Pubkey>,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Default, Debug)]
-pub enum RewardType {
-    #[default]
-    SplToken,
-    LegacyNft,
-    ProgrammableNft,
-    SplToken2022,
-    CompressedNft,
-}
-
-impl RewardType {
-    pub fn to_seed(&self) -> u8 {
-        match self {
-            RewardType::SplToken => 0,
-            RewardType::LegacyNft => 1,
-            RewardType::ProgrammableNft => 2,
-            RewardType::SplToken2022 => 3,
-            RewardType::CompressedNft => 4,
-        }
-    }
 }
