@@ -17,7 +17,6 @@ import {
     depositAndQueueTransferIx,
     deriveEphemeralAta,
     deriveShuttleEphemeralAta,
-    deriveShuttleAta,
     deriveShuttleWalletAta,
     deriveTransferQueue,
     deriveVault,
@@ -25,8 +24,6 @@ import {
     delegateTransferQueueIx,
     ensureTransferQueueCrankIx,
     initTransferQueueIx,
-    mergeShuttleIntoAtaIx,
-    undelegateAndCloseShuttleEphemeralAtaIx,
     undelegateIx,
     withdrawSplIx, delegateSpl
 } from "@magicblock-labs/ephemeral-rollups-sdk";
@@ -281,6 +278,16 @@ const createNoopInstruction = (): TransactionInstruction => new TransactionInstr
     data: Buffer.from(crypto.getRandomValues(new Uint8Array(5))),
 });
 
+const parseTokenAmount = (accountInfo: { data: Buffer | Uint8Array }): bigint | null => {
+    const data = Buffer.isBuffer(accountInfo.data)
+        ? accountInfo.data
+        : Buffer.from(accountInfo.data);
+
+    // SPL token account layout: mint(32) + owner(32) + amount(u64 at offset 64)
+    if (data.length < 72) return null;
+    return data.readBigUInt64LE(64);
+};
+
 // Utility: Safe localStorage operations
 const safeLocalStorage = {
     get: <T,>(key: string, defaultValue: T): T => {
@@ -534,7 +541,7 @@ const App: React.FC = () => {
 
     const refreshBalances = useCallback(async () => {
         const eConn = ephemeralConnection.current;
-        if (!eConn || !mint) return;
+        if (!mint) return;
 
         const updated = await Promise.all(accountsRef.current.map(async (acc) => {
             const ata = getAssociatedTokenAddressSync(mint, acc.keypair.publicKey, false, TOKEN_PROGRAM_ID);
@@ -545,11 +552,10 @@ const App: React.FC = () => {
 
             // Fetch L1 balance and delegation status
             try {
-                const ai = await connection.getAccountInfo(ata);
+                const ai = await connection.getAccountInfo(ata, 'processed');
                 if (ai) {
-                    const b = await connection.getTokenAccountBalance(ata, 'processed');
-                    balance = BigInt(b.value.amount);
-                    const eAtaAcc = await connection.getAccountInfo(eAta);
+                    balance = parseTokenAmount(ai) ?? 0n;
+                    const eAtaAcc = await connection.getAccountInfo(eAta, 'processed');
                     eDelegated = eAtaAcc?.owner.equals(DELEGATION_PROGRAM_ID);
                 }
             } catch {
@@ -558,20 +564,22 @@ const App: React.FC = () => {
 
             // Fetch ephemeral balance
             let eBalance = 0n;
-            try {
-                const aiE = await eConn.getAccountInfo(ata);
-                if (aiE) {
-                    const bE = await eConn.getTokenAccountBalance(ata, 'confirmed');
-                    eBalance = BigInt(bE.value.amount);
+            if (eConn) {
+                try {
+                    const aiE = await eConn.getAccountInfo(ata, 'processed');
+                    if (aiE) {
+                        eBalance = parseTokenAmount(aiE) ?? 0n;
+                    }
+                } catch {
+                    // default is fine
                 }
-            } catch {
-                // default is fine
             }
 
             // Fetch SOL balance
             let solLamports = 0n;
             try {
-                solLamports = BigInt(await connection.getBalance(acc.keypair.publicKey, 'confirmed'));
+                const ownerInfo = await connection.getAccountInfo(acc.keypair.publicKey, 'processed');
+                solLamports = BigInt(ownerInfo?.lamports ?? 0);
             } catch {
                 // default is fine
             }
@@ -605,6 +613,67 @@ const App: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [accountKeysFingerprint]);
 
+    // Subscribe to L1 ATA and wallet changes for live SPL and SOL updates
+    useEffect(() => {
+        const ids: number[] = [];
+
+        for (const a of accountsRef.current) {
+            if (a.ata) {
+                try {
+                    const ataId = connection.onAccountChange(
+                        a.ata,
+                        (accountInfo) => {
+                            const amount = parseTokenAmount(accountInfo) ?? 0n;
+                            setAccounts((prev) =>
+                                prev.map((p) =>
+                                    p.keypair.publicKey.equals(a.keypair.publicKey)
+                                        ? { ...p, balance: amount }
+                                        : p
+                                )
+                            );
+                        },
+                        "processed"
+                    );
+
+                    ids.push(ataId);
+                } catch (_) {
+                    /* ignore */
+                }
+            }
+
+            try {
+                const ownerId = connection.onAccountChange(
+                    a.keypair.publicKey,
+                    (accountInfo) => {
+                        const lamports = BigInt(accountInfo.lamports);
+                        setAccounts((prev) =>
+                            prev.map((p) =>
+                                p.keypair.publicKey.equals(a.keypair.publicKey)
+                                    ? { ...p, solLamports: lamports }
+                                    : p
+                            )
+                        );
+                    },
+                    "processed"
+                );
+
+                ids.push(ownerId);
+            } catch (_) {
+                /* ignore */
+            }
+        }
+
+        return () => {
+            ids.forEach((id) => {
+                try {
+                    connection.removeAccountChangeListener(id);
+                } catch (_) {
+                    /* ignore */
+                }
+            });
+        };
+    }, [accountKeysFingerprint, ataFingerprint, connection]);
+
     // Subscribe to ata changes on the ephemeral connection for each account
     useEffect(() => {
         const eConn = ephemeralConnection.current;
@@ -612,17 +681,7 @@ const App: React.FC = () => {
 
         const ids: number[] = [];
 
-        const parseTokenAmount = (accountInfo: { data: Buffer | Uint8Array }) => {
-            const data = Buffer.isBuffer(accountInfo.data)
-                ? accountInfo.data
-                : Buffer.from(accountInfo.data);
-
-            // SPL token account layout: mint(32) + owner(32) + amount(u64 at offset 64)
-            if (data.length < 72) return null;
-            return data.readBigUInt64LE(64);
-        };
-
-        for (const a of accounts) {
+        for (const a of accountsRef.current) {
             if (!a.ata) continue;
 
             try {
@@ -630,8 +689,7 @@ const App: React.FC = () => {
                     a.ata,
                     async (accountInfo) => {
                         try {
-                            const amount = parseTokenAmount(accountInfo);
-                            if (amount === null) return;
+                            const amount = parseTokenAmount(accountInfo) ?? 0n;
 
                             setAccounts((prev) =>
                                 prev.map((p) =>
@@ -663,7 +721,7 @@ const App: React.FC = () => {
             });
         };
         // Re-subscribe when ata set changes or mint changes
-    }, [accounts, ataFingerprint, mint]);
+    }, [accountKeysFingerprint, ataFingerprint, mint]);
 
     // Also refresh balances when the set of account keys changes (not on balance-only updates)
     useEffect(() => {
@@ -1159,22 +1217,6 @@ const App: React.FC = () => {
                                         const amountBn = parseAmount(raw, decimals);
                                         if (amountBn <= 0n) throw new Error('Invalid amount');
 
-                                        // if (a.eDelegated) {
-                                        //     // 1) Send undelegate instruction on Ephemeral rollup
-                                        //     const ixU = undelegateIx(a.keypair.publicKey, mint);
-                                        //     const txU = new Transaction().add(createNoopInstruction(), ixU);
-                                        //     txU.feePayer = a.keypair.publicKey;
-                                        //     const bhU = await getCachedEphemeralBlockhash();
-                                        //     txU.recentBlockhash = bhU;
-                                        //     txU.sign(a.keypair);
-                                        //     const sigU = await eConn.sendRawTransaction(txU.serialize(), {skipPreflight: true});
-                                        //     await eConn.confirmTransaction(sigU, 'confirmed');
-                                        //
-                                        //     // Wait for commitment signature, then confirm on L1
-                                        //     const txCommitSgn = await GetCommitmentSignature(sigU, eConn);
-                                        //     await connection.confirmTransaction(txCommitSgn, 'confirmed');
-                                        // }
-
                                         // Build instructions via SDK
                                         const shuttleId = crypto.getRandomValues(new Uint32Array(1))[0];
                                         const ixs = await delegateSpl(
@@ -1201,7 +1243,6 @@ const App: React.FC = () => {
                                         setTransactionSuccess('Delegation confirmed');
                                         console.log("Delegation: ", sig);
 
-                                        // TODO: Send tx to the ephemeral to merge_shuttle_ephemeral_ata
                                         const [shuttleEphemeralAta] = deriveShuttleEphemeralAta(
                                             a.keypair.publicKey,
                                             mint,
@@ -1211,63 +1252,7 @@ const App: React.FC = () => {
                                             mint,
                                             shuttleEphemeralAta,
                                         );
-                                        const [shuttleAta] = deriveShuttleAta(shuttleEphemeralAta, mint);
-                                        const ownerAta = getAssociatedTokenAddressSync(
-                                            mint,
-                                            a.keypair.publicKey,
-                                            false,
-                                            TOKEN_PROGRAM_ID,
-                                        );
-                                        const mergeIx = mergeShuttleIntoAtaIx(
-                                            a.keypair.publicKey,
-                                            ownerAta,
-                                            shuttleEphemeralAta,
-                                            shuttleWalletAta,
-                                            mint,
-                                        );
-                                        const txMerge = new Transaction().add(createNoopInstruction(), mergeIx);
-                                        txMerge.feePayer = a.keypair.publicKey;
-                                        const bhMerge = await getCachedEphemeralBlockhash();
-                                        txMerge.recentBlockhash = bhMerge;
-                                        txMerge.sign(a.keypair);
-
-                                        const sigMerge = await eConn.sendRawTransaction(txMerge.serialize(), {
-                                            skipPreflight: false,
-                                        });
-                                        console.log("Merging: " + sigMerge);
-                                        console.log("Shuttle ephemeral Ata: ", shuttleEphemeralAta.toBase58());
-                                        console.log("Owner Ata: ", ownerAta.toBase58());
-
-                                        // TODO: call undelegate_and_close_shuttle_ephemeral_ata in the ER
-                                        try {
-                                            await eConn.confirmTransaction(sigMerge, 'confirmed');
-                                        } catch (confirmErr) {
-                                            console.warn(
-                                                "Merge confirmation failed on first attempt, retrying once...",
-                                                confirmErr,
-                                            );
-                                            await new Promise((resolve) => setTimeout(resolve, 400));
-                                            await eConn.confirmTransaction(sigMerge, 'confirmed');
-                                        }
-                                        const closeShuttleIx = undelegateAndCloseShuttleEphemeralAtaIx(
-                                            a.keypair.publicKey,
-                                            shuttleEphemeralAta,
-                                            shuttleAta,
-                                            shuttleWalletAta,
-                                        );
-                                        const txCloseShuttle = new Transaction().add(
-                                            createNoopInstruction(),
-                                            closeShuttleIx,
-                                        );
-                                        txCloseShuttle.feePayer = a.keypair.publicKey;
-                                        txCloseShuttle.recentBlockhash = await getCachedEphemeralBlockhash();
-                                        txCloseShuttle.sign(a.keypair);
-                                        const sigCloseShuttle = await eConn.sendRawTransaction(
-                                            txCloseShuttle.serialize(),
-                                            { skipPreflight: true },
-                                        );
-                                        console.log("Closing: ", sigCloseShuttle);
-                                        await eConn.confirmTransaction(sigCloseShuttle, 'confirmed');
+                                        console.log(shuttleWalletAta.toBase58());
 
                                         await refreshBalances();
                                     } catch (e: any) {
