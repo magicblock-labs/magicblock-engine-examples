@@ -630,9 +630,9 @@ pub mod rewards_delegated_vrf {
         ctx: Context<AddReward>,
         reward_name: String,
         reward_amount: Option<u64>,
-        redemption_limit: Option<u64>,
         draw_range_min: Option<u32>,
         draw_range_max: Option<u32>,
+        redemption_limit: Option<u64>,
     ) -> Result<()> {
         let reward_list = &mut ctx.accounts.reward_list;
         let mint = &ctx.accounts.mint;
@@ -694,10 +694,56 @@ pub mod rewards_delegated_vrf {
                 RewardError::RewardTypeMismatch
             );
 
-            // CASE 1AA: Token rewards cannot be added
+            // CASE 1AA: Token rewards - allow updating redemption_limit if all params match
             if detected_type == RewardType::SplToken || detected_type == RewardType::SplToken2022 {
-                msg!("Token already exists in reward '{}'", reward_name);
-                return Err(RewardError::TokenCannotBeAdded.into());
+                // For token rewards, check if the new parameters match existing ones
+                if let (Some(new_amount), Some(new_limit)) = (reward_amount, redemption_limit) {
+                    // Check if amount matches
+                    if reward.reward_amount != new_amount {
+                        msg!(
+                            "Token reward '{}' already exists with amount {}. Cannot change to {}",
+                            reward_name,
+                            reward.reward_amount,
+                            new_amount
+                        );
+                        return Err(RewardError::TokenCannotBeAdded.into());
+                    }
+
+                    // Check if draw ranges match (if provided)
+                    let ranges_match = match (draw_range_min, draw_range_max) {
+                        (Some(new_min), Some(new_max)) => {
+                            new_min == reward.draw_range_min && new_max == reward.draw_range_max
+                        }
+                        (None, None) => true, // Ranges not specified, assume match
+                        _ => false,           // One specified, one not - mismatch
+                    };
+
+                    if !ranges_match {
+                        msg!(
+                            "Token reward '{}' draw range mismatch. Existing: {} - {}, Provided: {} - {}",
+                            reward_name,
+                            reward.draw_range_min,
+                            reward.draw_range_max,
+                            draw_range_min.unwrap_or(0),
+                            draw_range_max.unwrap_or(0)
+                        );
+                        return Err(RewardError::TokenCannotBeAdded.into());
+                    }
+
+                    // All parameters match - allow updating redemption_limit
+                    let old_limit = reward.redemption_limit;
+                    reward.redemption_limit = old_limit + new_limit;
+                    msg!(
+                        "Updated redemption_limit for token reward '{}': {} -> {}",
+                        reward_name,
+                        old_limit,
+                        reward.redemption_limit
+                    );
+                } else {
+                    msg!("Token reward '{}' already exists. Cannot add without specifying reward_amount and redemption_limit", reward_name);
+                    return Err(RewardError::TokenCannotBeAdded.into());
+                }
+                return Ok(());
             }
 
             // CASE 1AB: LegacyNft or ProgrammableNft
@@ -763,8 +809,8 @@ pub mod rewards_delegated_vrf {
             );
         } else {
             // CASE 1B: Reward doesn't exist - create new reward
-            let min = draw_range_min.ok_or(RewardError::MissingRewardParameters)?;
-            let max = draw_range_max.ok_or(RewardError::MissingRewardParameters)?;
+            let min = draw_range_min.ok_or(RewardError::MissingDrawRangeMin)?;
+            let max = draw_range_max.ok_or(RewardError::MissingDrawRangeMax)?;
 
             // For NFT rewards, amount and limit are automatically set
             let (amount, limit) = if detected_type == RewardType::LegacyNft
@@ -774,9 +820,8 @@ pub mod rewards_delegated_vrf {
                 (1u64, 1u64)
             } else {
                 // For token rewards, require amount and limit
-                let provided_amount = reward_amount.ok_or(RewardError::MissingRewardParameters)?;
-                let provided_limit =
-                    redemption_limit.ok_or(RewardError::MissingRewardParameters)?;
+                let provided_amount = reward_amount.ok_or(RewardError::MissingRewardAmount)?;
+                let provided_limit = redemption_limit.ok_or(RewardError::MissingRedemptionLimit)?;
                 (provided_amount, provided_limit)
             };
 

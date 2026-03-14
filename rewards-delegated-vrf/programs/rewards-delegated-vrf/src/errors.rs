@@ -38,7 +38,7 @@ pub enum RewardError {
     #[msg("Invalid reward type for transfer")]
     InvalidRewardType,
 
-    #[msg("Reward type does not match the specified type")]
+    #[msg("Reward type does not match the specified type with existing Reward")]
     RewardTypeMismatch,
 
     #[msg("Unsupported asset type - only Fungible, NonFungible, and ProgrammableNonFungible are supported")]
@@ -52,6 +52,18 @@ pub enum RewardError {
 
     #[msg("Missing required reward parameters for new reward creation")]
     MissingRewardParameters,
+
+    #[msg("Missing required parameter: draw_range_min")]
+    MissingDrawRangeMin,
+
+    #[msg("Missing required parameter: draw_range_max")]
+    MissingDrawRangeMax,
+
+    #[msg("Missing required parameter: reward_amount")]
+    MissingRewardAmount,
+
+    #[msg("Missing required parameter: redemption_limit")]
+    MissingRedemptionLimit,
 
     #[msg("ProgrammableNft requires metadata account")]
     MissingMetadataForProgrammableNft,

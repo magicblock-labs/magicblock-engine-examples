@@ -10,7 +10,7 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { createCreateMetadataAccountV3Instruction, createSetAndVerifyCollectionInstruction } from "@metaplex-foundation/mpl-token-metadata";
+import { createCreateMetadataAccountV3Instruction, createSetAndVerifyCollectionInstruction, createCreateMasterEditionV3Instruction } from "@metaplex-foundation/mpl-token-metadata";
 import * as fs from "fs";
 
 import { PDAs } from "./pdas";
@@ -21,6 +21,10 @@ import {
   getTransferLookupAccounts,
   logRewardListDetails,
   getValidatorAccounts,
+  logTestEnvironment,
+  logSection,
+  logTxResult,
+  logError,
 } from "./helpers";
 import { TOKEN_MINT, TOKEN_DECIMALS, DISTRIBUTOR_MINT_AMOUNT } from "./constants";
 
@@ -55,19 +59,23 @@ describe.only("rewards-delegated-vrf", () => {
 
   const whitelist = [wallet.publicKey, new PublicKey("Fr33vGLZtpuLJ6WVezhMQarEPityiwkqsnDANr4aTF8Q")];
 
+  // Initialize pubkeys
   let tokenMint: PublicKey = TOKEN_MINT;
-  let distributorTokenAccount: PublicKey;
+  let distributorTokenAccount: PublicKey = getAssociatedTokenAddressSync(
+    TOKEN_MINT,
+    rewardDistributorPda,
+    true // allowOffCurve - allows PDAs
+  );
   let collectionMint: PublicKey;
 
-  console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
-  console.log(
-    "Ephemeral Rollup Connection: ",
-    providerEphemeralRollup.connection.rpcEndpoint
+  logTestEnvironment(
+    provider.connection.rpcEndpoint,
+    providerEphemeralRollup.connection.rpcEndpoint,
+    wallet.publicKey,
+    user.publicKey,
+    rewardDistributorPda,
+    rewardListPda
   );
-  console.log(`Current SOL Public Key (Admin): ${wallet.publicKey}`);
-  console.log(`Test User Public Key: ${user.publicKey}`);
-  console.log("Reward Distributor PDA: ", rewardDistributorPda.toString());
-  console.log("Reward List PDA: ", rewardListPda.toString());
 
   before(async function () {
     const balance = await provider.connection.getBalance(wallet.publicKey);
@@ -157,10 +165,12 @@ describe.only("rewards-delegated-vrf", () => {
     console.log("\n=== Creating NFT Collection ===");
 
     try {
-      // Check if collection already exists
+      // Initialize or load mints file
       const mintsPath = "tests/nft-mints.json";
+      let mintsData = { collectionMint: null, nfts: [] };
+
       if (fs.existsSync(mintsPath)) {
-        const mintsData = JSON.parse(fs.readFileSync(mintsPath, "utf-8"));
+        mintsData = JSON.parse(fs.readFileSync(mintsPath, "utf-8"));
         if (mintsData.collectionMint) {
           collectionMint = new PublicKey(mintsData.collectionMint);
           console.log("Collection already exists. Mint:", collectionMint.toString());
@@ -229,10 +239,8 @@ describe.only("rewards-delegated-vrf", () => {
       console.log("Collection Metadata created. Signature:", sig);
 
       // Save collection mint to JSON
-      saveMints("tests/nft-mints.json", {
-        collectionMint: collectionMint.toString(),
-        nfts: [],
-      });
+      mintsData.collectionMint = collectionMint.toString();
+      saveMints(mintsPath, mintsData);
     } catch (err) {
       console.error("Error creating NFT Collection:", err);
       console.log("Error details:", (err as Error).message);
@@ -359,6 +367,39 @@ describe.only("rewards-delegated-vrf", () => {
       const metadataTx = new anchor.web3.Transaction().add(createMetadataIx);
       const metadataSig = await provider.sendAndConfirm(metadataTx);
       console.log("NFT Metadata created. Signature:", metadataSig);
+
+      // Create Master Edition account
+      const [masterEditionAddress] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("metadata"),
+          new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+          nftMint.toBuffer(),
+          Buffer.from("edition"),
+        ],
+        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+      );
+
+      const createMasterEditionIx = createCreateMasterEditionV3Instruction(
+        {
+          edition: masterEditionAddress,
+          metadata: metadataAddress,
+          mint: nftMint,
+          mintAuthority: wallet.publicKey,
+          payer: wallet.publicKey,
+          updateAuthority: wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        },
+        {
+          createMasterEditionArgs: {
+            maxSupply: null, // null for unlimited editions
+          }
+        }
+      );
+
+      const masterEditionTx = new anchor.web3.Transaction().add(createMasterEditionIx);
+      const masterEditionSig = await provider.sendAndConfirm(masterEditionTx);
+      console.log("Master Edition created. Signature:", masterEditionSig);
 
       // Derive collection metadata address
       const [collectionMetadataAddress] = PublicKey.findProgramAddressSync(
@@ -573,79 +614,6 @@ describe.only("rewards-delegated-vrf", () => {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   });
 
-  it("Add NFT Mint to Bronze Prize Reward (on Ephemeral Rollup)", async () => {
-    console.log("\n=== Adding NFT Mint to Bronze Prize Reward ===");
-    try {
-      // Load NFT mints from file
-      const mintsPath = "tests/nft-mints.json";
-      if (!fs.existsSync(mintsPath)) {
-        console.log("No NFT mints found");
-        return;
-      }
-
-      const mintsData = JSON.parse(fs.readFileSync(mintsPath, "utf-8"));
-      if (!mintsData.nfts || mintsData.nfts.length === 0) {
-        console.log("No NFTs in mints data");
-        return;
-      }
-
-      // Use the first NFT
-      const nftData = mintsData.nfts[0];
-      const nftMint = new PublicKey(nftData.mint);
-      const distributorNftAccount = new PublicKey(nftData.distributorTokenAccount);
-      const metadataAddress = new PublicKey(nftData.metadataAddress);
-
-      // Adding NFT to "Bronze Prize" reward
-      const accountsObj: any = {
-        admin: wallet.publicKey,
-        rewardDistributor: rewardDistributorPda,
-        rewardList: rewardListPda,
-        mint: nftMint,
-        tokenAccount: distributorNftAccount,
-      };
-
-      // Add metadata account (it's optional but helpful for type detection)
-      accountsObj.metadata = metadataAddress;
-
-      let tx = await ephemeralProgram.methods
-        .addReward(
-          "Bronze Prize",
-          null, // reward_amount (not needed for existing reward)
-          null, // redemption_limit (not needed for existing reward)
-          null, // draw_range_min (not needed for existing reward)
-          null  // draw_range_max (not needed for existing reward)
-        )
-        .accounts(accountsObj)
-        .transaction();
-
-      tx.feePayer = wallet.publicKey;
-      tx.recentBlockhash = (
-        await providerEphemeralRollup.connection.getLatestBlockhash()
-      ).blockhash;
-      tx.partialSign(wallet.payer);
-
-      const txHash = await providerEphemeralRollup
-        .sendAndConfirm(tx, [wallet.payer], { skipPreflight: true })
-        .catch((err) => {
-          console.log("Add Reward error:", err?.message || JSON.stringify(err));
-          return null;
-        });
-
-      if (txHash) {
-        console.log("Add Reward txHash: ", txHash);
-        console.log("Successfully added NFT to 'Bronze Prize' reward");
-
-        // Log updated reward list details
-        await logRewardListDetails(program, ephemeralProgram, rewardListPda, true);
-      } else {
-        console.log("Add Reward transaction failed or was not confirmed");
-      }
-    } catch (addRewardErr) {
-      console.error("Error adding reward:", addRewardErr);
-      console.log("Error details:", addRewardErr instanceof Error ? addRewardErr.message : JSON.stringify(addRewardErr));
-    }
-  });
-
   it("Request Random Reward (should fail - unauthorized user)", async () => {
     const clientSeed = Math.floor(Math.random() * 256);
 
@@ -766,23 +734,11 @@ describe.only("rewards-delegated-vrf", () => {
         name: "Silver Prize",
         drawRangeMin: 31,
         drawRangeMax: 65,
-        rewardType: { splToken: {} },
-        rewardMints: [tokenMint],
-        rewardAmount: new anchor.BN(500),
-        redemptionCount: new anchor.BN(0),
-        redemptionLimit: new anchor.BN(2),
-        additionalPubkeys: []
-      },
-      {
-        // Bronze Prize will be populated with NFTs via add_reward
-        name: "Bronze Prize",
-        drawRangeMin: 66,
-        drawRangeMax: 100,
         rewardType: { legacyNft: {} },
         rewardMints: [],
-        rewardAmount: new anchor.BN(1), // NFTs always have amount = 1
+        rewardAmount: new anchor.BN(1),
         redemptionCount: new anchor.BN(0),
-        redemptionLimit: new anchor.BN(0), // Will update as NFTs are added
+        redemptionLimit: new anchor.BN(0),
         additionalPubkeys: []
       }
     ];
@@ -812,6 +768,136 @@ describe.only("rewards-delegated-vrf", () => {
 
     if (tx) {
       console.log("Reward List set txHash: ", tx);
+    }
+  });
+
+  it("Add NFT Mint to Bronze Prize Reward (on Ephemeral Rollup)", async () => {
+    console.log("\n=== Adding NFT Mint to Bronze Prize Reward ===");
+    try {
+      // Load NFT mints from file
+      const mintsPath = "tests/nft-mints.json";
+      if (!fs.existsSync(mintsPath)) {
+        console.log("No NFT mints found");
+        return;
+      }
+
+      const mintsData = JSON.parse(fs.readFileSync(mintsPath, "utf-8"));
+      if (!mintsData.nfts || mintsData.nfts.length === 0) {
+        console.log("No NFTs in mints data");
+        return;
+      }
+
+      // Use the last NFT
+      const nftData = mintsData.nfts[mintsData.nfts.length - 1];
+      const nftMint = new PublicKey(nftData.mint);
+      const distributorNftAccount = new PublicKey(nftData.distributorTokenAccount);
+      const [metadataAddress] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("metadata"),
+          new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+          nftMint.toBuffer(),
+        ],
+        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+      );
+
+      // Adding NFT to "Bronze Prize" reward
+      const accountsObj: any = {
+        admin: wallet.publicKey,
+        rewardDistributor: rewardDistributorPda,
+        rewardList: rewardListPda,
+        mint: nftMint,
+        tokenAccount: distributorNftAccount,
+        metadata: metadataAddress,
+      };
+
+      let tx = await ephemeralProgram.methods
+        .addReward(
+          "Silver Prize",
+          null, // reward_amount (not needed for existing reward)
+          null, // redemption_limit (not needed for existing reward)
+          null, // draw_range_min (not needed for existing reward)
+          null  // draw_range_max (not needed for existing reward)
+        )
+        .accounts(accountsObj)
+        .transaction();
+
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = (
+        await providerEphemeralRollup.connection.getLatestBlockhash()
+      ).blockhash;
+      tx.partialSign(wallet.payer);
+
+      const txHash = await providerEphemeralRollup
+        .sendAndConfirm(tx, [wallet.payer], { skipPreflight: true })
+        .catch((err) => {
+          console.log("Add Reward error:", err?.message || JSON.stringify(err));
+          return null;
+        });
+
+      if (txHash) {
+        console.log("Add Reward txHash: ", txHash);
+        console.log("Successfully added NFT to 'Bronze Prize' reward");
+
+        // Log updated reward list details
+        await logRewardListDetails(program, ephemeralProgram, rewardListPda, true);
+      } else {
+        console.log("Add Reward transaction failed or was not confirmed");
+      }
+    } catch (addRewardErr) {
+      console.error("Error adding reward:", addRewardErr);
+      console.log("Error details:", addRewardErr instanceof Error ? addRewardErr.message : JSON.stringify(addRewardErr));
+    }
+  });
+
+  it.only("Add Token Reward to Bronze Prize with SPL Token", async () => {
+    logSection("Adding SPL Token to Bronze Prize Reward");
+    try {
+
+      // Adding SPL tokens to "Bronze Prize" reward (no metadata needed for tokens)
+      const accountsObj: any = {
+        admin: wallet.publicKey,
+        rewardDistributor: rewardDistributorPda,
+        rewardList: rewardListPda,
+        mint: tokenMint,
+        tokenAccount: distributorTokenAccount,
+        metadata: null, // Optional - not needed for SPL tokens
+      };
+
+      // Increase redemption limit for Bronze Prize (same reward_amount)
+      let tx = await ephemeralProgram.methods
+        .addReward(
+          "Bronze Prize",
+          new anchor.BN(500), // reward_amount: 500 tokens (must match existing)
+          null,               // draw_range_min (not needed for existing reward)
+          null,               // draw_range_max (not needed for existing reward)
+          new anchor.BN(15)   // redemption_limit: increase from 10 to 15
+        )
+        .accounts(accountsObj)
+        .transaction();
+
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = (
+        await providerEphemeralRollup.connection.getLatestBlockhash()
+      ).blockhash;
+      tx.partialSign(wallet.payer);
+
+      const txHash = await providerEphemeralRollup
+        .sendAndConfirm(tx, [wallet.payer], { skipPreflight: true })
+        .catch((err) => {
+          logError("Add Token Reward error", err);
+          return null;
+        });
+
+      if (txHash) {
+        logTxResult("Add Token Reward", txHash);
+        console.log("Successfully added SPL token to 'Bronze Prize' reward");
+        await logRewardListDetails(program, ephemeralProgram, rewardListPda, true);
+      } else {
+        console.log("Add Token Reward transaction failed or was not confirmed");
+      }
+    } catch (err) {
+      console.error("Error adding token reward:", err);
+      logError("Error details", err);
     }
   });
 

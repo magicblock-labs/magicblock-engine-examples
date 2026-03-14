@@ -1,173 +1,77 @@
 {
-  "collectionMint": "AyVePeLYzdxa7ZENTZFVCaTu6opixqjYhA12tZtMHSHk",
+  "collectionMint": "9reoZZFJM5XaZsmQN2zwVbVuCFBpak9eGhX3p31UwpcV",
   "nfts": [
     {
-      "mint": "CCK5rCPPZZiZSUnaJqjmAfNaGofjub8ivuvGD8KyVah5",
+      "mint": "CNKsq8f7NfA9SwVzNVinfih2aCUc4gfx2AXfvjbJQe46",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "7TTcEzXqDHzc47Lvx8xTBbKJyCwbNrjyotmqfsjcmTWj",
-      "metadataAddress": "BDwwdBZWYjhikuMn8JjWYDpjpQtBxZjueV7Qgou8KPFe"
+      "distributorTokenAccount": "DVKL4AwTXQtktca5aiwvfhSfqBJrYtsMz9M2Ehg5oXYf",
+      "metadataAddress": "31j8Wc3LFvUbSYAkHMqkHCRfTgiPTJJREvpDXjGTspxS"
     },
     {
-      "mint": "5miuekiP1b1HmZdphxsc4R1oZdVawRfcNsbngzaWKgPo",
+      "mint": "9mi3twx1wr3oyV6ArVwTtGmycEvswfBNK2zKHMHQpF16",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "34Tx7b3afCyb5iw93KaRfrYpiY2m8V7BvPj6a8iA1gyq",
-      "metadataAddress": "BLqjzMxT179YTNtbAQu1XHx6ccq8kr5edTyUDcduAPFn"
+      "distributorTokenAccount": "HysCkaWxUyaBkdVt4RNwwKfc8vZcWULRL41mCSRwUTiR",
+      "metadataAddress": "VsteCECxppkjS7mcfabtcKiYZzj9xMVUXrqPjvEWTKa"
     },
     {
-      "mint": "FJXzPwUejRiXiZ8q4M74xtMFJGUeiNXvom4qK2cryj77",
+      "mint": "nUfREgjhUC8RgQREemU3ngtMqY9cpBYBgHGEkE66XWk",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "HUbdTC1hCp3xxXtdQWk6DCj5AuoYncQs2VQVgeVk1Bii",
-      "metadataAddress": "3D7ZeXpN7Ezh5b2Q1fcynCYbSvu5QVhoRVZAXN1sB3YV"
+      "distributorTokenAccount": "3PdfF7cQVxjK12ztq81K94LwQdiyV7eLC19MG2q8E4fJ",
+      "metadataAddress": "EmYFsj9GaChL6UVY7AFQCzTQsfUi8TSzFJa4dpH4LMMz"
     },
     {
-      "mint": "EcHFp6sSu5zSzuHF2w5r7QDm8336jsAEh6NQXHhCeJAk",
+      "mint": "A9NqS4Pv13SoU5UAJtXPpaW1LLAoRZRiVbahXaZsDLC9",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "FnFr3PJDys2pVx55bYFxqdBKLmXYdVZVTuYagAfdJsLd",
-      "metadataAddress": "C4x27uBk84aCw4FRwpDazHQnzfhAjko7V4g28Qa5SV1v"
+      "distributorTokenAccount": "2KdXT1BDGQXTuWUKZCKFtEgujKWDfFhdCQwM7ciUX5Kw",
+      "metadataAddress": "352vSwR8NZSc7W9wVWzQE5F9QMgYKTCrBCBLNjhPSw1E"
     },
     {
-      "mint": "4xSpLkBATJnpoGxExbqCrQWVAcTiHHFJDbJs8yws3Azb",
+      "mint": "9xoCAEqF1eZpdsTje7UWVmw1hPD3pyq8v7NXa3EFw3yh",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "G32RN9owDkTnPctiQJMtZo5oup5k982VR3HPVJu5qJpW",
-      "metadataAddress": "8PzuBXdkpSv28eVxbW7o6zhXRufFA1gFxLVvyyihT9fS"
+      "distributorTokenAccount": "9e9sfLzRcvEiko1cJmVmypGow1tB8CaMXi3RpVFs4iYN",
+      "metadataAddress": "GBotKL3FgyLEaKbAioSncNrtsdvZ3UWUu4Y8UgLh5kHh"
     },
     {
-      "mint": "3KppQPPnnf5vYCXQuex3b9R6eM1xHqFvzACrJ8A7z5AX",
+      "mint": "ME2coG1AEomiZyo5LyBQK7y5u3bqqErc8MdLXL8dMXq",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "Gw2itmR7WfSkGNxiLMgTaBSbkXUPmtPnEE7hGSi3L3EH",
-      "metadataAddress": "DxCUEec4SbBXPaHBA4JNDWdMTcR4uxGBtCnXxwGV2bSz"
+      "distributorTokenAccount": "3TDeo5g3gr3V6HNxgh4x657fX3f1YWsCepZA7dhKS2yP",
+      "metadataAddress": "FBjmXPWuJX3u52KxfGU69LL48vn4szpF2bG6pd9siMdD"
     },
     {
-      "mint": "FTpcWerLgAZeFSi3iwH1QFyMt5GDSVEHrBZt2KKJeEZR",
+      "mint": "DP4Xzbd3KPBQ7Bp9fW1Tjd2hvhzGmAnkjNBZwB2kiNoe",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "4XPTFYK9f6y9kNXvoM71w5YZUntc33LTbquYfy1P1ryV",
-      "metadataAddress": "4hj6rz9J2DPaK68x3REzx4ztLaRexsoysNcUfdNRh5ZU"
+      "distributorTokenAccount": "28tUJmZ6MasA1ZdPoGAjubCFrEzKkVHHs5FGrb51Reot",
+      "metadataAddress": "93E98hMjP4W8kt3oXVw9k1SzTQFskQsdbxW6X3ynDWun"
     },
     {
-      "mint": "3ycmaFaF4byJhqPRW5AvskWxWH4kZrz5c1UmCBFWmgFt",
+      "mint": "EyepbE9Re1Va51eQNAgPz8ghBU7dkEcP8z54MzmgUGE8",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "43DGGeghH4wWEGqkh5qRy2NFqVD7AXJq6SYQWaoDdvc1",
-      "metadataAddress": "4naNPHXGxFaGJkeA6LA11uuor23ydovXwRr8YAmHoWTK"
+      "distributorTokenAccount": "DbgR1TT15VpFTwss78EHh5dyMNJTrejCLQHeb3uxZPN",
+      "metadataAddress": "82ZmAX9bnSRS5mXb32ySMv53diopguxFRYZVqjCsg3o"
     },
     {
-      "mint": "RtfGwATHBVrHt4dJxTJKtrjC2HFVgvPgq7pzn9QTthP",
+      "mint": "CzLsJXVkp3eFWBB5pfzdmuZXuqQ8KjbKatz7KdEyhLtx",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "C295Zd1VbiiMP5sC27oL2A458jsQRxS3toPhiJjSMfoA",
-      "metadataAddress": "J1EK5m7Q2qh4FQHYqL1oZr48MPfF1pgpqTPvcJFQVE9n"
+      "distributorTokenAccount": "Fw5rMY8RVDYX7VuGbGfHj1NKJG5o2QKpk5V871i61g3g",
+      "metadataAddress": "7EpQQHyNQjc9cNtu8GGi5ywYVNM7bjQFnDV9Yq6od5wv"
     },
     {
-      "mint": "6VkBRYFq5PFe5TAbBDTmcZXM4g5w1YRdHiidXSunRFZq",
+      "mint": "DpmNYhRmqpRCKR64uhbPdL74CpwRD6AFkDqLNntvnd6q",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "49w1KLYctyCzZ1vMdZXaEzN9HWYwwWvcYJ1qApVCbY7i",
-      "metadataAddress": "DLu8qKz76rV9yYXnjderGoxEoQWHp9jbS5EyNTWo1h48"
+      "distributorTokenAccount": "JAYG2DvHu2LaxtZ6R1eEb54BScfZSYT3MacsJyyPwLZ1",
+      "metadataAddress": "CgPJZruNV2hHvoDbYNZDzj52saf91oGeRm5fMhwz287q"
     },
     {
-      "mint": "61gcByqhFeGDmdZHHj4qZbUHEc4nVhXebR3WN3VEdThG",
+      "mint": "EHwN1jdEZXnvzmvGioZVCCx8an7nXkJXKwfKiTiKS2BN",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "5Bv4aWnU9T8GLzWzpfC1ovCrKifMdLpPKEyDbG2wdkdv",
-      "metadataAddress": "D8md7QdbyibhhX5o9pRbaJE5XDn6JhwwVLj6UaSJa314"
+      "distributorTokenAccount": "6D7JYzCBrspGvREN7ZYXy1RBVHvm6cX9sJ4qhyW3Np4D",
+      "metadataAddress": "5K7JwARZAgRtEM5RsSY9Qz1BY4ggeKJkwF5LhQckTtRU"
     },
     {
-      "mint": "6EPZNJAANjxVXreU8P7Jk4soVdr3Ezo4QXgokBEmSkzk",
+      "mint": "ccTSbJigm5ohoKbh5kWsJ2RCoSK5GLmaGd3K3F4BeJV",
       "name": "Reward NFT #1",
-      "distributorTokenAccount": "4ev1bf1UKQaidKW2JpXoVQyUzJL47mDwsm6Wsshm5D16",
-      "metadataAddress": "AceBaAv2ZP7tKF6iMUZdwZ4ACPEiUJc8JAza3k8jMGeD"
-    },
-    {
-      "mint": "HQuV3vxz8AbGUUUqwVGdiZZpkEYLM5e9ZQEp4j2WZxhC",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "7RxKRbStd3aSjvrUXGiXw6WAXGNGkBVUieRb6Kr2uqu6",
-      "metadataAddress": "G8KAwf3o8vwGfkNrwyVkw8YHnvGwrpj9B6D6htNX713g"
-    },
-    {
-      "mint": "5VaxfGRccR7WhrJi6VJod9p5a3V2c9vSPov7VUMeCq7Q",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "GsRA243DU4fptXesHyL5SRT4RNuUGbaBBZRPaVQg7unY",
-      "metadataAddress": "3RcQFrTvzBQVrmu2eV79EHjQ5dd8nAZzSVs913j3Sfv1"
-    },
-    {
-      "mint": "2jJBuTaLBaio8pXpbR1GBaAb4uRkA1ctT18cg3nbmueu",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "G8wacS6ixyS79dRML2NuXPtDzLDRoJQ1bPkxX66L1FgY",
-      "metadataAddress": "Bs87ybD6goGD3BMtiUrYbvmFnRpWUxaPWsYVvDEavkcB"
-    },
-    {
-      "mint": "5RBbHz8Tp95B2C9wZ6q2BbdPGwsLv3X6RsVBGYQfzwtC",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "FQipkNtTZXVnZUABic6Wuf467HyFvE6H2WezAX6z7p3Z",
-      "metadataAddress": "25C7iv7w9gKSFDPWVz4Hxy6BiuMW9vfft3nCWTEdXKNW"
-    },
-    {
-      "mint": "8MgJyYutQESdj9VuhhkQpd5vmguqFSppzPmPkkWUYGVg",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "67TAprQ2uT4pw7VHBGYxNmgZqXNVweAgbx2zMb4k4kjJ",
-      "metadataAddress": "GUXhBPSknwGW13dMB2wjiWQqEpNX76mXa4nvZyvQpQxd"
-    },
-    {
-      "mint": "5QdeAn4YFKEBPr6xELfL73EYVy8QbYPdGA3QJMSxqNRG",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "HMPMQcAE9Y6ns2Qm7HffNfzzwZobSn15fX3SGCRTzQbT",
-      "metadataAddress": "DV3vR7Y5LAHLNsoBZD7fp2GYr7Xh4hc1tQAG1Uj8waRB"
-    },
-    {
-      "mint": "7Uzdr5SWXyoHD7CdH2FBimd9tP2w4DUb4LTQeckPi79Z",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "7nYLYM7rncse4FzUSaihhEiBeXDzQT5Q2w4qxme22JDA",
-      "metadataAddress": "CHqTegStcNCnTdP6b16HioN6kSkGt8UxpHars4ubef7s"
-    },
-    {
-      "mint": "BWungxBcE41a7vm4e5WZBTDhTJC2jLn7v73DbNYecKN9",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "jNv1ZY3FcyYZovheGZWLUDffGv8koVntCWucCsB74AN",
-      "metadataAddress": "DqMjWfYLrmVY93Bn7G3LFVyJGPUssh5tBpx9Fxm4BW3M"
-    },
-    {
-      "mint": "5sdkJxemnWjJQRAq8DcVZ4nduEYg8eNGfGBukPVCShi6",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "Ac15EtXBLadbCVrkXJ9pBogrxhpfqoC14UrLMGaE4xQ7",
-      "metadataAddress": "HZ8Nn8WzrbXoVeXYCVWbeK62614jWbJ2rwRUV6Ns4PGJ"
-    },
-    {
-      "mint": "9D5354pRakGhMK4vajhtaydEKwMmKKyPHc4urdisf1KV",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "4cHA4PxbtENjso8rRxqnenhoSfos6vqSJMP8dxz4ZnqK",
-      "metadataAddress": "3HRq9zRW5VkjEeZmGbC6WkPNAEi62S7HWQphKmM7zPEr"
-    },
-    {
-      "mint": "5yMnwDjJ3ExnYtVDno8N9LHsVRSdx6QSBP6WPDvjzRiy",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "BQ53v9zsYYTN6xpXu2UgmUbuPcxwb7AA4n7PmG5hsc7a",
-      "metadataAddress": "61haG4W2gWvkhgrXTeWETWeynYfERmv84ENikh9ntsMk"
-    },
-    {
-      "mint": "4eRCeN6uVHA1t1KFt42KgcRrm7bCR7RJcE6xfrpDVXZJ",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "8SFPWyhCazGA92ivz5M6hu6RPtS8YjEzLsHDp5Vw4eNC",
-      "metadataAddress": "GoocDEr4sp6GrrSCdNxWoEar9TvT37tr2Ewecwj2PG4"
-    },
-    {
-      "mint": "4Q6kom4XxEkzHWmjcvms8srUiDrkucHM63Vant3N3EvT",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "Aaivxi8kF8QGTgwpgEdLxJAD9GXvihY4L9ZrVLwebnMo",
-      "metadataAddress": "J2jRbWiR5dnWa6TfKtGz7Ey2TCvjDfxNL3FMejSy26T6"
-    },
-    {
-      "mint": "4a9zeXUZrfLFaP1gVV2FPf6Yn7Z2qD8dZh95pgTUJqDS",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "2npCPosJax31TEoTQ9nWhT6bv2CfVicxKHdtzyd1QoC9",
-      "metadataAddress": "7WDAFNrv3L27znWcBTZDmKNSHsbGWbdvdjUgCLyyiVLn"
-    },
-    {
-      "mint": "5rs7UyrzKM7YF7Z49B99mfbfmd4Z9iTieruGcvAMznaS",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "FWwU6V5Ki2cnwYjTceNv1wFarjVt1R9cs8CUtXsCHcuq",
-      "metadataAddress": "4PvoF52wD1us8pZkBoaQmryC9CJKqkUTTBA4wBBT3VhS"
-    },
-    {
-      "mint": "HQ1Ktu9Qs3bjhpWq5EsFJn38sPG7S5frVQ3fXge4TeuQ",
-      "name": "Reward NFT #1",
-      "distributorTokenAccount": "DoCFa8Rs4io9nVfwAcTxmc1gZcoikLjLxgmJJy5NDujv",
-      "metadataAddress": "A8FxvcdaUJa5eZmpxuWmQTMJ29ScegfSK21knK8iovZj"
+      "distributorTokenAccount": "J58tEFqy6F7vprxdPW2Qg7rfizsXWbXncvCLvmALtxTH",
+      "metadataAddress": "7bAqodncdVbuU4qLqpqE2kJiZG6SaGmSJk7Ui4NVkAN4"
     }
   ]
 }

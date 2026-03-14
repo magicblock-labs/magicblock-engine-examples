@@ -194,3 +194,47 @@ export function getValidatorAccounts(rpcEndpoint: string): any[] {
   }
   return [];
 }
+
+/**
+ * Log test environment setup
+ */
+export function logTestEnvironment(
+  basLayerEndpoint: string,
+  ephemeralEndpoint: string,
+  adminKey: PublicKey,
+  userKey: PublicKey,
+  rewardDistributorPda: PublicKey,
+  rewardListPda: PublicKey
+): void {
+  console.log("Base Layer Connection: ", basLayerEndpoint);
+  console.log("Ephemeral Rollup Connection: ", ephemeralEndpoint);
+  console.log(`Current SOL Public Key (Admin): ${adminKey}`);
+  console.log(`Test User Public Key: ${userKey}`);
+  console.log("Reward Distributor PDA: ", rewardDistributorPda.toString());
+  console.log("Reward List PDA: ", rewardListPda.toString());
+}
+
+/**
+ * Log section header
+ */
+export function logSection(title: string): void {
+  console.log(`\n=== ${title} ===`);
+}
+
+/**
+ * Log transaction result
+ */
+export function logTxResult(title: string, txHash: string | null): void {
+  if (txHash) {
+    console.log(`${title} txHash: ${txHash}`);
+  } else {
+    console.log(`${title} failed or was not confirmed`);
+  }
+}
+
+/**
+ * Log error with context
+ */
+export function logError(context: string, error: any): void {
+  console.log(`${context}:`, error?.message || JSON.stringify(error));
+}
