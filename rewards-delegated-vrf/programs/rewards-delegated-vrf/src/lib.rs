@@ -19,10 +19,12 @@ use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 pub mod constants;
 pub mod errors;
 pub mod state;
+pub mod token_detection;
 
 use constants::*;
 use errors::RewardError;
 use state::{Reward, RewardDistributor, RewardType, RewardsList, TransferLookupTable};
+use token_detection::detect_reward_type;
 
 declare_id!("6e7VampziFfZf3nDB5pA3QhQKB8xmCQuJxFh7oLgSUjg");
 
@@ -643,44 +645,10 @@ pub mod rewards_delegated_vrf {
             reward_list.key()
         );
 
-        // Verify mint owner is token program (Token Program or Token 2022)
-        let mint_owner = mint.to_account_info().owner;
-        require!(
-            mint_owner == &token::ID || mint_owner == &token_interface::ID,
-            RewardError::InvalidTokenProgramOwner
-        );
+        // Detect the reward type based on mint and metadata
+        let detected_type = detect_reward_type(&mint, &ctx.accounts.metadata)?;
 
-        // Detect the mint type based on metadata token_standard
-        let detected_type = if let Some(metadata) = &ctx.accounts.metadata {
-            match metadata.token_standard {
-                Some(mpl_token_metadata::types::TokenStandard::Fungible) | None => {
-                    if mint_owner == &token_interface::ID {
-                        RewardType::SplToken2022
-                    } else {
-                        RewardType::SplToken
-                    }
-                }
-                Some(mpl_token_metadata::types::TokenStandard::NonFungible) => {
-                    RewardType::LegacyNft
-                }
-                Some(mpl_token_metadata::types::TokenStandard::ProgrammableNonFungible) => {
-                    RewardType::ProgrammableNft
-                }
-                _ => {
-                    msg!("Unsupported token standard: {:?}", metadata.token_standard);
-                    return Err(RewardError::UnsupportedAssetType.into());
-                }
-            }
-        } else {
-            // No metadata - assume regular token based on program owner
-            if mint_owner == &token_interface::ID {
-                RewardType::SplToken2022
-            } else {
-                RewardType::SplToken
-            }
-        };
-
-        msg!("Detected mint type: {:?}", detected_type);
+        msg!("Detected reward type: {:?}", detected_type);
 
         // Check if reward already exists
         if let Some(reward) = reward_list
@@ -688,125 +656,129 @@ pub mod rewards_delegated_vrf {
             .iter_mut()
             .find(|r| r.name == reward_name)
         {
-            // CASE 1A: Reward exists - verify type match
+            // Reward exists - verify type match
             require!(
                 reward.reward_type == detected_type,
                 RewardError::RewardTypeMismatch
             );
 
-            // CASE 1AA: Token rewards - allow updating redemption_limit if all params match
-            if detected_type == RewardType::SplToken || detected_type == RewardType::SplToken2022 {
-                // For token rewards, check if the new parameters match existing ones
-                if let (Some(new_amount), Some(new_limit)) = (reward_amount, redemption_limit) {
-                    // Check if amount matches
-                    if reward.reward_amount != new_amount {
-                        msg!(
-                            "Token reward '{}' already exists with amount {}. Cannot change to {}",
-                            reward_name,
-                            reward.reward_amount,
-                            new_amount
-                        );
-                        return Err(RewardError::TokenCannotBeAdded.into());
-                    }
+            // Handle existing reward based on type
+            match detected_type {
+                RewardType::SplToken | RewardType::SplToken2022 => {
+                    // For token rewards, check if the new parameters match existing ones
+                    match redemption_limit {
+                        Some(new_limit) => {
+                            // Check if amount matches (if provided)
+                            if let Some(new_amount) = reward_amount {
+                                if reward.reward_amount != new_amount {
+                                    msg!(
+                                        "Token reward '{}' already exists with amount {}. Cannot change to {}",
+                                        reward_name,
+                                        reward.reward_amount,
+                                        new_amount
+                                    );
+                                    return Err(RewardError::TokenCannotBeAdded.into());
+                                }
+                            }
+                            // If amount not provided, assume it matches
+                            // Check if draw ranges match (if provided)
+                            let ranges_match = match (draw_range_min, draw_range_max) {
+                                (Some(new_min), Some(new_max)) => {
+                                    new_min == reward.draw_range_min
+                                        && new_max == reward.draw_range_max
+                                }
+                                (None, None) => true, // Ranges not specified, assume match
+                                _ => false,           // One specified, one not - mismatch
+                            };
 
-                    // Check if draw ranges match (if provided)
-                    let ranges_match = match (draw_range_min, draw_range_max) {
-                        (Some(new_min), Some(new_max)) => {
-                            new_min == reward.draw_range_min && new_max == reward.draw_range_max
+                            if !ranges_match {
+                                msg!(
+                                    "Token reward '{}' draw range mismatch. Existing: {} - {}, Provided: {} - {}",
+                                    reward_name,
+                                    reward.draw_range_min,
+                                    reward.draw_range_max,
+                                    draw_range_min.unwrap_or(0),
+                                    draw_range_max.unwrap_or(0)
+                                );
+                                return Err(RewardError::TokenCannotBeAdded.into());
+                            }
+
+                            // All parameters match - allow updating redemption_limit
+                            let old_limit = reward.redemption_limit;
+                            reward.redemption_limit = old_limit + new_limit;
+                            msg!(
+                                "Updated redemption_limit for token reward '{}': {} -> {}",
+                                reward_name,
+                                old_limit,
+                                reward.redemption_limit
+                            );
                         }
-                        (None, None) => true, // Ranges not specified, assume match
-                        _ => false,           // One specified, one not - mismatch
-                    };
-
-                    if !ranges_match {
+                        None => {
+                            msg!("Token reward '{}' already exists. Must specify redemption_limit to update", reward_name);
+                            return Err(RewardError::TokenCannotBeAdded.into());
+                        }
+                    }
+                    return Ok(());
+                }
+                RewardType::LegacyNft | RewardType::ProgrammableNft => {
+                    // For NFT rewards, add mint if not already present
+                    if reward.reward_mints.contains(&mint.key()) {
                         msg!(
-                            "Token reward '{}' draw range mismatch. Existing: {} - {}, Provided: {} - {}",
-                            reward_name,
-                            reward.draw_range_min,
-                            reward.draw_range_max,
-                            draw_range_min.unwrap_or(0),
-                            draw_range_max.unwrap_or(0)
+                            "Mint {} already part of reward '{}'",
+                            mint.key(),
+                            reward_name
                         );
-                        return Err(RewardError::TokenCannotBeAdded.into());
+                        return Ok(());
+                    } else {
+                        // Add the NFT mint and set NFT redemption_limit to the number of mints
+                        reward.reward_mints.push(mint.key());
+                        reward.redemption_limit = reward.reward_mints.len() as u64;
                     }
 
-                    // All parameters match - allow updating redemption_limit
-                    let old_limit = reward.redemption_limit;
-                    reward.redemption_limit = old_limit + new_limit;
+                    // For ProgrammableNft, check ruleset PDA match and add PDA if not exist
+                    if detected_type == RewardType::ProgrammableNft {
+                        if let Some(metadata) = &ctx.accounts.metadata {
+                            if let Some(new_ruleset) =
+                                metadata.programmable_config.as_ref().and_then(|pc| {
+                                    if let mpl_token_metadata::types::ProgrammableConfig::V1 {
+                                        rule_set: Some(rule_set),
+                                        ..
+                                    } = pc
+                                    {
+                                        Some(*rule_set)
+                                    } else {
+                                        None
+                                    }
+                                })
+                            {
+                                // Check if new ruleset matches existing rulesets in additional_pubkeys
+                                if !reward.additional_pubkeys.is_empty() {
+                                    require!(
+                                        reward.additional_pubkeys[0] == new_ruleset,
+                                        RewardError::RulesetMismatch
+                                    );
+                                } else {
+                                    // First ProgrammableNft, store the ruleset
+                                    reward.additional_pubkeys.push(new_ruleset);
+                                }
+                            }
+                        } else {
+                            return Err(RewardError::MissingMetadataForProgrammableNft.into());
+                        }
+                    }
+
                     msg!(
-                        "Updated redemption_limit for token reward '{}': {} -> {}",
+                        "Successfully added mint {} to existing reward '{}' with new redemption limit {}",
+                        mint.key(),
                         reward_name,
-                        old_limit,
                         reward.redemption_limit
                     );
-                } else {
-                    msg!("Token reward '{}' already exists. Cannot add without specifying reward_amount and redemption_limit", reward_name);
-                    return Err(RewardError::TokenCannotBeAdded.into());
                 }
-                return Ok(());
-            }
-
-            // CASE 1AB: LegacyNft or ProgrammableNft
-            if reward.reward_mints.contains(&mint.key()) {
-                msg!(
-                    "Mint {} already part of reward '{}'",
-                    mint.key(),
-                    reward_name
-                );
-                return Ok(());
-            }
-
-            // For ProgrammableNft, check ruleset PDA matches
-            if detected_type == RewardType::ProgrammableNft {
-                if let Some(metadata) = &ctx.accounts.metadata {
-                    if let Some(new_ruleset) =
-                        metadata.programmable_config.as_ref().and_then(|pc| {
-                            if let mpl_token_metadata::types::ProgrammableConfig::V1 {
-                                rule_set: Some(rule_set),
-                                ..
-                            } = pc
-                            {
-                                Some(*rule_set)
-                            } else {
-                                None
-                            }
-                        })
-                    {
-                        // Check if new ruleset matches existing rulesets in additional_pubkeys
-                        if !reward.additional_pubkeys.is_empty() {
-                            require!(
-                                reward.additional_pubkeys[0] == new_ruleset,
-                                RewardError::RulesetMismatch
-                            );
-                        } else {
-                            // First ProgrammableNft, store the ruleset
-                            reward.additional_pubkeys.push(new_ruleset);
-                        }
-                    }
-                } else {
-                    return Err(RewardError::MissingMetadataForProgrammableNft.into());
+                _ => {
+                    msg!("Unsupported reward type: {:?}", detected_type);
+                    return Err(RewardError::UnsupportedAssetType.into());
                 }
             }
-
-            // Add the mint to the reward's mints
-            reward.reward_mints.push(mint.key());
-
-            // For NFT rewards, set redemption_limit to the number of mints
-            if detected_type == RewardType::LegacyNft
-                || detected_type == RewardType::ProgrammableNft
-            {
-                reward.redemption_limit = reward.reward_mints.len() as u64;
-                msg!(
-                    "NFT added: redemption_limit set to {} (number of mints)",
-                    reward.redemption_limit
-                );
-            }
-
-            msg!(
-                "Successfully added mint {} to existing reward '{}'",
-                mint.key(),
-                reward_name
-            );
         } else {
             // CASE 1B: Reward doesn't exist - create new reward
             let min = draw_range_min.ok_or(RewardError::MissingDrawRangeMin)?;
