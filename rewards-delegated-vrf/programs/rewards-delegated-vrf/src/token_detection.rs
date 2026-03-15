@@ -37,22 +37,21 @@ pub fn detect_reward_type(
 
         if let Some(metadata) = metadata {
             match metadata.token_standard {
-                Some(mpl_token_metadata::types::TokenStandard::NonFungible) => {
+                Some(
+                    mpl_token_metadata::types::TokenStandard::NonFungible
+                    | mpl_token_metadata::types::TokenStandard::NonFungibleEdition,
+                ) => {
                     msg!("NFT type: NonFungible (Legacy NFT)");
                     Ok(RewardType::LegacyNft)
                 }
-                Some(mpl_token_metadata::types::TokenStandard::ProgrammableNonFungible) => {
+                Some(
+                    mpl_token_metadata::types::TokenStandard::ProgrammableNonFungible
+                    | mpl_token_metadata::types::TokenStandard::ProgrammableNonFungibleEdition,
+                ) => {
                     msg!("NFT type: ProgrammableNonFungible");
                     Ok(RewardType::ProgrammableNft)
                 }
-                Some(mpl_token_metadata::types::TokenStandard::NonFungibleEdition)
-                | Some(mpl_token_metadata::types::TokenStandard::Fungible)
-                | Some(mpl_token_metadata::types::TokenStandard::FungibleAsset)
-                | Some(mpl_token_metadata::types::TokenStandard::CompressedNft) => {
-                    msg!("Unsupported token standard: {:?}", metadata.token_standard);
-                    Err(RewardError::UnsupportedAssetType.into())
-                }
-                None => {
+                _ => {
                     msg!("NFT has no token standard specified");
                     Err(RewardError::UnsupportedAssetType.into())
                 }

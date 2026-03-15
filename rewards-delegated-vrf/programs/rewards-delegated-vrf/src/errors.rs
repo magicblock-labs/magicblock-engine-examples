@@ -67,4 +67,10 @@ pub enum RewardError {
 
     #[msg("ProgrammableNft requires metadata account")]
     MissingMetadataForProgrammableNft,
+
+    #[msg("Reward range exceeds global bounds")]
+    RewardRangeExceedsGlobalBounds,
+
+    #[msg("Reward ranges overlap")]
+    RewardRangesOverlap,
 }

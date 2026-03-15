@@ -771,8 +771,8 @@ describe.only("rewards-delegated-vrf", () => {
     }
   });
 
-  it("Add NFT Mint to Bronze Prize Reward (on Ephemeral Rollup)", async () => {
-    console.log("\n=== Adding NFT Mint to Bronze Prize Reward ===");
+  it.only("Add NFT Mint to Silver Prize Reward (on Ephemeral Rollup)", async () => {
+    console.log("\n=== Adding NFT Mint to Silver Prize Reward ===");
     try {
       // Load NFT mints from file
       const mintsPath = "tests/nft-mints.json";
@@ -801,7 +801,7 @@ describe.only("rewards-delegated-vrf", () => {
       );
 
       // Adding NFT to "Bronze Prize" reward
-      const accountsObj: any = {
+      const accountsObj: any = { 
         admin: wallet.publicKey,
         rewardDistributor: rewardDistributorPda,
         rewardList: rewardListPda,
@@ -836,7 +836,7 @@ describe.only("rewards-delegated-vrf", () => {
 
       if (txHash) {
         console.log("Add Reward txHash: ", txHash);
-        console.log("Successfully added NFT to 'Bronze Prize' reward");
+        console.log("Successfully added NFT to 'Silver Prize' reward");
 
         // Log updated reward list details
         await logRewardListDetails(program, ephemeralProgram, rewardListPda, true);

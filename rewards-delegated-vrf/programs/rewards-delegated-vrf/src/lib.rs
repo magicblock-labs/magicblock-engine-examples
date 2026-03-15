@@ -18,11 +18,13 @@ use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
 pub mod constants;
 pub mod errors;
+pub mod helpers;
 pub mod state;
 pub mod token_detection;
 
 use constants::*;
 use errors::RewardError;
+use helpers::validate_reward_ranges;
 use state::{Reward, RewardDistributor, RewardType, RewardsList, TransferLookupTable};
 use token_detection::detect_reward_type;
 
@@ -71,6 +73,7 @@ pub mod rewards_delegated_vrf {
         global_range_max: u32,
     ) -> Result<()> {
         msg!("Setting reward list: {:?}", ctx.accounts.reward_list.key());
+
         let reward_list = &mut ctx.accounts.reward_list;
         reward_list.reward_distributor = ctx.accounts.reward_distributor.key();
         reward_list.bump = ctx.bumps.reward_list;
@@ -79,6 +82,10 @@ pub mod rewards_delegated_vrf {
         reward_list.end_timestamp = end_timestamp;
         reward_list.global_range_min = global_range_min;
         reward_list.global_range_max = global_range_max;
+
+        // Validate reward ranges after setting
+        validate_reward_ranges(reward_list)?;
+
         Ok(())
     }
 
@@ -843,6 +850,10 @@ pub mod rewards_delegated_vrf {
                 mint.key()
             );
         }
+
+        // Validate reward ranges after adding
+        validate_reward_ranges(reward_list)?;
+
         Ok(())
     }
 }
