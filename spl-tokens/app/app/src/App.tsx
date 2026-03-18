@@ -901,6 +901,7 @@ const App: React.FC = () => {
                 const ataPubkeys = accounts.map(a => getAssociatedTokenAddressSync(mintKp.publicKey, a.keypair.publicKey));
                 const [transferQueue] = deriveTransferQueue(mintKp.publicKey);
                 const [rentPda] = deriveRentPda();
+                console.log("Rent sponsor PDA: ", rentPda.toBase58());
 
                 const mintTx = new Transaction().add(
                     SystemProgram.createAccount({
