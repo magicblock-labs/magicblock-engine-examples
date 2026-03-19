@@ -479,33 +479,13 @@ const App: React.FC = () => {
 
     const ensureAirdropLamports = useCallback(async (conn: Connection, pubkey: PublicKey) => {
         try {
-            const signature = await conn.requestAirdrop(pubkey, 0.1 * LAMPORTS_PER_SOL);
+            const signature = await conn.requestAirdrop(pubkey, 1 * LAMPORTS_PER_SOL);
             const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
             await conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
         } catch {
             // ignore airdrop errors
         }
     }, []);
-
-    const ensureAta = useCallback(async (conn: Connection, owner: PublicKey): Promise<PublicKey> => {
-        if (!mint) throw new Error('Mint not initialized. Run Setup first.');
-        const ata = getAssociatedTokenAddressSync(mint, owner, true, TOKEN_PROGRAM_ID);
-        const info = await conn.getAccountInfo(ata);
-        if (!info) {
-            const tx = new Transaction().add(
-                createAssociatedTokenAccountInstruction(owner, ata, owner, mint)
-            );
-            tx.feePayer = owner;
-            const { blockhash } = await conn.getLatestBlockhash();
-            tx.recentBlockhash = blockhash;
-            // We assume owner is a temp Keypair we control
-            const kp = accounts.find(a => a.keypair.publicKey.equals(owner))?.keypair;
-            if (!kp) throw new Error('Missing keypair for owner');
-            tx.sign(kp);
-            await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-        }
-        return ata;
-    }, [accounts, mint]);
 
     const refreshBalances = useCallback(async () => {
         const eConn = ephemeralConnection.current;
@@ -740,42 +720,6 @@ const App: React.FC = () => {
             const amountBn = parseAmount(amountUi, decimals);
             if (amountBn <= 0n) throw new Error('Invalid amount');
 
-            if (fromBalance === 'base') {
-                await ensureAta(connection, src.keypair.publicKey);
-            } else {
-                if (!eConn) return;
-                await ensureAta(eConn, src.keypair.publicKey);
-            }
-
-            if (toBalance === 'base') {
-                await ensureAta(connection, dst.keypair.publicKey);
-            } else {
-                if (!eConn) return;
-                await ensureAta(eConn, dst.keypair.publicKey);
-
-                if (!accounts[toIdx].eDelegated) {
-                    const delIxs = await delegateSpl(
-                        dst.keypair.publicKey,
-                        mint,
-                        0n,
-                        {
-                            validator: validator.current,
-                            initIfMissing: true,
-                        }
-                    );
-                    const delTx = new Transaction().add(...delIxs);
-                    delTx.feePayer = dst.keypair.publicKey;
-                    const {blockhash: delBh} = await connection.getLatestBlockhash();
-                    delTx.recentBlockhash = delBh;
-                    delTx.sign(dst.keypair);
-                    const delSig = await connection.sendRawTransaction(delTx.serialize());
-                    await connection.confirmTransaction(delSig, 'confirmed');
-                    const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-                    await delay(2000);
-                    await refreshBalances();
-                }
-            }
-
             let privateTransfer:
                 | { minDelayMs: bigint; maxDelayMs: bigint; split: number }
                 | undefined;
@@ -817,6 +761,9 @@ const App: React.FC = () => {
                     toBalance,
                     payer: src.keypair.publicKey,
                     validator: validator.current,
+                    initIfMissing: true,
+                    initAtasIfMissing: true,
+                    initVaultIfMissing: true,
                     privateTransfer,
                     shuttleId
                 },
@@ -873,7 +820,7 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, decimals, ensureAta, fromBalance, getCachedEphemeralBlockhash, mint, privateMaxDelayMs, privateMinDelayMs, privateSplitCount, refreshBalances, toBalance, transferVisibility]);
+    }, [accounts, connection, decimals, fromBalance, getCachedEphemeralBlockhash, mint, privateMaxDelayMs, privateMinDelayMs, privateSplitCount, refreshBalances, toBalance, transferVisibility]);
 
     const handleTransfer = useCallback(async () => {
         await performTransfer(srcIndex, dstIndex, amountStr);
@@ -1224,6 +1171,7 @@ const App: React.FC = () => {
                                             {
                                                 validator: validator.current,
                                                 initIfMissing: true,
+                                                initAtasIfMissing: true,
                                                 initVaultIfMissing: true,
                                                 idempotent: true,
                                                 shuttleId,
@@ -1427,7 +1375,10 @@ const App: React.FC = () => {
                                     />
                                 </label>
 
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, alignItems: 'flex-start', marginTop: 24 }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12, marginBottom: -10 }}>
                                     Visibility
                                     <select
                                         value={transferVisibility}
@@ -1439,39 +1390,41 @@ const App: React.FC = () => {
                                     </select>
                                 </label>
 
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
-                                    From
-                                    <select
-                                        value={fromBalance}
-                                        onChange={e => setFromBalance(e.target.value as 'base' | 'ephemeral')}
-                                        style={{ ...INPUT_STYLE, width: 124, padding: '6px 8px' }}
-                                    >
-                                        <option value="base">Base</option>
-                                        <option value="ephemeral">Ephemeral</option>
-                                    </select>
-                                </label>
+                                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
+                                        From
+                                        <select
+                                            value={fromBalance}
+                                            onChange={e => setFromBalance(e.target.value as 'base' | 'ephemeral')}
+                                            style={{ ...INPUT_STYLE, width: 124, padding: '6px 8px' }}
+                                        >
+                                            <option value="base">Base</option>
+                                            <option value="ephemeral">Ephemeral</option>
+                                        </select>
+                                    </label>
 
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
-                                    To
-                                    <select
-                                        value={toBalance}
-                                        onChange={e => setToBalance(e.target.value as 'base' | 'ephemeral')}
-                                        style={{ ...INPUT_STYLE, width: 124, padding: '6px 8px' }}
-                                    >
-                                        <option value="base">Base</option>
-                                        <option value="ephemeral">Ephemeral</option>
-                                    </select>
-                                </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
+                                        To
+                                        <select
+                                            value={toBalance}
+                                            onChange={e => setToBalance(e.target.value as 'base' | 'ephemeral')}
+                                            style={{ ...INPUT_STYLE, width: 124, padding: '6px 8px' }}
+                                        >
+                                            <option value="base">Base</option>
+                                            <option value="ephemeral">Ephemeral</option>
+                                        </select>
+                                    </label>
 
-                                <button
-                                    onClick={handleTransfer}
-                                    disabled={isSubmitting || !mint}
-                                    style={{ ...BUTTON_STYLE, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
-                                >
-                                    {isSubmitting
-                                        ? (transferVisibility === 'private' && toBalance === 'base' ? 'Queueing…' : 'Transferring…')
-                                        : (transferVisibility === 'private' && toBalance === 'base' ? 'Queue Transfer' : 'Transfer')}
-                                </button>
+                                    <button
+                                        onClick={handleTransfer}
+                                        disabled={isSubmitting || !mint}
+                                        style={{ ...BUTTON_STYLE, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
+                                    >
+                                        {isSubmitting
+                                            ? (transferVisibility === 'private' && toBalance === 'base' ? 'Queueing…' : 'Transferring…')
+                                            : (transferVisibility === 'private' && toBalance === 'base' ? 'Queue Transfer' : 'Transfer')}
+                                    </button>
+                                </div>
                             </div>
 
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
