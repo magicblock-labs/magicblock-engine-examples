@@ -694,6 +694,11 @@ pub mod rewards_delegated_vrf {
 
             // Handle removal based on reward type
             let reward = &mut reward_list.rewards[reward_index];
+            if reward.redemption_count >= reward.redemption_limit {
+                msg!("Reward {} fully redeemed, removing from list.", reward.name);
+                reward_list.rewards.remove(reward_index);
+                return Ok(());
+            }
             match reward.reward_type {
                 RewardType::LegacyNft | RewardType::ProgrammableNft => {
                     // For NFT rewards, check if mint exists in reward_mints
@@ -1074,7 +1079,7 @@ pub struct AddReward<'info> {
     pub metadata: Option<Account<'info, MetadataAccount>>,
 }
 
-#[action]
+#[commit]
 #[derive(Accounts)]
 pub struct RemoveReward<'info> {
     #[account(constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]

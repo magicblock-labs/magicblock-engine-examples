@@ -18,6 +18,7 @@ import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory
 import { useRewardData } from "@/hooks/useRewardData";
 import { PDAs } from "@/lib/pda";
 import { TransactionModal } from "./TransactionModal";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 
 interface ActionForm {
   [key: string]: any;
@@ -76,17 +77,16 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     },
     addReward: {
       rewardName: "",
-      mint: "",
-      tokenAccount: "",
-      rewardAmount: 0,
+      rewardMint: "",
+      rewardAmount: 1,
       drawRangeMin: 0,
       drawRangeMax: 0,
-      redemptionLimit: 0,
+      redemptionLimit: 1,
     },
     removeReward: {
       rewardName: "",
-      mint: "",
-      redemptionAmount: 0,
+      rewardMint: "",
+      redemptionAmount: 1,
     },
   });
 
@@ -312,26 +312,36 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
   const handleAddReward = async () => {
     setLocalStatus({ loading: true, error: null, signature: null });
     const config = forms.addReward;
+    const rewardMint = new PublicKey(config.rewardMint)
+    const tokenAccount = getAssociatedTokenAddressSync(rewardMint, new PublicKey(rewardList?.rewardDistributor!), true)
+    const [metadataAccount] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("metadata"),
+        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+        rewardMint.toBuffer(),
+      ],
+      new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+    );
     const result = await addReward(
       config.rewardName,
-      new PublicKey(config.mint),
-      new PublicKey(config.tokenAccount),
+      rewardMint,
+      tokenAccount,
       config.rewardAmount,
       config.drawRangeMin,
       config.drawRangeMax,
-      config.redemptionLimit
+      config.redemptionLimit,
+      metadataAccount
     );
     await handleTransactionResult(result, "Add Reward", () => {
       setForms({
         ...forms,
         addReward: {
           rewardName: "",
-          mint: "",
-          tokenAccount: "",
+          rewardMint: "",
           rewardAmount: 0,
           drawRangeMin: 0,
           drawRangeMax: 0,
-          redemptionLimit: 0,
+          redemptionLimit: 0
         },
       });
     });
@@ -342,11 +352,11 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     const config = forms.removeReward;
     const result = await removeReward(
       config.rewardName,
-      config.mint ? new PublicKey(config.mint) : undefined,
+      config.rewardMint ? new PublicKey(config.rewardMint) : undefined,
       config.redemptionAmount
     );
     await handleTransactionResult(result, "Remove Reward", () => {
-      setForms({ ...forms, removeReward: { rewardName: "", mint: "", redemptionAmount: 0 } });
+      setForms({ ...forms, removeReward: { rewardName: "", rewardMint: "", redemptionAmount: 1 } });
     });
   };
 
@@ -694,7 +704,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
            {/* Existing Rewards Display */}
            {rewardList && rewardList.rewards && rewardList.rewards.length > 0 && (
              <div className="border-t border-gray-600 pt-3">
-               <label className="block text-sm font-medium text-gray-300 mb-2">Current Rewards in List</label>
+               <label className="block text-sm font-medium text-gray-300 mb-2">Current Rewards in Listaaaaa</label>
                <div className="space-y-2 max-h-80 overflow-y-auto">
                  {rewardList.rewards.map((reward, idx) => (
                    <details
@@ -732,10 +742,10 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
                            <div className="text-gray-300 break-all mt-1">{reward.tokenAccount.toString()}</div>
                          </div>
                        )}
-                       {reward.mint && (
+                       {reward.rewardMints[0] && (
                          <div>
                            <span className="text-gray-400">Mint:</span>
-                           <div className="text-gray-300 break-all mt-1">{reward.mint.toString()}</div>
+                           <div className="text-gray-300 break-all mt-1">{reward.rewardMints[0].toString()}</div>
                          </div>
                        )}
                        {reward.rewardType && (
@@ -874,11 +884,11 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               <label className="block text-sm text-gray-300 mb-1">Mint Address</label>
               <input
               type="text"
-              value={forms.addReward.mint}
+              value={forms.addReward.rewardMint}
               onChange={(e) =>
                 setForms({
                   ...forms,
-                  addReward: { ...forms.addReward, mint: e.target.value },
+                  addReward: { ...forms.addReward, rewardMint: e.target.value },
                 })
               }
               placeholder="Enter mint address"
@@ -886,22 +896,6 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
               />
               </div>
-              <div>
-              <label className="block text-sm text-gray-300 mb-1">Token Account</label>
-              <input
-              type="text"
-              value={forms.addReward.tokenAccount}
-              onChange={(e) =>
-                setForms({
-                  ...forms,
-                  addReward: { ...forms.addReward, tokenAccount: e.target.value },
-                })
-              }
-              placeholder="Enter token account address"
-              disabled={localStatus.loading}
-              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
-            />
-          </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-sm text-gray-300 mb-1">Amount</label>
@@ -1006,8 +1000,8 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
                     ...forms,
                     removeReward: {
                       rewardName: e.target.value,
-                      mint: reward?.mint?.toString() || "",
-                      redemptionAmount: reward?.rewardAmount ? Number(reward.rewardAmount) : 0,
+                      rewardMint: reward?.rewardMints[0]?.toString() || "",
+                      redemptionAmount: reward?.redemptionLimit ? Number(reward.redemptionLimit - reward.redemptionCount) : 0,
                     },
                   });
                 }}
@@ -1017,7 +1011,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
                 <option value="">-- Select a reward --</option>
                 {rewardList.rewards.map((reward, idx) => (
                   <option key={idx} value={reward.name || reward.rewardName}>
-                    {reward.name || reward.rewardName} ({reward.rewardAmount?.toString() || "0"})
+                    {reward.name || reward.rewardName} ({(reward.redemptionLimit - reward.redemptionCount)?.toString() || "0"})
                   </option>
                 ))}
               </select>
@@ -1045,19 +1039,19 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
             <label className="block text-sm font-semibold text-gray-300 mb-2">Mint Address</label>
             <input
               type="text"
-              value={forms.removeReward.mint}
+              value={forms.removeReward.rewardMint}
               onChange={(e) =>
                 setForms({
                   ...forms,
-                  removeReward: { ...forms.removeReward, mint: e.target.value },
+                  removeReward: { ...forms.removeReward, rewardMint: e.target.value },
                 })
               }
               placeholder="Mint address (optional)"
               disabled={localStatus.loading}
               className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm font-mono text-xs"
             />
-            {forms.removeReward.mint && (
-              <p className="text-xs text-gray-400 mt-1">Full mint: {forms.removeReward.mint}</p>
+            {forms.removeReward.rewardMint && (
+              <p className="text-xs text-gray-400 mt-1">Mint: {forms.removeReward.rewardMint}</p>
             )}
           </div>
 

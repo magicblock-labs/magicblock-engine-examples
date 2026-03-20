@@ -19,6 +19,7 @@ import {
   getAccount,
 } from "@solana/spl-token";
 import { Program } from "@coral-xyz/anchor";
+import { MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 
 export interface TransactionStatus {
@@ -610,13 +611,13 @@ export const useTransaction = (props?: UseTransactionProps) => {
   const addReward = useCallback(
     async (
       rewardName: string,
-      mint: PublicKey,
+      rewardMint: PublicKey,
       tokenAccount: PublicKey,
       rewardAmount?: number,
       drawRangeMin?: number,
       drawRangeMax?: number,
       redemptionLimit?: number,
-      metadata?: PublicKey
+      metadataAccount?: PublicKey
     ): Promise<TransactionResponse> => {
       if (!publicKey) return { success: false, error: "Wallet not connected" };
 
@@ -632,21 +633,30 @@ export const useTransaction = (props?: UseTransactionProps) => {
           admin: publicKey,
           rewardDistributor: rewardDistributorPda,
           rewardList: rewardListPda,
-          mint,
+          mint: rewardMint,
           tokenAccount,
         };
 
-        if (metadata) {
-          accounts.metadata = metadata;
+        // Check if metadata exist
+        let metadataExist = false
+        accounts.metadata = null
+        try {
+          const metadataAccountData = await program.account.metadata.fetch(accounts.metadata);
+          if (metadataAccountData) {
+            metadataExist = true
+            accounts.metadata = metadataAccount;
+          }
+        } catch(error) {
+          console.log("Metadata account does not exist:", accounts.metadata)
         }
-
+ 
         const tx = await program.methods
           .addReward(
             rewardName,
             rewardAmount ? new anchor.BN(rewardAmount) : null,
             drawRangeMin || null,
             drawRangeMax || null,
-            redemptionLimit ? new anchor.BN(redemptionLimit) : null
+            redemptionLimit ? new anchor.BN(redemptionLimit) : null,
           )
           .accounts(accounts)
           .transaction();
@@ -678,11 +688,16 @@ export const useTransaction = (props?: UseTransactionProps) => {
         const program = await createProgram(provider);
         const rewardDistributorPda = getDistributorPda(publicKey);
         const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
+        const [transferLookupTablePda] = PDAs.getTransferLookupTable();
 
         const accounts: any = {
           admin: publicKey,
           rewardDistributor: rewardDistributorPda,
           rewardList: rewardListPda,
+          transferLookupTable: transferLookupTablePda,
+          destination: publicKey,
+          magicProgram: MAGIC_PROGRAM_ID,
+          magicContext: MAGIC_CONTEXT_ID
         };
 
         // Add mint if provided
