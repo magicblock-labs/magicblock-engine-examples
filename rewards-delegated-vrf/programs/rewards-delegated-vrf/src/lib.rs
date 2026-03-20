@@ -24,7 +24,7 @@ pub mod token_detection;
 
 use constants::*;
 use errors::RewardError;
-use helpers::validate_reward;
+use helpers::{remove_duplicate_pubkeys, validate_reward};
 use state::{Reward, RewardDistributor, RewardType, RewardsList, TransferLookupTable};
 use token_detection::detect_reward_type;
 
@@ -57,10 +57,25 @@ pub mod rewards_delegated_vrf {
         Ok(())
     }
 
+    pub fn set_admins(ctx: Context<SetAdmins>, admins: Vec<Pubkey>) -> Result<()> {
+        msg!("Setting admins for reward distributor");
+        let reward_distributor = &mut ctx.accounts.reward_distributor;
+        let super_admin = reward_distributor.super_admin;
+
+        // Filter out super_admin from the input, remove duplicates, then prepend super_admin
+        let filtered_admins: Vec<Pubkey> =
+            admins.into_iter().filter(|k| *k != super_admin).collect();
+        let mut unique_admins = remove_duplicate_pubkeys(filtered_admins);
+        unique_admins.insert(0, super_admin);
+
+        reward_distributor.admins = unique_admins;
+        Ok(())
+    }
+
     pub fn set_whitelist(ctx: Context<SetWhitelist>, whitelist: Vec<Pubkey>) -> Result<()> {
         msg!("Setting whitelist for reward distributor");
         let reward_distributor = &mut ctx.accounts.reward_distributor;
-        reward_distributor.whitelist = whitelist;
+        reward_distributor.whitelist = remove_duplicate_pubkeys(whitelist);
         Ok(())
     }
 
@@ -986,6 +1001,14 @@ pub struct InitializeRewardDistributor<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetAdmins<'info> {
+    #[account(mut, constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
+    pub admin: Signer<'info>,
+    #[account(mut)]
+    pub reward_distributor: Account<'info, RewardDistributor>,
+}
+
+#[derive(Accounts)]
 pub struct SetWhitelist<'info> {
     #[account(mut, constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
     pub admin: Signer<'info>,
@@ -1017,7 +1040,7 @@ pub struct InitializeTransferLookupTable<'info> {
 #[delegate]
 #[derive(Accounts)]
 pub struct DelegateRewardList<'info> {
-    #[account(mut)]
+    #[account(mut, constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
     pub admin: Signer<'info>,
     pub reward_distributor: Account<'info, RewardDistributor>,
     /// CHECK: The pda to delegate
@@ -1028,7 +1051,7 @@ pub struct DelegateRewardList<'info> {
 #[commit]
 #[derive(Accounts)]
 pub struct UndelegateRewardList<'info> {
-    #[account(mut)]
+    #[account(mut, constraint = payer.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&payer.key()))]
     pub payer: Signer<'info>,
     pub reward_distributor: Account<'info, RewardDistributor>,
     #[account(mut, seeds = [REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]

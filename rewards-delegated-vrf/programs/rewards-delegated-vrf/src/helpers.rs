@@ -1,6 +1,7 @@
 use crate::errors::RewardError;
 use crate::state::{Reward, RewardsList};
 use anchor_lang::prelude::*;
+use std::collections::HashSet;
 
 /// Validates individual reward state
 pub fn validate_reward_state(reward: &Reward) -> Result<()> {
@@ -93,4 +94,19 @@ pub fn validate_reward(reward_list: &RewardsList) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Removes duplicate pubkeys while preserving order
+pub fn remove_duplicate_pubkeys(pubkeys: Vec<Pubkey>) -> Vec<Pubkey> {
+    let mut unique = Vec::new();
+    let mut seen = HashSet::new();
+    
+    for pubkey in pubkeys.into_iter() {
+        if !seen.contains(&pubkey) {
+            unique.push(pubkey);
+            seen.insert(pubkey);
+        }
+    }
+    
+    unique
 }
