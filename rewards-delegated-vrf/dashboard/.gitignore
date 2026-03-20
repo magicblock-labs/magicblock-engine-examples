@@ -1,0 +1,10 @@
+/.next/
+/out/
+/build/
+*.pem
+.DS_Store
+/.env.local
+/.env
+node_modules/
+yarn.lock
+package-lock.json
