@@ -47,16 +47,20 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
         console.warn("Size-filtered fetch failed, trying without size filter:", err);
         
         try {
-          // Fallback: fetch without size filter
-          accounts = await connection.getProgramAccounts(PROGRAM_ID);
-          console.log(`Found ${accounts.length} potential distributor accounts (unfiltered)`);
-          
-          // Filter to reasonable sizes locally
-          accounts = accounts.filter(acc => {
-            const size = acc.account.data.length;
-            return size >= 41 && size <= 10000;
-          });
-          console.log(`After local filtering: ${accounts.length} accounts`);
+            // Fallback: fetch without size filter
+            accounts = await connection.getProgramAccounts(PROGRAM_ID);
+            console.log(`Found ${accounts.length} potential distributor accounts (unfiltered)`);
+            
+            accounts.forEach((acc, idx) => {
+              console.log(`  [${idx}] Account: ${acc.pubkey.toString()}, Size: ${acc.account.data.length} bytes`);
+            });
+            
+            // Filter to reasonable sizes locally
+            accounts = accounts.filter(acc => {
+              const size = acc.account.data.length;
+              return size >= 41 && size <= 10000;
+            });
+            console.log(`After local filtering: ${accounts.length} accounts`);
         } catch (fallbackErr) {
           console.error("Failed to fetch program accounts even without filter:", fallbackErr);
           return;
@@ -152,6 +156,8 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
           const isAdmin = superAdmin.equals(userPublicKey) || admins.some(admin => admin.equals(userPublicKey));
           const isWhitelisted = whitelist.some(addr => addr.equals(userPublicKey));
 
+          console.log(`Account ${account.pubkey.toString()}: isAdmin=${isAdmin}, isWhitelisted=${isWhitelisted}, adminsLength=${admins.length}, whitelistLength=${whitelist.length}`);
+
           if (isAdmin || isWhitelisted) {
             console.log(`Found ${isAdmin ? 'ADMIN' : 'WHITELISTED'} distributor: ${account.pubkey.toString()}`, {
               isAdmin,
@@ -167,6 +173,8 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
               isAdmin,
               isWhitelisted,
             });
+          } else {
+            console.log(`Account ${account.pubkey.toString()} skipped - user not in admin or whitelist`);
           }
         } catch (err) {
           // Skip accounts that can't be decoded

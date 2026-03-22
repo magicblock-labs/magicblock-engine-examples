@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import {
   Header,
@@ -25,6 +25,7 @@ import { RefreshCw } from "lucide-react";
 
 export default function Home() {
   const { publicKey } = useWallet();
+  const { connection } = useConnection();
   const [dismissedError, setDismissedError] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [selectedDistributor, setSelectedDistributor] = useState<string | null>(null);
@@ -41,6 +42,11 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Clear selected distributor when network changes
+  useEffect(() => {
+    setSelectedDistributor(null);
+  }, [connection.rpcEndpoint]);
 
   // Auto-select first discovered distributor
   useEffect(() => {

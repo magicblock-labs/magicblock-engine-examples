@@ -16,15 +16,15 @@ interface ConnectionOption {
 const DEFAULT_CONNECTIONS: ConnectionOption[] = [
   {
     name: "Solana Devnet",
-    endpoint: "https://api.devnet.solana.com",
-    wsEndpoint: "wss://api.devnet.solana.com",
+    endpoint: "https://rpc.magicblock.app/devnet",
+    wsEndpoint: "wss://rpc.magicblock.app/devnet",
     description: "Development network for testing",
     color: "bg-purple-600",
   },
   {
     name: "Solana Mainnet",
-    endpoint: "https://api.mainnet-beta.solana.com",
-    wsEndpoint: "wss://api.mainnet-beta.solana.com",
+    endpoint: "https://rpc.magicblock.app/mainnet",
+    wsEndpoint: "wss://rpc.magicblock.app/mainnet",
     description: "Production network",
     color: "bg-green-600",
   },

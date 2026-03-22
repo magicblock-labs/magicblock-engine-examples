@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { TransactionSignature } from "@solana/web3.js";
 import { getExplorerUrl } from "@/lib/clusterContext";
 
@@ -30,8 +31,9 @@ interface TransactionHistoryStore {
 }
 
 export const useGlobalTransactionHistory = create<TransactionHistoryStore>(
-  (set) => ({
-    transactions: [],
+  persist(
+    (set) => ({
+      transactions: [],
 
     addTransaction: (signature, actionName, network = "devnet", endpoint) => {
       // Use the endpoint to generate the correct explorer URL
@@ -83,5 +85,9 @@ export const useGlobalTransactionHistory = create<TransactionHistoryStore>(
     clearHistory: () => {
       set({ transactions: [] });
     },
-  })
-);
+    }),
+    {
+     name: "transaction-history-storage",
+    }
+    )
+    );

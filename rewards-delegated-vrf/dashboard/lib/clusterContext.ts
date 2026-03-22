@@ -10,20 +10,25 @@ export interface ClusterInfo {
 }
 
 export const CLUSTER_CONFIG: Record<string, ClusterInfo> = {
-  "https://api.devnet.solana.com": {
+  "https://rpc.magicblock.app/devnet": {
     name: "Solana Devnet",
-    endpoint: "https://api.devnet.solana.com",
-    wsEndpoint: "wss://api.devnet.solana.com",
+    endpoint: "https://rpc.magicblock.app/devnet",
+    wsEndpoint: "wss://rpc.magicblock.app/devnet",
   },
-  "https://api.mainnet-beta.solana.com": {
+  "https://rpc.magicblock.app/mainnet": {
     name: "Solana Mainnet",
-    endpoint: "https://api.mainnet-beta.solana.com",
-    wsEndpoint: "wss://api.mainnet-beta.solana.com",
+    endpoint: "https://rpc.magicblock.app/mainnet",
+    wsEndpoint: "wss://rpc.magicblock.app/mainnet",
   },
   "https://devnet-as.magicblock.app/": {
     name: "MagicBlock Devnet Asia",
     endpoint: "https://devnet-as.magicblock.app/",
     wsEndpoint: "wss://devnet-as.magicblock.app/",
+  },
+  "https://as.magicblock.app": {
+    name: "MagicBlock Mainnet Asia",
+    endpoint: "https://as.magicblock.app",
+    wsEndpoint: "wss://as.magicblock.app",
   },
   "http://localhost:8899": {
     name: "Localhost",
