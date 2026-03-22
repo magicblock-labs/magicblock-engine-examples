@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-rewards_delegated_vrf = "D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM"
+rewards_delegated_vrf = "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
 
 [programs.localnet]
-rewards_delegated_vrf = "D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM"
+rewards_delegated_vrf = "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
 
 [registry]
 url = "https://api.apr.dev"
