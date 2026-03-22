@@ -6,6 +6,7 @@ import { PublicKey } from "@solana/web3.js";
 import { Send, Eye } from "lucide-react";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
+import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
 import { TransactionModal } from "./TransactionModal";
 import { PDAs } from "@/lib/pda";
 
@@ -60,7 +61,7 @@ export const TokenActions: React.FC<TokenActionsProps> = ({ selectedDistributor 
         result.signature,
         "Send SPL Token to Distributor",
         "devnet",
-        process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com"
+        process.env.NEXT_PUBLIC_SOLANA_RPC_URL || getDefaultSolanaEndpoint()
       );
       updateTransaction(txId, {
         status: result.success ? "confirmed" : "failed",

@@ -44,6 +44,7 @@ export interface RewardsList {
   endTimestamp: bigint;
   globalRangeMin: number;
   globalRangeMax: number;
+  delegated?: boolean;
 }
 
 export interface TransferLookupTable {

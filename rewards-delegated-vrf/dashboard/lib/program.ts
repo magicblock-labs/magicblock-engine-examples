@@ -1,15 +1,37 @@
 import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import { RewardDistributor, RewardsList, TransferLookupTable } from "./types";
 import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { CLUSTER_CONFIG } from "./clusterContext";
+
+// Map endpoints to Solana endpoints for delegation status checking
+const getSolanaEndpoint = (endpoint: string): string => {
+  // Check for devnet first (devnet-as.magicblock.app, api.devnet.solana.com, etc)
+  if (endpoint.includes("devnet")) {
+    return CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint;
+  } 
+  // Check for mainnet (mainnet, as.magicblock.app, etc)
+  else if (endpoint.includes("mainnet") || endpoint.includes("as.magicblock.app")) {
+    return CLUSTER_CONFIG["https://rpc.magicblock.app/mainnet"].endpoint;
+  } 
+  // Default to devnet
+  else {
+    return CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint;
+  }
+};
 
 export class ProgramClient {
   private connection: Connection;
   private rpcUrl: string;
+  private solanaConnection: Connection;
 
   constructor(rpcUrl?: string) {
     this.rpcUrl = rpcUrl || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || clusterApiUrl("devnet");
     this.connection = new Connection(this.rpcUrl, "confirmed");
+    // Create a separate connection to Solana endpoint for delegation status
+    const solanaEndpoint = getSolanaEndpoint(this.rpcUrl);
+    this.solanaConnection = new Connection(solanaEndpoint, "confirmed");
     console.log("ProgramClient initialized with RPC:", this.rpcUrl);
+    console.log("Solana endpoint for delegation check:", solanaEndpoint);
   }
 
   /**
@@ -189,6 +211,14 @@ export class ProgramClient {
       
       const accountInfo = await this.connection.getAccountInfo(pda);
       
+      // Fetch delegation status from Solana endpoint
+      let delegationAccountInfo: any = null;
+      try {
+        delegationAccountInfo = await this.solanaConnection.getAccountInfo(pda);
+      } catch (err) {
+        console.warn("Failed to fetch delegation status from Solana endpoint:", err);
+      }
+      
       if (!accountInfo) {
         console.log("Reward distributor account not initialized at", pda.toString());
         return null;
@@ -208,9 +238,10 @@ export class ProgramClient {
       
       console.log("Decoded account data:", decoded);
 
-      // Check if account is delegated by comparing owner with delegation program
-      const isDelegated = accountInfo.owner.equals(DELEGATION_PROGRAM_ID);
-      console.log("Is delegated:", isDelegated, "-> owner is:", accountInfo.owner.toString());
+      // Check if account is delegated by comparing owner with delegation program on Solana
+      const isDelegated = delegationAccountInfo?.owner.equals(DELEGATION_PROGRAM_ID) || false;
+      const solanaEndpoint = getSolanaEndpoint(this.rpcUrl);
+      console.log("Is delegated:", isDelegated, "| Account:", pda.toString(), "| Endpoint:", solanaEndpoint, "| Owner:", delegationAccountInfo?.owner.toString() || "not found");
 
       return {
         superAdmin: decoded.superAdmin as PublicKey,
@@ -230,9 +261,17 @@ export class ProgramClient {
    */
   async fetchRewardsList(pda: PublicKey): Promise<RewardsList | null> {
     try {
-      console.log("Fetching reward list from:", pda.toString());
-      
-      const accountInfo = await this.connection.getAccountInfo(pda);
+       console.log("Fetching reward list from:", pda.toString());
+       
+       const accountInfo = await this.connection.getAccountInfo(pda);
+       
+       // Fetch delegation status from Solana endpoint
+       let delegationAccountInfo: any = null;
+       try {
+         delegationAccountInfo = await this.solanaConnection.getAccountInfo(pda);
+       } catch (err) {
+         console.warn("Failed to fetch delegation status from Solana endpoint:", err);
+       }
       
       if (!accountInfo) {
         console.log("Reward list account not initialized at", pda.toString());
@@ -246,12 +285,18 @@ export class ProgramClient {
       }
 
       console.log("Account found. Data size:", accountInfo.data.length, "bytes");
+      console.log("Account owner:", accountInfo.owner.toString());
 
       // Deserialize using manual Borsh parsing
       const decoded = this.deserializeRewardsList(accountInfo.data);
       
       console.log("Decoded reward list:", decoded);
       console.log("Number of rewards:", decoded.rewards.length);
+
+      // Check if account is delegated by comparing owner with delegation program on Solana
+      const isDelegated = delegationAccountInfo?.owner.equals(DELEGATION_PROGRAM_ID) || false;
+      const solanaEndpoint = getSolanaEndpoint(this.rpcUrl);
+      console.log("Is delegated:", isDelegated, "| Account:", pda.toString(), "| Endpoint:", solanaEndpoint, "| Owner:", delegationAccountInfo?.owner.toString() || "not found");
 
       return {
         rewardDistributor: decoded.rewardDistributor as PublicKey,
@@ -261,6 +306,7 @@ export class ProgramClient {
         endTimestamp: decoded.endTimestamp as bigint,
         globalRangeMin: decoded.globalRangeMin as number,
         globalRangeMax: decoded.globalRangeMax as number,
+        delegated: isDelegated,
       };
     } catch (error) {
       console.error("Error fetching reward list:", error instanceof Error ? error.message : error);

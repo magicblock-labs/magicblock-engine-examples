@@ -17,6 +17,7 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
 import { useRewardData } from "@/hooks/useRewardData";
 import { PDAs } from "@/lib/pda";
+import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
 import { TransactionModal } from "./TransactionModal";
 import { CopyableAddress } from "./CopyableAddress";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
@@ -157,7 +158,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
 
     if (result.signature) {
       // Get the cluster endpoint from connection
-      const clusterEndpoint = endpoint || connection.rpcEndpoint || "https://api.devnet.solana.com";
+      const clusterEndpoint = endpoint || connection.rpcEndpoint || getDefaultSolanaEndpoint();
       
       console.log("[handleTransactionResult] Adding transaction to history:", {
         signature: result.signature,

@@ -90,3 +90,18 @@ export function clearClusterPreference(): void {
     localStorage.removeItem("solana-cluster-endpoint");
   }
 }
+
+/**
+ * Get the default/fallback endpoint for Solana (not MagicBlock ER)
+ */
+export function getDefaultSolanaEndpoint(): string {
+  return CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint;
+}
+
+/**
+ * Get the default/fallback endpoint for MagicBlock ER (Ephemeral Rollups)
+ * Defaults to MagicBlock Devnet Asia
+ */
+export function getDefaultMagicBlockErEndpoint(): string {
+  return CLUSTER_CONFIG["https://devnet-as.magicblock.app/"].endpoint;
+}

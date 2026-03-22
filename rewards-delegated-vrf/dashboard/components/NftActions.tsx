@@ -5,6 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Zap, Grid } from "lucide-react";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
+import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
 import { TransactionModal } from "./TransactionModal";
 
 interface ActionForm {
@@ -46,7 +47,7 @@ export const NftActions: React.FC = () => {
         result.signature,
         "Mint NFT Collection",
         "devnet",
-        process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com"
+        process.env.NEXT_PUBLIC_SOLANA_RPC_URL || getDefaultSolanaEndpoint()
       );
       updateTransaction(txId, {
         status: result.success ? "confirmed" : "failed",

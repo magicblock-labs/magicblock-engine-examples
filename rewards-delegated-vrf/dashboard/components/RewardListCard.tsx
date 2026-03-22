@@ -17,9 +17,20 @@ export function RewardListCard({ rewardList }: RewardListCardProps) {
   return (
     <div className="card">
       <div className="mb-4">
-        <h2 className="text-xl font-semibold text-white mb-2">
-          Reward Schedule
-        </h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xl font-semibold text-white">
+            Reward Schedule
+          </h2>
+          {rewardList.delegated !== undefined && (
+            <span className={`text-xs font-medium px-2 py-1 rounded ${
+              rewardList.delegated
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-600 text-gray-300'
+            }`}>
+              {rewardList.delegated ? '✓ Delegated' : 'Not Delegated'}
+            </span>
+          )}
+        </div>
         <div
           className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
             isActive

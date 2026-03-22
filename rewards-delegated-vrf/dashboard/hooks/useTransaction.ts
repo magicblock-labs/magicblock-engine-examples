@@ -20,6 +20,7 @@ import {
   getAccount,
 } from "@solana/spl-token";
 import { MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
 
 
 export interface TransactionStatus {
@@ -543,7 +544,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
                      
                      // Add the callback as a separate transaction entry
                      if (props?.onTransactionAdd && props?.onTransactionUpdate) {
-                       const clusterEndpoint = connection.rpcEndpoint || "https://api.devnet.solana.com";
+                       const clusterEndpoint = connection.rpcEndpoint || getDefaultSolanaEndpoint();
                        console.log("[VRF Callback] Adding callback transaction to history with status:", txStatus);
                        // Create a callback entry in the transaction history
                        const callbackTxId = props.onTransactionAdd(
