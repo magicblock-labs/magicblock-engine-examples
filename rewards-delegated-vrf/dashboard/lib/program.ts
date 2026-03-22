@@ -1,5 +1,6 @@
 import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import { RewardDistributor, RewardsList, TransferLookupTable } from "./types";
+import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 export class ProgramClient {
   private connection: Connection;
@@ -200,17 +201,23 @@ export class ProgramClient {
       }
 
       console.log("Account found. Data size:", accountInfo.data.length, "bytes");
+      console.log("Account owner:", accountInfo.owner.toString());
 
       // Deserialize using manual Borsh parsing
       const decoded = this.deserializeRewardDistributor(accountInfo.data);
       
       console.log("Decoded account data:", decoded);
 
+      // Check if account is delegated by comparing owner with delegation program
+      const isDelegated = accountInfo.owner.equals(DELEGATION_PROGRAM_ID);
+      console.log("Is delegated:", isDelegated, "-> owner is:", accountInfo.owner.toString());
+
       return {
         superAdmin: decoded.superAdmin as PublicKey,
         bump: decoded.bump as number,
         admins: (decoded.admins as PublicKey[]) || [],
         whitelist: (decoded.whitelist as PublicKey[]) || [],
+        delegated: isDelegated,
       };
     } catch (error) {
       console.error("Error fetching reward distributor:", error instanceof Error ? error.message : error);

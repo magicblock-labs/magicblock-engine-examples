@@ -13,9 +13,20 @@ export function DistributorCard({ distributor, address }: DistributorCardProps) 
   return (
     <div className="card">
       <div className="mb-4">
-        <h2 className="text-xl font-semibold text-white mb-2">
-          Reward Distributor
-        </h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xl font-semibold text-white">
+            Reward Distributor
+          </h2>
+          {distributor.delegated !== undefined && (
+            <span className={`text-xs font-medium px-2 py-1 rounded ${
+              distributor.delegated
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-600 text-gray-300'
+            }`}>
+              {distributor.delegated ? '✓ Delegated' : 'Not Delegated'}
+            </span>
+          )}
+        </div>
         <div className="bg-gray-700 rounded-lg p-3 mb-2">
           <CopyableAddress 
             address={address}

@@ -281,12 +281,12 @@ export const useTransaction = (props?: UseTransactionProps) => {
         const errorMessage = err instanceof Error ? err.message : "Unknown error";
         setStatus({ loading: false, error: errorMessage, signature: null });
         return { success: false, error: errorMessage };
-      }
-    },
-    [publicKey, signTransaction, connection]
-  );
+        }
+        },
+        [publicKey, signTransaction, connection, props?.selectedDistributor?.toString()]
+        );
 
-  const setWhitelist = useCallback(
+        const setWhitelist = useCallback(
     async (newWhitelist: PublicKey[]): Promise<TransactionResponse> => {
       if (!publicKey) return { success: false, error: "Wallet not connected" };
       
@@ -316,12 +316,12 @@ export const useTransaction = (props?: UseTransactionProps) => {
         const errorMessage = err instanceof Error ? err.message : "Unknown error";
         setStatus({ loading: false, error: errorMessage, signature: null });
         return { success: false, error: errorMessage };
-      }
-    },
-    [publicKey, signTransaction, connection]
-  );
+        }
+        },
+        [publicKey, signTransaction, connection, props?.selectedDistributor?.toString()]
+        );
 
-  const setRewardList = useCallback(
+        const setRewardList = useCallback(
     async (
       globalRangeMin: number,
       globalRangeMax: number,
@@ -365,12 +365,12 @@ export const useTransaction = (props?: UseTransactionProps) => {
         const errorMessage = err instanceof Error ? err.message : "Unknown error";
         setStatus({ loading: false, error: errorMessage, signature: null });
         return { success: false, error: errorMessage };
-      }
-    },
-    [publicKey, signTransaction, connection]
-  );
+        }
+        },
+        [publicKey, signTransaction, connection, props?.selectedDistributor?.toString()]
+        );
 
-  const delegateRewardList = useCallback(async (): Promise<TransactionResponse> => {
+        const delegateRewardList = useCallback(async (): Promise<TransactionResponse> => {
     if (!publicKey) return { success: false, error: "Wallet not connected" };
 
     setStatus({ loading: true, error: null, signature: null });
@@ -402,10 +402,10 @@ export const useTransaction = (props?: UseTransactionProps) => {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setStatus({ loading: false, error: errorMessage, signature: null });
       return { success: false, error: errorMessage };
-    }
-  }, [publicKey, signTransaction, connection]);
+      }
+      }, [publicKey, signTransaction, connection, props?.selectedDistributor?.toString()]);
 
-  const undelegateRewardList = useCallback(
+      const undelegateRewardList = useCallback(
     async (): Promise<TransactionResponse> => {
       if (!publicKey) return { success: false, error: "Wallet not connected" };
 
@@ -451,7 +451,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
       try {
          const provider = createProvider();
          const program = await createProgram(provider);
-         const rewardDistributorPda = getDistributorPda(publicKey);
+         const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
          const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
          const [transferLookupTablePda] = PDAs.getTransferLookupTable();
          const programIdentity = getVrfProgramIdentity();
@@ -668,12 +668,12 @@ export const useTransaction = (props?: UseTransactionProps) => {
         const errorMessage = err instanceof Error ? err.message : "Unknown error";
         setStatus({ loading: false, error: errorMessage, signature: null });
         return { success: false, error: errorMessage };
-      }
-    },
-    [publicKey, signTransaction, connection]
-  );
+        }
+        },
+        [publicKey, signTransaction, connection, props?.selectedDistributor?.toString()]
+        );
 
-  const removeReward = useCallback(
+        const removeReward = useCallback(
     async (rewardName: string, rewardMint?: PublicKey, redemptionAmount?: number): Promise<TransactionResponse> => {
       if (!publicKey) return { success: false, error: "Wallet not connected" };
       setStatus({ loading: true, error: null, signature: null });

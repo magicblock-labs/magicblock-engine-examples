@@ -33,6 +33,7 @@ export interface RewardDistributor {
   bump: number;
   admins: PublicKey[];
   whitelist: PublicKey[];
+  delegated?: boolean;
 }
 
 export interface RewardsList {

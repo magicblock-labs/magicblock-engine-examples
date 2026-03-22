@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PROGRAM_ID } from "@/lib/constants";
-import * as anchor from "@coral-xyz/anchor";
 
 export interface DiscoveredDistributor {
   publicKey: PublicKey;
