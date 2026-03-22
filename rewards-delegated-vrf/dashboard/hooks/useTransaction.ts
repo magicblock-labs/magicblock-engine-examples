@@ -437,12 +437,12 @@ export const useTransaction = (props?: UseTransactionProps) => {
         const errorMessage = err instanceof Error ? err.message : "Unknown error";
         setStatus({ loading: false, error: errorMessage, signature: null });
         return { success: false, error: errorMessage };
-      }
-    },
-    [publicKey, signTransaction, connection]
-  );
+        }
+        },
+        [publicKey, signTransaction, connection, props?.selectedDistributor?.toString()]
+        );
 
-  const requestRandomReward = useCallback(
+        const requestRandomReward = useCallback(
     async (user: PublicKey, clientSeed: number, txSignature?: string): Promise<TransactionResponse> => {
       if (!publicKey) return { success: false, error: "Wallet not connected" };
 
