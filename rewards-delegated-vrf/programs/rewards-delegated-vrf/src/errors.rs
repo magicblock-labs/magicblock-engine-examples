@@ -50,6 +50,9 @@ pub enum RewardError {
     #[msg("ProgrammableNft ruleset does not match the existing reward's ruleset")]
     RulesetMismatch,
 
+    #[msg("Missing required mint")]
+    MissingMint,
+
     #[msg("Missing required reward parameters for new reward creation")]
     MissingRewardParameters,
 

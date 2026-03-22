@@ -670,35 +670,33 @@ pub mod rewards_delegated_vrf {
     pub fn remove_reward(
         ctx: Context<RemoveReward>,
         reward_name: String,
-        mint_to_remove: Pubkey,
+        mint_to_remove: Option<Pubkey>,
         redemption_amount: Option<u64>,
     ) -> Result<()> {
+        let reward_list = &mut ctx.accounts.reward_list;
+        msg!(
+            "Processing reward removal '{}' in reward list: {:?}",
+            reward_name,
+            reward_list.key()
+        );
+
+        // Find the reward by name
+        let reward_index = reward_list
+            .rewards
+            .iter()
+            .position(|r| r.name == reward_name)
+            .ok_or(RewardError::RewardNotFound)?;
+
+        // Handle removal based on reward type
+        let reward = &mut reward_list.rewards[reward_index];
+        if reward.redemption_count >= reward.redemption_limit {
+            msg!("Reward {} fully redeemed, removing from list.", reward.name);
+            reward_list.rewards.remove(reward_index);
+            return Ok(());
+        }
+
+        let mint = mint_to_remove.ok_or(RewardError::MissingMint)?;
         let reward_for_transfer = {
-            let reward_list = &mut ctx.accounts.reward_list;
-
-            msg!(
-                "Processing removal of mint {} from reward '{}' in reward list: {:?}",
-                mint_to_remove,
-                reward_name,
-                reward_list.key()
-            );
-
-            // Find the reward by name
-            let reward_index = reward_list
-                .rewards
-                .iter()
-                .position(|r| r.name == reward_name)
-                .ok_or(RewardError::RewardNotFound)?;
-
-            let mint = mint_to_remove;
-
-            // Handle removal based on reward type
-            let reward = &mut reward_list.rewards[reward_index];
-            if reward.redemption_count >= reward.redemption_limit {
-                msg!("Reward {} fully redeemed, removing from list.", reward.name);
-                reward_list.rewards.remove(reward_index);
-                return Ok(());
-            }
             match reward.reward_type {
                 RewardType::LegacyNft | RewardType::ProgrammableNft => {
                     // For NFT rewards, check if mint exists in reward_mints
@@ -774,7 +772,7 @@ pub mod rewards_delegated_vrf {
             &ctx.accounts.reward_list.to_account_info(),
             &ctx.accounts.magic_context.to_account_info(),
             &ctx.accounts.magic_program.to_account_info(),
-            mint_to_remove,
+            mint,
             &reward_for_transfer,
             amount,
             ctx.accounts.admin.to_account_info(),
