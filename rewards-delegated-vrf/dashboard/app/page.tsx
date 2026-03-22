@@ -11,7 +11,6 @@ import {
   RewardsTable,
   LoadingSpinner,
   ErrorMessage,
-  ViewOtherDistributor,
   AdminActions,
 } from "@/components";
 import { NftActions } from "@/components/NftActions";
@@ -50,7 +49,9 @@ export default function Home() {
     }
   }, [publicKey, distributors, selectedDistributor]);
 
-  const distributorPda = publicKey ? PDAs.getRewardDistributor(publicKey)[0] : null;
+  const distributorPda = selectedDistributor 
+    ? new PublicKey(selectedDistributor)
+    : publicKey ? PDAs.getRewardDistributor(publicKey)[0] : null;
 
   // Don't render wallet-dependent content until mounted
   if (!mounted) {
@@ -152,16 +153,11 @@ export default function Home() {
         )}
 
         {/* Token Management Section */}
-        {publicKey && (
-          <div className="pt-8 border-t border-gray-700">
-            <TokenActions />
-          </div>
-        )}
-
-        {/* View Other Distributors */}
-        <div className="pt-8 border-t border-gray-700">
-          <ViewOtherDistributor />
-        </div>
+         {publicKey && (
+           <div className="pt-8 border-t border-gray-700">
+             <TokenActions selectedDistributor={selectedDistributor ? new PublicKey(selectedDistributor) : null} />
+           </div>
+         )}
 
         {/* Transaction History */}
         <div className="pt-8 border-t border-gray-700">

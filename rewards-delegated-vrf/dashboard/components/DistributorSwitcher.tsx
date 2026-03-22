@@ -7,6 +7,7 @@ import { ChevronDown, RefreshCw } from "lucide-react";
 import { PDAs } from "@/lib/pda";
 import { shortAddress } from "@/lib/utils";
 import { useDiscoverDistributors } from "@/hooks/useDiscoverDistributors";
+import { CopyableAddress } from "./CopyableAddress";
 
 interface DistributorSwitcherProps {
   selectedDistributor: PublicKey | null;
@@ -20,6 +21,8 @@ export const DistributorSwitcher: React.FC<DistributorSwitcherProps> = ({
   const { publicKey } = useWallet();
   const { distributors, loading, error, refetch } = useDiscoverDistributors(publicKey);
   const [isOpen, setIsOpen] = useState(false);
+  const [customPda, setCustomPda] = useState("");
+  const [customPdaError, setCustomPdaError] = useState("");
 
   // Get primary distributor from PDA
   const primaryDistributor = publicKey ? PDAs.getRewardDistributor(publicKey)[0] : null;
@@ -30,6 +33,23 @@ export const DistributorSwitcher: React.FC<DistributorSwitcherProps> = ({
 
   // Only show discovered distributors that actually exist
   const displayDistributors = distributors;
+
+  const handleCustomPdaChange = (value: string) => {
+    setCustomPda(value);
+    setCustomPdaError("");
+    
+    // Auto-validate and apply if it looks like a valid address
+    if (value.trim().length >= 44) {
+      try {
+        new PublicKey(value.trim());
+        onSelectDistributor(new PublicKey(value.trim()));
+        setCustomPda("");
+        setIsOpen(false);
+      } catch {
+        // Invalid address, but don't show error yet - user might still be typing
+      }
+    }
+  };
 
   return (
     <div className="card p-4 mb-4">
@@ -49,35 +69,54 @@ export const DistributorSwitcher: React.FC<DistributorSwitcherProps> = ({
         </div>
 
         <div className="relative">
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            disabled={loading}
-            className="w-full p-3 bg-gray-700 hover:bg-gray-600 text-white rounded border border-gray-600 flex items-center justify-between transition disabled:opacity-50"
-          >
-            <div className="text-left">
-              <div className="text-sm font-medium">
-                {selectedDistributor
-                  ? shortAddress(selectedDistributor, 8)
-                  : "Select Distributor"}
-              </div>
-              <div className="text-xs text-gray-400">
-                {selectedDistributor?.equals(primaryDistributor)
-                  ? "Your Distributor"
-                  : selectedDistributor ? "Other Distributor" : ""}
-              </div>
-            </div>
-            <ChevronDown
-              className={`w-4 h-4 text-gray-400 transition ${
-                isOpen ? "rotate-180" : ""
-              }`}
-            />
-          </button>
+           {selectedDistributor ? (
+             <div className="w-full p-3 bg-gray-700 rounded border border-gray-600">
+               <div className="text-xs text-gray-400 mb-2">Selected Distributor</div>
+               <CopyableAddress 
+                 address={selectedDistributor.toString()}
+                 className="text-white font-mono text-sm"
+                 showIcon={true}
+               />
+               {selectedDistributor?.equals(primaryDistributor) && (
+                 <div className="text-xs text-gray-400 mt-2">Your Distributor</div>
+               )}
+             </div>
+           ) : (
+             <button
+               onClick={() => setIsOpen(!isOpen)}
+               disabled={loading}
+               className="w-full p-3 bg-gray-700 hover:bg-gray-600 text-white rounded border border-gray-600 flex items-center justify-between transition disabled:opacity-50"
+             >
+               <div className="text-left">
+                 <div className="text-sm font-medium">Select Distributor</div>
+               </div>
+               <ChevronDown
+                 className={`w-4 h-4 text-gray-400 transition ${
+                   isOpen ? "rotate-180" : ""
+                 }`}
+               />
+             </button>
+           )}
+           
+           <button
+             onClick={() => setIsOpen(!isOpen)}
+             disabled={loading}
+             className={`w-full mt-2 p-2 text-sm text-gray-300 hover:text-gray-100 rounded border border-gray-600 transition disabled:opacity-50 ${
+               isOpen ? "bg-gray-600" : "bg-gray-700 hover:bg-gray-600"
+             }`}
+           >
+             {isOpen ? "Hide Options" : "Show Options"}
+           </button>
 
           {/* Dropdown */}
           {isOpen && !loading && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-gray-700 border border-gray-600 rounded shadow-lg z-10 max-h-64 overflow-y-auto">
+            <div className="absolute top-full left-0 right-0 mt-1 bg-gray-700 border border-gray-600 rounded shadow-lg z-10 max-h-96 overflow-y-auto">
+             {/* Discovered Distributors */}
               {displayDistributors.length > 0 ? (
                 <>
+                 <div className="px-3 py-2 bg-gray-800 text-xs text-gray-500">
+                   Discovered Distributors
+                 </div>
                   {displayDistributors.map((dist, index) => (
                     <button
                       key={dist.publicKey.toString()}
@@ -89,7 +128,7 @@ export const DistributorSwitcher: React.FC<DistributorSwitcherProps> = ({
                         selectedDistributor?.equals(dist.publicKey)
                           ? "bg-blue-600 text-white"
                           : "text-gray-200"
-                      } ${index === 0 ? "border-b border-gray-600" : ""}`}
+                      }`}
                     >
                       <div className="flex items-center justify-between w-full gap-2">
                         <div className="flex-1">
@@ -127,22 +166,27 @@ export const DistributorSwitcher: React.FC<DistributorSwitcherProps> = ({
                   No distributors found
                 </div>
               )}
+
+             {/* Custom PDA Input */}
+             <div className="px-3 py-3 border-t border-gray-600 bg-gray-800">
+               <input
+                 type="text"
+                 value={customPda}
+                 onChange={(e) => handleCustomPdaChange(e.target.value)}
+                 placeholder="Paste custom distributor address..."
+                 className="w-full px-2 py-2 text-sm bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none placeholder-gray-500"
+               />
+             </div>
             </div>
           )}
         </div>
 
         {error && (
-          <div className="text-xs text-red-400 p-2 bg-red-900 bg-opacity-20 rounded">
-            {error}
-          </div>
-        )}
-
-        {selectedDistributor && (
-          <div className="text-xs text-gray-400 mt-2 p-2 bg-gray-800 rounded">
-            PDA: <code>{shortAddress(selectedDistributor, 6)}</code>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+           <div className="text-xs text-red-400 p-2 bg-red-900 bg-opacity-20 rounded">
+             {error}
+           </div>
+         )}
+        </div>
+        </div>
+        );
+        };

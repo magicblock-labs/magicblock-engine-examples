@@ -1,195 +1,24 @@
 {
-  "accounts": [
-    {
-      "discriminator": [
-        215,
-        10,
-        217,
-        199,
-        104,
-        194,
-        97,
-        227
-      ],
-      "name": "RewardDistributor"
-    },
-    {
-      "discriminator": [
-        68,
-        169,
-        237,
-        16,
-        133,
-        97,
-        67,
-        78
-      ],
-      "name": "RewardsList"
-    },
-    {
-      "discriminator": [
-        63,
-        196,
-        231,
-        155,
-        181,
-        204,
-        67,
-        62
-      ],
-      "name": "TransferLookupTable"
-    }
-  ],
   "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y",
-  "errors": [
-    {
-      "code": 6000,
-      "msg": "Reward not found with the specified name",
-      "name": "RewardNotFound"
-    },
-    {
-      "code": 6001,
-      "msg": "Invalid token account provided",
-      "name": "InvalidTokenAccount"
-    },
-    {
-      "code": 6002,
-      "msg": "Token account is not owned by the reward distributor",
-      "name": "TokenNotOwnedByDistributor"
-    },
-    {
-      "code": 6003,
-      "msg": "Token account owner is not the token program",
-      "name": "InvalidTokenProgramOwner"
-    },
-    {
-      "code": 6004,
-      "msg": "Failed to deserialize token account data",
-      "name": "InvalidTokenAccountData"
-    },
-    {
-      "code": 6005,
-      "msg": "Unauthorized - caller is not an admin or whitelist member",
-      "name": "Unauthorized"
-    },
-    {
-      "code": 6006,
-      "msg": "Collection cannot be verified in this instruction",
-      "name": "CollectionVerificationFailed"
-    },
-    {
-      "code": 6007,
-      "msg": "Reward distribution time window has not started",
-      "name": "RewardNotStarted"
-    },
-    {
-      "code": 6008,
-      "msg": "Reward distribution time window has ended",
-      "name": "RewardEnded"
-    },
-    {
-      "code": 6009,
-      "msg": "No rewards available for the drawn value",
-      "name": "NoRewardForValue"
-    },
-    {
-      "code": 6010,
-      "msg": "Reward redemption limit has been exceeded",
-      "name": "RedemptionLimitExceeded"
-    },
-    {
-      "code": 6011,
-      "msg": "Invalid reward type for transfer",
-      "name": "InvalidRewardType"
-    },
-    {
-      "code": 6012,
-      "msg": "Reward type does not match the specified type with existing Reward",
-      "name": "RewardTypeMismatch"
-    },
-    {
-      "code": 6013,
-      "msg": "Unsupported asset type - only Fungible, NonFungible, and ProgrammableNonFungible are supported",
-      "name": "UnsupportedAssetType"
-    },
-    {
-      "code": 6014,
-      "msg": "Token rewards cannot be added to existing reward",
-      "name": "TokenCannotBeAdded"
-    },
-    {
-      "code": 6015,
-      "msg": "ProgrammableNft ruleset does not match the existing reward's ruleset",
-      "name": "RulesetMismatch"
-    },
-    {
-      "code": 6016,
-      "msg": "Missing required reward parameters for new reward creation",
-      "name": "MissingRewardParameters"
-    },
-    {
-      "code": 6017,
-      "msg": "Missing required parameter: draw_range_min",
-      "name": "MissingDrawRangeMin"
-    },
-    {
-      "code": 6018,
-      "msg": "Missing required parameter: draw_range_max",
-      "name": "MissingDrawRangeMax"
-    },
-    {
-      "code": 6019,
-      "msg": "Missing required parameter: reward_amount",
-      "name": "MissingRewardAmount"
-    },
-    {
-      "code": 6020,
-      "msg": "Missing required parameter: redemption_limit",
-      "name": "MissingRedemptionLimit"
-    },
-    {
-      "code": 6021,
-      "msg": "ProgrammableNft requires metadata account",
-      "name": "MissingMetadataForProgrammableNft"
-    },
-    {
-      "code": 6022,
-      "msg": "Reward range exceeds global bounds",
-      "name": "RewardRangeExceedsGlobalBounds"
-    },
-    {
-      "code": 6023,
-      "msg": "Reward ranges overlap",
-      "name": "RewardRangesOverlap"
-    },
-    {
-      "code": 6024,
-      "msg": "Mint not found in reward",
-      "name": "MintNotFoundInReward"
-    },
-    {
-      "code": 6025,
-      "msg": "Insufficient redemption limit to remove",
-      "name": "InsufficientRedemptionLimit"
-    },
-    {
-      "code": 6026,
-      "msg": "Invalid draw range: draw_range_min must be less than or equal to draw_range_max",
-      "name": "InvalidDrawRange"
-    },
-    {
-      "code": 6027,
-      "msg": "Invalid redemption state: redemption_count cannot exceed redemption_limit",
-      "name": "InvalidRedemptionState"
-    },
-    {
-      "code": 6028,
-      "msg": "Invalid reward amount: must be greater than 0",
-      "name": "InvalidRewardAmount"
-    }
-  ],
+  "metadata": {
+    "name": "rewards_delegated_vrf",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "MagicBlock Rewards Program"
+  },
   "instructions": [
     {
+      "name": "add_reward",
+      "discriminator": [
+        4,
+        114,
+        188,
+        164,
+        149,
+        249,
+        198,
+        237
+      ],
       "accounts": [
         {
           "name": "admin",
@@ -200,6 +29,7 @@
         },
         {
           "name": "reward_list",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -223,8 +53,7 @@
                 "path": "reward_distributor"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
           "name": "mint"
@@ -266,29 +95,29 @@
             "option": "u64"
           }
         }
-      ],
-      "discriminator": [
-        4,
-        114,
-        188,
-        164,
-        149,
-        249,
-        198,
-        237
-      ],
-      "name": "add_reward"
+      ]
     },
     {
+      "name": "consume_random_reward",
+      "discriminator": [
+        217,
+        114,
+        103,
+        58,
+        64,
+        195,
+        157,
+        3
+      ],
       "accounts": [
         {
-          "address": "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw",
+          "name": "vrf_program_identity",
           "docs": [
             "This check ensure that the vrf_program_identity (which is a PDA) is a signer",
             "enforcing the callback is executed by the VRF program through CPI"
           ],
-          "name": "vrf_program_identity",
-          "signer": true
+          "signer": true,
+          "address": "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw"
         },
         {
           "name": "user"
@@ -298,6 +127,7 @@
         },
         {
           "name": "reward_list",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -321,8 +151,7 @@
                 "path": "reward_distributor"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
           "name": "transfer_lookup_table",
@@ -358,13 +187,13 @@
           }
         },
         {
-          "address": "Magic11111111111111111111111111111111111111",
-          "name": "magic_program"
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
         },
         {
-          "address": "MagicContext1111111111111111111111111111111",
           "name": "magic_context",
-          "writable": true
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
         }
       ],
       "args": [
@@ -377,32 +206,50 @@
             ]
           }
         }
-      ],
-      "discriminator": [
-        217,
-        114,
-        103,
-        58,
-        64,
-        195,
-        157,
-        3
-      ],
-      "name": "consume_random_reward"
+      ]
     },
     {
+      "name": "delegate_reward_list",
+      "discriminator": [
+        33,
+        90,
+        35,
+        18,
+        214,
+        29,
+        202,
+        59
+      ],
       "accounts": [
         {
           "name": "admin",
-          "signer": true,
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "reward_distributor"
         },
         {
           "name": "buffer_reward_list",
+          "writable": true,
           "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "reward_list"
+              }
+            ],
             "program": {
               "kind": "const",
               "value": [
@@ -439,34 +286,13 @@
                 51,
                 193
               ]
-            },
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  102,
-                  102,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "reward_list"
-              }
-            ]
-          },
-          "writable": true
+            }
+          }
         },
         {
           "name": "delegation_record_reward_list",
+          "writable": true,
           "pda": {
-            "program": {
-              "kind": "account",
-              "path": "delegation_program"
-            },
             "seeds": [
               {
                 "kind": "const",
@@ -487,17 +313,17 @@
                 "kind": "account",
                 "path": "reward_list"
               }
-            ]
-          },
-          "writable": true
-        },
-        {
-          "name": "delegation_metadata_reward_list",
-          "pda": {
+            ],
             "program": {
               "kind": "account",
               "path": "delegation_program"
-            },
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_reward_list",
+          "writable": true,
+          "pda": {
             "seeds": [
               {
                 "kind": "const",
@@ -527,12 +353,16 @@
                 "kind": "account",
                 "path": "reward_list"
               }
-            ]
-          },
-          "writable": true
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
         },
         {
           "name": "reward_list",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -556,44 +386,44 @@
                 "path": "reward_distributor"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
-          "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y",
-          "name": "owner_program"
+          "name": "owner_program",
+          "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
         },
         {
-          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh",
-          "name": "delegation_program"
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
-      "args": [],
-      "discriminator": [
-        33,
-        90,
-        35,
-        18,
-        214,
-        29,
-        202,
-        59
-      ],
-      "name": "delegate_reward_list"
+      "args": []
     },
     {
+      "name": "initialize_reward_distributor",
+      "discriminator": [
+        158,
+        15,
+        52,
+        95,
+        214,
+        28,
+        121,
+        131
+      ],
       "accounts": [
         {
           "name": "initializer",
-          "signer": true,
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "reward_distributor",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -624,12 +454,11 @@
                 "path": "initializer"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -639,31 +468,32 @@
             "vec": "pubkey"
           }
         }
-      ],
-      "discriminator": [
-        158,
-        15,
-        52,
-        95,
-        214,
-        28,
-        121,
-        131
-      ],
-      "name": "initialize_reward_distributor"
+      ]
     },
     {
+      "name": "initialize_transfer_lookup_table",
+      "discriminator": [
+        61,
+        55,
+        42,
+        239,
+        22,
+        80,
+        152,
+        247
+      ],
       "accounts": [
         {
           "name": "authority",
-          "signer": true,
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "program_data"
         },
         {
           "name": "transfer_lookup_table",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -693,12 +523,11 @@
                 ]
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -708,20 +537,20 @@
             "vec": "pubkey"
           }
         }
-      ],
-      "discriminator": [
-        61,
-        55,
-        42,
-        239,
-        22,
-        80,
-        152,
-        247
-      ],
-      "name": "initialize_transfer_lookup_table"
+      ]
     },
     {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
       "accounts": [
         {
           "name": "base_account",
@@ -745,20 +574,20 @@
             "vec": "bytes"
           }
         }
-      ],
-      "discriminator": [
-        196,
-        28,
-        41,
-        206,
-        48,
-        37,
-        51,
-        167
-      ],
-      "name": "process_undelegation"
+      ]
     },
     {
+      "name": "remove_reward",
+      "discriminator": [
+        208,
+        115,
+        143,
+        26,
+        159,
+        97,
+        59,
+        232
+      ],
       "accounts": [
         {
           "name": "admin",
@@ -769,6 +598,7 @@
         },
         {
           "name": "reward_list",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -792,8 +622,7 @@
                 "path": "reward_distributor"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
           "name": "transfer_lookup_table",
@@ -832,11 +661,13 @@
           "name": "destination"
         },
         {
-          "name": "magic_program"
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
         },
         {
           "name": "magic_context",
-          "writable": true
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
         }
       ],
       "args": [
@@ -856,20 +687,20 @@
             "option": "u64"
           }
         }
-      ],
-      "discriminator": [
-        208,
-        115,
-        143,
-        26,
-        159,
-        97,
-        59,
-        232
-      ],
-      "name": "remove_reward"
+      ]
     },
     {
+      "name": "request_random_reward",
+      "discriminator": [
+        195,
+        78,
+        165,
+        47,
+        67,
+        12,
+        32,
+        10
+      ],
       "accounts": [
         {
           "name": "user"
@@ -918,9 +749,9 @@
           }
         },
         {
-          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc",
           "name": "oracle_queue",
-          "writable": true
+          "writable": true,
+          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
         },
         {
           "name": "program_identity",
@@ -943,16 +774,16 @@
           }
         },
         {
-          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz",
-          "name": "vrf_program"
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
         },
         {
-          "address": "SysvarS1otHashes111111111111111111111111111",
-          "name": "slot_hashes"
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -960,31 +791,64 @@
           "name": "client_seed",
           "type": "u8"
         }
-      ],
-      "discriminator": [
-        195,
-        78,
-        165,
-        47,
-        67,
-        12,
-        32,
-        10
-      ],
-      "name": "request_random_reward"
+      ]
     },
     {
+      "name": "set_admins",
+      "discriminator": [
+        152,
+        38,
+        44,
+        217,
+        51,
+        199,
+        77,
+        92
+      ],
       "accounts": [
         {
           "name": "admin",
-          "signer": true,
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "reward_distributor",
           "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "admins",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_reward_list",
+      "discriminator": [
+        7,
+        241,
+        253,
+        206,
+        181,
+        172,
+        43,
+        128
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
         },
         {
           "name": "reward_distributor"
         },
         {
           "name": "reward_list",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -1008,12 +872,11 @@
                 "path": "reward_distributor"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -1043,25 +906,25 @@
           "name": "global_range_max",
           "type": "u32"
         }
-      ],
-      "discriminator": [
-        7,
-        241,
-        253,
-        206,
-        181,
-        172,
-        43,
-        128
-      ],
-      "name": "set_reward_list"
+      ]
     },
     {
+      "name": "set_whitelist",
+      "discriminator": [
+        69,
+        161,
+        114,
+        252,
+        244,
+        66,
+        197,
+        48
+      ],
       "accounts": [
         {
           "name": "admin",
-          "signer": true,
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "reward_distributor",
@@ -1075,20 +938,20 @@
             "vec": "pubkey"
           }
         }
-      ],
-      "discriminator": [
-        69,
-        161,
-        114,
-        252,
-        244,
-        66,
-        197,
-        48
-      ],
-      "name": "set_whitelist"
+      ]
     },
     {
+      "name": "transfer_reward_programmable_nft",
+      "discriminator": [
+        108,
+        62,
+        71,
+        162,
+        24,
+        220,
+        74,
+        161
+      ],
       "accounts": [
         {
           "name": "token_program"
@@ -1114,8 +977,8 @@
           "name": "associated_token_program"
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         },
         {
           "name": "token_metadata_program"
@@ -1142,8 +1005,8 @@
           "name": "auth_rule"
         },
         {
-          "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y",
-          "name": "source_program"
+          "name": "source_program",
+          "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
         },
         {
           "name": "escrow_auth"
@@ -1158,20 +1021,20 @@
           "name": "amount",
           "type": "u64"
         }
-      ],
-      "discriminator": [
-        108,
-        62,
-        71,
-        162,
-        24,
-        220,
-        74,
-        161
-      ],
-      "name": "transfer_reward_programmable_nft"
+      ]
     },
     {
+      "name": "transfer_reward_spl_token",
+      "discriminator": [
+        48,
+        92,
+        159,
+        119,
+        218,
+        101,
+        20,
+        229
+      ],
       "accounts": [
         {
           "name": "token_program"
@@ -1197,12 +1060,12 @@
           "name": "associated_token_program"
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         },
         {
-          "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y",
-          "name": "source_program"
+          "name": "source_program",
+          "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
         },
         {
           "name": "escrow_auth"
@@ -1217,31 +1080,32 @@
           "name": "amount",
           "type": "u64"
         }
-      ],
-      "discriminator": [
-        48,
-        92,
-        159,
-        119,
-        218,
-        101,
-        20,
-        229
-      ],
-      "name": "transfer_reward_spl_token"
+      ]
     },
     {
+      "name": "undelegate_reward_list",
+      "discriminator": [
+        207,
+        3,
+        201,
+        148,
+        98,
+        2,
+        162,
+        111
+      ],
       "accounts": [
         {
           "name": "payer",
-          "signer": true,
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "reward_distributor"
         },
         {
           "name": "reward_list",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -1265,43 +1129,219 @@
                 "path": "reward_distributor"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
-          "address": "Magic11111111111111111111111111111111111111",
-          "name": "magic_program"
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
         },
         {
-          "address": "MagicContext1111111111111111111111111111111",
           "name": "magic_context",
-          "writable": true
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
         }
       ],
-      "args": [],
-      "discriminator": [
-        207,
-        3,
-        201,
-        148,
-        98,
-        2,
-        162,
-        111
-      ],
-      "name": "undelegate_reward_list"
+      "args": []
     }
   ],
-  "metadata": {
-    "description": "MagicBlock Rewards Program",
-    "name": "rewards_delegated_vrf",
-    "spec": "0.1.0",
-    "version": "0.1.0"
-  },
+  "accounts": [
+    {
+      "name": "RewardDistributor",
+      "discriminator": [
+        215,
+        10,
+        217,
+        199,
+        104,
+        194,
+        97,
+        227
+      ]
+    },
+    {
+      "name": "RewardsList",
+      "discriminator": [
+        68,
+        169,
+        237,
+        16,
+        133,
+        97,
+        67,
+        78
+      ]
+    },
+    {
+      "name": "TransferLookupTable",
+      "discriminator": [
+        63,
+        196,
+        231,
+        155,
+        181,
+        204,
+        67,
+        62
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "RewardNotFound",
+      "msg": "Reward not found with the specified name"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidTokenAccount",
+      "msg": "Invalid token account provided"
+    },
+    {
+      "code": 6002,
+      "name": "TokenNotOwnedByDistributor",
+      "msg": "Token account is not owned by the reward distributor"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidTokenProgramOwner",
+      "msg": "Token account owner is not the token program"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidTokenAccountData",
+      "msg": "Failed to deserialize token account data"
+    },
+    {
+      "code": 6005,
+      "name": "Unauthorized",
+      "msg": "Unauthorized - caller is not an admin or whitelist member"
+    },
+    {
+      "code": 6006,
+      "name": "CollectionVerificationFailed",
+      "msg": "Collection cannot be verified in this instruction"
+    },
+    {
+      "code": 6007,
+      "name": "RewardNotStarted",
+      "msg": "Reward distribution time window has not started"
+    },
+    {
+      "code": 6008,
+      "name": "RewardEnded",
+      "msg": "Reward distribution time window has ended"
+    },
+    {
+      "code": 6009,
+      "name": "NoRewardForValue",
+      "msg": "No rewards available for the drawn value"
+    },
+    {
+      "code": 6010,
+      "name": "RedemptionLimitExceeded",
+      "msg": "Reward redemption limit has been exceeded"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidRewardType",
+      "msg": "Invalid reward type for transfer"
+    },
+    {
+      "code": 6012,
+      "name": "RewardTypeMismatch",
+      "msg": "Reward type does not match the specified type with existing Reward"
+    },
+    {
+      "code": 6013,
+      "name": "UnsupportedAssetType",
+      "msg": "Unsupported asset type - only Fungible, NonFungible, and ProgrammableNonFungible are supported"
+    },
+    {
+      "code": 6014,
+      "name": "TokenCannotBeAdded",
+      "msg": "Token rewards cannot be added to existing reward"
+    },
+    {
+      "code": 6015,
+      "name": "RulesetMismatch",
+      "msg": "ProgrammableNft ruleset does not match the existing reward's ruleset"
+    },
+    {
+      "code": 6016,
+      "name": "MissingMint",
+      "msg": "Missing required mint"
+    },
+    {
+      "code": 6017,
+      "name": "MissingRewardParameters",
+      "msg": "Missing required reward parameters for new reward creation"
+    },
+    {
+      "code": 6018,
+      "name": "MissingDrawRangeMin",
+      "msg": "Missing required parameter: draw_range_min"
+    },
+    {
+      "code": 6019,
+      "name": "MissingDrawRangeMax",
+      "msg": "Missing required parameter: draw_range_max"
+    },
+    {
+      "code": 6020,
+      "name": "MissingRewardAmount",
+      "msg": "Missing required parameter: reward_amount"
+    },
+    {
+      "code": 6021,
+      "name": "MissingRedemptionLimit",
+      "msg": "Missing required parameter: redemption_limit"
+    },
+    {
+      "code": 6022,
+      "name": "MissingMetadataForProgrammableNft",
+      "msg": "ProgrammableNft requires metadata account"
+    },
+    {
+      "code": 6023,
+      "name": "RewardRangeExceedsGlobalBounds",
+      "msg": "Reward range exceeds global bounds"
+    },
+    {
+      "code": 6024,
+      "name": "RewardRangesOverlap",
+      "msg": "Reward ranges overlap"
+    },
+    {
+      "code": 6025,
+      "name": "MintNotFoundInReward",
+      "msg": "Mint not found in reward"
+    },
+    {
+      "code": 6026,
+      "name": "InsufficientRedemptionLimit",
+      "msg": "Insufficient redemption limit to remove"
+    },
+    {
+      "code": 6027,
+      "name": "InvalidDrawRange",
+      "msg": "Invalid draw range: draw_range_min must be less than or equal to draw_range_max"
+    },
+    {
+      "code": 6028,
+      "name": "InvalidRedemptionState",
+      "msg": "Invalid redemption state: redemption_count cannot exceed redemption_limit"
+    },
+    {
+      "code": 6029,
+      "name": "InvalidRewardAmount",
+      "msg": "Invalid reward amount: must be greater than 0"
+    }
+  ],
   "types": [
     {
       "name": "Reward",
       "type": {
+        "kind": "struct",
         "fields": [
           {
             "name": "name",
@@ -1347,13 +1387,13 @@
               "vec": "pubkey"
             }
           }
-        ],
-        "kind": "struct"
+        ]
       }
     },
     {
       "name": "RewardDistributor",
       "type": {
+        "kind": "struct",
         "fields": [
           {
             "name": "super_admin",
@@ -1375,8 +1415,7 @@
               "vec": "pubkey"
             }
           }
-        ],
-        "kind": "struct"
+        ]
       }
     },
     {
@@ -1405,6 +1444,7 @@
     {
       "name": "RewardsList",
       "type": {
+        "kind": "struct",
         "fields": [
           {
             "name": "reward_distributor",
@@ -1440,13 +1480,13 @@
             "name": "global_range_max",
             "type": "u32"
           }
-        ],
-        "kind": "struct"
+        ]
       }
     },
     {
       "name": "TransferLookupTable",
       "type": {
+        "kind": "struct",
         "fields": [
           {
             "name": "bump",
@@ -1458,8 +1498,7 @@
               "vec": "pubkey"
             }
           }
-        ],
-        "kind": "struct"
+        ]
       }
     }
   ]

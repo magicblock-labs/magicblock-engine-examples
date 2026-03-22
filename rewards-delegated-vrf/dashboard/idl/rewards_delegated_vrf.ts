@@ -667,17 +667,13 @@ export type RewardsDelegatedVrf = {
           "name": "destination"
         },
         {
-          "name": "magicProgram"
+          "name": "magicProgram",
+          "address": "Magic11111111111111111111111111111111111111"
         },
         {
           "name": "magicContext",
-          "writable": true
-        },
-        {
-          "name": "escrowAuth"
-        },
-        {
-          "name": "escrow"
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
         }
       ],
       "args": [
@@ -687,7 +683,9 @@ export type RewardsDelegatedVrf = {
         },
         {
           "name": "mintToRemove",
-          "type": "pubkey"
+          "type": {
+            "option": "pubkey"
+          }
         },
         {
           "name": "redemptionAmount",
@@ -1276,66 +1274,71 @@ export type RewardsDelegatedVrf = {
     },
     {
       "code": 6016,
+      "name": "missingMint",
+      "msg": "Missing required mint"
+    },
+    {
+      "code": 6017,
       "name": "missingRewardParameters",
       "msg": "Missing required reward parameters for new reward creation"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "missingDrawRangeMin",
       "msg": "Missing required parameter: draw_range_min"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "missingDrawRangeMax",
       "msg": "Missing required parameter: draw_range_max"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "missingRewardAmount",
       "msg": "Missing required parameter: reward_amount"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "missingRedemptionLimit",
       "msg": "Missing required parameter: redemption_limit"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "missingMetadataForProgrammableNft",
       "msg": "ProgrammableNft requires metadata account"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "rewardRangeExceedsGlobalBounds",
       "msg": "Reward range exceeds global bounds"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "rewardRangesOverlap",
       "msg": "Reward ranges overlap"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "mintNotFoundInReward",
       "msg": "Mint not found in reward"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "insufficientRedemptionLimit",
       "msg": "Insufficient redemption limit to remove"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "invalidDrawRange",
       "msg": "Invalid draw range: draw_range_min must be less than or equal to draw_range_max"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "invalidRedemptionState",
       "msg": "Invalid redemption state: redemption_count cannot exceed redemption_limit"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "invalidRewardAmount",
       "msg": "Invalid reward amount: must be greater than 0"
     }

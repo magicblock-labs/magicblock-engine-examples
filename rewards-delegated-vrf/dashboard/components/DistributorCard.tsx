@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { Copy, Check } from "lucide-react";
 import { RewardDistributor } from "@/lib/types";
+import { CopyableAddress } from "./CopyableAddress";
 
 interface DistributorCardProps {
   distributor: RewardDistributor;
@@ -10,39 +10,19 @@ interface DistributorCardProps {
 }
 
 export function DistributorCard({ distributor, address }: DistributorCardProps) {
-  const [copied, setCopied] = React.useState(false);
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div className="card">
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-white mb-2">
           Reward Distributor
         </h2>
-        <p className="text-gray-400 text-sm break-all">
-          {address}
-        </p>
-        <button
-          onClick={() => copyToClipboard(address)}
-          className="mt-1 inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 text-sm transition-colors"
-        >
-          {copied ? (
-            <>
-              <Check className="w-4 h-4" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="w-4 h-4" />
-              Copy
-            </>
-          )}
-        </button>
+        <div className="bg-gray-700 rounded-lg p-3 mb-2">
+          <CopyableAddress 
+            address={address}
+            className="text-white font-mono text-sm"
+            showIcon={true}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

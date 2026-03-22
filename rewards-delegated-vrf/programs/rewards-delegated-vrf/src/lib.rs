@@ -1091,11 +1091,6 @@ pub struct RemoveReward<'info> {
     pub transfer_lookup_table: Account<'info, TransferLookupTable>,
     /// CHECK: destination of the removed reward
     pub destination: AccountInfo<'info>,
-    /// CHECK: Magic Program
-    pub magic_program: AccountInfo<'info>,
-    /// CHECK: Magic Context
-    #[account(mut)]
-    pub magic_context: AccountInfo<'info>,
 }
 
 /// USER FLOW

@@ -21,10 +21,14 @@ interface DistributorAsset {
   isInRewardList?: boolean;
 }
 
-export const TokenActions: React.FC = () => {
+interface TokenActionsProps {
+  selectedDistributor?: PublicKey | null;
+}
+
+export const TokenActions: React.FC<TokenActionsProps> = ({ selectedDistributor }) => {
   const { publicKey } = useWallet();
   const { connection } = useConnection();
-  const { status, sendSplTokenToDistributor } = useTransaction();
+  const { status, sendSplTokenToDistributor } = useTransaction({ selectedDistributor });
   const { addTransaction, updateTransaction } = useGlobalTransactionHistory();
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -77,10 +81,10 @@ export const TokenActions: React.FC = () => {
   };
 
   const loadDistributorAssets = async () => {
-    if (!publicKey) return;
-    
-    try {
-      const rewardDistributorPda = PDAs.getRewardDistributor(publicKey)[0];
+     if (!publicKey) return;
+     
+     try {
+       const rewardDistributorPda = selectedDistributor || PDAs.getRewardDistributor(publicKey)[0];
       
       // Get all token accounts owned by the distributor
       const tokenAccounts = await connection.getParsedTokenAccountsByOwner(

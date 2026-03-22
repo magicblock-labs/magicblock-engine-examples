@@ -18,6 +18,7 @@ import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory
 import { useRewardData } from "@/hooks/useRewardData";
 import { PDAs } from "@/lib/pda";
 import { TransactionModal } from "./TransactionModal";
+import { CopyableAddress } from "./CopyableAddress";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 
 interface ActionForm {
@@ -153,6 +154,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     onSuccess?: () => void,
     endpoint?: string
   ) => {
+
     if (result.signature) {
       // Get the cluster endpoint from connection
       const clusterEndpoint = endpoint || connection.rpcEndpoint || "https://api.devnet.solana.com";
@@ -184,7 +186,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         status: result.success ? "confirmed" : "failed",
         error: result.error,
       });
-      
+
       setLocalStatus({
         loading: false,
         error: errorMessage,
@@ -355,6 +357,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
       config.rewardMint ? new PublicKey(config.rewardMint) : undefined,
       config.redemptionAmount
     );
+
     await handleTransactionResult(result, "Remove Reward", () => {
       setForms({ ...forms, removeReward: { rewardName: "", rewardMint: "", redemptionAmount: 1 } });
     });
@@ -516,8 +519,9 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               <p className="text-blue-300 font-semibold mb-2">Current Admins ({distributor.admins.length} addresses)</p>
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {distributor.admins.map((addr, idx) => (
-                  <div key={idx} className="text-blue-200 text-xs break-all font-mono">
-                    {addr.toString()} {idx === 0 ? "(super_admin)" : ""}
+                  <div key={idx} className="flex items-center gap-2">
+                    <CopyableAddress address={addr.toString()} />
+                    {idx === 0 && <span className="text-xs text-gray-400">(super_admin)</span>}
                   </div>
                 ))}
               </div>
@@ -568,9 +572,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               <p className="text-blue-300 font-semibold mb-2">Current Whitelist ({distributor.whitelist.length} addresses)</p>
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {distributor.whitelist.map((addr, idx) => (
-                  <div key={idx} className="text-blue-200 text-xs break-all font-mono">
-                    {addr.toString()}
-                  </div>
+                  <CopyableAddress key={idx} address={addr.toString()} />
                 ))}
               </div>
             </div>

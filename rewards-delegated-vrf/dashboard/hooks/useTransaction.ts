@@ -8,6 +8,7 @@ import {
 import * as anchor from "@coral-xyz/anchor";
 import { PROGRAM_ID } from "@/lib/constants";
 import type { RewardsDelegatedVrf } from "@/idl/rewards_delegated_vrf";
+import rewardsDelegatedVrfIdl from "@/idl/rewards_delegated_vrf.json";
 import { PDAs } from "@/lib/pda";
 import { VRF_PROGRAM_ID, ORACLE_QUEUE, SLOT_HASHES_SYSVAR, getVrfProgramIdentity } from "@/lib/vrfConstants";
 import {
@@ -18,7 +19,6 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAccount,
 } from "@solana/spl-token";
-import { Program } from "@coral-xyz/anchor";
 import { MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 
@@ -60,22 +60,16 @@ export const useTransaction = (props?: UseTransactionProps) => {
   // Helper to create program instance with IDL from local file
   const createProgram = async (provider: anchor.AnchorProvider): Promise<anchor.Program<RewardsDelegatedVrf>> => {
     try {
-      // Load IDL from local file (devnet_idl.json)
-      console.log("[createProgram] Loading IDL from /devnet_idl.json...");
-      const response = await fetch("/devnet_idl.json");
-      if (!response.ok) {
-        throw new Error(`Failed to load IDL: ${response.status} ${response.statusText}`);
-      }
-      const idl = await response.json();
-      console.log("[createProgram] IDL loaded successfully");
-      
       console.log("[createProgram] Creating Anchor program with IDL...");
-      console.log("[createProgram] IDL address:", (idl as any).address);
+      console.log("[createProgram] IDL address:", (rewardsDelegatedVrfIdl as any).address);
       console.log("[createProgram] Provider:", {
         wallet: provider.wallet.publicKey.toString(),
         connection: provider.connection.rpcEndpoint,
       });
-      const program = new anchor.Program<RewardsDelegatedVrf>(idl as anchor.Idl, provider);
+      const program = new anchor.Program<RewardsDelegatedVrf>(
+        rewardsDelegatedVrfIdl as anchor.Idl,
+        provider
+      );
       console.log("[createProgram] Program created successfully");
       console.log("[createProgram] Program ID:", program.programId.toString());
       return program;
@@ -266,7 +260,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
       try {
         const provider = createProvider();
         const program = await createProgram(provider);
-        const rewardDistributorPda = getDistributorPda(publicKey);
+        const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
 
         const tx = await program.methods
           .setAdmins(newAdmins)
@@ -301,7 +295,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
       try {
         const provider = createProvider();
         const program = await createProgram(provider);
-        const rewardDistributorPda = getDistributorPda(publicKey);
+        const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
 
         const tx = await program.methods
           .setWhitelist(newWhitelist)
@@ -341,20 +335,22 @@ export const useTransaction = (props?: UseTransactionProps) => {
       try {
         const provider = createProvider();
         const program = await createProgram(provider);
-        const rewardDistributorPda = getDistributorPda(publicKey);
+        const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
         const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
 
         const tx = await program.methods
           .setRewardList(
-            globalRangeMin,
-            globalRangeMax,
+            [],
             startTimestamp,
-            endTimestamp
+            endTimestamp,
+            globalRangeMin,
+            globalRangeMax
           )
           .accounts({
             admin: publicKey,
             rewardDistributor: rewardDistributorPda,
             rewardList: rewardListPda,
+            systemProgram: anchor.web3.SystemProgram.programId,
           })
           .transaction();
 
@@ -382,7 +378,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
     try {
       const provider = createProvider();
       const program = await createProgram(provider);
-      const rewardDistributorPda = getDistributorPda(publicKey);
+      const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
       const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
 
       const tx = await program.methods
@@ -418,7 +414,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
       try {
         const provider = createProvider();
         const program = await createProgram(provider);
-        const rewardDistributorPda = getDistributorPda(publicKey);
+        const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
         const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
 
         const tx = await program.methods
@@ -626,7 +622,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
       try {
         const provider = createProvider();
         const program = await createProgram(provider);
-        const rewardDistributorPda = getDistributorPda(publicKey);
+        const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
         const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
 
         const accounts: any = {
@@ -678,15 +674,14 @@ export const useTransaction = (props?: UseTransactionProps) => {
   );
 
   const removeReward = useCallback(
-    async (rewardName: string, mint?: PublicKey, redemptionAmount?: number): Promise<TransactionResponse> => {
+    async (rewardName: string, rewardMint?: PublicKey, redemptionAmount?: number): Promise<TransactionResponse> => {
       if (!publicKey) return { success: false, error: "Wallet not connected" };
-
       setStatus({ loading: true, error: null, signature: null });
 
       try {
         const provider = createProvider();
         const program = await createProgram(provider);
-        const rewardDistributorPda = getDistributorPda(publicKey);
+        const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
         const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
         const [transferLookupTablePda] = PDAs.getTransferLookupTable();
 
@@ -700,13 +695,10 @@ export const useTransaction = (props?: UseTransactionProps) => {
           magicContext: MAGIC_CONTEXT_ID
         };
 
-        // Add mint if provided
-        if (mint) {
-          accounts.mint = mint;
-        }
-
+  
+        console.log(accounts)
         const tx = await program.methods
-          .removeReward(rewardName, redemptionAmount || 0)
+          .removeReward(rewardName, rewardMint || null, redemptionAmount ? new anchor.BN(redemptionAmount) : null)
           .accounts(accounts)
           .transaction();
 
