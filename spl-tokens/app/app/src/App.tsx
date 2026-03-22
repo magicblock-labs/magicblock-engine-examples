@@ -724,6 +724,9 @@ const App: React.FC = () => {
                 | { minDelayMs: bigint; maxDelayMs: bigint; split: number }
                 | undefined;
             if (usesQueuedPrivateTransfer) {
+                if (!validator.current) {
+                    throw new Error('Validator not loaded yet for encrypted private transfers');
+                }
                 const minDelayMsNumber = Number(privateMinDelayMs);
                 const maxDelayMsNumber = Number(privateMaxDelayMs);
                 const splitCountNumber = Number(privateSplitCount);
@@ -778,10 +781,14 @@ const App: React.FC = () => {
                 mint,
                 shuttleEphemeralAta,
             );
-            // User ATAs
+            // User ATAslog pu
             const srcAta = getAssociatedTokenAddressSync(
                 mint,
                 src.keypair.publicKey
+            );
+            const dstAta = getAssociatedTokenAddressSync(
+                mint,
+                dst.keypair.publicKey
             );
             console.log("Shuttle wallet ata: ", shuttleWalletAta.toBase58());
             console.log("Shuttle eata: ", shuttleEphemeralAta.toBase58());
@@ -812,7 +819,11 @@ const App: React.FC = () => {
                 await conn.confirmTransaction(sig, 'confirmed');
             }
             setTransactionSuccess(`${usesQueuedPrivateTransfer ? 'Private transfer queued' : 'Transfer confirmed'}: ${sig.substring(0, 10)}...${sig.substring(sig.length - 10, sig.length)}`);
-            console.log("Transfer: ", sig);
+            console.log(
+                "Transfer: ",
+                sig,
+                `(from ${src.keypair.publicKey.toBase58()} (sender ata: ${srcAta.toBase58()}), to ${dst.keypair.publicKey.toBase58()} (destination ata: ${dstAta.toBase58()}))`
+            );
             await ephemeralConnection!.current!.getAccountInfo(shuttleWalletAta);
             await refreshBalances();
         } catch (e: any) {
@@ -1198,7 +1209,7 @@ const App: React.FC = () => {
                                             mint,
                                             shuttleEphemeralAta,
                                         );
-                                        await eConn.getAccountInfo(shuttleWalletAta);
+                                        // await eConn.getAccountInfo(shuttleWalletAta);
 
                                         console.log("Shuttle wallet ata: ", shuttleWalletAta.toBase58());
                                         console.log("Shuttle eata: ", shuttleEphemeralAta.toBase58());
@@ -1295,9 +1306,9 @@ const App: React.FC = () => {
                                             shuttleEphemeralAta,
                                         );
                                         const [shuttleAta] = deriveShuttleAta(shuttleEphemeralAta, mint);
-                                        await eConn.getAccountInfo(shuttleAta);
-                                        await eConn.getAccountInfo(shuttleWalletAta);
-                                        await eConn.getAccountInfo(shuttleEphemeralAta);
+                                        // await eConn.getAccountInfo(shuttleAta);
+                                        // await eConn.getAccountInfo(shuttleWalletAta);
+                                        // await eConn.getAccountInfo(shuttleEphemeralAta);
                                         console.log("Shuttle wallet ata: ", shuttleWalletAta.toBase58());
                                         console.log("Shuttle eata: ", shuttleEphemeralAta.toBase58());
                                         console.log("Shuttle ata: ", shuttleAta.toBase58());
