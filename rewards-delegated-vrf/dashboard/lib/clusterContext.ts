@@ -9,6 +9,14 @@ export interface ClusterInfo {
   wsEndpoint?: string;
 }
 
+export const RPC_ENDPOINT_STORAGE_KEY = "solana-rpc-endpoint";
+export const CLUSTER_ENDPOINT_STORAGE_KEY = "solana-cluster-endpoint";
+export const RPC_ENDPOINT_CHANGED_EVENT = "solana-rpc-endpoint-changed";
+
+function normalizeEndpoint(endpoint: string): string {
+  return endpoint.trim().replace(/\/+$/, "");
+}
+
 export const CLUSTER_CONFIG: Record<string, ClusterInfo> = {
   "https://rpc.magicblock.app/devnet": {
     name: "Solana Devnet",
@@ -41,8 +49,11 @@ export const CLUSTER_CONFIG: Record<string, ClusterInfo> = {
  * Get the cluster name for a given endpoint
  */
 export function getClusterName(endpoint: string): string {
-  const config = CLUSTER_CONFIG[endpoint];
-  return config?.name || "Unknown Cluster";
+  const normalizedEndpoint = normalizeEndpoint(endpoint);
+  const configEntry = Object.entries(CLUSTER_CONFIG).find(
+    ([configuredEndpoint]) => normalizeEndpoint(configuredEndpoint) === normalizedEndpoint
+  );
+  return configEntry?.[1].name || "Unknown Cluster";
 }
 
 /**
@@ -50,17 +61,22 @@ export function getClusterName(endpoint: string): string {
  */
 export function getExplorerUrl(signature: string, endpoint: string): string {
   const baseUrl = "https://explorer.solana.com/tx/";
+  const normalizedEndpoint = normalizeEndpoint(endpoint);
   
   // Map endpoints to cluster query parameters
-  if (endpoint.includes("mainnet")) {
+  if (normalizedEndpoint.includes("mainnet")) {
     return `${baseUrl}${signature}`;
-  } else if (endpoint.includes("devnet") && !endpoint.includes("localhost") && !endpoint.includes("magicblock")) {
+  } else if (
+    normalizedEndpoint.includes("devnet") &&
+    !normalizedEndpoint.includes("localhost") &&
+    !normalizedEndpoint.includes("magicblock")
+  ) {
     return `${baseUrl}${signature}?cluster=devnet`;
   }
   
   // For all custom endpoints (localhost, magicblock, or any other custom RPC), use custom cluster format
   // This handles: localhost, magicblock, or any other custom RPC endpoint
-  return `${baseUrl}${signature}?cluster=custom&customUrl=${encodeURIComponent(endpoint)}`;
+  return `${baseUrl}${signature}?cluster=custom&customUrl=${encodeURIComponent(normalizedEndpoint)}`;
 }
 
 /**
@@ -68,7 +84,7 @@ export function getExplorerUrl(signature: string, endpoint: string): string {
  */
 export function saveClusterPreference(endpoint: string): void {
   if (typeof window !== "undefined") {
-    localStorage.setItem("solana-cluster-endpoint", endpoint);
+    localStorage.setItem(CLUSTER_ENDPOINT_STORAGE_KEY, endpoint);
   }
 }
 
@@ -77,7 +93,7 @@ export function saveClusterPreference(endpoint: string): void {
  */
 export function loadClusterPreference(): string | null {
   if (typeof window !== "undefined") {
-    return localStorage.getItem("solana-cluster-endpoint");
+    return localStorage.getItem(CLUSTER_ENDPOINT_STORAGE_KEY);
   }
   return null;
 }
@@ -87,8 +103,29 @@ export function loadClusterPreference(): string | null {
  */
 export function clearClusterPreference(): void {
   if (typeof window !== "undefined") {
-    localStorage.removeItem("solana-cluster-endpoint");
+    localStorage.removeItem(CLUSTER_ENDPOINT_STORAGE_KEY);
   }
+}
+
+export function loadRpcEndpointPreference(): string | null {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem(RPC_ENDPOINT_STORAGE_KEY);
+  }
+  return null;
+}
+
+export function saveRpcEndpointPreference(endpoint: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  localStorage.setItem(RPC_ENDPOINT_STORAGE_KEY, endpoint);
+  localStorage.setItem(CLUSTER_ENDPOINT_STORAGE_KEY, endpoint);
+  window.dispatchEvent(
+    new CustomEvent(RPC_ENDPOINT_CHANGED_EVENT, {
+      detail: { endpoint },
+    })
+  );
 }
 
 /**

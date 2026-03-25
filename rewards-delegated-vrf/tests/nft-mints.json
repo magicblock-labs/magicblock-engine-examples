@@ -102,6 +102,48 @@
       "name": "Reward NFT #1",
       "distributorTokenAccount": "DewpaeFP6b2yJMWBbAqMvkbtLh1QkDhN3VfAqUANrUvw",
       "metadataAddress": "GpadMhPxJFytMWe76GthBK1aNDfVpg2vhwjp71mzwCeF"
+    },
+    {
+      "mint": "GoEEEL7vEVVGYXbqMW3645QGi6FuTx4TxdeH6Lpu8DDR",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "8vJVX6u4CpbHYVQjS8i63qf53uhhczXmad3gUCVfoqLp",
+      "metadataAddress": "k6HhiFpcsGWsvs7qRRNPuSzrdiS7KmToUBwQS2keeUP"
+    },
+    {
+      "mint": "8zejvULEvZb7EfHLspMkGHPoRR63aTgTNEiLnRcUq7z3",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "A9gKWV8KEHLzPGa2Sc54uJQrQox5LSKdzbNwVMJmDYtD",
+      "metadataAddress": "EjWqKBbuxJiK2qtxAiJUo8nosAMycxkkvywPJGXWxmbo"
+    },
+    {
+      "mint": "HbVT3BqXfBXCQpECKoP21fqUA7jyK4mXHxFqUoZ1saaV",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "HN1UBPyc48T296VKmnun1oqhzEKbsE6bup2GscKE1EA6",
+      "metadataAddress": "Bfx84tfqqXBTZja71CHz5FCw7nGx25uxVTYosus2KgNi"
+    },
+    {
+      "mint": "6KQdLFRFxXpYwBuZx4FJQFGYkYugG48sYmEa1Q4JrDAR",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "9pxzqpW2UNJeZK9hYq1A6ATHaEnXYneqXLSkAt4ibuiG",
+      "metadataAddress": "2JBe5d2D6BeMG7YLkFoKzDxBXF4xnn5QDUGhaAgoKzCW"
+    },
+    {
+      "mint": "6PUM6F39SfySJXi2uc5K6YNwqFgfa1f4xkZJdf4Dungs",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "HnFG76E7b8xWF7dP3TVQ5uUeWEh1fPSdq8NvMvwRfNCj",
+      "metadataAddress": "JXqxCPCtXrhfvVTyvoXYdbj3SLSdvJWF1wCgnkdbxk7"
+    },
+    {
+      "mint": "35veMksefEnwNft4a1rUHAKYyeeuuPAqj8hwhQqGx2yW",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "CRsurT72VyvyFM9QwqZnAGTjmRsqG3a8y8G1XYFs9giu",
+      "metadataAddress": "AssXH4yjG9Kae4Xu6Sys7fNiyyzTYx4GPvHs3LC2ajvF"
+    },
+    {
+      "mint": "7MrfCrFC3YTR339RR1ZXnHm1o15GM5ZLh1CE8F36KKPA",
+      "name": "Reward NFT #1",
+      "distributorTokenAccount": "FLNPxXEq9t6Yt5ybfc4fnf2L6jmu34NAyypEPJ98pEd2",
+      "metadataAddress": "5nqkZsik64HDFnRz9PRDzA4zjgnJqAXWszB4jgEVpvpx"
     }
   ]
 }

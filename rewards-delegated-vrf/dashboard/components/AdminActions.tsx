@@ -35,7 +35,6 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
   const { connection } = useConnection();
   const { addTransaction, updateTransaction, transactions } = useGlobalTransactionHistory();
   const {
-    status,
     initializeRewardDistributor,
     setAdmins,
     setWhitelist,
@@ -63,6 +62,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     loading: false,
     error: null as string | null,
     signature: null as string | null,
+    endpoint: null as string | null,
   });
   const [forms, setForms] = useState<ActionForm>({
     admins: "",
@@ -94,14 +94,37 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
 
   // Helper to open modal with cleared status
   const openModal = (modalName: string) => {
-    setLocalStatus({ loading: false, error: null, signature: null });
+    setLocalStatus({ loading: false, error: null, signature: null, endpoint: null });
     setActiveModal(modalName);
   };
 
   // Helper to close modal with cleared status
   const closeModal = () => {
-    setLocalStatus({ loading: false, error: null, signature: null });
+    setLocalStatus({ loading: false, error: null, signature: null, endpoint: null });
     setActiveModal(null);
+  };
+
+  const setLoadingStatus = () => {
+    setLocalStatus({ loading: true, error: null, signature: null, endpoint: null });
+  };
+
+  const setValidationError = (message: string) => {
+    setLocalStatus({ loading: false, error: message, signature: null, endpoint: null });
+  };
+
+  const parsePublicKey = (value: string, label: string): PublicKey | null => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setValidationError(`${label} is required`);
+      return null;
+    }
+
+    try {
+      return new PublicKey(trimmed);
+    } catch {
+      setValidationError(`${label} is invalid`);
+      return null;
+    }
   };
 
   // Track localStatus changes
@@ -112,7 +135,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
   // Update randomReward user field when wallet changes and populate existing data
   useEffect(() => {
     setForms((prev) => {
-      const updated = {
+      const updated: ActionForm = {
         ...prev,
         randomReward: {
           ...prev.randomReward,
@@ -158,7 +181,8 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
 
     if (result.signature) {
       // Get the cluster endpoint from connection
-      const clusterEndpoint = endpoint || connection.rpcEndpoint || getDefaultSolanaEndpoint();
+      const clusterEndpoint =
+        result.endpoint || endpoint || connection.rpcEndpoint || getDefaultSolanaEndpoint();
       
       console.log("[handleTransactionResult] Adding transaction to history:", {
         signature: result.signature,
@@ -192,6 +216,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading: false,
         error: errorMessage,
         signature: result.signature,
+        endpoint: result.endpoint || clusterEndpoint,
       });
       
       // Only auto-close on success
@@ -199,7 +224,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         setTimeout(() => {
           setActiveModal(null);
           onSuccess?.();
-          setLocalStatus({ loading: false, error: null, signature: null });
+          setLocalStatus({ loading: false, error: null, signature: null, endpoint: null });
         }, 2000);
       }
     } else {
@@ -207,18 +232,19 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading: false,
         error: result.error || "Unknown error",
         signature: null,
+        endpoint: result.endpoint || null,
       });
     }
   };
 
   const handleInitialize = async () => {
-    setLocalStatus({ loading: true, error: null, signature: null });
+    setLoadingStatus();
     const result = await initializeRewardDistributor([]);
     await handleTransactionResult(result, "Initialize Distributor");
   };
 
   const handleSetAdmins = async () => {
-    setLocalStatus({ loading: true, error: null, signature: null });
+    setLoadingStatus();
     const addresses = forms.admins.split("\n").filter((a: string) => a.trim());
     const admins = addresses.map(
       (a: string) => new PublicKey(a.trim())
@@ -230,7 +256,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
   };
 
   const handleSetWhitelist = async () => {
-    setLocalStatus({ loading: true, error: null, signature: null });
+    setLoadingStatus();
     const addresses = forms.whitelist.split("\n").filter((a: string) => a.trim());
     const whitelist = addresses.map(
       (a: string) => new PublicKey(a.trim())
@@ -242,41 +268,56 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
   };
 
   const handleSetRewardList = async () => {
-    setLocalStatus({ loading: true, error: null, signature: null });
+    setLoadingStatus();
     const config = forms.rewardList;
+    const existingStartTimestamp = rewardList ? Number(rewardList.startTimestamp) : null;
+    const existingEndTimestamp = rewardList ? Number(rewardList.endTimestamp) : null;
+    const existingGlobalRangeMin = rewardList ? rewardList.globalRangeMin : null;
+    const existingGlobalRangeMax = rewardList ? rewardList.globalRangeMax : null;
+
     const result = await setRewardList(
-      config.globalRangeMin,
-      config.globalRangeMax,
-      config.startTimestamp,
-      config.endTimestamp
+      rewardList && config.globalRangeMin === existingGlobalRangeMin
+        ? null
+        : config.globalRangeMin,
+      rewardList && config.globalRangeMax === existingGlobalRangeMax
+        ? null
+        : config.globalRangeMax,
+      rewardList && config.startTimestamp === existingStartTimestamp
+        ? null
+        : config.startTimestamp,
+      rewardList && config.endTimestamp === existingEndTimestamp
+        ? null
+        : config.endTimestamp
     );
     await handleTransactionResult(result, "Set Reward List");
   };
 
   const handleDelegateRewardList = async () => {
-    setLocalStatus({ loading: true, error: null, signature: null });
+    setLoadingStatus();
     const result = await delegateRewardList();
     await handleTransactionResult(result, "Delegate Reward List");
   };
 
   const handleUndelegateRewardList = async () => {
-    setLocalStatus({ loading: true, error: null, signature: null });
+    setLoadingStatus();
     const result = await undelegateRewardList();
     await handleTransactionResult(result, "Undelegate Reward List");
   };
 
   const handleRequestRandomReward = async () => {
-    setLocalStatus({ loading: true, error: null, signature: null });
+    setLoadingStatus();
     const config = forms.randomReward;
+    const user = parsePublicKey(config.user, "User address");
+    if (!user) return;
     
     const result = await requestRandomReward(
-      new PublicKey(config.user),
+      user,
       config.clientSeed
     );
     
     if (result.signature) {
       // Get the cluster endpoint from connection
-      const clusterEndpoint = connection.rpcEndpoint || "https://api.devnet.solana.com";
+      const clusterEndpoint = result.endpoint || connection.rpcEndpoint || "https://api.devnet.solana.com";
       
       // Add the request transaction to history
       const txId = addTransaction(
@@ -295,12 +336,13 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading: false,
         error: result.error || null,
         signature: result.signature,
+        endpoint: result.endpoint || clusterEndpoint,
       });
       
       if (result.success) {
         setTimeout(() => {
           setActiveModal(null);
-          setLocalStatus({ loading: false, error: null, signature: null });
+          setLocalStatus({ loading: false, error: null, signature: null, endpoint: null });
         }, 2000);
       }
     } else {
@@ -308,15 +350,34 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading: false,
         error: result.error || "Unknown error",
         signature: null,
+        endpoint: result.endpoint || null,
       });
     }
   };
 
   const handleAddReward = async () => {
-    setLocalStatus({ loading: true, error: null, signature: null });
+    setLoadingStatus();
     const config = forms.addReward;
-    const rewardMint = new PublicKey(config.rewardMint)
-    const tokenAccount = getAssociatedTokenAddressSync(rewardMint, new PublicKey(rewardList?.rewardDistributor!), true)
+    if (!config.rewardName.trim()) {
+      setValidationError("Reward name is required");
+      return;
+    }
+
+    const rewardMint = parsePublicKey(config.rewardMint, "Mint address");
+    if (!rewardMint) return;
+
+    if (!rewardList?.rewardDistributor) {
+      setValidationError("Reward list is not loaded for the selected distributor");
+      return;
+    }
+
+    const rewardDistributor = parsePublicKey(
+      rewardList.rewardDistributor.toString(),
+      "Reward distributor"
+    );
+    if (!rewardDistributor) return;
+
+    const tokenAccount = getAssociatedTokenAddressSync(rewardMint, rewardDistributor, true)
     const [metadataAccount] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("metadata"),
@@ -351,11 +412,22 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
   };
 
   const handleRemoveReward = async () => {
-    setLocalStatus({ loading: true, error: null, signature: null });
+    setLoadingStatus();
     const config = forms.removeReward;
+    if (!config.rewardName.trim()) {
+      setValidationError("Reward name is required");
+      return;
+    }
+
+    const parsedRewardMint = config.rewardMint
+      ? parsePublicKey(config.rewardMint, "Mint address")
+      : null;
+    const rewardMint = parsedRewardMint ?? undefined;
+    if (config.rewardMint && !rewardMint) return;
+
     const result = await removeReward(
       config.rewardName,
-      config.rewardMint ? new PublicKey(config.rewardMint) : undefined,
+      rewardMint,
       config.redemptionAmount
     );
 
@@ -495,8 +567,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading={localStatus.loading}
         error={localStatus.error}
         signature={localStatus.signature}
-        endpoint={connection.rpcEndpoint}
-                endpoint={connection.rpcEndpoint}
+        endpoint={localStatus.endpoint || connection.rpcEndpoint}
         onClose={closeModal}
         onConfirm={handleInitialize}
       />
@@ -509,7 +580,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading={localStatus.loading}
         error={localStatus.error}
         signature={localStatus.signature}
-        endpoint={connection.rpcEndpoint}
+        endpoint={localStatus.endpoint || connection.rpcEndpoint}
         onClose={closeModal}
         onConfirm={handleSetAdmins}
       >
@@ -543,7 +614,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               rows={6}
             />
             <p className="text-xs text-gray-400 mt-2">
-              📝 {forms.admins.split('\n').filter(a => a.trim()).length} address(es) to be set
+              📝 {forms.admins.split('\n').filter((a: string) => a.trim()).length} address(es) to be set
             </p>
           </div>
 
@@ -562,7 +633,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading={localStatus.loading}
         error={localStatus.error}
         signature={localStatus.signature}
-        endpoint={connection.rpcEndpoint}
+        endpoint={localStatus.endpoint || connection.rpcEndpoint}
         onClose={closeModal}
         onConfirm={handleSetWhitelist}
       >
@@ -593,7 +664,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               rows={6}
             />
             <p className="text-xs text-gray-400 mt-2">
-              📝 {forms.whitelist.split('\n').filter(a => a.trim()).length} address(es) to be set
+              📝 {forms.whitelist.split('\n').filter((a: string) => a.trim()).length} address(es) to be set
             </p>
           </div>
 
@@ -612,7 +683,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
        loading={localStatus.loading}
        error={localStatus.error}
        signature={localStatus.signature}
-               endpoint={connection.rpcEndpoint}
+       endpoint={localStatus.endpoint || connection.rpcEndpoint}
         onClose={closeModal}
        onConfirm={handleSetRewardList}
       >
@@ -709,7 +780,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
              <div className="border-t border-gray-600 pt-3">
                <label className="block text-sm font-medium text-gray-300 mb-2">Current Rewards in Listaaaaa</label>
                <div className="space-y-2 max-h-80 overflow-y-auto">
-                 {rewardList.rewards.map((reward, idx) => (
+                 {rewardList.rewards.map((reward: any, idx: number) => (
                    <details
                      key={idx}
                      className="bg-gray-800 p-3 rounded border border-gray-700 text-xs group"
@@ -783,7 +854,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading={localStatus.loading}
         error={localStatus.error}
         signature={localStatus.signature}
-                endpoint={connection.rpcEndpoint}
+        endpoint={localStatus.endpoint || connection.rpcEndpoint}
         onClose={closeModal}
         onConfirm={handleDelegateRewardList}
       />
@@ -796,7 +867,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading={localStatus.loading}
         error={localStatus.error}
         signature={localStatus.signature}
-                endpoint={connection.rpcEndpoint}
+        endpoint={localStatus.endpoint || connection.rpcEndpoint}
         onClose={closeModal}
         onConfirm={handleUndelegateRewardList}
       />
@@ -809,7 +880,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading={localStatus.loading}
         error={localStatus.error}
         signature={localStatus.signature}
-                endpoint={connection.rpcEndpoint}
+        endpoint={localStatus.endpoint || connection.rpcEndpoint}
         onClose={closeModal}
         onConfirm={handleRequestRandomReward}
       >
@@ -862,7 +933,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               loading={localStatus.loading}
               error={localStatus.error}
               signature={localStatus.signature}
-                endpoint={connection.rpcEndpoint}
+              endpoint={localStatus.endpoint || connection.rpcEndpoint}
         onClose={closeModal}
         onConfirm={handleAddReward}
       >
@@ -986,7 +1057,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         loading={localStatus.loading}
         error={localStatus.error}
         signature={localStatus.signature}
-                endpoint={connection.rpcEndpoint}
+        endpoint={localStatus.endpoint || connection.rpcEndpoint}
         onClose={closeModal}
         onConfirm={handleRemoveReward}
       >
@@ -998,7 +1069,9 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               <select
                 value={forms.removeReward.rewardName}
                 onChange={(e) => {
-                  const reward = rewardList.rewards?.find(r => r.name === e.target.value || r.rewardName === e.target.value);
+                  const reward = rewardList.rewards?.find(
+                    (r: any) => r.name === e.target.value || r.rewardName === e.target.value
+                  );
                   setForms({
                     ...forms,
                     removeReward: {
@@ -1012,7 +1085,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
                 className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
               >
                 <option value="">-- Select a reward --</option>
-                {rewardList.rewards.map((reward, idx) => (
+                {rewardList.rewards.map((reward: any, idx: number) => (
                   <option key={idx} value={reward.name || reward.rewardName}>
                     {reward.name || reward.rewardName} ({(reward.redemptionLimit - reward.redemptionCount)?.toString() || "0"})
                   </option>

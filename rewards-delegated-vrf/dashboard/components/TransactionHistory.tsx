@@ -4,7 +4,7 @@ import React from "react";
 import { HistoryTransaction } from "@/hooks/useGlobalTransactionHistory";
 import { ExternalLink, Trash2, Copy, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { copyToClipboard, shortAddress } from "@/lib/utils";
-import { getClusterName } from "@/lib/clusterContext";
+import { getClusterName, getExplorerUrl } from "@/lib/clusterContext";
 
 interface TransactionHistoryProps {
   transactions: HistoryTransaction[];
@@ -15,6 +15,11 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
   transactions,
   onRemove,
 }) => {
+  const getEndpointLabel = (endpoint: string) => {
+    const clusterName = getClusterName(endpoint);
+    return clusterName === "Unknown Cluster" ? "Custom RPC" : clusterName;
+  };
+
   const getStatusIcon = (status: "pending" | "confirmed" | "failed") => {
     switch (status) {
       case "confirmed":
@@ -91,8 +96,11 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                     {formatTime(tx.timestamp)}
                   </span>
                   {tx.endpoint && (
-                    <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded truncate">
-                      {getClusterName(tx.endpoint)}
+                    <span
+                      className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded truncate"
+                      title={tx.endpoint}
+                    >
+                      {getEndpointLabel(tx.endpoint)}
                     </span>
                   )}
                 </div>
@@ -114,7 +122,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
               </button>
 
               <a
-                href={tx.explorerUrl}
+                href={tx.endpoint ? getExplorerUrl(tx.signature, tx.endpoint) : tx.explorerUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1 hover:bg-gray-600 rounded transition"

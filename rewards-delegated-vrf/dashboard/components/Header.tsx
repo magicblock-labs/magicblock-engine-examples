@@ -3,6 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { Gift, Network, ChevronDown, Search, Check } from "lucide-react";
+import {
+  loadRpcEndpointPreference,
+  saveRpcEndpointPreference,
+} from "@/lib/clusterContext";
 import { WalletConnect } from "./WalletConnect";
 
 interface ConnectionOption {
@@ -60,7 +64,7 @@ function ClusterSelector() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem("solana-rpc-endpoint") : null;
+    const saved = loadRpcEndpointPreference();
     const initial = saved || connection.rpcEndpoint || DEFAULT_CONNECTIONS[0].endpoint;
     setCurrentEndpoint(initial);
     setMounted(true);
@@ -76,9 +80,7 @@ function ClusterSelector() {
   const handleSelectConnection = (endpoint: string) => {
     setCurrentEndpoint(endpoint);
     setIsOpen(false);
-    localStorage.setItem("solana-rpc-endpoint", endpoint);
-    localStorage.setItem("solana-cluster-endpoint", endpoint);
-    window.location.reload();
+    saveRpcEndpointPreference(endpoint);
   };
 
   const handleCustomEndpoint = () => {

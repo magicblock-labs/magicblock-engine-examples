@@ -57,7 +57,7 @@ describe.only("rewards-delegated-vrf", () => {
   const rewardListPda = PDAs.getRewardList(program.programId, rewardDistributorPda);
   const transferLookupTable = PDAs.getTransferLookupTable(program.programId);
 
-  const whitelist = [wallet.publicKey, new PublicKey("MBRsimXx8nMHvXYgRHLQeVQR3FDALK2eZeXfQ3fJeSv")];
+  const whitelist = [wallet.publicKey, new PublicKey("MBRsimXx8nMHvXYgRHLQeVQR3FDALK2eZeXfQ3fJeSv"), new PublicKey("JonasQ6kwFknJKQpVXbAs2d3fdVLy2DnXd13ynwhgV4")];
 
   // Initialize pubkeys
   let tokenMint: PublicKey = TOKEN_MINT;

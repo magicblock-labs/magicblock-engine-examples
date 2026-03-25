@@ -66,12 +66,12 @@ export function useRewardData(wallet: PublicKey | null, distributorAddress?: Pub
     }
 
     // Fetch immediately
-    performFetch(wallet, connection.rpcEndpoint, distributorAddress);
+    performFetch(wallet, connection.rpcEndpoint, distributorAddress ?? undefined);
 
     // Set up interval only if we have both wallet and distributor
     if (distributorAddress) {
       intervalRef.current = setInterval(() => {
-        performFetch(wallet, connection.rpcEndpoint, distributorAddress);
+        performFetch(wallet, connection.rpcEndpoint, distributorAddress ?? undefined);
       }, 30000);
     }
 
@@ -85,7 +85,7 @@ export function useRewardData(wallet: PublicKey | null, distributorAddress?: Pub
 
   const refetch = useCallback(() => {
     if (wallet) {
-      performFetch(wallet, connection.rpcEndpoint, distributorAddress);
+      performFetch(wallet, connection.rpcEndpoint, distributorAddress ?? undefined);
     }
   }, [wallet, distributorAddress, connection.rpcEndpoint, performFetch]);
 

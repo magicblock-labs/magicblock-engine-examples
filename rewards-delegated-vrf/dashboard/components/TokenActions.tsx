@@ -29,7 +29,7 @@ interface TokenActionsProps {
 export const TokenActions: React.FC<TokenActionsProps> = ({ selectedDistributor }) => {
   const { publicKey } = useWallet();
   const { connection } = useConnection();
-  const { status, sendSplTokenToDistributor } = useTransaction({ selectedDistributor });
+  const { sendSplTokenToDistributor } = useTransaction({ selectedDistributor });
   const { addTransaction, updateTransaction } = useGlobalTransactionHistory();
 
   const [activeModal, setActiveModal] = useState<string | null>(null);

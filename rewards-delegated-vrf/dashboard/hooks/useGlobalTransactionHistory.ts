@@ -30,7 +30,7 @@ interface TransactionHistoryStore {
   clearHistory: () => void;
 }
 
-export const useGlobalTransactionHistory = create<TransactionHistoryStore>(
+export const useGlobalTransactionHistory = create<TransactionHistoryStore>()(
   persist(
     (set) => ({
       transactions: [],
@@ -70,9 +70,18 @@ export const useGlobalTransactionHistory = create<TransactionHistoryStore>(
 
     updateTransaction: (txId, updates) => {
       set((state) => ({
-        transactions: state.transactions.map((tx) =>
-          tx.id === txId ? { ...tx, ...updates } : tx
-        ),
+        transactions: state.transactions.map((tx) => {
+          if (tx.id !== txId) {
+            return tx;
+          }
+
+          const nextTx = { ...tx, ...updates };
+          if (nextTx.endpoint) {
+            nextTx.explorerUrl = getExplorerUrl(nextTx.signature, nextTx.endpoint);
+          }
+
+          return nextTx;
+        }),
       }));
     },
 

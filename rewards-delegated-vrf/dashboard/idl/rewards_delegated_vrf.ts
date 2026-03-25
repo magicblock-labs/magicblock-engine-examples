@@ -889,28 +889,38 @@ export type RewardsDelegatedVrf = {
         {
           "name": "rewards",
           "type": {
-            "vec": {
-              "defined": {
-                "name": "reward"
+            "option": {
+              "vec": {
+                "defined": {
+                  "name": "reward"
+                }
               }
             }
           }
         },
         {
           "name": "startTimestamp",
-          "type": "i64"
+          "type": {
+            "option": "i64"
+          }
         },
         {
           "name": "endTimestamp",
-          "type": "i64"
+          "type": {
+            "option": "i64"
+          }
         },
         {
           "name": "globalRangeMin",
-          "type": "u32"
+          "type": {
+            "option": "u32"
+          }
         },
         {
           "name": "globalRangeMax",
-          "type": "u32"
+          "type": {
+            "option": "u32"
+          }
         }
       ]
     },

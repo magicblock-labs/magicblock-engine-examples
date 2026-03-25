@@ -14,7 +14,7 @@ interface ActionForm {
 
 export const NftActions: React.FC = () => {
   const { publicKey } = useWallet();
-  const { status, mintNftCollection } = useTransaction();
+  const { mintNftCollection } = useTransaction();
   const { addTransaction, updateTransaction } = useGlobalTransactionHistory();
 
   const [activeModal, setActiveModal] = useState<string | null>(null);

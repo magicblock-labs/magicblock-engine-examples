@@ -883,28 +883,38 @@
         {
           "name": "rewards",
           "type": {
-            "vec": {
-              "defined": {
-                "name": "Reward"
+            "option": {
+              "vec": {
+                "defined": {
+                  "name": "Reward"
+                }
               }
             }
           }
         },
         {
           "name": "start_timestamp",
-          "type": "i64"
+          "type": {
+            "option": "i64"
+          }
         },
         {
           "name": "end_timestamp",
-          "type": "i64"
+          "type": {
+            "option": "i64"
+          }
         },
         {
           "name": "global_range_min",
-          "type": "u32"
+          "type": {
+            "option": "u32"
+          }
         },
         {
           "name": "global_range_max",
-          "type": "u32"
+          "type": {
+            "option": "u32"
+          }
         }
       ]
     },

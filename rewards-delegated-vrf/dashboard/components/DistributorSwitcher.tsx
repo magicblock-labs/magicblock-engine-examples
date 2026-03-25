@@ -22,7 +22,6 @@ export const DistributorSwitcher: React.FC<DistributorSwitcherProps> = ({
   const { distributors, loading, error, refetch } = useDiscoverDistributors(publicKey);
   const [isOpen, setIsOpen] = useState(false);
   const [customPda, setCustomPda] = useState("");
-  const [customPdaError, setCustomPdaError] = useState("");
 
   // Get primary distributor from PDA
   const primaryDistributor = publicKey ? PDAs.getRewardDistributor(publicKey)[0] : null;
@@ -36,7 +35,6 @@ export const DistributorSwitcher: React.FC<DistributorSwitcherProps> = ({
 
   const handleCustomPdaChange = (value: string) => {
     setCustomPda(value);
-    setCustomPdaError("");
     
     // Auto-validate and apply if it looks like a valid address
     if (value.trim().length >= 44) {
@@ -77,7 +75,7 @@ export const DistributorSwitcher: React.FC<DistributorSwitcherProps> = ({
                  className="text-white font-mono text-sm"
                  showIcon={true}
                />
-               {selectedDistributor?.equals(primaryDistributor) && (
+               {primaryDistributor && selectedDistributor?.equals(primaryDistributor) && (
                  <div className="text-xs text-gray-400 mt-2">Your Distributor</div>
                )}
              </div>
@@ -117,7 +115,7 @@ export const DistributorSwitcher: React.FC<DistributorSwitcherProps> = ({
                  <div className="px-3 py-2 bg-gray-800 text-xs text-gray-500">
                    Discovered Distributors
                  </div>
-                  {displayDistributors.map((dist, index) => (
+                  {displayDistributors.map((dist) => (
                     <button
                       key={dist.publicKey.toString()}
                       onClick={() => {
@@ -141,12 +139,12 @@ export const DistributorSwitcher: React.FC<DistributorSwitcherProps> = ({
                           </div>
                         </div>
                         <div className="flex gap-1">
-                          {dist.publicKey.equals(primaryDistributor) && (
+                          {primaryDistributor && dist.publicKey.equals(primaryDistributor) && (
                             <span className="text-xs bg-green-600 text-white px-2 py-1 rounded whitespace-nowrap">
                               Primary
                             </span>
                           )}
-                          {dist.isAdmin && !dist.publicKey.equals(primaryDistributor) && (
+                          {dist.isAdmin && (!primaryDistributor || !dist.publicKey.equals(primaryDistributor)) && (
                             <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded whitespace-nowrap">
                               Admin
                             </span>

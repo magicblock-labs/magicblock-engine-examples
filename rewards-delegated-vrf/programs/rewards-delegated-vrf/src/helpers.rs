@@ -72,24 +72,28 @@ pub fn validate_reward(reward_list: &RewardsList) -> Result<()> {
         }
     }
 
-    // Check for overlapping ranges
-    for (i, reward1) in rewards.iter().enumerate() {
-        for reward2 in rewards.iter().skip(i + 1) {
-            // Check if ranges overlap
-            if !(reward1.draw_range_max < reward2.draw_range_min
-                || reward2.draw_range_max < reward1.draw_range_min)
-            {
-                msg!(
-                    "Reward '{}' (range {}-{}) overlaps with '{}' (range {}-{})",
-                    reward1.name,
-                    reward1.draw_range_min,
-                    reward1.draw_range_max,
-                    reward2.name,
-                    reward2.draw_range_min,
-                    reward2.draw_range_max
-                );
-                return Err(RewardError::RewardRangesOverlap.into());
-            }
+    // Sort once and check adjacent ranges for overlap.
+    let mut sorted_ranges: Vec<_> = rewards
+        .iter()
+        .map(|reward| (reward.draw_range_min, reward.draw_range_max, reward.name.as_str()))
+        .collect();
+    sorted_ranges.sort_unstable_by_key(|(min, _, _)| *min);
+
+    for pair in sorted_ranges.windows(2) {
+        let (left_min, left_max, left_name) = pair[0];
+        let (right_min, right_max, right_name) = pair[1];
+
+        if left_max >= right_min {
+            msg!(
+                "Reward '{}' (range {}-{}) overlaps with '{}' (range {}-{})",
+                left_name,
+                left_min,
+                left_max,
+                right_name,
+                right_min,
+                right_max
+            );
+            return Err(RewardError::RewardRangesOverlap.into());
         }
     }
 

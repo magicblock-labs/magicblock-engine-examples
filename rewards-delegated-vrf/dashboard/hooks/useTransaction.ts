@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import {
   Transaction,
@@ -22,6 +22,49 @@ import {
 import { MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
 
+type AdminActionEndpointMode = "solana" | "magicblock";
+
+const SOLANA_DEVNET_ENDPOINT = "https://rpc.magicblock.app/devnet";
+const SOLANA_MAINNET_ENDPOINT = "https://rpc.magicblock.app/mainnet";
+const MAGICBLOCK_DEVNET_ENDPOINT =
+  process.env.NEXT_PUBLIC_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/";
+const MAGICBLOCK_MAINNET_ENDPOINT = "https://as.magicblock.app";
+
+function isKnownDevnetEndpoint(endpoint: string): boolean {
+  return endpoint.includes("devnet");
+}
+
+function isKnownMainnetEndpoint(endpoint: string): boolean {
+  return endpoint.includes("mainnet") || endpoint.includes("as.magicblock.app");
+}
+
+function isKnownPresetEndpoint(endpoint: string): boolean {
+  return (
+    endpoint === SOLANA_DEVNET_ENDPOINT ||
+    endpoint === SOLANA_MAINNET_ENDPOINT ||
+    endpoint === MAGICBLOCK_DEVNET_ENDPOINT ||
+    endpoint === MAGICBLOCK_MAINNET_ENDPOINT
+  );
+}
+
+function resolveAdminActionEndpoint(
+  selectedEndpoint: string,
+  mode: AdminActionEndpointMode
+): string {
+  if (!selectedEndpoint || !isKnownPresetEndpoint(selectedEndpoint)) {
+    return selectedEndpoint;
+  }
+
+  if (isKnownDevnetEndpoint(selectedEndpoint)) {
+    return mode === "solana" ? SOLANA_DEVNET_ENDPOINT : MAGICBLOCK_DEVNET_ENDPOINT;
+  }
+
+  if (isKnownMainnetEndpoint(selectedEndpoint)) {
+    return mode === "solana" ? SOLANA_MAINNET_ENDPOINT : MAGICBLOCK_MAINNET_ENDPOINT;
+  }
+
+  return selectedEndpoint;
+}
 
 export interface TransactionStatus {
   loading: boolean;
@@ -33,11 +76,17 @@ export interface TransactionResponse {
   success: boolean;
   signature?: TransactionSignature;
   error?: string;
+  endpoint?: string;
 }
 
 interface UseTransactionProps {
   selectedDistributor?: PublicKey | null;
-  onTransactionAdd?: (signature: string, actionName: string, network: string, endpoint: string) => string; // returns txId
+  onTransactionAdd?: (
+    signature: string,
+    actionName: string,
+    network?: "devnet" | "mainnet-beta",
+    endpoint?: string
+  ) => string; // returns txId
   onTransactionUpdate?: (txId: string, updates: any) => void;
 }
 
@@ -57,6 +106,12 @@ export const useTransaction = (props?: UseTransactionProps) => {
     }
     return PDAs.getRewardDistributor(wallet)[0];
   };
+
+  const getActionEndpoint = useCallback(
+    (mode: AdminActionEndpointMode) =>
+      resolveAdminActionEndpoint(connection.rpcEndpoint, mode),
+    [connection.rpcEndpoint]
+  );
 
   // Helper to create program instance with IDL from local file
   const createProgram = async (provider: anchor.AnchorProvider): Promise<anchor.Program<RewardsDelegatedVrf>> => {
@@ -83,7 +138,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
 
 
   // Create provider helper
-  const createProvider = () => {
+  const createProvider = (endpointOverride?: string) => {
     if (!publicKey || !signTransaction) {
       throw new Error("Wallet not connected");
     }
@@ -95,22 +150,31 @@ export const useTransaction = (props?: UseTransactionProps) => {
         return Promise.all(txs.map(tx => signTransaction!(tx)));
       },
     } as unknown as anchor.Wallet;
-    return new anchor.AnchorProvider(connection, wallet, { commitment: "confirmed" });
+    const providerConnection = endpointOverride
+      ? new anchor.web3.Connection(endpointOverride, "confirmed")
+      : connection;
+    return new anchor.AnchorProvider(providerConnection, wallet, { commitment: "confirmed" });
   };
 
   // Send transaction helper with verification
-  const sendTransaction = async (tx: Transaction): Promise<TransactionResponse> => {
+  const sendTransaction = async (
+    tx: Transaction,
+    endpointOverride?: string
+  ): Promise<TransactionResponse> => {
     if (!publicKey || !signTransaction) {
       console.error("[sendTransaction] Wallet not connected");
       return { success: false, error: "Wallet not connected" };
     }
 
     try {
+      const txConnection = endpointOverride
+        ? new anchor.web3.Connection(endpointOverride, "confirmed")
+        : connection;
       console.log("[sendTransaction] Starting transaction send...");
       
       // Set transaction properties
       tx.feePayer = publicKey;
-      const latestBlockhash = await connection.getLatestBlockhash();
+      const latestBlockhash = await txConnection.getLatestBlockhash();
       tx.recentBlockhash = latestBlockhash.blockhash;
       console.log("[sendTransaction] Transaction prepared with blockhash:", latestBlockhash.blockhash);
 
@@ -121,7 +185,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
       
       // Send transaction
       console.log("[sendTransaction] Sending raw transaction...");
-      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+      const signature = await txConnection.sendRawTransaction(signedTx.serialize(), {
         skipPreflight: true,
         maxRetries: 3,
       });
@@ -130,8 +194,8 @@ export const useTransaction = (props?: UseTransactionProps) => {
 
       // Wait for confirmation with timeout
       try {
-        const confirmation = await Promise.race([
-          connection.confirmTransaction(signature, "confirmed"),
+        await Promise.race([
+          txConnection.confirmTransaction(signature, "confirmed"),
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("Transaction confirmation timeout")),
@@ -146,7 +210,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
 
       // Verify transaction actually succeeded
       try {
-        const txStatus = await connection.getSignatureStatus(signature);
+        const txStatus = await txConnection.getSignatureStatus(signature);
         console.log("[sendTransaction] Transaction status:", txStatus);
         
         if (txStatus.value?.err) {
@@ -164,18 +228,20 @@ export const useTransaction = (props?: UseTransactionProps) => {
             success: false,
             signature,
             error: errorMessage,
+            endpoint: txConnection.rpcEndpoint,
           };
         }
 
         console.log("[sendTransaction] Transaction succeeded, returning signature:", signature);
-        return { success: true, signature };
+        return { success: true, signature, endpoint: txConnection.rpcEndpoint };
       } catch (statusErr) {
         // If we can't get status, but we have signature, return it with unknown error
         console.warn("[sendTransaction] Could not get signature status, but signature was sent:", signature, statusErr);
         return { 
           success: false, 
           signature,
-          error: "Transaction sent but could not verify status. Check explorer for details."
+          error: "Transaction sent but could not verify status. Check explorer for details.",
+          endpoint: txConnection.rpcEndpoint,
         };
       }
     } catch (err) {
@@ -203,7 +269,8 @@ export const useTransaction = (props?: UseTransactionProps) => {
       setStatus({ loading: true, error: null, signature: null });
 
       try {
-         const provider = createProvider();
+         const actionEndpoint = getActionEndpoint("solana");
+         const provider = createProvider(actionEndpoint);
          
          // Create program and build transaction
          const program = await createProgram(provider);
@@ -215,12 +282,12 @@ export const useTransaction = (props?: UseTransactionProps) => {
             initializer: publicKey,
             rewardDistributor: rewardDistributorPda,
             systemProgram: anchor.web3.SystemProgram.programId,
-          })
+          } as any)
           .transaction();
 
         // Send and sign transaction
         console.log("[initializeRewardDistributor] Calling sendTransaction...");
-        const result = await sendTransaction(tx);
+        const result = await sendTransaction(tx, actionEndpoint);
         console.log("[initializeRewardDistributor] sendTransaction returned:", result);
         
         if (result.success) {
@@ -259,7 +326,8 @@ export const useTransaction = (props?: UseTransactionProps) => {
       setStatus({ loading: true, error: null, signature: null });
 
       try {
-        const provider = createProvider();
+        const actionEndpoint = getActionEndpoint("solana");
+        const provider = createProvider(actionEndpoint);
         const program = await createProgram(provider);
         const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
 
@@ -268,10 +336,10 @@ export const useTransaction = (props?: UseTransactionProps) => {
           .accounts({
             admin: publicKey,
             rewardDistributor: rewardDistributorPda,
-          })
+          } as any)
           .transaction();
 
-        const result = await sendTransaction(tx);
+        const result = await sendTransaction(tx, actionEndpoint);
         setStatus({ 
           loading: false, 
           error: result.error || null, 
@@ -294,7 +362,8 @@ export const useTransaction = (props?: UseTransactionProps) => {
       setStatus({ loading: true, error: null, signature: null });
 
       try {
-        const provider = createProvider();
+        const actionEndpoint = getActionEndpoint("solana");
+        const provider = createProvider(actionEndpoint);
         const program = await createProgram(provider);
         const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
 
@@ -303,10 +372,10 @@ export const useTransaction = (props?: UseTransactionProps) => {
           .accounts({
             admin: publicKey,
             rewardDistributor: rewardDistributorPda,
-          })
+          } as any)
           .transaction();
 
-        const result = await sendTransaction(tx);
+        const result = await sendTransaction(tx, actionEndpoint);
         setStatus({ 
           loading: false, 
           error: result.error || null, 
@@ -324,38 +393,47 @@ export const useTransaction = (props?: UseTransactionProps) => {
 
         const setRewardList = useCallback(
     async (
-      globalRangeMin: number,
-      globalRangeMax: number,
-      startTimestamp: number,
-      endTimestamp: number
+      globalRangeMin: number | null,
+      globalRangeMax: number | null,
+      startTimestamp: number | null,
+      endTimestamp: number | null
     ): Promise<TransactionResponse> => {
       if (!publicKey) return { success: false, error: "Wallet not connected" };
 
       setStatus({ loading: true, error: null, signature: null });
 
       try {
-        const provider = createProvider();
+        const actionEndpoint = getActionEndpoint("magicblock");
+        const provider = createProvider(actionEndpoint);
         const program = await createProgram(provider);
         const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
         const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
 
         const tx = await program.methods
           .setRewardList(
-            [],
-            startTimestamp,
-            endTimestamp,
-            globalRangeMin,
-            globalRangeMax
+            null,
+            typeof startTimestamp === "number" && startTimestamp > 0
+              ? new anchor.BN(startTimestamp)
+              : null,
+            typeof endTimestamp === "number" && endTimestamp > 0
+              ? new anchor.BN(endTimestamp)
+              : null,
+            typeof globalRangeMin === "number" && Number.isFinite(globalRangeMin)
+              ? globalRangeMin
+              : null,
+            typeof globalRangeMax === "number" && Number.isFinite(globalRangeMax)
+              ? globalRangeMax
+              : null
           )
           .accounts({
             admin: publicKey,
             rewardDistributor: rewardDistributorPda,
             rewardList: rewardListPda,
             systemProgram: anchor.web3.SystemProgram.programId,
-          })
+          } as any)
           .transaction();
 
-        const result = await sendTransaction(tx);
+        const result = await sendTransaction(tx, actionEndpoint);
         setStatus({ 
           loading: false, 
           error: result.error || null, 
@@ -377,7 +455,8 @@ export const useTransaction = (props?: UseTransactionProps) => {
     setStatus({ loading: true, error: null, signature: null });
 
     try {
-      const provider = createProvider();
+      const actionEndpoint = getActionEndpoint("solana");
+      const provider = createProvider(actionEndpoint);
       const program = await createProgram(provider);
       const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
       const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
@@ -389,10 +468,10 @@ export const useTransaction = (props?: UseTransactionProps) => {
           rewardDistributor: rewardDistributorPda,
           rewardList: rewardListPda,
           systemProgram: anchor.web3.SystemProgram.programId,
-        })
+        } as any)
         .transaction();
 
-      const result = await sendTransaction(tx);
+      const result = await sendTransaction(tx, actionEndpoint);
       setStatus({ 
         loading: false, 
         error: result.error || null, 
@@ -413,7 +492,8 @@ export const useTransaction = (props?: UseTransactionProps) => {
       setStatus({ loading: true, error: null, signature: null });
 
       try {
-        const provider = createProvider();
+        const actionEndpoint = getActionEndpoint("magicblock");
+        const provider = createProvider(actionEndpoint);
         const program = await createProgram(provider);
         const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
         const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
@@ -424,10 +504,10 @@ export const useTransaction = (props?: UseTransactionProps) => {
             payer: publicKey,
             rewardDistributor: rewardDistributorPda,
             rewardList: rewardListPda,
-          })
+          } as any)
           .transaction();
 
-        const result = await sendTransaction(tx);
+        const result = await sendTransaction(tx, actionEndpoint);
         setStatus({ 
           loading: false, 
           error: result.error || null, 
@@ -443,14 +523,15 @@ export const useTransaction = (props?: UseTransactionProps) => {
         [publicKey, signTransaction, connection, props?.selectedDistributor?.toString()]
         );
 
-        const requestRandomReward = useCallback(
-    async (user: PublicKey, clientSeed: number, txSignature?: string): Promise<TransactionResponse> => {
+  const requestRandomReward = useCallback(
+    async (user: PublicKey, clientSeed: number): Promise<TransactionResponse> => {
       if (!publicKey) return { success: false, error: "Wallet not connected" };
 
       setStatus({ loading: true, error: null, signature: null });
 
       try {
-         const provider = createProvider();
+         const actionEndpoint = getActionEndpoint("magicblock");
+         const provider = createProvider(actionEndpoint);
          const program = await createProgram(provider);
          const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
          const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
@@ -482,10 +563,10 @@ export const useTransaction = (props?: UseTransactionProps) => {
              vrfProgram: VRF_PROGRAM_ID,
              slotHashes: SLOT_HASHES_SYSVAR,
              systemProgram: anchor.web3.SystemProgram.programId,
-           })
+           } as any)
            .transaction();
 
-         const result = await sendTransaction(tx);
+         const result = await sendTransaction(tx, actionEndpoint);
          setStatus({ 
            loading: false, 
            error: result.error || null, 
@@ -504,14 +585,14 @@ export const useTransaction = (props?: UseTransactionProps) => {
            const callbackReceived = new Promise<void>((resolve) => {
              const timeoutId = setTimeout(() => {
                if (listener !== null && !listenerRemoved) {
-                 connection.removeOnLogsListener(listener);
+                 provider.connection.removeOnLogsListener(listener);
                  listenerRemoved = true;
                }
                console.log("[requestRandomReward] VRF callback listener timeout after 30s. Callback found:", callbackFound);
                resolve();
              }, 30000); // 30 second timeout
 
-             listener = connection.onLogs(
+             listener = provider.connection.onLogs(
                PROGRAM_ID,
                (logs) => {
                  try {
@@ -544,7 +625,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
                      
                      // Add the callback as a separate transaction entry
                      if (props?.onTransactionAdd && props?.onTransactionUpdate) {
-                       const clusterEndpoint = connection.rpcEndpoint || getDefaultSolanaEndpoint();
+                       const clusterEndpoint = result.endpoint || provider.connection.rpcEndpoint || getDefaultSolanaEndpoint();
                        console.log("[VRF Callback] Adding callback transaction to history with status:", txStatus);
                        // Create a callback entry in the transaction history
                        const callbackTxId = props.onTransactionAdd(
@@ -566,7 +647,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
                    
                    if (callbackFound) {
                      if (listener !== null && !listenerRemoved) {
-                       connection.removeOnLogsListener(listener);
+                       provider.connection.removeOnLogsListener(listener);
                        listenerRemoved = true;
                      }
                      clearTimeout(timeoutId);
@@ -575,7 +656,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
                  } catch (err) {
                    console.error("[VRF Callback] Error in log listener:", err);
                    if (listener !== null && !listenerRemoved) {
-                     connection.removeOnLogsListener(listener);
+                     provider.connection.removeOnLogsListener(listener);
                      listenerRemoved = true;
                    }
                    clearTimeout(timeoutId);
@@ -621,7 +702,8 @@ export const useTransaction = (props?: UseTransactionProps) => {
       setStatus({ loading: true, error: null, signature: null });
 
       try {
-        const provider = createProvider();
+        const actionEndpoint = getActionEndpoint("magicblock");
+        const provider = createProvider(actionEndpoint);
         const program = await createProgram(provider);
         const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
         const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
@@ -632,20 +714,8 @@ export const useTransaction = (props?: UseTransactionProps) => {
           rewardList: rewardListPda,
           mint: rewardMint,
           tokenAccount,
+          metadata: metadataAccount ?? null,
         };
-
-        // Check if metadata exist
-        let metadataExist = false
-        accounts.metadata = null
-        try {
-          const metadataAccountData = await program.account.metadata.fetch(accounts.metadata);
-          if (metadataAccountData) {
-            metadataExist = true
-            accounts.metadata = metadataAccount;
-          }
-        } catch(error) {
-          console.log("Metadata account does not exist:", accounts.metadata)
-        }
  
         const tx = await program.methods
           .addReward(
@@ -658,7 +728,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
           .accounts(accounts)
           .transaction();
 
-        const result = await sendTransaction(tx);
+        const result = await sendTransaction(tx, actionEndpoint);
         setStatus({ 
           loading: false, 
           error: result.error || null, 
@@ -674,13 +744,14 @@ export const useTransaction = (props?: UseTransactionProps) => {
         [publicKey, signTransaction, connection, props?.selectedDistributor?.toString()]
         );
 
-        const removeReward = useCallback(
+  const removeReward = useCallback(
     async (rewardName: string, rewardMint?: PublicKey, redemptionAmount?: number): Promise<TransactionResponse> => {
       if (!publicKey) return { success: false, error: "Wallet not connected" };
       setStatus({ loading: true, error: null, signature: null });
 
       try {
-        const provider = createProvider();
+        const actionEndpoint = getActionEndpoint("magicblock");
+        const provider = createProvider(actionEndpoint);
         const program = await createProgram(provider);
         const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
         const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
@@ -703,7 +774,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
           .accounts(accounts)
           .transaction();
 
-        const result = await sendTransaction(tx);
+        const result = await sendTransaction(tx, actionEndpoint);
         setStatus({ 
           loading: false, 
           error: result.error || null, 
@@ -716,7 +787,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
         return { success: false, error: errorMessage };
       }
     },
-    [publicKey, signTransaction, connection]
+    [publicKey, signTransaction, connection, props?.selectedDistributor?.toString()]
   );
 
   const mintNftCollection = useCallback(

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ConnectionProvider,
   WalletProvider,
@@ -12,6 +12,11 @@ import {
   TorusWalletAdapter,
 } from "@solana/wallet-adapter-wallets";
 import { clusterApiUrl } from "@solana/web3.js";
+import {
+  loadRpcEndpointPreference,
+  RPC_ENDPOINT_CHANGED_EVENT,
+  RPC_ENDPOINT_STORAGE_KEY,
+} from "@/lib/clusterContext";
 
 require("@solana/wallet-adapter-react-ui/styles.css");
 
@@ -24,18 +29,35 @@ const HydrationSuppressed = ({ children }: { children: React.ReactNode }) => (
  * Get the RPC endpoint, preferring saved cluster preference over env var
  */
 function getEndpoint(): string {
-  if (typeof window !== "undefined") {
-    const savedEndpoint = localStorage.getItem("solana-rpc-endpoint");
-    if (savedEndpoint) {
-      return savedEndpoint;
-    }
+  const savedEndpoint = loadRpcEndpointPreference();
+  if (savedEndpoint) {
+    return savedEndpoint;
   }
   return process.env.NEXT_PUBLIC_SOLANA_RPC_URL || clusterApiUrl("devnet");
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const network = getEndpoint();
-  const endpoint = useMemo(() => network, [network]);
+  const [endpoint, setEndpoint] = useState(getEndpoint);
+
+  useEffect(() => {
+    const syncEndpoint = () => {
+      setEndpoint(getEndpoint());
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key || event.key === RPC_ENDPOINT_STORAGE_KEY) {
+        syncEndpoint();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(RPC_ENDPOINT_CHANGED_EVENT, syncEndpoint);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(RPC_ENDPOINT_CHANGED_EVENT, syncEndpoint);
+    };
+  }, []);
 
   const wallets = useMemo(
     () => [
@@ -48,7 +70,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <HydrationSuppressed>
-      <ConnectionProvider endpoint={endpoint}>
+      <ConnectionProvider endpoint={endpoint} key={endpoint}>
         <WalletProvider wallets={wallets} autoConnect>
           <WalletModalProvider>{children}</WalletModalProvider>
         </WalletProvider>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PublicKey } from "@solana/web3.js";
+import { AccountInfo, PublicKey } from "@solana/web3.js";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PROGRAM_ID } from "@/lib/constants";
 
@@ -30,40 +30,28 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
 
       console.log("Discovering distributors on endpoint:", connection.rpcEndpoint);
 
-      let accounts = [];
+      let accounts: Array<{
+        pubkey: PublicKey;
+        account: AccountInfo<Buffer>;
+      }> = [];
       
       try {
-        // Try with a strict size limit first
-        accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-          filters: [
-            {
-              dataSize: { min: 41, max: 10000 }, // Reasonable size for typical distributors
-            },
-          ],
-        });
-        console.log(`Found ${accounts.length} distributor accounts with size filter`);
-      } catch (err) {
-        console.warn("Size-filtered fetch failed, trying without size filter:", err);
+        accounts = [...(await connection.getProgramAccounts(PROGRAM_ID))];
+        console.log(`Found ${accounts.length} potential distributor accounts (unfiltered)`);
         
-        try {
-            // Fallback: fetch without size filter
-            accounts = await connection.getProgramAccounts(PROGRAM_ID);
-            console.log(`Found ${accounts.length} potential distributor accounts (unfiltered)`);
-            
-            accounts.forEach((acc, idx) => {
-              console.log(`  [${idx}] Account: ${acc.pubkey.toString()}, Size: ${acc.account.data.length} bytes`);
-            });
-            
-            // Filter to reasonable sizes locally
-            accounts = accounts.filter(acc => {
-              const size = acc.account.data.length;
-              return size >= 41 && size <= 10000;
-            });
-            console.log(`After local filtering: ${accounts.length} accounts`);
-        } catch (fallbackErr) {
-          console.error("Failed to fetch program accounts even without filter:", fallbackErr);
-          return;
-        }
+        accounts.forEach((acc, idx) => {
+          console.log(`  [${idx}] Account: ${acc.pubkey.toString()}, Size: ${acc.account.data.length} bytes`);
+        });
+        
+        // Filter to reasonable sizes locally
+        accounts = accounts.filter((acc) => {
+          const size = acc.account.data.length;
+          return size >= 41 && size <= 10000;
+        });
+        console.log(`After local filtering: ${accounts.length} accounts`);
+      } catch (err) {
+        console.error("Failed to fetch program accounts:", err);
+        return;
       }
 
       console.log(`Processing ${accounts.length} potential distributor accounts`);

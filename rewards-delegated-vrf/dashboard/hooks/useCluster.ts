@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, createContext, useCallback } from "react";
+import { useContext, createContext } from "react";
 
 export interface ClusterContextType {
   endpoint: string;
