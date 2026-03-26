@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useRef } from "react";
 import { X, AlertCircle, CheckCircle, Loader } from "lucide-react";
 import { getExplorerUrl } from "@/lib/clusterContext";
 
@@ -31,18 +31,32 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const backdropMouseDown = useRef(false);
+
+  const handleBackdropMouseDown = (e: React.MouseEvent) => {
+    backdropMouseDown.current = e.target === e.currentTarget;
+  };
+
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !loading) {
+    if (backdropMouseDown.current && e.target === e.currentTarget && !loading) {
       onClose();
     }
+    backdropMouseDown.current = false;
   };
 
   return (
     <div 
       className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onMouseDown={handleBackdropMouseDown}
       onClick={handleBackdropClick}
     >
-      <div className="bg-gray-800 rounded-lg max-w-md w-full p-6 border border-gray-700">
+      <div
+        className="bg-gray-800 rounded-lg max-w-md w-full p-6 border border-gray-700"
+        onMouseDown={() => {
+          backdropMouseDown.current = false;
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-white">{title}</h2>

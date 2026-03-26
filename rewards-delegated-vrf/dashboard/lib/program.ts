@@ -30,8 +30,6 @@ export class ProgramClient {
     // Create a separate connection to Solana endpoint for delegation status
     const solanaEndpoint = getSolanaEndpoint(this.rpcUrl);
     this.solanaConnection = new Connection(solanaEndpoint, "confirmed");
-    console.log("ProgramClient initialized with RPC:", this.rpcUrl);
-    console.log("Solana endpoint for delegation check:", solanaEndpoint);
   }
 
   /**
@@ -49,10 +47,7 @@ export class ProgramClient {
    */
   private deserializeRewardDistributor(data: Buffer): any {
     let pos = 8; // Skip discriminator
-    
-    console.log("[RewardDistributor] Buffer length:", data.length, "bytes");
-    console.log("[RewardDistributor] First 100 bytes:", data.slice(0, 100).toString('hex'));
-    
+
     if (data.length < pos + 32) {
       throw new Error(`Buffer too short for RewardDistributor. Expected at least ${pos + 32} bytes, got ${data.length}`);
     }
@@ -91,10 +86,7 @@ export class ProgramClient {
    */
   private deserializeRewardsList(data: Buffer): any {
     let pos = 8; // Skip discriminator
-    
-    console.log("[RewardsList] Buffer length:", data.length, "bytes");
-    console.log("[RewardsList] First 100 bytes:", data.slice(0, 100).toString('hex'));
-    
+
     if (data.length < pos + 32) {
       throw new Error(`Buffer too short for RewardsList. Expected at least ${pos + 32} bytes, got ${data.length}`);
     }
@@ -207,41 +199,30 @@ export class ProgramClient {
    */
   async fetchRewardDistributor(pda: PublicKey): Promise<RewardDistributor | null> {
     try {
-      console.log("Fetching reward distributor from:", pda.toString());
-      
       const accountInfo = await this.connection.getAccountInfo(pda);
       
       // Fetch delegation status from Solana endpoint
       let delegationAccountInfo: any = null;
       try {
         delegationAccountInfo = await this.solanaConnection.getAccountInfo(pda);
-      } catch (err) {
-        console.warn("Failed to fetch delegation status from Solana endpoint:", err);
+      } catch {
+        // Ignore delegation lookup failures and continue with base data.
       }
       
       if (!accountInfo) {
-        console.log("Reward distributor account not initialized at", pda.toString());
         return null;
       }
 
       // Check if account has meaningful data (at least discriminator + some fields)
       if (accountInfo.data.length < 50) {
-        console.log("Reward distributor account exists but is empty or too small. Size:", accountInfo.data.length, "bytes");
         return null;
       }
 
-      console.log("Account found. Data size:", accountInfo.data.length, "bytes");
-      console.log("Account owner:", accountInfo.owner.toString());
-
       // Deserialize using manual Borsh parsing
       const decoded = this.deserializeRewardDistributor(accountInfo.data);
-      
-      console.log("Decoded account data:", decoded);
 
       // Check if account is delegated by comparing owner with delegation program on Solana
       const isDelegated = delegationAccountInfo?.owner.equals(DELEGATION_PROGRAM_ID) || false;
-      const solanaEndpoint = getSolanaEndpoint(this.rpcUrl);
-      console.log("Is delegated:", isDelegated, "| Account:", pda.toString(), "| Endpoint:", solanaEndpoint, "| Owner:", delegationAccountInfo?.owner.toString() || "not found");
 
       return {
         superAdmin: decoded.superAdmin as PublicKey,
@@ -261,42 +242,30 @@ export class ProgramClient {
    */
   async fetchRewardsList(pda: PublicKey): Promise<RewardsList | null> {
     try {
-       console.log("Fetching reward list from:", pda.toString());
-       
        const accountInfo = await this.connection.getAccountInfo(pda);
        
        // Fetch delegation status from Solana endpoint
        let delegationAccountInfo: any = null;
        try {
          delegationAccountInfo = await this.solanaConnection.getAccountInfo(pda);
-       } catch (err) {
-         console.warn("Failed to fetch delegation status from Solana endpoint:", err);
+       } catch {
+         // Ignore delegation lookup failures and continue with base data.
        }
       
       if (!accountInfo) {
-        console.log("Reward list account not initialized at", pda.toString());
         return null;
       }
 
       // Check if account has meaningful data (at least discriminator + some fields)
       if (accountInfo.data.length < 50) {
-        console.log("Reward list account exists but is empty or too small. Size:", accountInfo.data.length, "bytes");
         return null;
       }
 
-      console.log("Account found. Data size:", accountInfo.data.length, "bytes");
-      console.log("Account owner:", accountInfo.owner.toString());
-
       // Deserialize using manual Borsh parsing
       const decoded = this.deserializeRewardsList(accountInfo.data);
-      
-      console.log("Decoded reward list:", decoded);
-      console.log("Number of rewards:", decoded.rewards.length);
 
       // Check if account is delegated by comparing owner with delegation program on Solana
       const isDelegated = delegationAccountInfo?.owner.equals(DELEGATION_PROGRAM_ID) || false;
-      const solanaEndpoint = getSolanaEndpoint(this.rpcUrl);
-      console.log("Is delegated:", isDelegated, "| Account:", pda.toString(), "| Endpoint:", solanaEndpoint, "| Owner:", delegationAccountInfo?.owner.toString() || "not found");
 
       return {
         rewardDistributor: decoded.rewardDistributor as PublicKey,
@@ -319,17 +288,11 @@ export class ProgramClient {
    */
   async fetchTransferLookupTable(pda: PublicKey): Promise<TransferLookupTable | null> {
     try {
-      console.log("Fetching transfer lookup table from:", pda.toString());
-      console.log("RPC endpoint:", this.rpcUrl);
-      
       const accountInfo = await this.connection.getAccountInfo(pda);
       
       if (!accountInfo) {
-        console.warn("Transfer lookup table not found at", pda.toString());
         return null;
       }
-
-      console.log("Account found. Data size:", accountInfo.data.length, "bytes");
 
       // Return safe structure
       return {

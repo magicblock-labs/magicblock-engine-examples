@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { HistoryTransaction } from "@/hooks/useGlobalTransactionHistory";
 import { ExternalLink, Trash2, Copy, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { copyToClipboard, shortAddress } from "@/lib/utils";
@@ -15,6 +15,9 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
   transactions,
   onRemove,
 }) => {
+  const pageSize = 10;
+  const [currentPage, setCurrentPage] = useState(1);
+
   const getEndpointLabel = (endpoint: string) => {
     const clusterName = getClusterName(endpoint);
     return clusterName === "Unknown Cluster" ? "Custom RPC" : clusterName;
@@ -53,6 +56,17 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
     return date.toLocaleTimeString();
   };
 
+  const totalPages = Math.max(1, Math.ceil(transactions.length / pageSize));
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
+  const visibleTransactions = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return transactions.slice(startIndex, startIndex + pageSize);
+  }, [currentPage, transactions]);
+
   if (transactions.length === 0) {
     return (
       <div className="card p-6 text-center">
@@ -63,10 +77,15 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
 
   return (
     <div className="card p-4">
-      <h3 className="text-lg font-semibold text-white mb-4">Transaction History</h3>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold text-white">Transaction History</h3>
+        <span className="text-xs text-gray-400">
+          Page {currentPage} of {totalPages}
+        </span>
+      </div>
       
-      <div className="space-y-2 max-h-96 overflow-y-auto">
-        {transactions.map((tx) => (
+      <div className="space-y-2">
+        {visibleTransactions.map((tx) => (
           <div
             key={tx.id}
             className="bg-gray-700 p-3 rounded border border-gray-600 flex items-center justify-between hover:bg-gray-650 transition"
@@ -142,6 +161,28 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
           </div>
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-700 pt-4">
+          <button
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            disabled={currentPage === 1}
+            className="rounded border border-gray-600 px-3 py-2 text-sm text-white transition hover:border-blue-500 hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-xs text-gray-400">
+            Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, transactions.length)} of {transactions.length}
+          </span>
+          <button
+            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+            disabled={currentPage === totalPages}
+            className="rounded border border-gray-600 px-3 py-2 text-sm text-white transition hover:border-blue-500 hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 };

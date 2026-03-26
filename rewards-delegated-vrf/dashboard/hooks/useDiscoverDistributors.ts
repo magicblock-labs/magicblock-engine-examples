@@ -28,8 +28,6 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
       setLoading(true);
       setError(null);
 
-      console.log("Discovering distributors on endpoint:", connection.rpcEndpoint);
-
       let accounts: Array<{
         pubkey: PublicKey;
         account: AccountInfo<Buffer>;
@@ -37,24 +35,16 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
       
       try {
         accounts = [...(await connection.getProgramAccounts(PROGRAM_ID))];
-        console.log(`Found ${accounts.length} potential distributor accounts (unfiltered)`);
-        
-        accounts.forEach((acc, idx) => {
-          console.log(`  [${idx}] Account: ${acc.pubkey.toString()}, Size: ${acc.account.data.length} bytes`);
-        });
         
         // Filter to reasonable sizes locally
         accounts = accounts.filter((acc) => {
           const size = acc.account.data.length;
           return size >= 41 && size <= 10000;
         });
-        console.log(`After local filtering: ${accounts.length} accounts`);
       } catch (err) {
         console.error("Failed to fetch program accounts:", err);
         return;
       }
-
-      console.log(`Processing ${accounts.length} potential distributor accounts`);
 
       const discovered: DiscoveredDistributor[] = [];
 
@@ -65,13 +55,11 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
           
           // Ensure minimum size
           if (data.length < 41) {
-            console.debug(`Account ${account.pubkey.toString()} too small (${data.length} bytes), skipping`);
             continue;
           }
 
           // Validate buffer before processing
           if (!Buffer.isBuffer(data)) {
-            console.debug(`Account ${account.pubkey.toString()} data is not a buffer, skipping`);
             continue;
           }
           
@@ -87,13 +75,11 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
 
           // Validate bump is reasonable (should be 1-255)
           if (bump === 0 || bump > 255) {
-            console.debug(`Account ${account.pubkey.toString()} has invalid bump ${bump}, skipping`);
             continue;
           }
 
           // Read admins vec length (must have at least 4 more bytes)
           if (data.length < pos + 4) {
-            console.debug(`Account ${account.pubkey.toString()} too short to read admins length`);
             continue;
           }
           const adminsLength = data.readUInt32LE(pos);
@@ -101,14 +87,12 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
 
           // Safety check: don't read more admins than possible
           if (adminsLength > 1000 || adminsLength < 0) {
-            console.debug(`Account ${account.pubkey.toString()} has invalid admins length: ${adminsLength}`);
             continue;
           }
           
           const admins: PublicKey[] = [];
           for (let i = 0; i < adminsLength; i++) {
             if (data.length < pos + 32) {
-              console.debug(`Account ${account.pubkey.toString()} truncated while reading admin ${i}`);
               break;
             }
             admins.push(new PublicKey(data.slice(pos, pos + 32)));
@@ -117,7 +101,6 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
 
           // Read whitelist vec length
           if (data.length < pos + 4) {
-            console.debug(`Account ${account.pubkey.toString()} too short to read whitelist length`);
             continue;
           }
           const whitelistLength = data.readUInt32LE(pos);
@@ -125,14 +108,12 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
 
           // Safety check: don't read more whitelisted than possible
           if (whitelistLength > 10000 || whitelistLength < 0) {
-            console.debug(`Account ${account.pubkey.toString()} has invalid whitelist length: ${whitelistLength}`);
             continue;
           }
           
           const whitelist: PublicKey[] = [];
           for (let i = 0; i < whitelistLength; i++) {
             if (data.length < pos + 32) {
-              console.debug(`Account ${account.pubkey.toString()} truncated while reading whitelist entry ${i}`);
               break;
             }
             whitelist.push(new PublicKey(data.slice(pos, pos + 32)));
@@ -143,15 +124,7 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
           const isAdmin = superAdmin.equals(userPublicKey) || admins.some(admin => admin.equals(userPublicKey));
           const isWhitelisted = whitelist.some(addr => addr.equals(userPublicKey));
 
-          console.log(`Account ${account.pubkey.toString()}: isAdmin=${isAdmin}, isWhitelisted=${isWhitelisted}, adminsLength=${admins.length}, whitelistLength=${whitelist.length}`);
-
           if (isAdmin || isWhitelisted) {
-            console.log(`Found ${isAdmin ? 'ADMIN' : 'WHITELISTED'} distributor: ${account.pubkey.toString()}`, {
-              isAdmin,
-              isWhitelisted,
-              whitelistLength: whitelist.length,
-              adminsLength: admins.length,
-            });
             discovered.push({
               publicKey: account.pubkey,
               superAdmin,
@@ -160,12 +133,9 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
               isAdmin,
               isWhitelisted,
             });
-          } else {
-            console.log(`Account ${account.pubkey.toString()} skipped - user not in admin or whitelist`);
           }
         } catch (err) {
           // Skip accounts that can't be decoded
-          console.debug(`Failed to decode distributor account ${account.pubkey.toString()}:`, err);
           continue;
         }
       }
@@ -177,7 +147,6 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
         return a.publicKey.toString().localeCompare(b.publicKey.toString());
       });
 
-      console.log(`Discovered ${discovered.length} distributors where user is admin or whitelisted`, discovered);
       setDistributors(discovered);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to discover distributors";

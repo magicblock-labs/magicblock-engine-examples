@@ -54,15 +54,10 @@ export const useGlobalTransactionHistory = create<TransactionHistoryStore>()(
         explorerUrl,
         endpoint,
       };
-
-      console.log("[useGlobalTransactionHistory] Adding transaction:", transaction);
-
       set((state) => {
-        const newState = {
+        return {
           transactions: [transaction, ...state.transactions],
         };
-        console.log("[useGlobalTransactionHistory] New transactions state:", newState.transactions);
-        return newState;
       });
 
       return txId;

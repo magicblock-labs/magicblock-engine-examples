@@ -874,7 +874,13 @@ export const useTransaction = (props?: UseTransactionProps) => {
       setStatus({ loading: true, error: null, signature: null });
 
       try {
-        const rewardDistributorPda = getDistributorPda(publicKey);
+        const actionEndpoint = getActionEndpoint("solana");
+        const txConnection =
+          actionEndpoint && actionEndpoint !== connection.rpcEndpoint
+            ? new anchor.web3.Connection(actionEndpoint, "confirmed")
+            : connection;
+        const rewardDistributorPda =
+          props?.selectedDistributor || getDistributorPda(publicKey);
         
         // Get or create associated token accounts
         const userTokenAccount = getAssociatedTokenAddressSync(
@@ -892,7 +898,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
 
         // Check if distributor token account exists, if not create it
         try {
-          await getAccount(connection, distributorTokenAccount);
+          await getAccount(txConnection, distributorTokenAccount);
         } catch {
           tx.add(
             createAssociatedTokenAccountInstruction(
@@ -922,7 +928,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
 
         tx.feePayer = publicKey;
         tx.recentBlockhash = (
-          await connection.getLatestBlockhash()
+          await txConnection.getLatestBlockhash()
         ).blockhash;
 
         if (!signTransaction) {
@@ -930,12 +936,12 @@ export const useTransaction = (props?: UseTransactionProps) => {
         }
 
         const signedTx = await signTransaction(tx);
-        const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+        const signature = await txConnection.sendRawTransaction(signedTx.serialize(), {
           skipPreflight: true,
           maxRetries: 3,
         });
 
-        await connection.confirmTransaction(signature, "confirmed");
+        await txConnection.confirmTransaction(signature, "confirmed");
 
         setStatus({
           loading: false,
@@ -946,6 +952,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
         return {
           success: true,
           signature,
+          endpoint: txConnection.rpcEndpoint,
         };
       } catch (err) {
         const errorMessage =
@@ -960,10 +967,11 @@ export const useTransaction = (props?: UseTransactionProps) => {
         return {
           success: false,
           error: errorMessage,
+          endpoint: getActionEndpoint("solana"),
         };
       }
     },
-    [publicKey, connection, signTransaction]
+    [publicKey, connection, signTransaction, getActionEndpoint, props?.selectedDistributor]
   );
 
   return {

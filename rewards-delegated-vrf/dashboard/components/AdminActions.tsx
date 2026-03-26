@@ -18,9 +18,14 @@ import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory
 import { useRewardData } from "@/hooks/useRewardData";
 import { PDAs } from "@/lib/pda";
 import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
+import {
+  fetchOwnedSplMintOptions,
+  type OwnedSplMintOption,
+} from "@/lib/tokenAccounts";
 import { TransactionModal } from "./TransactionModal";
 import { CopyableAddress } from "./CopyableAddress";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { shortAddress } from "@/lib/utils";
 
 interface ActionForm {
   [key: string]: any;
@@ -33,7 +38,7 @@ interface AdminActionsProps {
 export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor }) => {
   const { publicKey } = useWallet();
   const { connection } = useConnection();
-  const { addTransaction, updateTransaction, transactions } = useGlobalTransactionHistory();
+  const { addTransaction, updateTransaction } = useGlobalTransactionHistory();
   const {
     initializeRewardDistributor,
     setAdmins,
@@ -52,10 +57,8 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
 
   // Use selected distributor if available, otherwise use primary (PDA-derived)
   const targetDistributor = selectedDistributor || (publicKey ? PDAs.getRewardDistributor(publicKey)[0] : null);
+  const targetDistributorKey = targetDistributor?.toBase58() ?? null;
   const { distributor, rewardList } = useRewardData(publicKey, targetDistributor);
-  
-  // Log transactions for debugging
-  console.log("[AdminActions] Global transactions:", transactions);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState({
@@ -91,6 +94,9 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
       redemptionAmount: 1,
     },
   });
+  const [availableDistributorMints, setAvailableDistributorMints] = useState<OwnedSplMintOption[]>([]);
+  const [loadingDistributorMints, setLoadingDistributorMints] = useState(false);
+  const [distributorMintFetchError, setDistributorMintFetchError] = useState<string | null>(null);
 
   // Helper to open modal with cleared status
   const openModal = (modalName: string) => {
@@ -127,49 +133,96 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     }
   };
 
-  // Track localStatus changes
-  useEffect(() => {
-    console.log("[AdminActions] localStatus updated:", localStatus);
-  }, [localStatus]);
-
   // Update randomReward user field when wallet changes and populate existing data
   useEffect(() => {
     setForms((prev) => {
-      const updated: ActionForm = {
+      const nextRandomRewardUser = publicKey?.toString() || "";
+      const nextAdmins =
+        distributor?.admins && distributor.admins.length > 0
+          ? distributor.admins.map((addr) => addr.toString()).join("\n")
+          : prev.admins;
+      const nextWhitelist =
+        distributor?.whitelist && distributor.whitelist.length > 0
+          ? distributor.whitelist.map((addr) => addr.toString()).join("\n")
+          : prev.whitelist;
+      const nextRewardList = rewardList
+        ? {
+            globalRangeMin: rewardList.globalRangeMin || 0,
+            globalRangeMax: rewardList.globalRangeMax || 1000,
+            startTimestamp: rewardList.startTimestamp || Math.floor(Date.now() / 1000),
+            endTimestamp: rewardList.endTimestamp || Math.floor(Date.now() / 1000) + 86400,
+          }
+        : prev.rewardList;
+
+      const isUnchanged =
+        prev.randomReward.user === nextRandomRewardUser &&
+        prev.admins === nextAdmins &&
+        prev.whitelist === nextWhitelist &&
+        prev.rewardList.globalRangeMin === nextRewardList.globalRangeMin &&
+        prev.rewardList.globalRangeMax === nextRewardList.globalRangeMax &&
+        prev.rewardList.startTimestamp === nextRewardList.startTimestamp &&
+        prev.rewardList.endTimestamp === nextRewardList.endTimestamp;
+
+      if (isUnchanged) {
+        return prev;
+      }
+
+      return {
         ...prev,
+        admins: nextAdmins,
+        whitelist: nextWhitelist,
+        rewardList: nextRewardList,
         randomReward: {
           ...prev.randomReward,
-          user: publicKey?.toString() || "",
+          user: nextRandomRewardUser,
         },
       };
-
-      // Populate existing admins if available
-      if (distributor?.admins && distributor.admins.length > 0) {
-        updated.admins = distributor.admins
-          .map((addr) => addr.toString())
-          .join("\n");
-      }
-
-      // Populate existing whitelist if available
-      if (distributor?.whitelist && distributor.whitelist.length > 0) {
-        updated.whitelist = distributor.whitelist
-          .map((addr) => addr.toString())
-          .join("\n");
-      }
-
-      // Populate existing reward list parameters if available
-      if (rewardList) {
-        updated.rewardList = {
-          globalRangeMin: rewardList.globalRangeMin || 0,
-          globalRangeMax: rewardList.globalRangeMax || 1000,
-          startTimestamp: rewardList.startTimestamp || Math.floor(Date.now() / 1000),
-          endTimestamp: rewardList.endTimestamp || Math.floor(Date.now() / 1000) + 86400,
-        };
-      }
-
-      return updated;
     });
   }, [publicKey, distributor, rewardList]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDistributorMints = async () => {
+      if (activeModal !== "addReward" || !targetDistributor) {
+        if (!cancelled) {
+          setAvailableDistributorMints([]);
+          setLoadingDistributorMints(false);
+          setDistributorMintFetchError(null);
+        }
+        return;
+      }
+
+      setLoadingDistributorMints(true);
+      setDistributorMintFetchError(null);
+
+      try {
+        const mintFetchResult = await fetchOwnedSplMintOptions(
+          connection,
+          targetDistributor
+        );
+        if (!cancelled) {
+          setAvailableDistributorMints(mintFetchResult.options);
+        }
+      } catch (error) {
+        console.error("[AdminActions] Failed to load distributor token mints:", error);
+        if (!cancelled) {
+          setAvailableDistributorMints([]);
+          setDistributorMintFetchError(error instanceof Error ? error.message : "Unknown fetch error");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingDistributorMints(false);
+        }
+      }
+    };
+
+    void loadDistributorMints();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeModal, connection.rpcEndpoint, targetDistributorKey]);
 
   // Helper to handle transaction result
   const handleTransactionResult = async (
@@ -184,13 +237,6 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
       const clusterEndpoint =
         result.endpoint || endpoint || connection.rpcEndpoint || getDefaultSolanaEndpoint();
       
-      console.log("[handleTransactionResult] Adding transaction to history:", {
-        signature: result.signature,
-        actionName,
-        endpoint: clusterEndpoint,
-        success: result.success,
-      });
-      
       const txId = addTransaction(
         result.signature,
         actionName,
@@ -198,13 +244,10 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         clusterEndpoint
       );
       
-      console.log("[handleTransactionResult] Transaction added with ID:", txId);
-      
       // Build error message
       let errorMessage = null;
       if (!result.success && result.error) {
         errorMessage = `Transaction failed: ${result.error}`;
-        console.log("[handleTransactionResult] Error message:", errorMessage);
       }
       
       updateTransaction(txId, {
@@ -377,7 +420,14 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     );
     if (!rewardDistributor) return;
 
-    const tokenAccount = getAssociatedTokenAddressSync(rewardMint, rewardDistributor, true)
+    const selectedDistributorMint =
+      availableDistributorMints.find(
+        (option) => option.tokenAccount === config.rewardMint.trim()
+      ) ??
+      availableDistributorMints.find((option) => option.mint === rewardMint.toBase58());
+    const tokenAccount = selectedDistributorMint
+      ? new PublicKey(selectedDistributorMint.tokenAccount)
+      : getAssociatedTokenAddressSync(rewardMint, rewardDistributor, true);
     const [metadataAccount] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("metadata"),
@@ -956,19 +1006,31 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               </div>
               <div>
               <label className="block text-sm text-gray-300 mb-1">Mint Address</label>
-              <input
-              type="text"
-              value={forms.addReward.rewardMint}
-              onChange={(e) =>
-                setForms({
-                  ...forms,
-                  addReward: { ...forms.addReward, rewardMint: e.target.value },
-                })
-              }
-              placeholder="Enter mint address"
-              disabled={localStatus.loading}
-              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
-              />
+              {distributorMintFetchError && (
+                <div className="mt-2 rounded border border-red-700 bg-red-900/20 p-2 text-xs text-red-300">
+                  Fetch error: {distributorMintFetchError}
+                </div>
+              )}
+              <select
+                value={forms.addReward.rewardMint}
+                onChange={(e) =>
+                  setForms({
+                    ...forms,
+                    addReward: { ...forms.addReward, rewardMint: e.target.value },
+                  })
+                }
+                disabled={localStatus.loading || loadingDistributorMints || availableDistributorMints.length === 0}
+                className="mt-2 w-full rounded border border-gray-600 bg-gray-700 p-2 text-sm text-white focus:border-blue-500 focus:outline-none disabled:opacity-50"
+              >
+                <option value="">
+                  {availableDistributorMints.length > 0 ? "Select distributor mint" : "No distributor token accounts found"}
+                </option>
+                {availableDistributorMints.map((option) => (
+                  <option key={option.tokenAccount} value={option.mint}>
+                    {shortAddress(option.mint, 5)} ({option.balanceLabel})
+                  </option>
+                ))}
+              </select>
               </div>
           <div className="grid grid-cols-2 gap-2">
             <div>

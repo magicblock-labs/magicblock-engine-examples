@@ -142,3 +142,27 @@ export function getDefaultSolanaEndpoint(): string {
 export function getDefaultMagicBlockErEndpoint(): string {
   return CLUSTER_CONFIG["https://devnet-as.magicblock.app/"].endpoint;
 }
+
+/**
+ * Resolve the base-layer Solana RPC to use for reads when a paired MagicBlock
+ * endpoint is selected. Custom endpoints are left unchanged.
+ */
+export function getBaseLayerSolanaEndpoint(endpoint: string): string {
+  const normalizedEndpoint = normalizeEndpoint(endpoint);
+
+  if (
+    normalizedEndpoint === normalizeEndpoint(CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint) ||
+    normalizedEndpoint === normalizeEndpoint(CLUSTER_CONFIG["https://devnet-as.magicblock.app/"].endpoint)
+  ) {
+    return CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint;
+  }
+
+  if (
+    normalizedEndpoint === normalizeEndpoint(CLUSTER_CONFIG["https://rpc.magicblock.app/mainnet"].endpoint) ||
+    normalizedEndpoint === normalizeEndpoint(CLUSTER_CONFIG["https://as.magicblock.app"].endpoint)
+  ) {
+    return CLUSTER_CONFIG["https://rpc.magicblock.app/mainnet"].endpoint;
+  }
+
+  return endpoint;
+}

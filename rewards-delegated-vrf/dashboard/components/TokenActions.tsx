@@ -1,32 +1,32 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import { Send, Eye } from "lucide-react";
+import { Send } from "lucide-react";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
 import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
+import { shortAddress } from "@/lib/utils";
+import {
+  fetchOwnedSplMintOptions,
+  type OwnedSplMintOption,
+} from "@/lib/tokenAccounts";
 import { TransactionModal } from "./TransactionModal";
-import { PDAs } from "@/lib/pda";
 
 interface ActionForm {
   [key: string]: any;
 }
 
-interface DistributorAsset {
-  type: "spl-token" | "nft";
-  mint: string;
-  name?: string;
-  balance?: number;
-  isInRewardList?: boolean;
-}
-
 interface TokenActionsProps {
   selectedDistributor?: PublicKey | null;
+  showTitle?: boolean;
 }
 
-export const TokenActions: React.FC<TokenActionsProps> = ({ selectedDistributor }) => {
+export const TokenActions: React.FC<TokenActionsProps> = ({
+  selectedDistributor,
+  showTitle = true,
+}) => {
   const { publicKey } = useWallet();
   const { connection } = useConnection();
   const { sendSplTokenToDistributor } = useTransaction({ selectedDistributor });
@@ -38,22 +38,70 @@ export const TokenActions: React.FC<TokenActionsProps> = ({ selectedDistributor 
     error: null as string | null,
     signature: null as string | null,
   });
-  const [assets, setAssets] = useState<DistributorAsset[]>([]);
   const [forms, setForms] = useState<ActionForm>({
     sendToken: {
       tokenMint: "",
       amount: 0,
-      decimals: 6,
     },
   });
+  const [availableWalletMints, setAvailableWalletMints] = useState<OwnedSplMintOption[]>([]);
+  const [loadingWalletMints, setLoadingWalletMints] = useState(false);
+  const [walletMintFetchError, setWalletMintFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadWalletMints = async () => {
+      if (activeModal !== "sendToken" || !publicKey) {
+        if (!cancelled) {
+          setAvailableWalletMints([]);
+          setLoadingWalletMints(false);
+          setWalletMintFetchError(null);
+        }
+        return;
+      }
+
+      setLoadingWalletMints(true);
+      setWalletMintFetchError(null);
+
+      try {
+        const mintFetchResult = await fetchOwnedSplMintOptions(
+          connection,
+          publicKey
+        );
+        if (!cancelled) {
+          setAvailableWalletMints(mintFetchResult.options);
+        }
+      } catch (error) {
+        console.error("[TokenActions] Failed to load wallet token mints:", error);
+        if (!cancelled) {
+          setAvailableWalletMints([]);
+          setWalletMintFetchError(error instanceof Error ? error.message : "Unknown fetch error");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingWalletMints(false);
+        }
+      }
+    };
+
+    void loadWalletMints();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeModal, connection.rpcEndpoint, publicKey]);
 
   const handleSendToken = async () => {
     setLocalStatus({ loading: true, error: null, signature: null });
     const config = forms.sendToken;
+    const selectedMintOption = availableWalletMints.find(
+      (option) => option.mint === config.tokenMint
+    );
     const result = await sendSplTokenToDistributor(
       new PublicKey(config.tokenMint),
       config.amount,
-      config.decimals
+      selectedMintOption?.decimals ?? 0
     );
     
     if (result.signature) {
@@ -61,7 +109,7 @@ export const TokenActions: React.FC<TokenActionsProps> = ({ selectedDistributor 
         result.signature,
         "Send SPL Token to Distributor",
         "devnet",
-        process.env.NEXT_PUBLIC_SOLANA_RPC_URL || getDefaultSolanaEndpoint()
+        result.endpoint || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || getDefaultSolanaEndpoint()
       );
       updateTransaction(txId, {
         status: result.success ? "confirmed" : "failed",
@@ -72,43 +120,12 @@ export const TokenActions: React.FC<TokenActionsProps> = ({ selectedDistributor 
         setActiveModal(null);
         setForms({
           ...forms,
-          sendToken: { tokenMint: "", amount: 0, decimals: 6 },
+          sendToken: { tokenMint: "", amount: 0 },
         });
         setLocalStatus({ loading: false, error: null, signature: null });
       }, 2000);
     } else {
       setLocalStatus({ loading: false, error: result.error || "Unknown error", signature: null });
-    }
-  };
-
-  const loadDistributorAssets = async () => {
-     if (!publicKey) return;
-     
-     try {
-       const rewardDistributorPda = selectedDistributor || PDAs.getRewardDistributor(publicKey)[0];
-      
-      // Get all token accounts owned by the distributor
-      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-        rewardDistributorPda,
-        { programId: new PublicKey("TokenkegQfeZyiNwAJsyFbPVwwQQYuU2exeJY4pocrA") }
-      );
-
-      const assetsData: DistributorAsset[] = [];
-
-      for (const account of tokenAccounts.value) {
-        const parsedData = account.account.data.parsed?.info;
-        if (parsedData) {
-          assetsData.push({
-            type: "spl-token",
-            mint: parsedData.mint,
-            balance: parsedData.tokenAmount?.uiAmount || 0,
-          });
-        }
-      }
-
-      setAssets(assetsData);
-    } catch (err) {
-      console.error("Error loading assets:", err);
     }
   };
 
@@ -122,7 +139,7 @@ export const TokenActions: React.FC<TokenActionsProps> = ({ selectedDistributor 
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold text-white mb-4">Token Management</h2>
+      {showTitle && <h2 className="text-2xl font-bold text-white mb-4">Token Management</h2>}
 
       {/* Action Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -137,52 +154,7 @@ export const TokenActions: React.FC<TokenActionsProps> = ({ selectedDistributor 
             <div className="text-xs text-gray-400">Transfer tokens to distributor</div>
           </span>
         </button>
-
-        {/* View Distributor Assets */}
-        <button
-          onClick={loadDistributorAssets}
-          className="card p-4 hover:bg-gray-700 transition flex items-center gap-3 group"
-        >
-          <Eye className="w-5 h-5 text-indigo-400 group-hover:text-indigo-300" />
-          <span className="text-left">
-            <div className="font-medium text-white">View Distributor Assets</div>
-            <div className="text-xs text-gray-400">See all distributor tokens and NFTs</div>
-          </span>
-        </button>
       </div>
-
-      {/* Distributor Assets Display */}
-      {assets.length > 0 && (
-        <div className="card p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Distributor Assets</h3>
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {assets.map((asset, idx) => (
-              <div key={idx} className="bg-gray-700 p-3 rounded-lg border border-gray-600">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-white font-medium text-sm">Mint: {asset.mint.slice(0, 8)}...</p>
-                    <p className="text-gray-400 text-xs mt-1">Type: {asset.type}</p>
-                    {asset.balance !== undefined && (
-                      <p className="text-gray-400 text-xs mt-1">Balance: {asset.balance}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        // Implementation for adding/removing from reward list
-                        console.log("Toggle reward list for asset:", asset.mint);
-                      }}
-                      className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition"
-                    >
-                      {asset.isInRewardList ? "Remove" : "Add"} to Rewards
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Send Token Modal */}
       <TransactionModal
@@ -197,53 +169,51 @@ export const TokenActions: React.FC<TokenActionsProps> = ({ selectedDistributor 
       >
         <div className="space-y-3">
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Token Mint Address</label>
-            <input
-              type="text"
+            <label className="block text-sm text-gray-300 mb-1">Token Mint</label>
+            {walletMintFetchError && (
+              <div className="mt-2 rounded border border-red-700 bg-red-900/20 p-2 text-xs text-red-300">
+                Fetch error: {walletMintFetchError}
+              </div>
+            )}
+            <select
               value={forms.sendToken.tokenMint}
               onChange={(e) =>
                 setForms({
                   ...forms,
-                  sendToken: { ...forms.sendToken, tokenMint: e.target.value },
+                  sendToken: {
+                    ...forms.sendToken,
+                    tokenMint: e.target.value,
+                  },
                 })
               }
-              placeholder="Enter SPL token mint address"
-              disabled={localStatus.loading}
-              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
-            />
+              disabled={localStatus.loading || loadingWalletMints || availableWalletMints.length === 0}
+              className="mt-2 w-full rounded border border-gray-600 bg-gray-700 p-2 text-sm text-white focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            >
+              <option value="">
+                {availableWalletMints.length > 0 ? "Select wallet mint" : "No wallet token accounts found"}
+              </option>
+              {availableWalletMints.map((option) => (
+                <option key={option.tokenAccount} value={option.mint}>
+                  {shortAddress(option.mint, 5)} ({option.balanceLabel})
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-sm text-gray-300 mb-1">Amount</label>
-              <input
-                type="number"
-                value={forms.sendToken.amount}
-                onChange={(e) =>
-                  setForms({
-                    ...forms,
-                    sendToken: { ...forms.sendToken, amount: parseFloat(e.target.value) },
-                  })
-                }
-                placeholder="0"
-                disabled={localStatus.loading}
-                className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
-                />
-                </div>
-                <div>
-                <label className="block text-sm text-gray-300 mb-1">Decimals</label>
-                <input
-                type="number"
-                value={forms.sendToken.decimals}
-                onChange={(e) =>
-                  setForms({
-                    ...forms,
-                    sendToken: { ...forms.sendToken, decimals: parseInt(e.target.value) },
-                  })
-                }
-                disabled={localStatus.loading}
-                className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
-              />
-            </div>
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Amount</label>
+            <input
+              type="number"
+              value={forms.sendToken.amount}
+              onChange={(e) =>
+                setForms({
+                  ...forms,
+                  sendToken: { ...forms.sendToken, amount: parseFloat(e.target.value) },
+                })
+              }
+              placeholder="0"
+              disabled={localStatus.loading}
+              className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
+            />
           </div>
         </div>
       </TransactionModal>

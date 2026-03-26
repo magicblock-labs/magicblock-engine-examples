@@ -14,7 +14,6 @@ import {
   AdminActions,
 } from "@/components";
 import { NftActions } from "@/components/NftActions";
-import { TokenActions } from "@/components/TokenActions";
 import { TransactionHistory } from "@/components/TransactionHistory";
 import { DistributorSwitcher } from "@/components/DistributorSwitcher";
 import { useRewardData } from "@/hooks/useRewardData";
@@ -36,8 +35,6 @@ export default function Home() {
     selectedDistributor ? new PublicKey(selectedDistributor) : null
   );
   const { transactions, removeTransaction } = useGlobalTransactionHistory();
-  
-  console.log("[Home] Global transactions:", transactions);
 
   useEffect(() => {
     setMounted(true);
@@ -154,16 +151,9 @@ export default function Home() {
         {/* NFT Management Section */}
         {publicKey && (
           <div className="pt-8 border-t border-gray-700">
-            <NftActions />
+            <NftActions selectedDistributor={selectedDistributor ? new PublicKey(selectedDistributor) : null} />
           </div>
         )}
-
-        {/* Token Management Section */}
-         {publicKey && (
-           <div className="pt-8 border-t border-gray-700">
-             <TokenActions selectedDistributor={selectedDistributor ? new PublicKey(selectedDistributor) : null} />
-           </div>
-         )}
 
         {/* Transaction History */}
         <div className="pt-8 border-t border-gray-700">

@@ -1,19 +1,38 @@
 "use client";
 
-import React, { useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
+import React, { useEffect, useState } from "react";
+import { PublicKey } from "@solana/web3.js";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  unpackAccount,
+} from "@solana/spl-token";
+import { getMetadataAccountDataSerializer } from "@metaplex-foundation/mpl-token-metadata";
 import { Zap, Grid } from "lucide-react";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
 import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
 import { TransactionModal } from "./TransactionModal";
+import { TokenActions } from "./TokenActions";
+import { shortAddress } from "@/lib/utils";
 
 interface ActionForm {
   [key: string]: any;
 }
 
-export const NftActions: React.FC = () => {
+interface NftActionsProps {
+  selectedDistributor?: PublicKey | null;
+}
+
+interface CollectionOption {
+  mint: string;
+  name: string;
+}
+
+export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) => {
   const { publicKey } = useWallet();
+  const { connection } = useConnection();
   const { mintNftCollection } = useTransaction();
   const { addTransaction, updateTransaction } = useGlobalTransactionHistory();
 
@@ -36,6 +55,124 @@ export const NftActions: React.FC = () => {
       uri: "",
     },
   });
+  const [availableCollections, setAvailableCollections] = useState<CollectionOption[]>([]);
+  const [loadingCollections, setLoadingCollections] = useState(false);
+  const [collectionFetchError, setCollectionFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCollections = async () => {
+      if (activeModal !== "mintToCollection" || !publicKey) {
+        if (!cancelled) {
+          setAvailableCollections([]);
+          setLoadingCollections(false);
+          setCollectionFetchError(null);
+        }
+        return;
+      }
+
+      setLoadingCollections(true);
+      setCollectionFetchError(null);
+
+      try {
+        const metadataProgramId = new PublicKey("metaqbxxUerdq28cj1RbAWkQm3ybzjb6a8bt518x1s");
+        const serializer = getMetadataAccountDataSerializer();
+        const programResponses = await Promise.all([
+          connection.getTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }),
+          connection.getTokenAccountsByOwner(publicKey, { programId: TOKEN_2022_PROGRAM_ID }),
+        ]);
+
+        const nftMints = programResponses.flatMap((response) =>
+          response.value.flatMap((accountInfo) => {
+            try {
+              const decodedAccount = unpackAccount(
+                accountInfo.pubkey,
+                accountInfo.account,
+                accountInfo.account.owner
+              );
+
+              if (decodedAccount.amount !== 1n) {
+                return [];
+              }
+
+              return [decodedAccount.mint];
+            } catch {
+              return [];
+            }
+          })
+        );
+
+        const uniqueMints = Array.from(new Set(nftMints.map((mint) => mint.toBase58()))).map(
+          (mint) => new PublicKey(mint)
+        );
+
+        const metadataPdas = uniqueMints.map((mint) =>
+          PublicKey.findProgramAddressSync(
+            [
+              Buffer.from("metadata"),
+              metadataProgramId.toBuffer(),
+              mint.toBuffer(),
+            ],
+            metadataProgramId
+          )[0]
+        );
+
+        const metadataAccounts = metadataPdas.length > 0
+          ? await connection.getMultipleAccountsInfo(metadataPdas)
+          : [];
+
+        const collectionOptions: CollectionOption[] = [];
+
+        uniqueMints.forEach((mint, index) => {
+          const metadataAccount = metadataAccounts[index];
+          if (!metadataAccount) {
+            return;
+          }
+
+          try {
+            const [metadata] = serializer.deserialize(metadataAccount.data);
+            if (!metadata.collectionDetails) {
+              return;
+            }
+
+            const metadataName =
+              typeof metadata.name === "string"
+                ? metadata.name.replace(/\0/g, "").trim()
+                : mint.toBase58().slice(0, 8);
+
+            collectionOptions.push({
+              mint: mint.toBase58(),
+              name: metadataName || mint.toBase58().slice(0, 8),
+            });
+          } catch {
+            return;
+          }
+        });
+
+        if (!cancelled) {
+          setAvailableCollections(
+            collectionOptions.sort((left, right) => left.name.localeCompare(right.name))
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAvailableCollections([]);
+          setCollectionFetchError(error instanceof Error ? error.message : "Unknown fetch error");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingCollections(false);
+        }
+      }
+    };
+
+    void loadCollections();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeModal, connection, publicKey]);
 
   const handleMintCollection = async () => {
     setLocalStatus({ loading: true, error: null, signature: null });
@@ -77,7 +214,7 @@ export const NftActions: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold text-white mb-4">NFT Management</h2>
+      <h2 className="text-2xl font-bold text-white mb-4">Token / NFT Management</h2>
 
       {/* Action Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -185,9 +322,13 @@ export const NftActions: React.FC = () => {
       >
         <div className="space-y-3">
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Collection Mint Address</label>
-            <input
-              type="text"
+            <label className="block text-sm text-gray-300 mb-1">Collection Mint</label>
+            {collectionFetchError && (
+              <div className="mt-2 rounded border border-red-700 bg-red-900/20 p-2 text-xs text-red-300">
+                Fetch error: {collectionFetchError}
+              </div>
+            )}
+            <select
               value={forms.mintToCollection.collectionMint}
               onChange={(e) =>
                 setForms({
@@ -195,11 +336,23 @@ export const NftActions: React.FC = () => {
                   mintToCollection: { ...forms.mintToCollection, collectionMint: e.target.value },
                 })
               }
-              placeholder="Enter collection mint address"
-              disabled={localStatus.loading}
-              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
-              />
-              </div>
+              disabled={localStatus.loading || loadingCollections || availableCollections.length === 0}
+              className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
+            >
+              <option value="">
+                {loadingCollections
+                  ? "Loading collection NFTs..."
+                  : availableCollections.length > 0
+                    ? "Select collection mint"
+                    : "No collection NFTs found"}
+              </option>
+              {availableCollections.map((collection) => (
+                <option key={collection.mint} value={collection.mint}>
+                  {collection.name} ({shortAddress(collection.mint, 5)})
+                </option>
+              ))}
+            </select>
+          </div>
               <div>
               <label className="block text-sm text-gray-300 mb-1">NFT Name</label>
               <input
@@ -250,6 +403,8 @@ export const NftActions: React.FC = () => {
           </div>
         </div>
       </TransactionModal>
+
+      <TokenActions selectedDistributor={selectedDistributor} showTitle={false} />
     </div>
   );
 };
