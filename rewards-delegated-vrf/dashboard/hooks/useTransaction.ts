@@ -15,12 +15,19 @@ import {
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
   createTransferInstruction,
+  createInitializeMintInstruction,
+  createMintToInstruction,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAccount,
 } from "@solana/spl-token";
 import { MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
+import {
+  createCreateMasterEditionV3Instruction,
+  createCreateMetadataAccountV3Instruction,
+  createSetAndVerifySizedCollectionItemInstruction,
+} from "../../node_modules/@metaplex-foundation/mpl-token-metadata";
 
 type AdminActionEndpointMode = "solana" | "magicblock";
 
@@ -29,6 +36,9 @@ const SOLANA_MAINNET_ENDPOINT = "https://rpc.magicblock.app/mainnet";
 const MAGICBLOCK_DEVNET_ENDPOINT =
   process.env.NEXT_PUBLIC_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/";
 const MAGICBLOCK_MAINNET_ENDPOINT = "https://as.magicblock.app";
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+);
 
 function isKnownDevnetEndpoint(endpoint: string): boolean {
   return endpoint.includes("devnet");
@@ -792,46 +802,164 @@ export const useTransaction = (props?: UseTransactionProps) => {
 
   const mintNftCollection = useCallback(
     async (
-      _name: string,
-      _symbol: string,
-      _uri: string,
+      name: string,
+      symbol: string,
+      uri: string,
       _decimals: number = 0
     ): Promise<TransactionResponse & { mint?: PublicKey }> => {
-      if (!publicKey) return { success: false, error: "Wallet not connected" };
+      if (!publicKey || !signTransaction) {
+        return { success: false, error: "Wallet not connected" };
+      }
 
       try {
-        // Create a new mint
+        const actionEndpoint = getActionEndpoint("solana");
+        const txConnection =
+          actionEndpoint && actionEndpoint !== connection.rpcEndpoint
+            ? new anchor.web3.Connection(actionEndpoint, "confirmed")
+            : connection;
+
+        const trimmedName = name.trim();
+        const trimmedSymbol = symbol.trim();
+        const trimmedUri = uri.trim();
+
+        if (!trimmedName || !trimmedSymbol || !trimmedUri) {
+          throw new Error("Collection name, symbol, and URI are required");
+        }
+
         const mintKeypair = anchor.web3.Keypair.generate();
-        const rent = await connection.getMinimumBalanceForRentExemption(82); // Mint account size
-        
+        const mintRent = await txConnection.getMinimumBalanceForRentExemption(82);
+        const ownerTokenAccount = getAssociatedTokenAddressSync(
+          mintKeypair.publicKey,
+          publicKey
+        );
+        const [metadataAddress] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            mintKeypair.publicKey.toBuffer(),
+          ],
+          TOKEN_METADATA_PROGRAM_ID
+        );
+        const [masterEditionAddress] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            mintKeypair.publicKey.toBuffer(),
+            Buffer.from("edition"),
+          ],
+          TOKEN_METADATA_PROGRAM_ID
+        );
+
         setStatus({ loading: true, error: null, signature: null });
 
-        const transaction = new anchor.web3.Transaction().add(
-          anchor.web3.SystemProgram.createAccount({
-            fromPubkey: publicKey,
-            newAccountPubkey: mintKeypair.publicKey,
-            space: 82,
-            lamports: rent,
-            programId: TOKEN_PROGRAM_ID,
-          })
-        );
+        const transaction = new anchor.web3.Transaction()
+          .add(
+            anchor.web3.SystemProgram.createAccount({
+              fromPubkey: publicKey,
+              newAccountPubkey: mintKeypair.publicKey,
+              space: 82,
+              lamports: mintRent,
+              programId: TOKEN_PROGRAM_ID,
+            })
+          )
+          .add(
+            createInitializeMintInstruction(
+              mintKeypair.publicKey,
+              0,
+              publicKey,
+              publicKey,
+              TOKEN_PROGRAM_ID
+            )
+          )
+          .add(
+            createAssociatedTokenAccountInstruction(
+              publicKey,
+              ownerTokenAccount,
+              publicKey,
+              mintKeypair.publicKey,
+              TOKEN_PROGRAM_ID,
+              ASSOCIATED_TOKEN_PROGRAM_ID
+            )
+          )
+          .add(
+            createMintToInstruction(
+              mintKeypair.publicKey,
+              ownerTokenAccount,
+              publicKey,
+              1,
+              [],
+              TOKEN_PROGRAM_ID
+            )
+          )
+          .add(
+            createCreateMetadataAccountV3Instruction(
+              {
+                metadata: metadataAddress,
+                mint: mintKeypair.publicKey,
+                mintAuthority: publicKey,
+                payer: publicKey,
+                updateAuthority: publicKey,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+              },
+              {
+                createMetadataAccountArgsV3: {
+                  data: {
+                    name: trimmedName,
+                    symbol: trimmedSymbol,
+                    uri: trimmedUri,
+                    sellerFeeBasisPoints: 0,
+                    creators: [
+                      {
+                        address: publicKey,
+                        verified: true,
+                        share: 100,
+                      },
+                    ],
+                    collection: null,
+                    uses: null,
+                  },
+                  isMutable: true,
+                  collectionDetails: { __kind: "V1", size: new anchor.BN(0) },
+                },
+              }
+            )
+          )
+          .add(
+            createCreateMasterEditionV3Instruction(
+              {
+                edition: masterEditionAddress,
+                metadata: metadataAddress,
+                mint: mintKeypair.publicKey,
+                mintAuthority: publicKey,
+                payer: publicKey,
+                updateAuthority: publicKey,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+              },
+              {
+                createMasterEditionArgs: {
+                  maxSupply: new anchor.BN(0),
+                },
+              }
+            )
+          );
 
         transaction.feePayer = publicKey;
         transaction.recentBlockhash = (
-          await connection.getLatestBlockhash()
+          await txConnection.getLatestBlockhash()
         ).blockhash;
+        transaction.partialSign(mintKeypair);
 
-        const signedTx = await (window as any).wallet?.adapter?.signTransaction?.(transaction);
-        if (!signedTx) {
-          throw new Error("Failed to sign transaction");
-        }
+        const signedTx = await signTransaction(transaction);
 
-        const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+        const signature = await txConnection.sendRawTransaction(signedTx.serialize(), {
           skipPreflight: true,
           maxRetries: 3,
         });
 
-        await connection.confirmTransaction(signature, "confirmed");
+        await txConnection.confirmTransaction(signature, "confirmed");
 
         setStatus({
           loading: false,
@@ -843,6 +971,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
           success: true,
           signature,
           mint: mintKeypair.publicKey,
+          endpoint: txConnection.rpcEndpoint,
         };
       } catch (err) {
         const errorMessage =
@@ -860,7 +989,228 @@ export const useTransaction = (props?: UseTransactionProps) => {
         };
       }
     },
-    [publicKey, connection]
+    [publicKey, connection, signTransaction, getActionEndpoint]
+  );
+
+  const mintNftToCollection = useCallback(
+    async (
+      collectionMint: PublicKey,
+      name: string,
+      symbol: string,
+      uri: string
+    ): Promise<TransactionResponse & { mint?: PublicKey }> => {
+      if (!publicKey || !signTransaction) {
+        return { success: false, error: "Wallet not connected" };
+      }
+
+      try {
+        const actionEndpoint = getActionEndpoint("solana");
+        const txConnection =
+          actionEndpoint && actionEndpoint !== connection.rpcEndpoint
+            ? new anchor.web3.Connection(actionEndpoint, "confirmed")
+            : connection;
+
+        const trimmedName = name.trim();
+        const trimmedSymbol = symbol.trim();
+        const trimmedUri = uri.trim();
+
+        if (!trimmedName || !trimmedSymbol || !trimmedUri) {
+          throw new Error("Collection mint, NFT name, symbol, and URI are required");
+        }
+
+        const mintKeypair = anchor.web3.Keypair.generate();
+        const mintRent = await txConnection.getMinimumBalanceForRentExemption(82);
+        const ownerTokenAccount = getAssociatedTokenAddressSync(
+          mintKeypair.publicKey,
+          publicKey
+        );
+        const [metadataAddress] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            mintKeypair.publicKey.toBuffer(),
+          ],
+          TOKEN_METADATA_PROGRAM_ID
+        );
+        const [masterEditionAddress] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            mintKeypair.publicKey.toBuffer(),
+            Buffer.from("edition"),
+          ],
+          TOKEN_METADATA_PROGRAM_ID
+        );
+        const [collectionMetadataAddress] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            collectionMint.toBuffer(),
+          ],
+          TOKEN_METADATA_PROGRAM_ID
+        );
+
+        setStatus({ loading: true, error: null, signature: null });
+
+        const transaction = new anchor.web3.Transaction()
+          .add(
+            anchor.web3.SystemProgram.createAccount({
+              fromPubkey: publicKey,
+              newAccountPubkey: mintKeypair.publicKey,
+              space: 82,
+              lamports: mintRent,
+              programId: TOKEN_PROGRAM_ID,
+            })
+          )
+          .add(
+            createInitializeMintInstruction(
+              mintKeypair.publicKey,
+              0,
+              publicKey,
+              publicKey,
+              TOKEN_PROGRAM_ID
+            )
+          )
+          .add(
+            createAssociatedTokenAccountInstruction(
+              publicKey,
+              ownerTokenAccount,
+              publicKey,
+              mintKeypair.publicKey,
+              TOKEN_PROGRAM_ID,
+              ASSOCIATED_TOKEN_PROGRAM_ID
+            )
+          )
+          .add(
+            createMintToInstruction(
+              mintKeypair.publicKey,
+              ownerTokenAccount,
+              publicKey,
+              1,
+              [],
+              TOKEN_PROGRAM_ID
+            )
+          )
+          .add(
+            createCreateMetadataAccountV3Instruction(
+              {
+                metadata: metadataAddress,
+                mint: mintKeypair.publicKey,
+                mintAuthority: publicKey,
+                payer: publicKey,
+                updateAuthority: publicKey,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+              },
+              {
+                createMetadataAccountArgsV3: {
+                  data: {
+                    name: trimmedName,
+                    symbol: trimmedSymbol,
+                    uri: trimmedUri,
+                    sellerFeeBasisPoints: 0,
+                    creators: [
+                      {
+                        address: publicKey,
+                        verified: true,
+                        share: 100,
+                      },
+                    ],
+                    collection: {
+                      key: collectionMint,
+                      verified: false,
+                    },
+                    uses: null,
+                  },
+                  isMutable: true,
+                  collectionDetails: null,
+                },
+              }
+            )
+          )
+          .add(
+            createCreateMasterEditionV3Instruction(
+              {
+                edition: masterEditionAddress,
+                metadata: metadataAddress,
+                mint: mintKeypair.publicKey,
+                mintAuthority: publicKey,
+                payer: publicKey,
+                updateAuthority: publicKey,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+              },
+              {
+                createMasterEditionArgs: {
+                  maxSupply: null,
+                },
+              }
+            )
+          )
+          .add(
+            createSetAndVerifySizedCollectionItemInstruction({
+              metadata: metadataAddress,
+              collectionAuthority: publicKey,
+              payer: publicKey,
+              updateAuthority: publicKey,
+              collectionMint,
+              collection: collectionMetadataAddress,
+              collectionMasterEditionAccount: PublicKey.findProgramAddressSync(
+                [
+                  Buffer.from("metadata"),
+                  TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+                  collectionMint.toBuffer(),
+                  Buffer.from("edition"),
+                ],
+                TOKEN_METADATA_PROGRAM_ID
+              )[0],
+            } as any)
+          );
+
+        transaction.feePayer = publicKey;
+        transaction.recentBlockhash = (
+          await txConnection.getLatestBlockhash()
+        ).blockhash;
+        transaction.partialSign(mintKeypair);
+
+        const signedTx = await signTransaction(transaction);
+        const signature = await txConnection.sendRawTransaction(signedTx.serialize(), {
+          skipPreflight: true,
+          maxRetries: 3,
+        });
+
+        await txConnection.confirmTransaction(signature, "confirmed");
+
+        setStatus({
+          loading: false,
+          error: null,
+          signature,
+        });
+
+        return {
+          success: true,
+          signature,
+          mint: mintKeypair.publicKey,
+          endpoint: txConnection.rpcEndpoint,
+        };
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error occurred";
+
+        setStatus({
+          loading: false,
+          error: errorMessage,
+          signature: null,
+        });
+
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+    },
+    [publicKey, connection, signTransaction, getActionEndpoint]
   );
 
   const sendSplTokenToDistributor = useCallback(
@@ -986,6 +1336,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
     addReward,
     removeReward,
     mintNftCollection,
+    mintNftToCollection,
     sendSplTokenToDistributor,
   };
 };

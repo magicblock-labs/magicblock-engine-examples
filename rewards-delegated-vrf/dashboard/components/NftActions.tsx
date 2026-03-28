@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
   TOKEN_2022_PROGRAM_ID,
@@ -12,7 +12,7 @@ import { getMetadataAccountDataSerializer } from "@metaplex-foundation/mpl-token
 import { Zap, Grid } from "lucide-react";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
-import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
+import { getBaseLayerSolanaEndpoint, getDefaultSolanaEndpoint } from "@/lib/clusterContext";
 import { TransactionModal } from "./TransactionModal";
 import { TokenActions } from "./TokenActions";
 import { shortAddress } from "@/lib/utils";
@@ -33,7 +33,7 @@ interface CollectionOption {
 export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) => {
   const { publicKey } = useWallet();
   const { connection } = useConnection();
-  const { mintNftCollection } = useTransaction();
+  const { mintNftCollection, mintNftToCollection } = useTransaction();
   const { addTransaction, updateTransaction } = useGlobalTransactionHistory();
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -76,11 +76,16 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
       setCollectionFetchError(null);
 
       try {
-        const metadataProgramId = new PublicKey("metaqbxxUerdq28cj1RbAWkQm3ybzjb6a8bt518x1s");
+        const readEndpoint = getBaseLayerSolanaEndpoint(connection.rpcEndpoint);
+        const readConnection =
+          readEndpoint === connection.rpcEndpoint
+            ? connection
+            : new Connection(readEndpoint, "confirmed");
+        const metadataProgramId = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
         const serializer = getMetadataAccountDataSerializer();
         const programResponses = await Promise.all([
-          connection.getTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }),
-          connection.getTokenAccountsByOwner(publicKey, { programId: TOKEN_2022_PROGRAM_ID }),
+          readConnection.getTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }),
+          readConnection.getTokenAccountsByOwner(publicKey, { programId: TOKEN_2022_PROGRAM_ID }),
         ]);
 
         const nftMints = programResponses.flatMap((response) =>
@@ -119,7 +124,7 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
         );
 
         const metadataAccounts = metadataPdas.length > 0
-          ? await connection.getMultipleAccountsInfo(metadataPdas)
+          ? await readConnection.getMultipleAccountsInfo(metadataPdas)
           : [];
 
         const collectionOptions: CollectionOption[] = [];
@@ -172,7 +177,7 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
     return () => {
       cancelled = true;
     };
-  }, [activeModal, connection, publicKey]);
+  }, [activeModal, connection.rpcEndpoint, publicKey]);
 
   const handleMintCollection = async () => {
     setLocalStatus({ loading: true, error: null, signature: null });
@@ -184,7 +189,7 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
         result.signature,
         "Mint NFT Collection",
         "devnet",
-        process.env.NEXT_PUBLIC_SOLANA_RPC_URL || getDefaultSolanaEndpoint()
+        result.endpoint || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || getDefaultSolanaEndpoint()
       );
       updateTransaction(txId, {
         status: result.success ? "confirmed" : "failed",
@@ -196,6 +201,63 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
         setForms({
           ...forms,
           mintCollection: { name: "", symbol: "", uri: "" },
+        });
+        setLocalStatus({ loading: false, error: null, signature: null });
+      }, 2000);
+    } else {
+      setLocalStatus({ loading: false, error: result.error || "Unknown error", signature: null });
+    }
+  };
+
+  const handleMintToCollection = async () => {
+    setLocalStatus({ loading: true, error: null, signature: null });
+    const config = forms.mintToCollection;
+
+    if (!config.collectionMint.trim() || !config.name.trim() || !config.symbol.trim() || !config.uri.trim()) {
+      setLocalStatus({
+        loading: false,
+        error: "Collection mint, NFT name, symbol, and metadata URI are required",
+        signature: null,
+      });
+      return;
+    }
+
+    let collectionMint: PublicKey;
+    try {
+      collectionMint = new PublicKey(config.collectionMint.trim());
+    } catch {
+      setLocalStatus({
+        loading: false,
+        error: "Collection mint is invalid",
+        signature: null,
+      });
+      return;
+    }
+
+    const result = await mintNftToCollection(
+      collectionMint,
+      config.name,
+      config.symbol,
+      config.uri
+    );
+
+    if (result.signature) {
+      const txId = addTransaction(
+        result.signature,
+        "Mint NFT to Collection",
+        "devnet",
+        result.endpoint || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || getDefaultSolanaEndpoint()
+      );
+      updateTransaction(txId, {
+        status: result.success ? "confirmed" : "failed",
+        error: result.error,
+      });
+      setLocalStatus({ loading: false, error: null, signature: result.signature });
+      setTimeout(() => {
+        setActiveModal(null);
+        setForms({
+          ...forms,
+          mintToCollection: { collectionMint: "", name: "", symbol: "", uri: "" },
         });
         setLocalStatus({ loading: false, error: null, signature: null });
       }, 2000);
@@ -315,10 +377,7 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
         error={localStatus.error}
         signature={localStatus.signature}
         onClose={() => setActiveModal(null)}
-        onConfirm={async () => {
-          // Implementation for minting to collection
-          console.log("Mint to collection not yet implemented");
-        }}
+        onConfirm={handleMintToCollection}
       >
         <div className="space-y-3">
           <div>
