@@ -41,6 +41,7 @@ The dev server will start on http://localhost:3000.
 This UI talks to two RPC endpoints:
 - REACT_APP_PROVIDER_ENDPOINT: Solana RPC (e.g., local validator or a public devnet RPC)
 - REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT: Ephemeral Rollup RPC
+- SETUP_MINT: existing SPL mint address to use instead of auto-creating one on startup
 
 You can set them via environment variables when starting the app. If not provided, the app defaults to MagicBlock public endpoints:
 - REACT_APP_PROVIDER_ENDPOINT → https://rpc.magicblock.app/devnet

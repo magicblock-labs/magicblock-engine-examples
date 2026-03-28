@@ -22,6 +22,7 @@ import {
     ensureTransferQueueCrankIx,
     initRentPdaIx,
     initTransferQueueIx,
+    magicFeeVaultPdaFromValidator,
     transferSpl,
     withdrawSpl,
     delegateSpl,
@@ -36,6 +37,26 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
     "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
 );
 const MINT_SIZE = 82;
+
+type StructuredIx = {
+    accounts: TransactionInstruction["keys"];
+    data: Uint8Array;
+    programAddress: PublicKey;
+};
+
+function asTransactionInstruction(
+    instruction: TransactionInstruction | StructuredIx,
+): TransactionInstruction {
+    if ("programAddress" in instruction) {
+        return new TransactionInstruction({
+            programId: instruction.programAddress,
+            keys: instruction.accounts,
+            data: Buffer.from(instruction.data),
+        });
+    }
+
+    return instruction;
+}
 
 function getAssociatedTokenAddressSync(
     mint: PublicKey,
@@ -193,6 +214,17 @@ type StoredAccounts = { version: 1; keys: string[] };
 const LS_MINT_KEY = 'tempMintV1';
 type StoredMint = { version: 1; secret: string; pubkey: string; decimals: number };
 
+const SETUP_MINT_ENV = (process.env.SETUP_MINT || process.env.REACT_APP_SETUP_MINT || '').trim();
+const CONFIGURED_SETUP_MINT = (() => {
+    if (!SETUP_MINT_ENV) return null;
+    try {
+        return new PublicKey(SETUP_MINT_ENV);
+    } catch (error) {
+        console.error('Invalid SETUP_MINT value:', SETUP_MINT_ENV, error);
+        return null;
+    }
+})();
+
 export const BLOCKHASH_CACHE_MAX_AGE_MS = 30000
 
 const toBase64 = (u8: Uint8Array): string => {
@@ -327,6 +359,13 @@ const BUTTON_STYLE = {
     cursor: 'pointer',
 } as const;
 
+const COMPACT_BUTTON_STYLE = {
+    ...BUTTON_STYLE,
+    margin: 0,
+    width: 'auto',
+    whiteSpace: 'nowrap',
+} as const;
+
 const App: React.FC = () => {
     const { connection } = useConnection();
     const ephemeralConnection = useRef<Connection | null>(null);
@@ -343,10 +382,12 @@ const App: React.FC = () => {
 
     // Config
     const [mint, setMint] = useState<PublicKey | null>(() => {
+        if (CONFIGURED_SETUP_MINT) return CONFIGURED_SETUP_MINT;
         const stored = safeLocalStorage.get<StoredMint | null>(LS_MINT_KEY, null);
         return stored?.version === 1 && stored.pubkey ? new PublicKey(stored.pubkey) : null;
     });
     const [decimals, setDecimals] = useState<number>(() => {
+        if (CONFIGURED_SETUP_MINT) return 6;
         const stored = safeLocalStorage.get<StoredMint | null>(LS_MINT_KEY, null);
         return stored?.version === 1 && typeof stored.decimals === 'number' ? stored.decimals : 6;
     });
@@ -393,6 +434,8 @@ const App: React.FC = () => {
     const [srcIndex, setSrcIndex] = useState(0);
     const [dstIndex, setDstIndex] = useState(1);
     const [amountStr, setAmountStr] = useState('1');
+    const [mintRecipient, setMintRecipient] = useState('');
+    const [queueMintAddress, setQueueMintAddress] = useState(() => mint?.toBase58() ?? '');
     const [transferVisibility, setTransferVisibility] = useState<'public' | 'private'>('public');
     const [fromBalance, setFromBalance] = useState<'base' | 'ephemeral'>('ephemeral');
     const [toBalance, setToBalance] = useState<'base' | 'ephemeral'>('ephemeral');
@@ -477,9 +520,13 @@ const App: React.FC = () => {
         return () => { cancelled = true };
     }, [connection, mint]);
 
+    useEffect(() => {
+        setQueueMintAddress(mint?.toBase58() ?? '');
+    }, [mint]);
+
     const ensureAirdropLamports = useCallback(async (conn: Connection, pubkey: PublicKey) => {
         try {
-            const signature = await conn.requestAirdrop(pubkey, 1 * LAMPORTS_PER_SOL);
+            const signature = await conn.requestAirdrop(pubkey, 2 * LAMPORTS_PER_SOL);
             const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
             await conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
         } catch {
@@ -843,7 +890,11 @@ const App: React.FC = () => {
         setTransactionError(null);
         setTransactionSuccess(null);
         const payer = accounts[0].keypair;
+        const queueValidator = validator.current;
         try {
+            if (!queueValidator) {
+                throw new Error('Validator not loaded yet for queue setup');
+            }
             // Airdrop a small amount of SOL to each local wallet to cover fees
             for (const a of accounts) {
                 await ensureAirdropLamports(connection, a.keypair.publicKey);
@@ -857,7 +908,8 @@ const App: React.FC = () => {
             // Helper to create mint + ATAs + mintTo on a given connection
             const setupOn = async (conn: Connection) => {
                 const ataPubkeys = accounts.map(a => getAssociatedTokenAddressSync(mintKp.publicKey, a.keypair.publicKey));
-                const [transferQueue] = deriveTransferQueue(mintKp.publicKey);
+                const [transferQueue] = deriveTransferQueue(mintKp.publicKey, queueValidator);
+                const magicFeeVault = magicFeeVaultPdaFromValidator(queueValidator);
                 const [rentPda] = deriveRentPda();
                 console.log("Rent sponsor PDA: ", rentPda.toBase58());
 
@@ -893,11 +945,12 @@ const App: React.FC = () => {
                             Number(amountBase)
                         )
                     ),
-                    initTransferQueueIx(
+                    asTransactionInstruction(initTransferQueueIx(
                         payer.publicKey,
                         transferQueue,
                         mintKp.publicKey,
-                    ),
+                        queueValidator,
+                    )),
                     initRentPdaIx(
                         payer.publicKey,
                         rentPda,
@@ -907,11 +960,11 @@ const App: React.FC = () => {
                         toPubkey: rentPda,
                         lamports: LAMPORTS_PER_SOL / 10,
                     }),
-                    delegateTransferQueueIx(
+                    asTransactionInstruction(delegateTransferQueueIx(
                         transferQueue,
                         payer.publicKey,
                         mintKp.publicKey,
-                    ),
+                    )),
                 );
                 mintTx.feePayer = payer.publicKey;
                 const mintSig = await sendAndConfirmTransaction(
@@ -926,12 +979,15 @@ const App: React.FC = () => {
                 );
                 console.log("Mint and queue setup tx: ", mintSig)
 
+                console.log("Transfer queue: ", transferQueue.toBase58());
+
                 const startCrankQueueTx = new Transaction().add(
 
-                    ensureTransferQueueCrankIx(
+                    asTransactionInstruction(ensureTransferQueueCrankIx(
                         payer.publicKey,
                         transferQueue,
-                    ),
+                        magicFeeVault,
+                    )),
                 );
                 startCrankQueueTx.feePayer = payer.publicKey;
                 const crankQueueSig = await sendAndConfirmTransaction(
@@ -970,6 +1026,21 @@ const App: React.FC = () => {
 
     // Auto-run setup once on start if no mint is set
     useEffect(() => {
+        if (SETUP_MINT_ENV) {
+            if (!CONFIGURED_SETUP_MINT) {
+                setTransactionError(`Invalid SETUP_MINT env value: ${SETUP_MINT_ENV}`);
+                autoSetupTriggeredRef.current = true;
+                return;
+            }
+
+            if (!mint || !mint.equals(CONFIGURED_SETUP_MINT)) {
+                setMint(CONFIGURED_SETUP_MINT);
+                setDecimals(6);
+            }
+            autoSetupTriggeredRef.current = true;
+            return;
+        }
+
         if (mint) return; // already set or loaded from storage
         if (autoSetupTriggeredRef.current) return; // guard against multiple triggers (e.g., StrictMode)
         autoSetupTriggeredRef.current = true;
@@ -979,11 +1050,231 @@ const App: React.FC = () => {
 
     const resetMint = useCallback(async () => {
         safeLocalStorage.remove(LS_MINT_KEY);
-        setMint(null);
+        setMint(CONFIGURED_SETUP_MINT);
         setDecimals(6);
-        setTransactionSuccess('Mint reset. Run Setup to create a new mint.');
+        setTransactionSuccess(
+            CONFIGURED_SETUP_MINT
+                ? 'Mint reset. Using configured setup mint.'
+                : 'Mint reset. Run Setup to create a new mint.',
+        );
         await refreshBalances();
     }, [refreshBalances]);
+
+    const handleMintToAddress = useCallback(async () => {
+        setTransactionError(null);
+        setTransactionSuccess(null);
+
+        if (!mint) {
+            setTransactionError('Mint not initialized. Run Setup first.');
+            return;
+        }
+
+        const payer = accounts[0]?.keypair;
+        if (!payer) {
+            setTransactionError('Mint authority not available.');
+            return;
+        }
+
+        const recipientText = mintRecipient.trim();
+        if (!recipientText) {
+            setTransactionError('Recipient public key is required.');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            await ensureAirdropLamports(connection, payer.publicKey);
+
+            const recipient = new PublicKey(recipientText);
+            const recipientAta = getAssociatedTokenAddressSync(mint, recipient, false, TOKEN_PROGRAM_ID);
+            const recipientAtaInfo = await connection.getAccountInfo(recipientAta, 'processed');
+            const amountBase = BigInt(1000) * BigInt(10) ** BigInt(decimals);
+
+            const tx = new Transaction();
+            if (!recipientAtaInfo) {
+                tx.add(
+                    createAssociatedTokenAccountInstruction(
+                        payer.publicKey,
+                        recipientAta,
+                        recipient,
+                        mint,
+                    ),
+                );
+            }
+
+            tx.add(
+                createMintToInstruction(
+                    mint,
+                    recipientAta,
+                    payer.publicKey,
+                    amountBase,
+                ),
+            );
+            tx.feePayer = payer.publicKey;
+
+            const sig = await sendAndConfirmTransaction(
+                connection,
+                tx,
+                [payer],
+                {
+                    commitment: 'confirmed',
+                    preflightCommitment: 'confirmed',
+                    skipPreflight: true,
+                },
+            );
+            console.log("Mint to address tx:", sig);
+
+            setMintRecipient('');
+            setTransactionSuccess(
+                `Minted 1000 tokens to ${recipient.toBase58()}: ${sig.substring(0, 10)}...${sig.substring(sig.length - 10)}`,
+            );
+            await refreshBalances();
+        } catch (e: any) {
+            setTransactionError(await formatTransactionError(e, connection));
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [accounts, connection, decimals, ensureAirdropLamports, mint, mintRecipient, refreshBalances]);
+
+    const handleSetupQueue = useCallback(async () => {
+        setTransactionError(null);
+        setTransactionSuccess(null);
+
+        const payer = accounts[0]?.keypair;
+        if (!payer) {
+            setTransactionError('Queue payer not available.');
+            return;
+        }
+
+        const queueMintText = queueMintAddress.trim();
+        if (!queueMintText) {
+            setTransactionError('Queue mint public key is required.');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            // await ensureAirdropLamports(connection, payer.publicKey);
+            const queueValidator = validator.current;
+            if (!queueValidator) {
+                throw new Error('Validator not loaded yet for queue setup');
+            }
+
+            const queueMint = new PublicKey(queueMintText);
+            const [transferQueue] = deriveTransferQueue(queueMint, queueValidator);
+            const [rentPda] = deriveRentPda();
+            console.log("Transfer queue:", transferQueue.toBase58());
+            console.log("Rent pda: ", rentPda.toBase58());
+
+            const tx = new Transaction().add(
+                asTransactionInstruction(initTransferQueueIx(
+                    payer.publicKey,
+                    transferQueue,
+                    queueMint,
+                    queueValidator,
+                )),
+                initRentPdaIx(
+                    payer.publicKey,
+                    rentPda,
+                ),
+                SystemProgram.transfer({
+                    fromPubkey: payer.publicKey,
+                    toPubkey: rentPda,
+                    lamports: LAMPORTS_PER_SOL / 10,
+                }),
+                asTransactionInstruction(delegateTransferQueueIx(
+                    transferQueue,
+                    payer.publicKey,
+                    queueMint,
+                )),
+            );
+            tx.feePayer = payer.publicKey;
+
+            const sig = await sendAndConfirmTransaction(
+                connection,
+                tx,
+                [payer],
+                {
+                    commitment: 'confirmed',
+                    preflightCommitment: 'confirmed',
+                    skipPreflight: true,
+                },
+            );
+
+
+            setTransactionSuccess(
+                `Queue setup confirmed for ${queueMint.toBase58()}: ${sig.substring(0, 10)}...${sig.substring(sig.length - 10)}`,
+            );
+        } catch (e: any) {
+            setTransactionError(await formatTransactionError(e, connection));
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [accounts, connection, queueMintAddress]);
+
+    const handleStartQueueCrank = useCallback(async () => {
+        setTransactionError(null);
+        setTransactionSuccess(null);
+
+        const eConn = ephemeralConnection.current;
+        if (!eConn) {
+            setTransactionError('Ephemeral connection not available.');
+            return;
+        }
+
+        const payer = accounts[0]?.keypair;
+        if (!payer) {
+            setTransactionError('Queue payer not available.');
+            return;
+        }
+
+        const queueMintText = queueMintAddress.trim();
+        if (!queueMintText) {
+            setTransactionError('Queue mint public key is required.');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            const queueValidator = validator.current;
+            if (!queueValidator) {
+                throw new Error('Validator not loaded yet for queue crank');
+            }
+
+            const queueMint = new PublicKey(queueMintText);
+            const [transferQueue] = deriveTransferQueue(queueMint, queueValidator);
+            const magicFeeVault = magicFeeVaultPdaFromValidator(queueValidator);
+            console.log("Transfer queue:", transferQueue.toBase58());
+
+            const tx = new Transaction().add(
+                asTransactionInstruction(ensureTransferQueueCrankIx(
+                    payer.publicKey,
+                    transferQueue,
+                    magicFeeVault,
+                )),
+            );
+            tx.feePayer = payer.publicKey;
+
+            const sig = await sendAndConfirmTransaction(
+                eConn,
+                tx,
+                [payer],
+                {
+                    commitment: 'confirmed',
+                    preflightCommitment: 'confirmed',
+                    skipPreflight: true,
+                },
+            );
+
+            setTransactionSuccess(
+                `Queue crank started for ${queueMint.toBase58()}: ${sig.substring(0, 10)}...${sig.substring(sig.length - 10)}`,
+            );
+        } catch (e: any) {
+            setTransactionError(await formatTransactionError(e, eConn));
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [accounts, queueMintAddress]);
 
     return (
         <>
@@ -992,6 +1283,28 @@ const App: React.FC = () => {
                 .counter-ui {
                   padding-left: 16px;
                   padding-right: 16px;
+                }
+              }
+
+              .mint-panel-row {
+                display: grid;
+                grid-template-columns: max-content max-content minmax(0, 1fr);
+                gap: 8px;
+                align-items: center;
+                width: 100%;
+              }
+
+              .mint-panel-actions {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+              }
+
+              @media (max-width: 900px) {
+                .mint-panel-row {
+                  grid-template-columns: 1fr;
+                  align-items: stretch;
                 }
               }
             `}</style>
@@ -1209,7 +1522,7 @@ const App: React.FC = () => {
                                             mint,
                                             shuttleEphemeralAta,
                                         );
-                                        // await eConn.getAccountInfo(shuttleWalletAta);
+                                        await eConn.getAccountInfo(shuttleWalletAta);
 
                                         console.log("Shuttle wallet ata: ", shuttleWalletAta.toBase58());
                                         console.log("Shuttle eata: ", shuttleEphemeralAta.toBase58());
@@ -1307,7 +1620,7 @@ const App: React.FC = () => {
                                         );
                                         const [shuttleAta] = deriveShuttleAta(shuttleEphemeralAta, mint);
                                         // await eConn.getAccountInfo(shuttleAta);
-                                        // await eConn.getAccountInfo(shuttleWalletAta);
+                                        await eConn.getAccountInfo(shuttleWalletAta);
                                         // await eConn.getAccountInfo(shuttleEphemeralAta);
                                         console.log("Shuttle wallet ata: ", shuttleWalletAta.toBase58());
                                         console.log("Shuttle eata: ", shuttleEphemeralAta.toBase58());
@@ -1499,19 +1812,66 @@ const App: React.FC = () => {
                             No test mint yet — click "Setup" to create one.
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
-                            Mint
-                            <span style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>{short(mint)}</span>
-                            <button
-                                onClick={() => copyPk(mint)}
-                                title="Copy mint address"
-                                style={{ ...BUTTON_STYLE, borderRadius: 6, padding: '4px 6px' }}
-                            >Copy</button>
-                            <button
-                                onClick={() => resetMint()}
-                                title="Reset mint"
-                                style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#fecaca', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}
-                            >Reset</button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', width: '100%' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12, flexWrap: 'wrap' }}>
+                                Mint
+                                <span style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>{short(mint)}</span>
+                                <button
+                                    onClick={() => copyPk(mint)}
+                                    title="Copy mint address"
+                                    style={{ ...COMPACT_BUTTON_STYLE, borderRadius: 6, padding: '4px 6px' }}
+                                >Copy</button>
+                                <button
+                                    onClick={() => resetMint()}
+                                    title="Reset mint"
+                                    style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#fecaca', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', margin: 0, width: 'auto', whiteSpace: 'nowrap' }}
+                                >Reset</button>
+                            </div>
+                            <div className="mint-panel-row">
+                                <div className="mint-panel-actions">
+                                    <button
+                                        onClick={handleMintToAddress}
+                                        disabled={isSubmitting || !mintRecipient.trim()}
+                                        style={{ ...COMPACT_BUTTON_STYLE, cursor: isSubmitting || !mintRecipient.trim() ? 'not-allowed' : 'pointer', opacity: isSubmitting || !mintRecipient.trim() ? 0.6 : 1, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                        Mint 1000
+                                    </button>
+                                </div>
+                                <div style={{ color: '#9ca3af', fontSize: 12, flexShrink: 0 }}>Recipient</div>
+                                <input
+                                    type="text"
+                                    value={mintRecipient}
+                                    onChange={e => setMintRecipient(e.target.value)}
+                                    placeholder="Public key"
+                                    style={{ ...INPUT_STYLE, minWidth: 0, width: '100%' }}
+                                />
+                            </div>
+                            <div className="mint-panel-row">
+                                <div className="mint-panel-actions">
+                                    <button
+                                        onClick={handleSetupQueue}
+                                        disabled={isSubmitting || !queueMintAddress.trim()}
+                                        style={{ ...COMPACT_BUTTON_STYLE, cursor: isSubmitting || !queueMintAddress.trim() ? 'not-allowed' : 'pointer', opacity: isSubmitting || !queueMintAddress.trim() ? 0.6 : 1, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                        Setup queue
+                                    </button>
+                                    <button
+                                        onClick={handleStartQueueCrank}
+                                        disabled={isSubmitting || !queueMintAddress.trim()}
+                                        style={{ ...COMPACT_BUTTON_STYLE, cursor: isSubmitting || !queueMintAddress.trim() ? 'not-allowed' : 'pointer', opacity: isSubmitting || !queueMintAddress.trim() ? 0.6 : 1, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                        Start queue crank
+                                    </button>
+                                </div>
+                                <div style={{ color: '#9ca3af', fontSize: 12, flexShrink: 0 }}>Queue Mint</div>
+                                <input
+                                    type="text"
+                                    value={queueMintAddress}
+                                    onChange={e => setQueueMintAddress(e.target.value)}
+                                    placeholder="Mint public key"
+                                    style={{ ...INPUT_STYLE, minWidth: 0, width: '100%' }}
+                                />
+                            </div>
                         </div>
                     )}
                     {!mint && (
