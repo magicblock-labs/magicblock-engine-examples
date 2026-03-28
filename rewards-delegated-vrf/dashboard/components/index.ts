@@ -9,5 +9,6 @@ export { ErrorMessage } from "./ErrorMessage";
 export { TransactionModal } from "./TransactionModal";
 export { TransactionResponse } from "./TransactionResponse";
 export { AdminActions } from "./AdminActions";
+export { DelegationActions } from "./DelegationActions";
 export { NftActions } from "./NftActions";
 export { TokenActions } from "./TokenActions";

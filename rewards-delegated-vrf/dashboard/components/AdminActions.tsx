@@ -6,9 +6,7 @@ import { PublicKey } from "@solana/web3.js";
 import {
   Plus,
   Minus,
-  Send,
   Lock,
-  Unlock,
   Settings,
   Zap,
   List,
@@ -44,8 +42,6 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     setAdmins,
     setWhitelist,
     setRewardList,
-    delegateRewardList,
-    undelegateRewardList,
     requestRandomReward,
     addReward,
     removeReward,
@@ -97,6 +93,25 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
   const [availableDistributorMints, setAvailableDistributorMints] = useState<OwnedSplMintOption[]>([]);
   const [loadingDistributorMints, setLoadingDistributorMints] = useState(false);
   const [distributorMintFetchError, setDistributorMintFetchError] = useState<string | null>(null);
+  const availableRewardNames = Array.from(
+    new Set(
+      (rewardList?.rewards ?? [])
+        .map((reward: any) => reward.name || reward.rewardName)
+        .filter((name: string | undefined): name is string => Boolean(name))
+    )
+  ).sort((left, right) => left.localeCompare(right));
+  const selectedRewardForRemoval = (rewardList?.rewards ?? []).find(
+    (reward: any) =>
+      reward.name === forms.removeReward.rewardName ||
+      reward.rewardName === forms.removeReward.rewardName
+  );
+  const availableRewardRemovalMints = Array.from(
+    new Set(
+      (selectedRewardForRemoval?.rewardMints ?? [])
+        .map((mint: any) => mint?.toString?.())
+        .filter((mint: string | undefined): mint is string => Boolean(mint))
+    )
+  ).sort((left, right) => left.localeCompare(right));
 
   // Helper to open modal with cleared status
   const openModal = (modalName: string) => {
@@ -335,27 +350,16 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     await handleTransactionResult(result, "Set Reward List");
   };
 
-  const handleDelegateRewardList = async () => {
-    setLoadingStatus();
-    const result = await delegateRewardList();
-    await handleTransactionResult(result, "Delegate Reward List");
-  };
-
-  const handleUndelegateRewardList = async () => {
-    setLoadingStatus();
-    const result = await undelegateRewardList();
-    await handleTransactionResult(result, "Undelegate Reward List");
-  };
-
   const handleRequestRandomReward = async () => {
     setLoadingStatus();
     const config = forms.randomReward;
     const user = parsePublicKey(config.user, "User address");
     if (!user) return;
+    const clientSeed = Math.floor(Math.random() * 255);
     
     const result = await requestRandomReward(
       user,
-      config.clientSeed
+      clientSeed
     );
     
     if (result.signature) {
@@ -545,30 +549,6 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
           <span className="text-left">
             <div className="font-medium text-white">Set Reward List</div>
             <div className="text-xs text-gray-400">Configure reward parameters</div>
-          </span>
-        </button>
-
-        {/* Delegate Reward List */}
-        <button
-          onClick={() => setActiveModal("delegate")}
-          className="card p-4 hover:bg-gray-700 transition flex items-center gap-3 group"
-        >
-          <Send className="w-5 h-5 text-orange-400 group-hover:text-orange-300" />
-          <span className="text-left">
-            <div className="font-medium text-white">Delegate Reward List</div>
-            <div className="text-xs text-gray-400">Deploy to Ephemeral Rollup</div>
-          </span>
-        </button>
-
-        {/* Undelegate Reward List */}
-        <button
-          onClick={() => setActiveModal("undelegate")}
-          className="card p-4 hover:bg-gray-700 transition flex items-center gap-3 group"
-        >
-          <Unlock className="w-5 h-5 text-red-400 group-hover:text-red-300" />
-          <span className="text-left">
-            <div className="font-medium text-white">Undelegate Reward List</div>
-            <div className="text-xs text-gray-400">Withdraw from Ephemeral Rollup</div>
           </span>
         </button>
 
@@ -824,103 +804,8 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
              Unix Timestamp: {forms.rewardList.endTimestamp}
            </p>
          </div>
-
-           {/* Existing Rewards Display */}
-           {rewardList && rewardList.rewards && rewardList.rewards.length > 0 && (
-             <div className="border-t border-gray-600 pt-3">
-               <label className="block text-sm font-medium text-gray-300 mb-2">Current Rewards in Listaaaaa</label>
-               <div className="space-y-2 max-h-80 overflow-y-auto">
-                 {rewardList.rewards.map((reward: any, idx: number) => (
-                   <details
-                     key={idx}
-                     className="bg-gray-800 p-3 rounded border border-gray-700 text-xs group"
-                   >
-                     <summary className="cursor-pointer font-medium text-white hover:text-indigo-300 transition flex-1">
-                       <span className="text-lg font-bold">{reward.name || reward.rewardName || "Unknown"}</span> 
-                       <span className="text-gray-400 text-sm ml-2">({reward.rewardAmount?.toString() || "0"})</span>
-                     </summary>
-                     <div className="mt-3 space-y-2 pl-2 border-l border-gray-600">
-                       <div>
-                         <span className="text-gray-400 font-semibold">Reward Name:</span>
-                         <span className="text-white ml-2 text-base font-bold">{reward.name || reward.rewardName || "N/A"}</span>
-                       </div>
-                       <div>
-                         <span className="text-gray-400">Reward Amount:</span>
-                         <span className="text-white ml-2">{reward.rewardAmount?.toString() || "0"}</span>
-                       </div>
-                       <div>
-                         <span className="text-gray-400">Draw Range Min:</span>
-                         <span className="text-white ml-2">{reward.drawRangeMin?.toString() || "0"}</span>
-                       </div>
-                       <div>
-                         <span className="text-gray-400">Draw Range Max:</span>
-                         <span className="text-white ml-2">{reward.drawRangeMax?.toString() || "0"}</span>
-                       </div>
-                       <div>
-                         <span className="text-gray-400">Redemption Limit:</span>
-                         <span className="text-white ml-2">{reward.redemptionLimit?.toString() || "0"}</span>
-                       </div>
-                       {reward.tokenAccount && (
-                         <div>
-                           <span className="text-gray-400">Token Account:</span>
-                           <div className="text-gray-300 break-all mt-1">{reward.tokenAccount.toString()}</div>
-                         </div>
-                       )}
-                       {reward.rewardMints[0] && (
-                         <div>
-                           <span className="text-gray-400">Mint:</span>
-                           <div className="text-gray-300 break-all mt-1">{reward.rewardMints[0].toString()}</div>
-                         </div>
-                       )}
-                       {reward.rewardType && (
-                         <div>
-                           <span className="text-gray-400">Reward Type:</span>
-                           <span className="text-white ml-2">{typeof reward.rewardType === 'object' ? JSON.stringify(reward.rewardType) : reward.rewardType}</span>
-                         </div>
-                       )}
-                       {reward.redemptionCount !== undefined && (
-                         <div>
-                           <span className="text-gray-400">Redemption Count:</span>
-                           <span className="text-white ml-2">{reward.redemptionCount?.toString() || "0"}</span>
-                         </div>
-                       )}
-                     </div>
-                   </details>
-                 ))}
-               </div>
-               <p className="text-xs text-gray-400 mt-3 bg-gray-900 p-2 rounded">
-                 💡 To modify rewards, use the "Add Reward" action to update parameters or "Remove Reward" to delete. Rewards are part of the reward list and managed separately from these parameters.
-               </p>
-             </div>
-           )}
            </div>
            </TransactionModal>
-
-      {/* Delegate Modal */}
-      <TransactionModal
-        isOpen={activeModal === "delegate"}
-        title="Delegate Reward List"
-        description="Deploy reward list to Ephemeral Rollup"
-        loading={localStatus.loading}
-        error={localStatus.error}
-        signature={localStatus.signature}
-        endpoint={localStatus.endpoint || connection.rpcEndpoint}
-        onClose={closeModal}
-        onConfirm={handleDelegateRewardList}
-      />
-
-      {/* Undelegate Modal */}
-      <TransactionModal
-        isOpen={activeModal === "undelegate"}
-        title="Undelegate Reward List"
-        description="Withdraw reward list from Ephemeral Rollup"
-        loading={localStatus.loading}
-        error={localStatus.error}
-        signature={localStatus.signature}
-        endpoint={localStatus.endpoint || connection.rpcEndpoint}
-        onClose={closeModal}
-        onConfirm={handleUndelegateRewardList}
-      />
 
       {/* Request Random Reward Modal */}
       <TransactionModal
@@ -954,24 +839,6 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
               />
               </div>
-              <div>
-              <label className="block text-sm text-gray-300 mb-1">Client Seed</label>
-              <input
-              type="number"
-              value={forms.randomReward.clientSeed}
-              onChange={(e) =>
-                setForms({
-                  ...forms,
-                  randomReward: {
-                    ...forms.randomReward,
-                    clientSeed: parseInt(e.target.value),
-                  },
-                })
-              }
-              disabled={localStatus.loading}
-              className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50"
-              />
-              </div>
               </div>
               </TransactionModal>
 
@@ -990,6 +857,26 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         <div className="space-y-3 max-h-96 overflow-y-auto">
           <div>
             <label className="block text-sm text-gray-300 mb-1">Reward Name</label>
+            <select
+              value={availableRewardNames.includes(forms.addReward.rewardName) ? forms.addReward.rewardName : ""}
+              onChange={(e) =>
+                setForms({
+                  ...forms,
+                  addReward: { ...forms.addReward, rewardName: e.target.value },
+                })
+              }
+              disabled={localStatus.loading || availableRewardNames.length === 0}
+              className="w-full rounded border border-gray-600 bg-gray-700 p-2 text-sm text-white focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            >
+              <option value="">
+                {availableRewardNames.length > 0 ? "Select existing reward name" : "No existing rewards found"}
+              </option>
+              {availableRewardNames.map((rewardName) => (
+                <option key={rewardName} value={rewardName}>
+                  {rewardName}
+                </option>
+              ))}
+            </select>
             <input
               type="text"
               value={forms.addReward.rewardName}
@@ -1001,7 +888,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               }
               placeholder="e.g., Gold Prize"
               disabled={localStatus.loading}
-              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
+              className="mt-2 w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
               />
               </div>
               <div>
@@ -1134,12 +1021,12 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
                   const reward = rewardList.rewards?.find(
                     (r: any) => r.name === e.target.value || r.rewardName === e.target.value
                   );
-                  setForms({
-                    ...forms,
-                    removeReward: {
+                setForms({
+                  ...forms,
+                  removeReward: {
                       rewardName: e.target.value,
                       rewardMint: reward?.rewardMints[0]?.toString() || "",
-                      redemptionAmount: reward?.redemptionLimit ? Number(reward.redemptionLimit - reward.redemptionCount) : 0,
+                      redemptionAmount: 1,
                     },
                   });
                 }}
@@ -1175,8 +1062,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
 
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">Mint Address</label>
-            <input
-              type="text"
+            <select
               value={forms.removeReward.rewardMint}
               onChange={(e) =>
                 setForms({
@@ -1184,13 +1070,20 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
                   removeReward: { ...forms.removeReward, rewardMint: e.target.value },
                 })
               }
-              placeholder="Mint address (optional)"
               disabled={localStatus.loading}
-              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm font-mono text-xs"
-            />
-            {forms.removeReward.rewardMint && (
-              <p className="text-xs text-gray-400 mt-1">Mint: {forms.removeReward.rewardMint}</p>
-            )}
+              className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
+            >
+              <option value="">
+                {availableRewardRemovalMints.length > 0
+                  ? "Select reward mint"
+                  : "No reward mints found"}
+              </option>
+              {availableRewardRemovalMints.map((mint) => (
+                <option key={mint} value={mint}>
+                  {shortAddress(mint, 5)}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -1212,7 +1105,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
           </div>
 
           <div className="bg-gray-800 p-2 rounded text-xs text-gray-400">
-            💡 Select from the dropdown or enter the reward name, mint address, and redemption amount manually
+            💡 Select the reward and mint from the dropdowns, then choose the redemption amount
           </div>
         </div>
       </TransactionModal>

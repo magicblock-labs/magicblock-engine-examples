@@ -12,6 +12,7 @@ import {
   LoadingSpinner,
   ErrorMessage,
   AdminActions,
+  DelegationActions,
 } from "@/components";
 import { NftActions } from "@/components/NftActions";
 import { TransactionHistory } from "@/components/TransactionHistory";
@@ -145,6 +146,12 @@ export default function Home() {
         {publicKey && (
           <div className="pt-8 border-t border-gray-700">
             <AdminActions selectedDistributor={selectedDistributor ? new PublicKey(selectedDistributor) : null} />
+          </div>
+        )}
+
+        {publicKey && (
+          <div className="pt-8 border-t border-gray-700">
+            <DelegationActions selectedDistributor={selectedDistributor ? new PublicKey(selectedDistributor) : null} />
           </div>
         )}
 
