@@ -51,21 +51,9 @@ jobs:
 
       - name: Start Solana Test Validator
         run: |
-          solana-test-validator \
+          mb-test-validator \
             --ledger ./my-ledger-1 \
-            --reset \
-            --clone mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev \
-            --clone EpJnX7ueXk7fKojBymqmVuCuwyhDQsYcLVL1XMsBbvDX \
-            --clone 7JrkjmZPprHwtuvtuGTXp9hwfGYFAQLnLeFM52kqAgXg \
-            --clone noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV \
-            --clone-upgradeable-program DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh \
-            --clone Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh \
-            --clone 5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc \
-            --clone F72HqCR8nwYsVyeVd38pgKkjXmXFzVAM8rjZZsXWbdE \
-            --clone vrfkfM4uoisXZQPrFiS2brY4oMkU9EWjyvmvqaFd5AS \
-            --clone-upgradeable-program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz \
-            --clone-upgradeable-program BTWAqWNBmF2TboMh3fxMJfgR16xGHYD7Kgr2dPwbRPBi \
-            --url https://api.devnet.solana.com &
+            --reset &
 
           # Wait for validator to be ready
           timeout 30 bash -c 'until solana cluster-version --url http://localhost:8899 >/dev/null 2>&1; do sleep 1; done'
@@ -76,17 +64,17 @@ jobs:
           sudo prlimit --pid $$ --nofile=1048576:1048576
           sudo sysctl fs.inotify.max_user_instances=1280
           sudo sysctl fs.inotify.max_user_watches=655360
-          RUST_LOG=info ephemeral-validator \
-            --remotes "http://127.0.0.1:8899" \
-            --remotes "ws://127.0.0.1:8900" \
-            -l "127.0.0.1:7799" \
-            --reset \
+          ephemeral-validator \
+            --remotes "http://localhost:8899" \
+            --remotes "ws://localhost:8900" \
+            -l "7799" \
+            --lifecycle ephemeral \
             > /tmp/ephemeral-validator.log 2>&1 &
           EPHEMERAL_PID=$!
 
           # Wait for validator to be ready
           for i in {1..60}; do
-            if curl -fsS http://127.0.0.1:7799/health >/dev/null 2>&1; then
+            if bash -c '</dev/tcp/127.0.0.1/7799' >/dev/null 2>&1; then
               break
             fi
             if ! kill -0 "$EPHEMERAL_PID" >/dev/null 2>&1; then

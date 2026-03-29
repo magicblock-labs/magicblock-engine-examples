@@ -1046,14 +1046,23 @@ const App: React.FC = () => {
     const resetMint = useCallback(async () => {
         safeLocalStorage.remove(LS_MINT_KEY);
         setMint(CONFIGURED_SETUP_MINT);
-        setDecimals(6);
+        if (CONFIGURED_SETUP_MINT) {
+            try {
+                const mintInfo = await getMint(connection, CONFIGURED_SETUP_MINT, 'processed');
+                setDecimals(mintInfo.decimals);
+            } catch (_) {
+                setDecimals(6);
+            }
+        } else {
+            setDecimals(6);
+        }
         setTransactionSuccess(
             CONFIGURED_SETUP_MINT
                 ? 'Mint reset. Using configured setup mint.'
                 : 'Mint reset. Run Setup to create a new mint.',
         );
         await refreshBalances();
-    }, [refreshBalances]);
+    }, [connection, refreshBalances]);
 
     const handleMintToAddress = useCallback(async () => {
         setTransactionError(null);
