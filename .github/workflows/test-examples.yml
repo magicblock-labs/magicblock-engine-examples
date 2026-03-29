@@ -70,25 +70,13 @@ jobs:
             -l "7799" \
             --lifecycle ephemeral \
             > /tmp/ephemeral-validator.log 2>&1 &
-          EPHEMERAL_PID=$!
 
           # Wait for validator to be ready
-          for i in {1..60}; do
-            if bash -c '</dev/tcp/127.0.0.1/7799' >/dev/null 2>&1; then
-              break
-            fi
-            if ! kill -0 "$EPHEMERAL_PID" >/dev/null 2>&1; then
-              echo "ephemeral-validator exited before becoming ready"
-              cat /tmp/ephemeral-validator.log || true
-              exit 1
-            fi
-            if [ "$i" -eq 60 ]; then
-              echo "ephemeral-validator did not become ready within 60 seconds"
-              cat /tmp/ephemeral-validator.log || true
-              exit 1
-            fi
-            sleep 1
-          done
+          timeout 60 bash -c 'until curl -s http://localhost:7799 >/dev/null 2>&1; do sleep 1; done' || {
+            echo "ephemeral-validator did not become ready within 60 seconds"
+            cat /tmp/ephemeral-validator.log || true
+            exit 1
+          }
       - name: Test anchor-counter
         run: |
           cd anchor-counter
