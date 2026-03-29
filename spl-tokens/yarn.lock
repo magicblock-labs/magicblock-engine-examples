@@ -76,9 +76,19 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
-"@magicblock-labs/ephemeral-rollups-sdk@link:../../ephemeral-rollups-sdk/ts/web3js":
-  version "0.0.0"
-  uid ""
+"@magicblock-labs/ephemeral-rollups-sdk@0.10.2":
+  version "0.10.2"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.10.2.tgz#3879c85dc616f3863b5ff6d475b95451f27d80e7"
+  integrity sha512-b3icnaiSpNar9U5RAn4zcBUylxjDAvTbTFFQaPRoayDL0+Jjw3hGN/ZHNCLwLSykw3o11cOExOCky66a5I+3CA==
+  dependencies:
+    "@noble/curves" "^1.4.2"
+    "@noble/hashes" "^1.4.0"
+    "@phala/dcap-qvl" "^0.3.9"
+    "@solana/web3.js" "^1.98.0"
+    bs58 "^6.0.0"
+    rpc-websockets "^9.0.4"
+    tweetnacl "^1.0.3"
+    typescript "^5.3.0"
 
 "@noble/curves@^1.4.2":
   version "1.9.7"
