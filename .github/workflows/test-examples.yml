@@ -77,12 +77,30 @@ jobs:
           sudo sysctl fs.inotify.max_user_instances=1280
           sudo sysctl fs.inotify.max_user_watches=655360
           RUST_LOG=info ephemeral-validator \
-            --remotes "http://localhost:8899" \
-            --remotes "ws://localhost:8900"  \
-            -l "127.0.0.1:7799" &
+            --remotes "http://127.0.0.1:8899" \
+            --remotes "ws://127.0.0.1:8900" \
+            -l "127.0.0.1:7799" \
+            --reset \
+            > /tmp/ephemeral-validator.log 2>&1 &
+          EPHEMERAL_PID=$!
 
           # Wait for validator to be ready
-          timeout 20 bash -c 'until curl -s http://localhost:7799 >/dev/null 2>&1; do sleep 1; done'
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:7799/health >/dev/null 2>&1; then
+              break
+            fi
+            if ! kill -0 "$EPHEMERAL_PID" >/dev/null 2>&1; then
+              echo "ephemeral-validator exited before becoming ready"
+              cat /tmp/ephemeral-validator.log || true
+              exit 1
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "ephemeral-validator did not become ready within 60 seconds"
+              cat /tmp/ephemeral-validator.log || true
+              exit 1
+            fi
+            sleep 1
+          done
       - name: Test anchor-counter
         run: |
           cd anchor-counter
