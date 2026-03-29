@@ -1158,10 +1158,20 @@ const App: React.FC = () => {
 
         try {
             setIsSubmitting(true);
-            // await ensureAirdropLamports(connection, payer.publicKey);
             const queueValidator = validator.current;
             if (!queueValidator) {
                 throw new Error('Validator not loaded yet for queue setup');
+            }
+
+            const minimumQueueSetupLamports = LAMPORTS_PER_SOL / 10 + LAMPORTS_PER_SOL / 100;
+            let payerBalance = await connection.getBalance(payer.publicKey, 'confirmed');
+            if (payerBalance < minimumQueueSetupLamports) {
+                await ensureAirdropLamports(connection, payer.publicKey);
+                payerBalance = await connection.getBalance(payer.publicKey, 'confirmed');
+                if (payerBalance < minimumQueueSetupLamports) {
+                    setTransactionError('Queue setup requires at least 0.11 SOL in the payer account.');
+                    return;
+                }
             }
 
             const queueMint = new PublicKey(queueMintText);
@@ -1214,7 +1224,7 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, queueMintAddress]);
+    }, [accounts, connection, ensureAirdropLamports, queueMintAddress]);
 
     const handleStartQueueCrank = useCallback(async () => {
         setTransactionError(null);
