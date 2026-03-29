@@ -353,6 +353,7 @@ const App: React.FC = () => {
     const accountsRef = useRef<TempAccount[]>([]);
     // Ensure auto-setup runs only once on first load when no mint is present
     const autoSetupTriggeredRef = useRef(false);
+    const autoSetupRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     type CachedBlockhash = {
         blockhash: string
@@ -463,6 +464,14 @@ const App: React.FC = () => {
         }, BLOCKHASH_CACHE_MAX_AGE_MS);
         return () => clearInterval(id);
     }, [refreshEphemeralBlockhash]);
+
+    useEffect(() => {
+        return () => {
+            if (autoSetupRetryTimeoutRef.current !== null) {
+                clearTimeout(autoSetupRetryTimeoutRef.current);
+            }
+        };
+    }, []);
 
     // Initialize ephemeral connection
     useEffect(() => {
@@ -871,10 +880,16 @@ const App: React.FC = () => {
         setTransactionSuccess(null);
         const payer = accounts[0].keypair;
         const queueValidator = validator.current;
-        try {
-            if (!queueValidator) {
-                throw new Error('Validator not loaded yet for queue setup');
+        if (!queueValidator) {
+            if (autoSetupRetryTimeoutRef.current === null) {
+                autoSetupRetryTimeoutRef.current = setTimeout(() => {
+                    autoSetupRetryTimeoutRef.current = null;
+                    setupAll().catch(console.error);
+                }, 1000);
             }
+            return;
+        }
+        try {
             // Airdrop a small amount of SOL to each local wallet to cover fees
             for (const a of accounts) {
                 await ensureAirdropLamports(connection, a.keypair.publicKey);
