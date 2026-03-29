@@ -38,26 +38,6 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
 );
 const MINT_SIZE = 82;
 
-type StructuredIx = {
-    accounts: TransactionInstruction["keys"];
-    data: Uint8Array;
-    programAddress: PublicKey;
-};
-
-function asTransactionInstruction(
-    instruction: TransactionInstruction | StructuredIx,
-): TransactionInstruction {
-    if ("programAddress" in instruction) {
-        return new TransactionInstruction({
-            programId: instruction.programAddress,
-            keys: instruction.accounts,
-            data: Buffer.from(instruction.data),
-        });
-    }
-
-    return instruction;
-}
-
 function getAssociatedTokenAddressSync(
     mint: PublicKey,
     owner: PublicKey,
@@ -945,12 +925,12 @@ const App: React.FC = () => {
                             Number(amountBase)
                         )
                     ),
-                    asTransactionInstruction(initTransferQueueIx(
+                    initTransferQueueIx(
                         payer.publicKey,
                         transferQueue,
                         mintKp.publicKey,
                         queueValidator,
-                    )),
+                    ),
                     initRentPdaIx(
                         payer.publicKey,
                         rentPda,
@@ -960,11 +940,11 @@ const App: React.FC = () => {
                         toPubkey: rentPda,
                         lamports: LAMPORTS_PER_SOL / 10,
                     }),
-                    asTransactionInstruction(delegateTransferQueueIx(
+                    delegateTransferQueueIx(
                         transferQueue,
                         payer.publicKey,
                         mintKp.publicKey,
-                    )),
+                    ),
                 );
                 mintTx.feePayer = payer.publicKey;
                 const mintSig = await sendAndConfirmTransaction(
@@ -983,11 +963,11 @@ const App: React.FC = () => {
 
                 const startCrankQueueTx = new Transaction().add(
 
-                    asTransactionInstruction(ensureTransferQueueCrankIx(
+                    ensureTransferQueueCrankIx(
                         payer.publicKey,
                         transferQueue,
                         magicFeeVault,
-                    )),
+                    ),
                 );
                 startCrankQueueTx.feePayer = payer.publicKey;
                 const crankQueueSig = await sendAndConfirmTransaction(
@@ -1167,12 +1147,12 @@ const App: React.FC = () => {
             console.log("Rent pda: ", rentPda.toBase58());
 
             const tx = new Transaction().add(
-                asTransactionInstruction(initTransferQueueIx(
+                initTransferQueueIx(
                     payer.publicKey,
                     transferQueue,
                     queueMint,
                     queueValidator,
-                )),
+                ),
                 initRentPdaIx(
                     payer.publicKey,
                     rentPda,
@@ -1182,11 +1162,11 @@ const App: React.FC = () => {
                     toPubkey: rentPda,
                     lamports: LAMPORTS_PER_SOL / 10,
                 }),
-                asTransactionInstruction(delegateTransferQueueIx(
+                delegateTransferQueueIx(
                     transferQueue,
                     payer.publicKey,
                     queueMint,
-                )),
+                ),
             );
             tx.feePayer = payer.publicKey;
 
@@ -1247,11 +1227,11 @@ const App: React.FC = () => {
             console.log("Transfer queue:", transferQueue.toBase58());
 
             const tx = new Transaction().add(
-                asTransactionInstruction(ensureTransferQueueCrankIx(
+                ensureTransferQueueCrankIx(
                     payer.publicKey,
                     transferQueue,
                     magicFeeVault,
-                )),
+                ),
             );
             tx.feePayer = payer.publicKey;
 
