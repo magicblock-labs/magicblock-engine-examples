@@ -64,7 +64,7 @@ jobs:
           sudo prlimit --pid $$ --nofile=1048576:1048576
           sudo sysctl fs.inotify.max_user_instances=1280
           sudo sysctl fs.inotify.max_user_watches=655360
-          ephemeral-validator \
+          RUST_LOG=info ephemeral-validator \
             --remotes "http://localhost:8899" \
             --remotes "ws://localhost:8900" \
             -l "7799" \
@@ -74,7 +74,8 @@ jobs:
           # Wait for validator to be ready
           timeout 60 bash -c 'until curl -s http://localhost:7799 >/dev/null 2>&1; do sleep 1; done' || {
             echo "ephemeral-validator did not become ready within 60 seconds"
-            cat /tmp/ephemeral-validator.log || true
+            echo "=== Last 100 lines of validator log ==="
+            tail -100 /tmp/ephemeral-validator.log || true
             exit 1
           }
       - name: Test anchor-counter

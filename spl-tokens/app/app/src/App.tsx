@@ -204,6 +204,51 @@ const CONFIGURED_SETUP_MINT = (() => {
         return null;
     }
 })();
+const SETUP_QUEUE_KEYPAIR_ENV = (process.env.SETUP_QUEUE_KEYPAIR || process.env.REACT_APP_SETUP_QUEUE_KEYPAIR || '').trim();
+const SETUP_QUEUE_KEYPAIR_JSON_ENV = (process.env.SETUP_QUEUE_KEYPAIR_JSON || '').trim();
+
+const resolveSetupQueueKeypairPath = (value: string): string => {
+    if (
+        !value ||
+        value.startsWith('/') ||
+        value.startsWith('./') ||
+        value.startsWith('../') ||
+        /^[a-z][a-z0-9+.-]*:/i.test(value)
+    ) {
+        return value;
+    }
+
+    const publicUrl = (process.env.PUBLIC_URL || '').trim().replace(/\/$/, '');
+    return publicUrl ? `${publicUrl}/${value}` : value;
+};
+
+const parseSetupQueueKeypair = (raw: unknown): Keypair => {
+    const secretKey = Array.isArray(raw)
+        ? raw
+        : raw && typeof raw === 'object' && Array.isArray((raw as { secretKey?: unknown }).secretKey)
+            ? (raw as { secretKey: unknown[] }).secretKey
+            : null;
+
+    if (
+        !secretKey ||
+        secretKey.length !== 64 ||
+        secretKey.some((value) => typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 255)
+    ) {
+        throw new Error('Expected keypair.json to contain 64 secret key bytes.');
+    }
+
+    return Keypair.fromSecretKey(Uint8Array.from(secretKey));
+};
+
+const CONFIGURED_SETUP_QUEUE_KEYPAIR = (() => {
+    if (!SETUP_QUEUE_KEYPAIR_JSON_ENV) return null;
+    try {
+        return parseSetupQueueKeypair(JSON.parse(SETUP_QUEUE_KEYPAIR_JSON_ENV));
+    } catch (error) {
+        console.error('Invalid SETUP_QUEUE_KEYPAIR file contents:', error);
+        return null;
+    }
+})();
 
 export const BLOCKHASH_CACHE_MAX_AGE_MS = 30000
 
@@ -351,6 +396,8 @@ const App: React.FC = () => {
     const ephemeralConnection = useRef<Connection | null>(null);
     const validator = useRef<PublicKey | undefined>(undefined);
     const accountsRef = useRef<TempAccount[]>([]);
+    const setupQueueKeypairRef = useRef<Keypair | null>(CONFIGURED_SETUP_QUEUE_KEYPAIR);
+    const setupQueueKeypairPromiseRef = useRef<Promise<Keypair | null> | null>(null);
     // Ensure auto-setup runs only once on first load when no mint is present
     const autoSetupTriggeredRef = useRef(false);
     const autoSetupRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -410,6 +457,9 @@ const App: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [transactionError, setTransactionError] = useState<string | null>(null);
     const [transactionSuccess, setTransactionSuccess] = useState<string | null>(null);
+    const [setupQueueKeypairPublicKey, setSetupQueueKeypairPublicKey] = useState<PublicKey | null>(
+        () => CONFIGURED_SETUP_QUEUE_KEYPAIR?.publicKey ?? null,
+    );
 
     // Transfer form state
     const [srcIndex, setSrcIndex] = useState(0);
@@ -512,6 +562,39 @@ const App: React.FC = () => {
     useEffect(() => {
         setQueueMintAddress(mint?.toBase58() ?? '');
     }, [mint]);
+
+    const loadSetupQueueKeypair = useCallback(async (): Promise<Keypair | null> => {
+        if (setupQueueKeypairRef.current) return setupQueueKeypairRef.current;
+        if (!SETUP_QUEUE_KEYPAIR_ENV) return null;
+        if (setupQueueKeypairPromiseRef.current) return setupQueueKeypairPromiseRef.current;
+
+        const loadPromise = (async () => {
+            const response = await fetch(resolveSetupQueueKeypairPath(SETUP_QUEUE_KEYPAIR_ENV));
+            if (!response.ok) {
+                throw new Error(
+                    `Unable to load queue keypair from ${SETUP_QUEUE_KEYPAIR_ENV}: ${response.status} ${response.statusText}`,
+                );
+            }
+
+            const keypair = parseSetupQueueKeypair(await response.json());
+            setupQueueKeypairRef.current = keypair;
+            setSetupQueueKeypairPublicKey(keypair.publicKey);
+            return keypair;
+        })().finally(() => {
+            setupQueueKeypairPromiseRef.current = null;
+        });
+
+        setupQueueKeypairPromiseRef.current = loadPromise;
+        return loadPromise;
+    }, []);
+
+    useEffect(() => {
+        if (!SETUP_QUEUE_KEYPAIR_ENV) return;
+
+        loadSetupQueueKeypair().catch((error) => {
+            console.error('Failed to load setup queue keypair:', error);
+        });
+    }, [loadSetupQueueKeypair]);
 
     const ensureAirdropLamports = useCallback(async (conn: Connection, pubkey: PublicKey) => {
         try {
@@ -1144,12 +1227,6 @@ const App: React.FC = () => {
         setTransactionError(null);
         setTransactionSuccess(null);
 
-        const payer = accounts[0]?.keypair;
-        if (!payer) {
-            setTransactionError('Queue payer not available.');
-            return;
-        }
-
         const queueMintText = queueMintAddress.trim();
         if (!queueMintText) {
             setTransactionError('Queue mint public key is required.');
@@ -1158,6 +1235,13 @@ const App: React.FC = () => {
 
         try {
             setIsSubmitting(true);
+            const configuredQueuePayer = await loadSetupQueueKeypair();
+            const payer = configuredQueuePayer ?? accounts[0]?.keypair;
+            if (!payer) {
+                setTransactionError('Queue payer not available.');
+                return;
+            }
+
             const queueValidator = validator.current;
             if (!queueValidator) {
                 throw new Error('Validator not loaded yet for queue setup');
@@ -1224,7 +1308,7 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, ensureAirdropLamports, queueMintAddress]);
+    }, [accounts, connection, ensureAirdropLamports, loadSetupQueueKeypair, queueMintAddress]);
 
     const handleStartQueueCrank = useCallback(async () => {
         setTransactionError(null);
@@ -1236,12 +1320,6 @@ const App: React.FC = () => {
             return;
         }
 
-        const payer = accounts[0]?.keypair;
-        if (!payer) {
-            setTransactionError('Queue payer not available.');
-            return;
-        }
-
         const queueMintText = queueMintAddress.trim();
         if (!queueMintText) {
             setTransactionError('Queue mint public key is required.');
@@ -1250,6 +1328,13 @@ const App: React.FC = () => {
 
         try {
             setIsSubmitting(true);
+            const configuredQueuePayer = await loadSetupQueueKeypair();
+            const payer = configuredQueuePayer ?? accounts[0]?.keypair;
+            if (!payer) {
+                setTransactionError('Queue payer not available.');
+                return;
+            }
+
             const queueValidator = validator.current;
             if (!queueValidator) {
                 throw new Error('Validator not loaded yet for queue crank');
@@ -1288,7 +1373,7 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, queueMintAddress]);
+    }, [accounts, loadSetupQueueKeypair, queueMintAddress]);
 
     return (
         <>
@@ -1886,6 +1971,14 @@ const App: React.FC = () => {
                                     style={{ ...INPUT_STYLE, minWidth: 0, width: '100%' }}
                                 />
                             </div>
+                            {setupQueueKeypairPublicKey && (
+                                <div style={{ color: '#9ca3af', fontSize: 12, wordBreak: 'break-all' }}>
+                                    Queue signer override{' '}
+                                    <span style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+                                        {setupQueueKeypairPublicKey.toBase58()}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     )}
                     {!mint && (

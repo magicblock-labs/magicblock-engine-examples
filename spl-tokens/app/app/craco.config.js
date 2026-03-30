@@ -1,5 +1,19 @@
 // craco.config.js
+const fs = require('fs');
 const webpack = require('webpack');
+
+const setupQueueKeypairPath = process.env.SETUP_QUEUE_KEYPAIR || '';
+const setupQueueKeypairJson = (() => {
+    if (!setupQueueKeypairPath) return '';
+
+    try {
+        return fs.readFileSync(setupQueueKeypairPath, 'utf8');
+    } catch (error) {
+        throw new Error(
+            `Failed to read SETUP_QUEUE_KEYPAIR at ${setupQueueKeypairPath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
+})();
 
 module.exports = {
     webpack: {
@@ -28,6 +42,8 @@ module.exports = {
                 }),
                 new webpack.DefinePlugin({
                     'process.env.SETUP_MINT': JSON.stringify(process.env.SETUP_MINT || ''),
+                    'process.env.SETUP_QUEUE_KEYPAIR': JSON.stringify(setupQueueKeypairPath),
+                    'process.env.SETUP_QUEUE_KEYPAIR_JSON': JSON.stringify(setupQueueKeypairJson),
                 })
             );
 
