@@ -153,8 +153,7 @@ export function RewardsTable({ rewards }: RewardsTableProps) {
                               </button>
                             </div>
                           );
-                        } catch (error) {
-                          console.error("Error rendering mint:", error);
+                        } catch {
                           return null;
                         }
                       })}

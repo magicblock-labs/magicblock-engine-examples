@@ -1161,7 +1161,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               />
               {selectedExistingAddReward && (
                 <p className="text-xs text-gray-400 mt-1">
-                  Existing rewards keep their current range. Use "Update Reward Range" to change it.
+                  Existing rewards keep their current range. Use "Update Reward" to change it.
                 </p>
               )}
               </div>

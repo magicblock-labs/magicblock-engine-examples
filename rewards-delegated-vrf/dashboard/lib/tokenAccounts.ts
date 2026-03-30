@@ -52,13 +52,6 @@ async function fetchAccountsForProgram(
   programId: PublicKey
 ): Promise<OwnedSplMintOption[]> {
   const response = await connection.getTokenAccountsByOwner(owner, { programId });
-  console.log("[fetchOwnedSplMintOptions] Raw token accounts", {
-    endpoint: connection.rpcEndpoint,
-    owner: owner.toBase58(),
-    programId: programId.toBase58(),
-    count: response.value.length,
-    tokenAccounts: response.value.map((accountInfo) => accountInfo.pubkey.toBase58()),
-  });
 
   const decodedAccounts = response.value.flatMap((accountInfo) => {
     try {
@@ -79,14 +72,7 @@ async function fetchAccountsForProgram(
           amount: decodedAccount.amount,
         },
       ];
-    } catch (error) {
-      console.warn("[fetchOwnedSplMintOptions] Failed to decode token account", {
-        endpoint: connection.rpcEndpoint,
-        owner: owner.toBase58(),
-        programId: programId.toBase58(),
-        tokenAccount: accountInfo.pubkey.toBase58(),
-        error: error instanceof Error ? error.message : String(error),
-      });
+    } catch {
       return [];
     }
   });
@@ -113,14 +99,7 @@ async function fetchAccountsForProgram(
     try {
       const decodedMint = unpackMint(mint, mintInfo, programId);
       mintDecimals.set(mint.toBase58(), decodedMint.decimals);
-    } catch (error) {
-      console.warn("[fetchOwnedSplMintOptions] Failed to decode mint account", {
-        endpoint: connection.rpcEndpoint,
-        owner: owner.toBase58(),
-        programId: programId.toBase58(),
-        mint: mint.toBase58(),
-        error: error instanceof Error ? error.message : String(error),
-      });
+    } catch {
       mintDecimals.set(mint.toBase58(), 0);
     }
   });
@@ -154,7 +133,7 @@ export async function fetchOwnedSplMintOptions(
     fetchAccountsForProgram(readConnection, owner, TOKEN_2022_PROGRAM_ID),
   ]);
 
-  const result = {
+  return {
     endpoint: readConnection.rpcEndpoint,
     owner: owner.toBase58(),
     tokenProgramCount: tokenProgramOptions.length,
@@ -163,8 +142,4 @@ export async function fetchOwnedSplMintOptions(
       left.mint.localeCompare(right.mint)
     ),
   };
-
-  console.log("[fetchOwnedSplMintOptions] Fetched token accounts", result);
-
-  return result;
 }

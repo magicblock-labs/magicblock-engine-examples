@@ -126,21 +126,13 @@ export const useTransaction = (props?: UseTransactionProps) => {
   // Helper to create program instance with IDL from local file
   const createProgram = async (provider: anchor.AnchorProvider): Promise<anchor.Program<RewardsDelegatedVrf>> => {
     try {
-      console.log("[createProgram] Creating Anchor program with IDL...");
-      console.log("[createProgram] IDL address:", (rewardsDelegatedVrfIdl as any).address);
-      console.log("[createProgram] Provider:", {
-        wallet: provider.wallet.publicKey.toString(),
-        connection: provider.connection.rpcEndpoint,
-      });
       const program = new anchor.Program<RewardsDelegatedVrf>(
         rewardsDelegatedVrfIdl as anchor.Idl,
         provider
       );
-      console.log("[createProgram] Program created successfully");
-      console.log("[createProgram] Program ID:", program.programId.toString());
       return program;
     } catch (err) {
-      console.error("[createProgram] Failed to create program:", err);
+      console.error("Failed to create program:", err);
       throw err;
     }
   };
@@ -172,7 +164,6 @@ export const useTransaction = (props?: UseTransactionProps) => {
     endpointOverride?: string
   ): Promise<TransactionResponse> => {
     if (!publicKey || !signTransaction) {
-      console.error("[sendTransaction] Wallet not connected");
       return { success: false, error: "Wallet not connected" };
     }
 
@@ -180,27 +171,20 @@ export const useTransaction = (props?: UseTransactionProps) => {
       const txConnection = endpointOverride
         ? new anchor.web3.Connection(endpointOverride, "confirmed")
         : connection;
-      console.log("[sendTransaction] Starting transaction send...");
       
       // Set transaction properties
       tx.feePayer = publicKey;
       const latestBlockhash = await txConnection.getLatestBlockhash();
       tx.recentBlockhash = latestBlockhash.blockhash;
-      console.log("[sendTransaction] Transaction prepared with blockhash:", latestBlockhash.blockhash);
 
       // Sign with wallet adapter
-      console.log("[sendTransaction] Signing transaction...");
       const signedTx = await signTransaction(tx);
-      console.log("[sendTransaction] Transaction signed successfully");
       
       // Send transaction
-      console.log("[sendTransaction] Sending raw transaction...");
       const signature = await txConnection.sendRawTransaction(signedTx.serialize(), {
         skipPreflight: true,
         maxRetries: 3,
       });
-
-      console.log("[sendTransaction] Transaction sent with signature:", signature);
 
       // Wait for confirmation with timeout
       try {
@@ -213,19 +197,15 @@ export const useTransaction = (props?: UseTransactionProps) => {
             )
           ),
         ]);
-      } catch (confirmErr) {
-        console.warn("[sendTransaction] Confirmation timeout or error, but signature was sent:", signature);
+      } catch {
         // Continue to check status even if confirmation times out
       }
 
       // Verify transaction actually succeeded
       try {
         const txStatus = await txConnection.getSignatureStatus(signature);
-        console.log("[sendTransaction] Transaction status:", txStatus);
         
         if (txStatus.value?.err) {
-          console.error("[sendTransaction] Transaction failed onchain:", txStatus.value.err);
-          
           // Parse instruction error for better message
           let errorMessage = JSON.stringify(txStatus.value.err);
           if (typeof txStatus.value.err === 'object' && 'InstructionError' in txStatus.value.err) {
@@ -233,7 +213,6 @@ export const useTransaction = (props?: UseTransactionProps) => {
             errorMessage = `Instruction ${index} failed: ${JSON.stringify(errContent)}`;
           }
           
-          console.log("[sendTransaction] Returning failed response with signature:", signature);
           return {
             success: false,
             signature,
@@ -242,11 +221,9 @@ export const useTransaction = (props?: UseTransactionProps) => {
           };
         }
 
-        console.log("[sendTransaction] Transaction succeeded, returning signature:", signature);
         return { success: true, signature, endpoint: txConnection.rpcEndpoint };
-      } catch (statusErr) {
+      } catch {
         // If we can't get status, but we have signature, return it with unknown error
-        console.warn("[sendTransaction] Could not get signature status, but signature was sent:", signature, statusErr);
         return { 
           success: false, 
           signature,
@@ -263,11 +240,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
       } else {
         errorMessage = String(err);
       }
-      console.error("[sendTransaction] Transaction error:", {
-        message: errorMessage,
-        fullError: err,
-        stack: err instanceof Error ? err.stack : undefined,
-      });
+      console.error("Transaction error:", errorMessage);
       return { success: false, error: errorMessage };
     }
   };
@@ -295,19 +268,13 @@ export const useTransaction = (props?: UseTransactionProps) => {
           } as any)
           .transaction();
 
-        // Send and sign transaction
-        console.log("[initializeRewardDistributor] Calling sendTransaction...");
         const result = await sendTransaction(tx, actionEndpoint);
-        console.log("[initializeRewardDistributor] sendTransaction returned:", result);
-        
+
         if (result.success) {
-          console.log("[initializeRewardDistributor] Success, signature:", result.signature);
           setStatus({ loading: false, error: null, signature: result.signature || null });
         } else {
-          console.log("[initializeRewardDistributor] Failed, error:", result.error);
           setStatus({ loading: false, error: result.error || null, signature: null });
         }
-        console.log("[initializeRewardDistributor] Returning result:", result);
         return result;
       } catch (err) {
         let errorMessage = "Unknown error";
@@ -318,10 +285,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
         } else {
           errorMessage = String(err);
         }
-        console.error("[initializeRewardDistributor] Full error:", {
-          message: errorMessage,
-          fullError: err,
-        });
+        console.error("Initialize reward distributor error:", errorMessage);
         setStatus({ loading: false, error: errorMessage, signature: null });
         return { success: false, error: errorMessage };
       }
@@ -547,18 +511,6 @@ export const useTransaction = (props?: UseTransactionProps) => {
          const [transferLookupTablePda] = PDAs.getTransferLookupTable();
          const programIdentity = getVrfProgramIdentity();
 
-         console.log("Request random reward with:", {
-           user: user.toString(),
-           admin: publicKey.toString(),
-           distributor: rewardDistributorPda.toString(),
-           rewardList: rewardListPda.toString(),
-           transferLookupTable: transferLookupTablePda.toString(),
-           oracleQueue: ORACLE_QUEUE.toString(),
-           programIdentity: programIdentity.toString(),
-           vrfProgram: VRF_PROGRAM_ID.toString(),
-           clientSeed,
-         });
-
          const tx = await program.methods
            .requestRandomReward(clientSeed)
            .accounts({
@@ -584,9 +536,6 @@ export const useTransaction = (props?: UseTransactionProps) => {
 
          // If request was successful, listen for VRF callback logs
          if (result.success && result.signature) {
-           const requestSignature = result.signature;
-           console.log("[requestRandomReward] Request succeeded with signature:", requestSignature);
-           console.log("[requestRandomReward] Setting up VRF callback listener...");
            let listener: number | null = null;
            let listenerRemoved = false;
            let callbackFound = false;
@@ -597,19 +546,13 @@ export const useTransaction = (props?: UseTransactionProps) => {
                  provider.connection.removeOnLogsListener(listener);
                  listenerRemoved = true;
                }
-               console.log("[requestRandomReward] VRF callback listener timeout after 30s. Callback found:", callbackFound);
                resolve();
              }, 30000); // 30 second timeout
 
              listener = provider.connection.onLogs(
-               PROGRAM_ID,
-               (logs) => {
-                 try {
-                   console.log("[VRF Callback] ===== LOGS RECEIVED =====");
-                   console.log("[VRF Callback] Transaction signature:", logs.signature);
-                   console.log("[VRF Callback] All program logs:");
-                   logs.logs.forEach((log, idx) => console.log(`  [${idx}] ${log}`));
-                   
+              PROGRAM_ID,
+              (logs) => {
+                try {
                    const relevantLogs = logs.logs.filter(
                      (log) => 
                        log.includes("Random result:") || 
@@ -617,25 +560,14 @@ export const useTransaction = (props?: UseTransactionProps) => {
                        log.includes("exhausted") ||
                        log.includes("Reward:")
                    );
-                   
-                   console.log("[VRF Callback] Found relevant logs:", relevantLogs.length > 0);
-                   
+
                    if (relevantLogs.length > 0) {
                      callbackFound = true;
                      const txStatus = logs.err ? "failed" : "confirmed";
-                     console.log("[VRF Callback] This is the consume callback! Signature:", logs.signature);
-                     console.log("[VRF Callback] Transaction Status:", txStatus);
-                     console.log("[VRF Callback] Relevant logs:");
-                     relevantLogs.forEach((log) => console.log("  " + log));
-                     
-                     if (logs.err) {
-                       console.log("[VRF Callback] ERROR:", JSON.stringify(logs.err));
-                     }
-                     
+
                      // Add the callback as a separate transaction entry
                      if (props?.onTransactionAdd && props?.onTransactionUpdate) {
                        const clusterEndpoint = result.endpoint || provider.connection.rpcEndpoint || getDefaultSolanaEndpoint();
-                       console.log("[VRF Callback] Adding callback transaction to history with status:", txStatus);
                        // Create a callback entry in the transaction history
                        const callbackTxId = props.onTransactionAdd(
                          logs.signature,
@@ -644,14 +576,11 @@ export const useTransaction = (props?: UseTransactionProps) => {
                          clusterEndpoint
                        );
                        // Mark it with the correct status
-                       console.log("[VRF Callback] Marking callback transaction as", txStatus, ":", callbackTxId);
                        props.onTransactionUpdate(callbackTxId, {
                          status: txStatus,
                          error: logs.err ? JSON.stringify(logs.err) : undefined,
-                       });
-                     }
-                   } else {
-                     console.log("[VRF Callback] No relevant logs found, continuing to listen...");
+                        });
+                      }
                    }
                    
                    if (callbackFound) {
@@ -663,7 +592,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
                      resolve();
                    }
                  } catch (err) {
-                   console.error("[VRF Callback] Error in log listener:", err);
+                   console.error("VRF callback log listener error:", err);
                    if (listener !== null && !listenerRemoved) {
                      provider.connection.removeOnLogsListener(listener);
                      listenerRemoved = true;
@@ -677,10 +606,8 @@ export const useTransaction = (props?: UseTransactionProps) => {
            });
 
            // Set up async callback update without blocking the transaction result
-           callbackReceived.then(() => {
-             console.log("[requestRandomReward] Callback listener completed. Found callback:", callbackFound);
-           }).catch((err) => {
-             console.error("[requestRandomReward] Callback listener error:", err);
+           callbackReceived.catch((err) => {
+             console.error("Request random reward callback listener error:", err);
            });
          }
 
@@ -776,8 +703,6 @@ export const useTransaction = (props?: UseTransactionProps) => {
           magicContext: MAGIC_CONTEXT_ID
         };
 
-  
-        console.log(accounts)
         const tx = await program.methods
           .removeReward(rewardName, rewardMint || null, redemptionAmount ? new anchor.BN(redemptionAmount) : null)
           .accounts(accounts)
