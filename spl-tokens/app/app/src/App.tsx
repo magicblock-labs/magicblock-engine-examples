@@ -14,6 +14,7 @@ import {
 import {
     DELEGATION_PROGRAM_ID,
     deriveEphemeralAta,
+    deriveLamportsPda,
     deriveRentPda,
     deriveShuttleEphemeralAta,
     deriveShuttleWalletAta,
@@ -22,6 +23,7 @@ import {
     ensureTransferQueueCrankIx,
     initRentPdaIx,
     initTransferQueueIx,
+    lamportsDelegatedTransferIx,
     magicFeeVaultPdaFromValidator,
     transferSpl,
     withdrawSpl,
@@ -473,6 +475,8 @@ const App: React.FC = () => {
     const [privateMinDelayMs, setPrivateMinDelayMs] = useState('0');
     const [privateMaxDelayMs, setPrivateMaxDelayMs] = useState('0');
     const [privateSplitCount, setPrivateSplitCount] = useState('1');
+    const [lamportsTransferDestination, setLamportsTransferDestination] = useState('');
+    const [lamportsTransferAmount, setLamportsTransferAmount] = useState('1000000');
 
     // Cached Blockhash
     const cachedEphemeralBlockhashRef = useRef<CachedBlockhash | null>(null)
@@ -1375,6 +1379,83 @@ const App: React.FC = () => {
         }
     }, [accounts, loadSetupQueueKeypair, queueMintAddress]);
 
+    const handleLamportsTransfer = useCallback(async () => {
+        setTransactionError(null);
+        setTransactionSuccess(null);
+
+        const destinationText = lamportsTransferDestination.trim();
+        if (!destinationText) {
+            setTransactionError('Lamports destination public key is required.');
+            return;
+        }
+
+        const amountText = lamportsTransferAmount.trim();
+        if (!/^\d+$/.test(amountText)) {
+            setTransactionError('Lamports amount must be a whole number.');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+
+            const configuredQueuePayer = await loadSetupQueueKeypair();
+            const payer = configuredQueuePayer ?? accounts[0]?.keypair;
+            if (!payer) {
+                setTransactionError('Lamports payer not available.');
+                return;
+            }
+
+            const destination = new PublicKey(destinationText);
+            const amount = BigInt(amountText);
+            if (amount <= 0n) {
+                setTransactionError('Lamports amount must be greater than 0.');
+                return;
+            }
+
+            const payerBalance = BigInt(await connection.getBalance(payer.publicKey, 'confirmed'));
+            if (payerBalance <= amount) {
+                setTransactionError('Lamports payer balance is too low for this transfer.');
+                return;
+            }
+
+            const salt = crypto.getRandomValues(new Uint8Array(32));
+            const [lamportsPda] = deriveLamportsPda(payer.publicKey, destination, salt);
+            console.log("Lamports PDA:", lamportsPda.toBase58());
+
+            const tx = new Transaction().add(
+                lamportsDelegatedTransferIx(
+                    payer.publicKey,
+                    destination,
+                    amount,
+                    salt,
+                ),
+            );
+            tx.feePayer = payer.publicKey;
+
+            const sig = await sendAndConfirmTransaction(
+                connection,
+                tx,
+                [payer],
+                {
+                    commitment: 'confirmed',
+                    preflightCommitment: 'confirmed',
+                    skipPreflight: true,
+                },
+            );
+
+            setTransactionSuccess(
+                `Lamports transfer submitted for ${destination.toBase58()} via ${lamportsPda.toBase58()}: ${sig.substring(0, 10)}...${sig.substring(sig.length - 10)}`,
+            );
+            await refreshBalances();
+        } catch (e: any) {
+            setTransactionError(await formatTransactionError(e, connection));
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [accounts, connection, lamportsTransferAmount, lamportsTransferDestination, loadSetupQueueKeypair, refreshBalances]);
+
+    const lamportsTransferSender = setupQueueKeypairPublicKey ?? accounts[0]?.keypair.publicKey ?? null;
+
     return (
         <>
             <style>{`
@@ -1990,6 +2071,58 @@ const App: React.FC = () => {
                             Setup
                         </button>
                     )}
+                </div>
+            </div>
+
+            <div style={{ height: 24 }} />
+
+            <div style={CARD_STYLE}>
+                <div style={{ height: 4, borderRadius: 999, background: 'linear-gradient(90deg,#22d3ee,#a78bfa)', marginBottom: 12, opacity: 0.9 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ color: '#e5e7eb', fontSize: 14, fontWeight: 600 }}>
+                        Lamports transfer
+                    </div>
+                    {lamportsTransferSender && (
+                        <div style={{ color: '#9ca3af', fontSize: 12, wordBreak: 'break-all' }}>
+                            Sender{' '}
+                            <span style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+                                {lamportsTransferSender.toBase58()}
+                            </span>
+                            {setupQueueKeypairPublicKey ? ' (queue override)' : ' (account #1)'}
+                        </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12 }}>
+                            Lamports
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                value={lamportsTransferAmount}
+                                onChange={e => setLamportsTransferAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                                placeholder="1000000"
+                                style={{ ...INPUT_STYLE, width: 140 }}
+                            />
+                        </label>
+
+                        <button
+                            onClick={handleLamportsTransfer}
+                            disabled={isSubmitting || !lamportsTransferDestination.trim() || !lamportsTransferAmount.trim()}
+                            style={{ ...BUTTON_STYLE, cursor: isSubmitting || !lamportsTransferDestination.trim() || !lamportsTransferAmount.trim() ? 'not-allowed' : 'pointer', opacity: isSubmitting || !lamportsTransferDestination.trim() || !lamportsTransferAmount.trim() ? 0.6 : 1 }}
+                        >
+                            Transfer lamports
+                        </button>
+
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 12, flex: '1 1 320px' }}>
+                            Destination
+                            <input
+                                type="text"
+                                value={lamportsTransferDestination}
+                                onChange={e => setLamportsTransferDestination(e.target.value)}
+                                placeholder="Public key"
+                                style={{ ...INPUT_STYLE, minWidth: 0, width: '100%' }}
+                            />
+                        </label>
+                    </div>
                 </div>
             </div>
 
