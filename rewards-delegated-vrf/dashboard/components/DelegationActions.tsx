@@ -7,6 +7,7 @@ import { Send, Unlock } from "lucide-react";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
 import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
+import { requestDashboardDataRefresh } from "@/lib/refresh";
 import { TransactionModal } from "./TransactionModal";
 
 interface DelegationActionsProps {
@@ -62,6 +63,7 @@ export const DelegationActions: React.FC<DelegationActionsProps> = ({
       });
 
       if (result.success) {
+        requestDashboardDataRefresh();
         setTimeout(() => {
           closeModal();
         }, 2000);

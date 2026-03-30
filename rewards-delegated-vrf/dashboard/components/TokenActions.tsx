@@ -7,6 +7,7 @@ import { Send } from "lucide-react";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
 import { getDefaultSolanaEndpoint } from "@/lib/clusterContext";
+import { requestDashboardDataRefresh } from "@/lib/refresh";
 import { shortAddress } from "@/lib/utils";
 import {
   fetchOwnedSplMintOptions,
@@ -115,6 +116,9 @@ export const TokenActions: React.FC<TokenActionsProps> = ({
         status: result.success ? "confirmed" : "failed",
         error: result.error,
       });
+      if (result.success) {
+        requestDashboardDataRefresh();
+      }
       setLocalStatus({ loading: false, error: null, signature: result.signature });
       setTimeout(() => {
         setActiveModal(null);

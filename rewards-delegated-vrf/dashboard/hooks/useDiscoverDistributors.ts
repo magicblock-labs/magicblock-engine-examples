@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { AccountInfo, PublicKey } from "@solana/web3.js";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PROGRAM_ID } from "@/lib/constants";
+import { DASHBOARD_DATA_REFRESH_EVENT } from "@/lib/refresh";
 
 export interface DiscoveredDistributor {
   publicKey: PublicKey;
@@ -158,11 +159,27 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
   };
 
   useEffect(() => {
+    setDistributors([]);
+    setError(null);
+
+    if (!userPublicKey) {
+      return;
+    }
+
     const timer = setTimeout(() => {
       discoverDistributors();
     }, 500); // Debounce the discovery
 
-    return () => clearTimeout(timer);
+    const handleRefresh = () => {
+      void discoverDistributors();
+    };
+
+    window.addEventListener(DASHBOARD_DATA_REFRESH_EVENT, handleRefresh);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener(DASHBOARD_DATA_REFRESH_EVENT, handleRefresh);
+    };
   }, [userPublicKey, connection.rpcEndpoint]);
 
   return { distributors, loading, error, refetch: discoverDistributors };

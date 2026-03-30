@@ -112,10 +112,6 @@
       "accounts": [
         {
           "name": "vrf_program_identity",
-          "docs": [
-            "This check ensure that the vrf_program_identity (which is a PDA) is a signer",
-            "enforcing the callback is executed by the VRF program through CPI"
-          ],
           "signer": true,
           "address": "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw"
         },
@@ -881,18 +877,6 @@
       ],
       "args": [
         {
-          "name": "rewards",
-          "type": {
-            "option": {
-              "vec": {
-                "defined": {
-                  "name": "Reward"
-                }
-              }
-            }
-          }
-        },
-        {
           "name": "start_timestamp",
           "type": {
             "option": "i64"
@@ -1152,6 +1136,94 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "update_reward",
+      "discriminator": [
+        62,
+        165,
+        125,
+        122,
+        39,
+        204,
+        160,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "reward_distributor"
+        },
+        {
+          "name": "reward_list",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  108,
+                  105,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "reward_distributor"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "optional": true
+        },
+        {
+          "name": "token_account",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "current_reward_name",
+          "type": "string"
+        },
+        {
+          "name": "updated_reward_name",
+          "type": {
+            "option": "string"
+          }
+        },
+        {
+          "name": "reward_amount",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "draw_range_min",
+          "type": {
+            "option": "u32"
+          }
+        },
+        {
+          "name": "draw_range_max",
+          "type": {
+            "option": "u32"
+          }
+        }
+      ]
     }
   ],
   "accounts": [

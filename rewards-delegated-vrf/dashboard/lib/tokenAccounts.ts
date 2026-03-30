@@ -14,6 +14,7 @@ export interface OwnedSplMintOption {
   tokenAccount: string;
   balanceLabel: string;
   decimals: number;
+  isNftLike: boolean;
 }
 
 export interface OwnedSplMintFetchResult {
@@ -133,6 +134,7 @@ async function fetchAccountsForProgram(
       tokenAccount: account.tokenAccount,
       balanceLabel: formatTokenAmount(account.amount, decimals),
       decimals,
+      isNftLike: decimals === 0 && account.amount === 1n,
     };
   });
 }

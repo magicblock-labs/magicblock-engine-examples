@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useConnection } from "@solana/wallet-adapter-react";
-import { Gift, Network, ChevronDown, Search, Check } from "lucide-react";
+import { Network, ChevronDown, Search, Check } from "lucide-react";
 import {
+  getDefaultSolanaEndpoint,
   loadRpcEndpointPreference,
   saveRpcEndpointPreference,
 } from "@/lib/clusterContext";
@@ -56,7 +56,6 @@ const DEFAULT_CONNECTIONS: ConnectionOption[] = [
 ];
 
 function ClusterSelector() {
-  const { connection } = useConnection();
   const [isOpen, setIsOpen] = useState(false);
   const [currentEndpoint, setCurrentEndpoint] = useState<string>("");
   const [customEndpoint, setCustomEndpoint] = useState("");
@@ -65,10 +64,10 @@ function ClusterSelector() {
 
   useEffect(() => {
     const saved = loadRpcEndpointPreference();
-    const initial = saved || connection.rpcEndpoint || DEFAULT_CONNECTIONS[0].endpoint;
+    const initial = saved || getDefaultSolanaEndpoint();
     setCurrentEndpoint(initial);
     setMounted(true);
-  }, [connection.rpcEndpoint]);
+  }, []);
 
   const filteredConnections = DEFAULT_CONNECTIONS.filter(
     (conn) =>
@@ -211,7 +210,11 @@ export function Header() {
     <header className="bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700 px-6 py-4 sticky top-0 z-40">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         <div className="flex items-center gap-2">
-          <Gift className="w-8 h-8 text-indigo-500" />
+          <img
+            src="/magicblock-logomark-white.svg"
+            alt="MagicBlock"
+            className="h-8 w-auto"
+          />
           <h1 className="text-2xl font-bold text-white">Rewards Dashboard</h1>
         </div>
         <div className="flex items-center gap-4">

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { ProgramClient } from "@/lib/program";
 import { PDAs } from "@/lib/pda";
+import { DASHBOARD_DATA_REFRESH_EVENT } from "@/lib/refresh";
 import {
   RewardDistributor,
   RewardsList,
@@ -20,12 +21,14 @@ export function useRewardData(wallet: PublicKey | null, distributorAddress?: Pub
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Perform the actual fetch - stable function that doesn't trigger effects
   const performFetch = useCallback(async (w: PublicKey, rpcEndpoint: string, distAddr?: PublicKey) => {
     setLoading(true);
     setError(null);
+    setDistributor(null);
+    setRewardList(null);
+    setLookupTable(null);
 
     try {
       const client = new ProgramClient(rpcEndpoint);
@@ -48,6 +51,9 @@ export function useRewardData(wallet: PublicKey | null, distributorAddress?: Pub
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+      setDistributor(null);
+      setRewardList(null);
+      setLookupTable(null);
       setError(message);
       console.error("Error fetching reward data:", err);
     } finally {
@@ -59,27 +65,17 @@ export function useRewardData(wallet: PublicKey | null, distributorAddress?: Pub
   useEffect(() => {
     if (!wallet) return;
 
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-
     // Fetch immediately
     performFetch(wallet, connection.rpcEndpoint, distributorAddress ?? undefined);
 
-    // Set up interval only if we have both wallet and distributor
-    if (distributorAddress) {
-      intervalRef.current = setInterval(() => {
-        performFetch(wallet, connection.rpcEndpoint, distributorAddress ?? undefined);
-      }, 30000);
-    }
+    const handleRefresh = () => {
+      performFetch(wallet, connection.rpcEndpoint, distributorAddress ?? undefined);
+    };
+
+    window.addEventListener(DASHBOARD_DATA_REFRESH_EVENT, handleRefresh);
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      window.removeEventListener(DASHBOARD_DATA_REFRESH_EVENT, handleRefresh);
     };
   }, [wallet?.toString(), distributorAddress?.toString(), connection.rpcEndpoint, performFetch]);
 

@@ -245,7 +245,20 @@ export function getRedemptionPercentage(
 /**
  * Get reward type name
  */
-export function getRewardTypeName(type: string | number): string {
+function normalizeRewardType(type: unknown): string | number | null {
+  if (typeof type === "string" || typeof type === "number") {
+    return type;
+  }
+
+  if (type && typeof type === "object") {
+    const keys = Object.keys(type as Record<string, unknown>);
+    return keys.length > 0 ? keys[0] : null;
+  }
+
+  return null;
+}
+
+export function getRewardTypeName(type: unknown): string {
   const types: Record<string | number, string> = {
     "0": "SPL Token",
     "1": "Legacy NFT",
@@ -258,13 +271,14 @@ export function getRewardTypeName(type: string | number): string {
     "splToken2022": "SPL Token 2022",
     "compressedNft": "Compressed NFT",
   };
-  return types[type] || "Unknown";
+  const normalizedType = normalizeRewardType(type);
+  return normalizedType != null ? types[normalizedType] || "Unknown" : "Unknown";
 }
 
 /**
  * Get reward type color for display
  */
-export function getRewardTypeColor(type: string | number): string {
+export function getRewardTypeColor(type: unknown): string {
   const colors: Record<string | number, string> = {
     "0": "bg-blue-500",
     "1": "bg-purple-500",
@@ -277,5 +291,6 @@ export function getRewardTypeColor(type: string | number): string {
     "splToken2022": "bg-cyan-500",
     "compressedNft": "bg-green-500",
   };
-  return colors[type] || "bg-gray-500";
+  const normalizedType = normalizeRewardType(type);
+  return normalizedType != null ? colors[normalizedType] || "bg-gray-500" : "bg-gray-500";
 }

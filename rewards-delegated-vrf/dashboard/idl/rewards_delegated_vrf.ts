@@ -118,10 +118,6 @@ export type RewardsDelegatedVrf = {
       "accounts": [
         {
           "name": "vrfProgramIdentity",
-          "docs": [
-            "This check ensure that the vrf_program_identity (which is a PDA) is a signer",
-            "enforcing the callback is executed by the VRF program through CPI"
-          ],
           "signer": true,
           "address": "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw"
         },
@@ -887,18 +883,6 @@ export type RewardsDelegatedVrf = {
       ],
       "args": [
         {
-          "name": "rewards",
-          "type": {
-            "option": {
-              "vec": {
-                "defined": {
-                  "name": "reward"
-                }
-              }
-            }
-          }
-        },
-        {
           "name": "startTimestamp",
           "type": {
             "option": "i64"
@@ -1158,6 +1142,94 @@ export type RewardsDelegatedVrf = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "updateReward",
+      "discriminator": [
+        62,
+        165,
+        125,
+        122,
+        39,
+        204,
+        160,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "rewardDistributor"
+        },
+        {
+          "name": "rewardList",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  108,
+                  105,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rewardDistributor"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "optional": true
+        },
+        {
+          "name": "tokenAccount",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "currentRewardName",
+          "type": "string"
+        },
+        {
+          "name": "updatedRewardName",
+          "type": {
+            "option": "string"
+          }
+        },
+        {
+          "name": "rewardAmount",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "drawRangeMin",
+          "type": {
+            "option": "u32"
+          }
+        },
+        {
+          "name": "drawRangeMax",
+          "type": {
+            "option": "u32"
+          }
+        }
+      ]
     }
   ],
   "accounts": [

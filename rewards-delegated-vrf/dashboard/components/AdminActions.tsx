@@ -23,6 +23,7 @@ import {
 import { TransactionModal } from "./TransactionModal";
 import { CopyableAddress } from "./CopyableAddress";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { requestDashboardDataRefresh } from "@/lib/refresh";
 import { shortAddress } from "@/lib/utils";
 
 interface ActionForm {
@@ -45,6 +46,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     requestRandomReward,
     addReward,
     removeReward,
+    updateReward,
   } = useTransaction({ 
     selectedDistributor,
     onTransactionAdd: addTransaction,
@@ -89,6 +91,14 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
       rewardMint: "",
       redemptionAmount: 1,
     },
+    updateReward: {
+      currentRewardName: "",
+      rewardName: "",
+      rewardMint: "",
+      rewardAmount: 1,
+      drawRangeMin: 0,
+      drawRangeMax: 0,
+    },
   });
   const [availableDistributorMints, setAvailableDistributorMints] = useState<OwnedSplMintOption[]>([]);
   const [loadingDistributorMints, setLoadingDistributorMints] = useState(false);
@@ -100,6 +110,18 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         .filter((name: string | undefined): name is string => Boolean(name))
     )
   ).sort((left, right) => left.localeCompare(right));
+  const rewardRangeSummary = [...(rewardList?.rewards ?? [])]
+    .map((reward: any) => ({
+      name: reward.name || reward.rewardName || "Unnamed Reward",
+      drawRangeMin: reward.drawRangeMin,
+      drawRangeMax: reward.drawRangeMax,
+    }))
+    .sort((left, right) => {
+      if (left.drawRangeMin !== right.drawRangeMin) {
+        return left.drawRangeMin - right.drawRangeMin;
+      }
+      return left.name.localeCompare(right.name);
+    });
   const selectedRewardForRemoval = (rewardList?.rewards ?? []).find(
     (reward: any) =>
       reward.name === forms.removeReward.rewardName ||
@@ -112,6 +134,131 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         .filter((mint: string | undefined): mint is string => Boolean(mint))
     )
   ).sort((left, right) => left.localeCompare(right));
+  const selectedAddRewardMintOption = availableDistributorMints.find(
+    (option) => option.mint === forms.addReward.rewardMint
+  );
+  const selectedExistingAddReward = (rewardList?.rewards ?? []).find(
+    (reward: any) =>
+      reward.name === forms.addReward.rewardName ||
+      reward.rewardName === forms.addReward.rewardName
+  );
+  const selectedExistingAddRewardType = selectedExistingAddReward?.rewardType
+    ? Object.keys(selectedExistingAddReward.rewardType)[0]
+    : null;
+  const isSelectedAddRewardNft =
+    selectedExistingAddRewardType === "legacyNft" ||
+    selectedExistingAddRewardType === "programmableNft" ||
+    (selectedExistingAddRewardType == null && selectedAddRewardMintOption?.isNftLike === true);
+  const shouldHideAddRewardAmount = Boolean(selectedExistingAddReward) || isSelectedAddRewardNft;
+  const shouldHideAddRewardRedemptionIncrease = isSelectedAddRewardNft;
+  const selectedRewardForUpdate = (rewardList?.rewards ?? []).find(
+    (reward: any) =>
+      reward.name === forms.updateReward.currentRewardName ||
+      reward.rewardName === forms.updateReward.currentRewardName
+  );
+  const selectedUpdateRewardType = selectedRewardForUpdate?.rewardType
+    ? Object.keys(selectedRewardForUpdate.rewardType)[0]
+    : null;
+  const isSelectedUpdateRewardNft =
+    selectedUpdateRewardType === "legacyNft" ||
+    selectedUpdateRewardType === "programmableNft";
+  const selectedUpdateRewardTypeLabel =
+    selectedUpdateRewardType === "legacyNft"
+      ? "Legacy NFT"
+      : selectedUpdateRewardType === "programmableNft"
+        ? "Programmable NFT"
+        : selectedUpdateRewardType === "splToken2022"
+          ? "SPL Token 2022"
+          : selectedUpdateRewardType === "splToken"
+            ? "SPL Token"
+            : selectedUpdateRewardType ?? "";
+
+  useEffect(() => {
+    if (!selectedRewardForUpdate) {
+      return;
+    }
+
+    setForms((prev) => {
+      const nextUpdateReward = {
+        currentRewardName: prev.updateReward.currentRewardName,
+        rewardName: selectedRewardForUpdate.name,
+        rewardMint: selectedRewardForUpdate.rewardMints?.[0]?.toString?.() || "",
+        rewardAmount: selectedRewardForUpdate.rewardAmount ?? 1,
+        drawRangeMin: selectedRewardForUpdate.drawRangeMin ?? 0,
+        drawRangeMax: selectedRewardForUpdate.drawRangeMax ?? 0,
+      };
+
+      const unchanged =
+        prev.updateReward.currentRewardName === nextUpdateReward.currentRewardName &&
+        prev.updateReward.rewardName === nextUpdateReward.rewardName &&
+        prev.updateReward.rewardMint === nextUpdateReward.rewardMint &&
+        prev.updateReward.rewardAmount === nextUpdateReward.rewardAmount &&
+        prev.updateReward.drawRangeMin === nextUpdateReward.drawRangeMin &&
+        prev.updateReward.drawRangeMax === nextUpdateReward.drawRangeMax;
+
+      if (unchanged) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        updateReward: nextUpdateReward,
+      };
+    });
+  }, [selectedRewardForUpdate]);
+
+  useEffect(() => {
+    if (
+      activeModal !== "updateReward" ||
+      forms.updateReward.currentRewardName ||
+      availableRewardNames.length === 0
+    ) {
+      return;
+    }
+
+    const defaultRewardName = availableRewardNames[0];
+    const defaultReward = (rewardList?.rewards ?? []).find(
+      (reward: any) =>
+        reward.name === defaultRewardName || reward.rewardName === defaultRewardName
+    );
+
+    setForms((prev) => ({
+      ...prev,
+      updateReward: {
+        currentRewardName: defaultRewardName,
+        rewardName: defaultReward?.name || defaultRewardName,
+        rewardMint: defaultReward?.rewardMints?.[0]?.toString?.() || "",
+        rewardAmount: defaultReward?.rewardAmount ?? 1,
+        drawRangeMin: defaultReward?.drawRangeMin ?? 0,
+        drawRangeMax: defaultReward?.drawRangeMax ?? 0,
+      },
+    }));
+  }, [activeModal, availableRewardNames, forms.updateReward.currentRewardName, rewardList]);
+
+  useEffect(() => {
+    if (
+      activeModal !== "removeReward" ||
+      forms.removeReward.rewardName ||
+      availableRewardNames.length === 0
+    ) {
+      return;
+    }
+
+    const defaultRewardName = availableRewardNames[0];
+    const defaultReward = (rewardList?.rewards ?? []).find(
+      (reward: any) =>
+        reward.name === defaultRewardName || reward.rewardName === defaultRewardName
+    );
+
+    setForms((prev) => ({
+      ...prev,
+      removeReward: {
+        rewardName: defaultRewardName,
+        rewardMint: defaultReward?.rewardMints?.[0]?.toString?.() || "",
+        redemptionAmount: 1,
+      },
+    }));
+  }, [activeModal, availableRewardNames, forms.removeReward.rewardName, rewardList]);
 
   // Helper to open modal with cleared status
   const openModal = (modalName: string) => {
@@ -199,7 +346,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     let cancelled = false;
 
     const loadDistributorMints = async () => {
-      if (activeModal !== "addReward" || !targetDistributor) {
+      if ((activeModal !== "addReward" && activeModal !== "updateReward") || !targetDistributor) {
         if (!cancelled) {
           setAvailableDistributorMints([]);
           setLoadingDistributorMints(false);
@@ -279,6 +426,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
       
       // Only auto-close on success
       if (result.success) {
+        requestDashboardDataRefresh();
         setTimeout(() => {
           setActiveModal(null);
           onSuccess?.();
@@ -387,6 +535,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
       });
       
       if (result.success) {
+        requestDashboardDataRefresh();
         setTimeout(() => {
           setActiveModal(null);
           setLocalStatus({ loading: false, error: null, signature: null, endpoint: null });
@@ -445,8 +594,8 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
       rewardMint,
       tokenAccount,
       config.rewardAmount,
-      config.drawRangeMin,
-      config.drawRangeMax,
+      selectedExistingAddReward ? undefined : config.drawRangeMin,
+      selectedExistingAddReward ? undefined : config.drawRangeMax,
       config.redemptionLimit,
       metadataAccount
     );
@@ -487,6 +636,78 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
 
     await handleTransactionResult(result, "Remove Reward", () => {
       setForms({ ...forms, removeReward: { rewardName: "", rewardMint: "", redemptionAmount: 1 } });
+    });
+  };
+
+  const handleUpdateReward = async () => {
+    setLoadingStatus();
+    const config = forms.updateReward;
+
+    if (!config.currentRewardName.trim()) {
+      setValidationError("Current reward is required");
+      return;
+    }
+    let rewardMint: PublicKey | null = null;
+    let tokenAccount: PublicKey | null = null;
+
+    if (!isSelectedUpdateRewardNft) {
+      const parsedRewardMint = parsePublicKey(
+        config.rewardMint || selectedRewardForUpdate?.rewardMints?.[0]?.toString?.() || "",
+        "Mint address"
+      );
+      if (!parsedRewardMint) return;
+      rewardMint = parsedRewardMint;
+
+      if (!rewardList?.rewardDistributor) {
+        setValidationError("Reward list is not loaded for the selected distributor");
+        return;
+      }
+
+      const rewardDistributor = parsePublicKey(
+        rewardList.rewardDistributor.toString(),
+        "Reward distributor"
+      );
+      if (!rewardDistributor) return;
+
+      const selectedDistributorMint =
+        availableDistributorMints.find((option) => option.tokenAccount === config.rewardMint.trim()) ??
+        availableDistributorMints.find((option) => option.mint === parsedRewardMint.toBase58());
+      tokenAccount = selectedDistributorMint
+        ? new PublicKey(selectedDistributorMint.tokenAccount)
+        : getAssociatedTokenAddressSync(parsedRewardMint, rewardDistributor, true);
+    }
+
+    const result = await updateReward(
+      config.currentRewardName,
+      config.rewardName.trim() && config.rewardName.trim() !== config.currentRewardName
+        ? config.rewardName.trim()
+        : null,
+      rewardMint,
+      tokenAccount,
+      !isSelectedUpdateRewardNft &&
+      config.rewardAmount !== selectedRewardForUpdate?.rewardAmount
+        ? config.rewardAmount
+        : null,
+      config.drawRangeMin !== selectedRewardForUpdate?.drawRangeMin
+        ? config.drawRangeMin
+        : null,
+      config.drawRangeMax !== selectedRewardForUpdate?.drawRangeMax
+        ? config.drawRangeMax
+        : null
+    );
+
+    await handleTransactionResult(result, "Update Reward", () => {
+      setForms({
+        ...forms,
+        updateReward: {
+          currentRewardName: "",
+          rewardName: "",
+          rewardMint: "",
+          rewardAmount: 1,
+          drawRangeMin: 0,
+          drawRangeMax: 0,
+        },
+      });
     });
   };
 
@@ -573,6 +794,17 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
           <span className="text-left">
             <div className="font-medium text-white">Add Reward</div>
             <div className="text-xs text-gray-400">Add new reward to list</div>
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveModal("updateReward")}
+          className="card p-4 hover:bg-gray-700 transition flex items-center gap-3 group"
+        >
+          <List className="w-5 h-5 text-cyan-400 group-hover:text-cyan-300" />
+          <span className="text-left">
+            <div className="font-medium text-white">Update Reward</div>
+            <div className="text-xs text-gray-400">Update name, amount, and range for an existing reward</div>
           </span>
         </button>
 
@@ -804,6 +1036,24 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
              Unix Timestamp: {forms.rewardList.endTimestamp}
            </p>
          </div>
+         {rewardRangeSummary.length > 0 && (
+           <div className="rounded border border-gray-700 bg-gray-900/60 p-3">
+             <p className="mb-2 text-sm font-medium text-gray-200">Current Range Usage</p>
+             <div className="space-y-1 text-xs text-gray-400">
+               {rewardRangeSummary.map((reward) => (
+                 <div
+                   key={`${reward.name}-${reward.drawRangeMin}-${reward.drawRangeMax}`}
+                   className="flex items-center justify-between gap-3"
+                 >
+                   <span className="truncate text-gray-300">{reward.name}</span>
+                   <span className="whitespace-nowrap">
+                     {reward.drawRangeMin} - {reward.drawRangeMax}
+                   </span>
+                 </div>
+               ))}
+             </div>
+           </div>
+         )}
            </div>
            </TransactionModal>
 
@@ -859,17 +1109,36 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
             <label className="block text-sm text-gray-300 mb-1">Reward Name</label>
             <select
               value={availableRewardNames.includes(forms.addReward.rewardName) ? forms.addReward.rewardName : ""}
-              onChange={(e) =>
+              onChange={(e) => {
+                const selectedReward = (rewardList?.rewards ?? []).find(
+                  (reward: any) =>
+                    reward.name === e.target.value || reward.rewardName === e.target.value
+                );
+
                 setForms({
                   ...forms,
-                  addReward: { ...forms.addReward, rewardName: e.target.value },
-                })
-              }
+                    addReward: {
+                      ...forms.addReward,
+                      rewardName: e.target.value,
+                      drawRangeMin: selectedReward?.drawRangeMin ?? forms.addReward.drawRangeMin,
+                      drawRangeMax: selectedReward?.drawRangeMax ?? forms.addReward.drawRangeMax,
+                      rewardAmount: selectedReward?.rewardAmount ?? forms.addReward.rewardAmount,
+                      redemptionLimit:
+                        selectedReward &&
+                        !(
+                          Object.keys(selectedReward.rewardType ?? {})[0] === "legacyNft" ||
+                          Object.keys(selectedReward.rewardType ?? {})[0] === "programmableNft"
+                        )
+                          ? 1
+                          : forms.addReward.redemptionLimit,
+                    },
+                  });
+              }}
               disabled={localStatus.loading || availableRewardNames.length === 0}
               className="w-full rounded border border-gray-600 bg-gray-700 p-2 text-sm text-white focus:border-blue-500 focus:outline-none disabled:opacity-50"
             >
               <option value="">
-                {availableRewardNames.length > 0 ? "Select existing reward name" : "No existing rewards found"}
+                {availableRewardNames.length > 0 ? "Add new reward" : "No existing rewards found"}
               </option>
               {availableRewardNames.map((rewardName) => (
                 <option key={rewardName} value={rewardName}>
@@ -890,6 +1159,11 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               disabled={localStatus.loading}
               className="mt-2 w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
               />
+              {selectedExistingAddReward && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Existing rewards keep their current range. Use "Update Reward Range" to change it.
+                </p>
+              )}
               </div>
               <div>
               <label className="block text-sm text-gray-300 mb-1">Mint Address</label>
@@ -903,7 +1177,15 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
                 onChange={(e) =>
                   setForms({
                     ...forms,
-                    addReward: { ...forms.addReward, rewardMint: e.target.value },
+                    addReward: {
+                      ...forms.addReward,
+                      rewardMint: e.target.value,
+                      rewardAmount:
+                        availableDistributorMints.find((option) => option.mint === e.target.value)
+                          ?.isNftLike
+                          ? 1
+                          : forms.addReward.rewardAmount,
+                    },
                   })
                 }
                 disabled={localStatus.loading || loadingDistributorMints || availableDistributorMints.length === 0}
@@ -919,82 +1201,271 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
                 ))}
               </select>
               </div>
-          <div className="grid grid-cols-2 gap-2">
+          {(!shouldHideAddRewardAmount || !shouldHideAddRewardRedemptionIncrease) && (
+            <div
+              className={`grid gap-2 ${
+                !shouldHideAddRewardAmount && !shouldHideAddRewardRedemptionIncrease
+                  ? "grid-cols-2"
+                  : "grid-cols-1"
+              }`}
+            >
+              {!shouldHideAddRewardAmount && (
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">Amount</label>
+                  <input
+                    type="number"
+                    value={forms.addReward.rewardAmount}
+                    onChange={(e) =>
+                      setForms({
+                        ...forms,
+                        addReward: {
+                          ...forms.addReward,
+                          rewardAmount: parseInt(e.target.value),
+                        },
+                      })
+                    }
+                    disabled={localStatus.loading}
+                    className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
+                  />
+                </div>
+              )}
+              {!shouldHideAddRewardRedemptionIncrease && (
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">Redemption Count Increase</label>
+                  <input
+                    type="number"
+                    value={forms.addReward.redemptionLimit}
+                    onChange={(e) =>
+                      setForms({
+                        ...forms,
+                        addReward: {
+                          ...forms.addReward,
+                          redemptionLimit: parseInt(e.target.value),
+                        },
+                      })
+                    }
+                    disabled={localStatus.loading}
+                    className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          {isSelectedAddRewardNft && (
+            <p className="text-xs text-gray-400">
+              NFT rewards use amount 1 and redemption count increase 1 automatically.
+            </p>
+          )}
+                {!selectedExistingAddReward && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Range Min</label>
+                      <input
+                        type="number"
+                        value={forms.addReward.drawRangeMin}
+                        onChange={(e) =>
+                          setForms({
+                            ...forms,
+                            addReward: {
+                              ...forms.addReward,
+                              drawRangeMin: parseInt(e.target.value),
+                            },
+                          })
+                        }
+                        disabled={localStatus.loading}
+                        className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Range Max</label>
+                      <input
+                        type="number"
+                        value={forms.addReward.drawRangeMax}
+                        onChange={(e) =>
+                          setForms({
+                            ...forms,
+                            addReward: {
+                              ...forms.addReward,
+                              drawRangeMax: parseInt(e.target.value),
+                            },
+                          })
+                        }
+                        disabled={localStatus.loading}
+                        className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+          {!selectedExistingAddReward && rewardRangeSummary.length > 0 && (
+            <div className="rounded border border-gray-700 bg-gray-900/60 p-3">
+              <p className="mb-2 text-sm font-medium text-gray-200">Current Range Usage</p>
+              <div className="space-y-1 text-xs text-gray-400">
+                {rewardRangeSummary.map((reward) => (
+                  <div
+                    key={`${reward.name}-${reward.drawRangeMin}-${reward.drawRangeMax}`}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <span className="truncate text-gray-300">{reward.name}</span>
+                    <span className="whitespace-nowrap">
+                      {reward.drawRangeMin} - {reward.drawRangeMax}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </TransactionModal>
+
+      <TransactionModal
+        isOpen={activeModal === "updateReward"}
+        title="Update Reward"
+        description="Update the name, amount, and draw range for an existing reward"
+        loading={localStatus.loading}
+        error={localStatus.error}
+        signature={localStatus.signature}
+        endpoint={localStatus.endpoint || connection.rpcEndpoint}
+        onClose={closeModal}
+        onConfirm={handleUpdateReward}
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Current Reward</label>
+            <select
+              value={forms.updateReward.currentRewardName}
+              onChange={(e) => {
+                const reward = (rewardList?.rewards ?? []).find(
+                  (item: any) =>
+                    item.name === e.target.value || item.rewardName === e.target.value
+                );
+                setForms({
+                  ...forms,
+                  updateReward: {
+                    currentRewardName: e.target.value,
+                    rewardName: reward?.name || e.target.value,
+                    rewardMint: reward?.rewardMints?.[0]?.toString?.() || "",
+                    rewardAmount: reward?.rewardAmount ?? 1,
+                    drawRangeMin: reward?.drawRangeMin ?? 0,
+                    drawRangeMax: reward?.drawRangeMax ?? 0,
+                  },
+                });
+              }}
+              disabled={localStatus.loading || availableRewardNames.length === 0}
+              className="w-full rounded border border-gray-600 bg-gray-700 p-2 text-sm text-white focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            >
+              <option value="">
+                {availableRewardNames.length > 0 ? "Select reward" : "No existing rewards found"}
+              </option>
+              {availableRewardNames.map((rewardName) => (
+                <option key={rewardName} value={rewardName}>
+                  {rewardName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Updated Reward Name</label>
+            <input
+              type="text"
+              value={forms.updateReward.rewardName}
+              onChange={(e) =>
+                setForms({
+                  ...forms,
+                  updateReward: {
+                    ...forms.updateReward,
+                    rewardName: e.target.value,
+                  },
+                })
+              }
+              disabled={localStatus.loading || !selectedRewardForUpdate}
+              className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Reward Type</label>
+            <input
+              type="text"
+              value={selectedUpdateRewardTypeLabel}
+              disabled
+              className="w-full p-2 bg-gray-800 text-gray-300 rounded border border-gray-700 focus:outline-none disabled:opacity-100 text-sm"
+            />
+          </div>
+          {!isSelectedUpdateRewardNft && (
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Amount</label>
+              <label className="block text-sm text-gray-300 mb-1">Reward Amount</label>
               <input
                 type="number"
-                value={forms.addReward.rewardAmount}
+                value={forms.updateReward.rewardAmount}
                 onChange={(e) =>
                   setForms({
                     ...forms,
-                    addReward: {
-                      ...forms.addReward,
-                      rewardAmount: parseInt(e.target.value),
+                    updateReward: {
+                      ...forms.updateReward,
+                      rewardAmount: parseInt(e.target.value) || 0,
                     },
                   })
                 }
-                disabled={localStatus.loading}
+                disabled={localStatus.loading || !selectedRewardForUpdate}
                 className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
-                />
-                </div>
-                <div>
-                <label className="block text-sm text-gray-300 mb-1">Redemption Limit</label>
-                <input
+              />
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-sm text-gray-300 mb-1">Range Min</label>
+              <input
                 type="number"
-                value={forms.addReward.redemptionLimit}
+                value={forms.updateReward.drawRangeMin}
                 onChange={(e) =>
                   setForms({
                     ...forms,
-                    addReward: {
-                      ...forms.addReward,
-                      redemptionLimit: parseInt(e.target.value),
-                    },
-                  })
-                }
-                disabled={localStatus.loading}
-                className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
-                />
-                </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                <div>
-                <label className="block text-sm text-gray-300 mb-1">Range Min</label>
-                <input
-                type="number"
-                value={forms.addReward.drawRangeMin}
-                onChange={(e) =>
-                  setForms({
-                    ...forms,
-                    addReward: {
-                      ...forms.addReward,
+                    updateReward: {
+                      ...forms.updateReward,
                       drawRangeMin: parseInt(e.target.value),
                     },
                   })
                 }
-                disabled={localStatus.loading}
+                disabled={localStatus.loading || !selectedRewardForUpdate}
                 className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
-                />
-                </div>
-                <div>
-                <label className="block text-sm text-gray-300 mb-1">Range Max</label>
-                <input
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-300 mb-1">Range Max</label>
+              <input
                 type="number"
-                value={forms.addReward.drawRangeMax}
+                value={forms.updateReward.drawRangeMax}
                 onChange={(e) =>
                   setForms({
                     ...forms,
-                    addReward: {
-                      ...forms.addReward,
+                    updateReward: {
+                      ...forms.updateReward,
                       drawRangeMax: parseInt(e.target.value),
                     },
                   })
                 }
-                disabled={localStatus.loading}
+                disabled={localStatus.loading || !selectedRewardForUpdate}
                 className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
               />
             </div>
           </div>
+          {rewardRangeSummary.length > 0 && (
+            <div className="rounded border border-gray-700 bg-gray-900/60 p-3">
+              <p className="mb-2 text-sm font-medium text-gray-200">Current Range Usage</p>
+              <div className="space-y-1 text-xs text-gray-400">
+                {rewardRangeSummary.map((reward) => (
+                  <div
+                    key={`${reward.name}-${reward.drawRangeMin}-${reward.drawRangeMax}`}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <span className="truncate text-gray-300">{reward.name}</span>
+                    <span className="whitespace-nowrap">
+                      {reward.drawRangeMin} - {reward.drawRangeMax}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </TransactionModal>
 
@@ -1042,23 +1513,6 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               </select>
             </div>
           )}
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-2">Reward Name</label>
-            <input
-              type="text"
-              value={forms.removeReward.rewardName}
-              onChange={(e) =>
-                setForms({
-                  ...forms,
-                  removeReward: { ...forms.removeReward, rewardName: e.target.value },
-                })
-              }
-              placeholder="Reward name"
-              disabled={localStatus.loading}
-              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
-            />
-          </div>
 
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">Mint Address</label>

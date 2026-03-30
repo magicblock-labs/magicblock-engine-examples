@@ -421,7 +421,6 @@ export const useTransaction = (props?: UseTransactionProps) => {
 
         const tx = await program.methods
           .setRewardList(
-            null,
             typeof startTimestamp === "number" && startTimestamp > 0
               ? new anchor.BN(startTimestamp)
               : null,
@@ -789,6 +788,64 @@ export const useTransaction = (props?: UseTransactionProps) => {
           loading: false, 
           error: result.error || null, 
           signature: result.signature || null 
+        });
+        return result;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error";
+        setStatus({ loading: false, error: errorMessage, signature: null });
+        return { success: false, error: errorMessage };
+      }
+    },
+    [publicKey, signTransaction, connection, props?.selectedDistributor?.toString()]
+  );
+
+  const updateReward = useCallback(
+    async (
+      currentRewardName: string,
+      updatedRewardName: string | null,
+      rewardMint: PublicKey | null,
+      tokenAccount: PublicKey | null,
+      rewardAmount: number | null,
+      drawRangeMin: number | null,
+      drawRangeMax: number | null
+    ): Promise<TransactionResponse> => {
+      if (!publicKey) return { success: false, error: "Wallet not connected" };
+      setStatus({ loading: true, error: null, signature: null });
+
+      try {
+        const actionEndpoint = getActionEndpoint("magicblock");
+        const provider = createProvider(actionEndpoint);
+        const program = await createProgram(provider);
+        const rewardDistributorPda = props?.selectedDistributor || getDistributorPda(publicKey);
+        const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
+        const accounts: any = {
+          admin: publicKey,
+          rewardDistributor: rewardDistributorPda,
+          rewardList: rewardListPda,
+        };
+        if (rewardMint) {
+          accounts.mint = rewardMint;
+        }
+        if (tokenAccount) {
+          accounts.tokenAccount = tokenAccount;
+        }
+
+        const tx = await program.methods
+          .updateReward(
+            currentRewardName,
+            updatedRewardName,
+            rewardAmount != null ? new anchor.BN(rewardAmount) : null,
+            drawRangeMin,
+            drawRangeMax
+          )
+          .accounts(accounts)
+          .transaction();
+
+        const result = await sendTransaction(tx, actionEndpoint);
+        setStatus({
+          loading: false,
+          error: result.error || null,
+          signature: result.signature || null,
         });
         return result;
       } catch (err) {
@@ -1335,6 +1392,7 @@ export const useTransaction = (props?: UseTransactionProps) => {
     requestRandomReward,
     addReward,
     removeReward,
+    updateReward,
     mintNftCollection,
     mintNftToCollection,
     sendSplTokenToDistributor,

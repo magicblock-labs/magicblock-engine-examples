@@ -11,8 +11,8 @@ import {
   SolflareWalletAdapter,
   TorusWalletAdapter,
 } from "@solana/wallet-adapter-wallets";
-import { clusterApiUrl } from "@solana/web3.js";
 import {
+  getDefaultSolanaEndpoint,
   loadRpcEndpointPreference,
   RPC_ENDPOINT_CHANGED_EVENT,
   RPC_ENDPOINT_STORAGE_KEY,
@@ -33,7 +33,7 @@ function getEndpoint(): string {
   if (savedEndpoint) {
     return savedEndpoint;
   }
-  return process.env.NEXT_PUBLIC_SOLANA_RPC_URL || clusterApiUrl("devnet");
+  return getDefaultSolanaEndpoint();
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -70,7 +70,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <HydrationSuppressed>
-      <ConnectionProvider endpoint={endpoint} key={endpoint}>
+      <ConnectionProvider endpoint={endpoint}>
         <WalletProvider wallets={wallets} autoConnect>
           <WalletModalProvider>{children}</WalletModalProvider>
         </WalletProvider>

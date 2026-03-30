@@ -85,12 +85,12 @@ export function RewardsTable({ rewards }: RewardsTableProps) {
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-medium ${
                     reward?.rewardType
-                      ? getRewardTypeColor(JSON.stringify(reward.rewardType))
+                      ? getRewardTypeColor(reward.rewardType)
                       : "bg-gray-700 text-gray-200"
                   }`}
                 >
                   {reward?.rewardType
-                    ? getRewardTypeName(JSON.stringify(reward.rewardType))
+                    ? getRewardTypeName(reward.rewardType)
                     : "Unknown"}
                 </span>
               </td>

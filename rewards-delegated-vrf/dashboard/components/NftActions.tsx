@@ -13,6 +13,7 @@ import { Zap, Grid } from "lucide-react";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
 import { getBaseLayerSolanaEndpoint, getDefaultSolanaEndpoint } from "@/lib/clusterContext";
+import { requestDashboardDataRefresh } from "@/lib/refresh";
 import { TransactionModal } from "./TransactionModal";
 import { TokenActions } from "./TokenActions";
 import { shortAddress } from "@/lib/utils";
@@ -195,6 +196,9 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
         status: result.success ? "confirmed" : "failed",
         error: result.error,
       });
+      if (result.success) {
+        requestDashboardDataRefresh();
+      }
       setLocalStatus({ loading: false, error: null, signature: result.signature });
       setTimeout(() => {
         setActiveModal(null);
@@ -252,6 +256,9 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
         status: result.success ? "confirmed" : "failed",
         error: result.error,
       });
+      if (result.success) {
+        requestDashboardDataRefresh();
+      }
       setLocalStatus({ loading: false, error: null, signature: result.signature });
       setTimeout(() => {
         setActiveModal(null);
