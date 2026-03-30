@@ -12,3 +12,4 @@ pub mod set_whitelist;
 pub mod transfer_reward_programmable_nft;
 pub mod transfer_reward_spl_token;
 pub mod undelegate_reward_list;
+pub mod update_reward;

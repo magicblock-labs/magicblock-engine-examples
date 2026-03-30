@@ -463,56 +463,12 @@ describe.only("rewards-delegated-vrf", () => {
     }
   });
 
-it("Set Reward List with rewards", async () => {
-    const rewards: any[] = [
-      {
-        name: "10,000 USDC",
-        drawRangeMin: 1,
-        drawRangeMax: 50,
-        rewardType: { splToken: {} },
-        rewardMints: [tokenMint],
-        rewardAmount: new anchor.BN(10),
-        redemptionCount: new anchor.BN(0),
-        redemptionLimit: new anchor.BN(1000),
-        additionalPubkeys: [],
-      },
-      {
-        name: "Magic Ticket",
-        drawRangeMin: 51,
-        drawRangeMax: 65,
-        rewardType: { splToken: {} },
-        rewardMints: [tokenMint],
-        rewardAmount: new anchor.BN(500),
-        redemptionCount: new anchor.BN(0),
-        redemptionLimit: new anchor.BN(2),
-        additionalPubkeys: [],
-      },
-      {
-        name: "Bronze Prize",
-        drawRangeMin: 66,
-        drawRangeMax: 100,
-        rewardType: { legacyNft: {} },
-        rewardMints: [],
-        rewardAmount: new anchor.BN(1),
-        redemptionCount: new anchor.BN(0),
-        redemptionLimit: new anchor.BN(0),
-        additionalPubkeys: [],
-      },
-    ];
-
+it("Set Reward List Parameters", async () => {
     const startTimestamp = Math.floor(Date.now() / 1000);
     const endTimestamp = startTimestamp + 86400 * 30;
 
-    console.log("Rewards being sent:");
-    rewards.forEach((r, i) => {
-      console.log(
-        `  Reward ${i}: name='${r.name}', type=${Object.keys(r.rewardType)[0]}, mints=${r.rewardMints.length}`
-      );
-    });
-
     const tx = await program.methods
       .setRewardList(
-        rewards,
         new anchor.BN(startTimestamp),
         new anchor.BN(endTimestamp),
         1,
@@ -841,6 +797,54 @@ it("Set Reward List with rewards", async () => {
       }
     } catch (err) {
       console.error("Error adding token reward:", err);
+      logError("Error details", err);
+    }
+  });
+
+  it("Update SPL Reward Parameters", async () => {
+    logSection("Updating Bronze Prize Reward");
+
+    try {
+      const accountsObj: any = {
+        admin: wallet.publicKey,
+        rewardDistributor: rewardDistributorPda,
+        rewardList: rewardListPda,
+        mint: tokenMint,
+        tokenAccount: distributorTokenAccount,
+      };
+
+      let tx = await ephemeralProgram.methods
+        .updateReward(
+          "Bronze Prize",
+          "Bronze Prize Updated",
+          new anchor.BN(500),
+          1,
+          25
+        )
+        .accounts(accountsObj)
+        .transaction();
+
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = (
+        await providerEphemeralRollup.connection.getLatestBlockhash()
+      ).blockhash;
+      tx.partialSign(wallet.payer);
+
+      const txHash = await providerEphemeralRollup
+        .sendAndConfirm(tx, [wallet.payer], { skipPreflight: true })
+        .catch((err) => {
+          logError("Update Reward error", err);
+          return null;
+        });
+
+      if (txHash) {
+        logTxResult("Update Reward", txHash);
+        await logRewardListDetails(program, ephemeralProgram, rewardListPda, true);
+      } else {
+        console.log("Update Reward transaction failed or was not confirmed");
+      }
+    } catch (err) {
+      console.error("Error updating reward:", err);
       logError("Error details", err);
     }
   });

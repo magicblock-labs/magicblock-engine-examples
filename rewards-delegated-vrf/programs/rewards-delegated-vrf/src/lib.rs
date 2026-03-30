@@ -12,8 +12,6 @@ pub mod instructions;
 pub mod state;
 pub mod token_detection;
 
-use state::Reward;
-
 declare_id!("rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y");
 
 #[ephemeral]
@@ -39,7 +37,6 @@ pub mod rewards_delegated_vrf {
 
     pub fn set_reward_list(
         ctx: Context<SetRewardList>,
-        rewards: Option<Vec<Reward>>,
         start_timestamp: Option<i64>,
         end_timestamp: Option<i64>,
         global_range_min: Option<u32>,
@@ -47,7 +44,6 @@ pub mod rewards_delegated_vrf {
     ) -> Result<()> {
         instructions::set_reward_list::set_reward_list(
             ctx,
-            rewards,
             start_timestamp,
             end_timestamp,
             global_range_min,
@@ -129,6 +125,24 @@ pub mod rewards_delegated_vrf {
             reward_name,
             mint_to_remove,
             redemption_amount,
+        )
+    }
+
+    pub fn update_reward(
+        ctx: Context<UpdateReward>,
+        current_reward_name: String,
+        updated_reward_name: Option<String>,
+        reward_amount: Option<u64>,
+        draw_range_min: Option<u32>,
+        draw_range_max: Option<u32>,
+    ) -> Result<()> {
+        instructions::update_reward::update_reward(
+            ctx,
+            current_reward_name,
+            updated_reward_name,
+            reward_amount,
+            draw_range_min,
+            draw_range_max,
         )
     }
 }
@@ -249,6 +263,17 @@ pub struct RemoveReward<'info> {
     pub transfer_lookup_table: Account<'info, state::TransferLookupTable>,
     /// CHECK: destination of the removed reward
     pub destination: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateReward<'info> {
+    #[account(constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
+    pub admin: Signer<'info>,
+    pub reward_distributor: Account<'info, state::RewardDistributor>,
+    #[account(mut, seeds = [constants::REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
+    pub reward_list: Account<'info, state::RewardsList>,
+    pub mint: Option<InterfaceAccount<'info, Mint>>,
+    pub token_account: Option<InterfaceAccount<'info, TokenAccount>>,
 }
 
 #[action]

@@ -77,6 +77,18 @@ pub enum RewardError {
     #[msg("Reward ranges overlap")]
     RewardRangesOverlap,
 
+    #[msg("Provided draw range does not match the existing reward range")]
+    RewardRangeMismatch,
+
+    #[msg("Provided reward amount does not match the existing reward amount")]
+    RewardAmountMismatch,
+
+    #[msg("Reward name is already used by another reward")]
+    DuplicateRewardName,
+
+    #[msg("Existing token rewards require a redemption increment to be provided")]
+    MissingRedemptionsAdded,
+
     #[msg("Mint not found in reward")]
     MintNotFoundInReward,
 
@@ -91,4 +103,25 @@ pub enum RewardError {
 
     #[msg("Invalid reward amount: must be greater than 0")]
     InvalidRewardAmount,
+
+    #[msg("Distributor token account does not hold enough tokens for the requested reward inventory")]
+    InsufficientTokenBalanceForReward,
+
+    #[msg("Arithmetic overflow while calculating reward inventory requirements")]
+    ArithmeticOverflow,
+
+    #[msg("NFT mint is already used by another reward")]
+    NftMintAlreadyAssigned,
+
+    #[msg("Reward list rewards can only be initialized once")]
+    RewardListAlreadyInitialized,
+
+    #[msg("Reward does not have enough remaining mints for its remaining redemptions")]
+    InsufficientRewardMints,
+
+    #[msg("Missing mint account for reward inventory validation")]
+    MissingMintAccountForReward,
+
+    #[msg("Mint is already part of the existing reward")]
+    MintAlreadyInReward,
 }

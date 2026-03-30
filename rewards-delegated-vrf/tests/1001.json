@@ -1,0 +1,46 @@
+{
+  "name": "Popcorn Wizard Tee #001",
+  "symbol": "POPT",
+  "description": "A limited-edition merch NFT featuring a comic-style wizard conjuring popcorn magic. This collectible unlocks exclusive community perks and represents the playful spirit of onchain creativity.",
+  "seller_fee_basis_points": 500,
+  "image": "https://storage.magicblock.app/assets/1001.mp4",
+  "animation_url": "https://storage.magicblock.app/assets/1001.mp4",
+  "external_url": "https://magicblock.xyz",
+  "attributes": [
+    {
+      "trait_type": "Theme",
+      "value": "Popcorn Magic"
+    },
+    {
+      "trait_type": "Character",
+      "value": "Wizard"
+    },
+    {
+      "trait_type": "Style",
+      "value": "Comic"
+    },
+    {
+      "trait_type": "Item Type",
+      "value": "T-Shirt"
+    },
+    {
+      "trait_type": "Utility",
+      "value": "Merch Access"
+    }
+  ],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://storage.magicblock.app/assets/1001.mp4",
+        "type": "video/mp4"
+      }
+    ],
+    "category": "video",
+    "creators": [
+      {
+        "address": "YOUR_WALLET_ADDRESS",
+        "share": 100
+      }
+    ]
+  }
+}

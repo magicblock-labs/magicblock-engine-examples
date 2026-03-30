@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::instructions::shared::execute_reward_transfer;
+use crate::state::RewardType;
 use crate::ConsumeRandomReward;
 
 pub fn consume_random_reward(
@@ -46,9 +47,14 @@ pub fn consume_random_reward(
                     );
 
                     if !transfer_lookup_table.lookup_accounts.is_empty() {
-                        let mint = reward.reward_mints[0];
-                        let amount = reward.reward_amount;
                         let reward_type = reward.reward_type.clone();
+                        let mint = match reward_type {
+                            RewardType::LegacyNft | RewardType::ProgrammableNft => {
+                                reward.reward_mints.remove(0)
+                            }
+                            _ => reward.reward_mints[0],
+                        };
+                        let amount = reward.reward_amount;
                         let ruleset_pda = reward.additional_pubkeys.first().copied();
 
                         execute_reward_transfer(

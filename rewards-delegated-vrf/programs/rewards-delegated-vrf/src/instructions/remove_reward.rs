@@ -43,7 +43,8 @@ pub fn remove_reward(
                     .ok_or(RewardError::MintNotFoundInReward)?;
 
                 reward.reward_mints.remove(mint_position);
-                reward.redemption_limit = reward.reward_mints.len() as u64;
+                reward.redemption_limit =
+                    reward.redemption_count + reward.reward_mints.len() as u64;
 
                 msg!(
                     "Removed mint {} from NFT reward '{}'. New redemption limit: {}",
