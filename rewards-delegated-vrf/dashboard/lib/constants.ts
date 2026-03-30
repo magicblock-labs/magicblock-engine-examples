@@ -3,6 +3,9 @@ import { PublicKey } from "@solana/web3.js";
 export const PROGRAM_ID = new PublicKey(
   process.env.NEXT_PUBLIC_PROGRAM_ID || "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
 );
+export const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+);
 
 export const REWARD_DISTRIBUTOR_SEED = "reward_distributor";
 export const REWARD_LIST_SEED = "reward_list";

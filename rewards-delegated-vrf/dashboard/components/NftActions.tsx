@@ -14,6 +14,7 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
 import { getBaseLayerSolanaEndpoint, getDefaultSolanaEndpoint } from "@/lib/clusterContext";
 import { requestDashboardDataRefresh } from "@/lib/refresh";
+import { TOKEN_METADATA_PROGRAM_ID } from "@/lib/constants";
 import { TransactionModal } from "./TransactionModal";
 import { TokenActions } from "./TokenActions";
 import { shortAddress } from "@/lib/utils";
@@ -82,7 +83,6 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
           readEndpoint === connection.rpcEndpoint
             ? connection
             : new Connection(readEndpoint, "confirmed");
-        const metadataProgramId = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
         const serializer = getMetadataAccountDataSerializer();
         const programResponses = await Promise.all([
           readConnection.getTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }),
@@ -117,10 +117,10 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
           PublicKey.findProgramAddressSync(
             [
               Buffer.from("metadata"),
-              metadataProgramId.toBuffer(),
+              TOKEN_METADATA_PROGRAM_ID.toBuffer(),
               mint.toBuffer(),
             ],
-            metadataProgramId
+            TOKEN_METADATA_PROGRAM_ID
           )[0]
         );
 

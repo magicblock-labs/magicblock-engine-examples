@@ -6,7 +6,7 @@ import {
   TransactionSignature,
 } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
-import { PROGRAM_ID } from "@/lib/constants";
+import { PROGRAM_ID, TOKEN_METADATA_PROGRAM_ID } from "@/lib/constants";
 import type { RewardsDelegatedVrf } from "@/idl/rewards_delegated_vrf";
 import rewardsDelegatedVrfIdl from "@/idl/rewards_delegated_vrf.json";
 import { PDAs } from "@/lib/pda";
@@ -36,10 +36,6 @@ const SOLANA_MAINNET_ENDPOINT = "https://rpc.magicblock.app/mainnet";
 const MAGICBLOCK_DEVNET_ENDPOINT =
   process.env.NEXT_PUBLIC_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/";
 const MAGICBLOCK_MAINNET_ENDPOINT = "https://as.magicblock.app";
-const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
-  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
-);
-
 function isKnownDevnetEndpoint(endpoint: string): boolean {
   return endpoint.includes("devnet");
 }

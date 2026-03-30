@@ -25,6 +25,7 @@ import { CopyableAddress } from "./CopyableAddress";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { requestDashboardDataRefresh } from "@/lib/refresh";
 import { shortAddress } from "@/lib/utils";
+import { TOKEN_METADATA_PROGRAM_ID } from "@/lib/constants";
 
 interface ActionForm {
   [key: string]: any;
@@ -584,10 +585,10 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     const [metadataAccount] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("metadata"),
-        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+        TOKEN_METADATA_PROGRAM_ID.toBuffer(),
         rewardMint.toBuffer(),
       ],
-      new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+      TOKEN_METADATA_PROGRAM_ID
     );
     const result = await addReward(
       config.rewardName,
