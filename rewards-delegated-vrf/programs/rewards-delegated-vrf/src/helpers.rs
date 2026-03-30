@@ -1,8 +1,50 @@
 use crate::errors::RewardError;
 use crate::state::{Reward, RewardType, RewardsList};
 use anchor_lang::prelude::*;
+use anchor_spl::metadata::mpl_token_metadata;
 use anchor_spl::token_interface::{Mint, TokenAccount};
+use anchor_spl::{token, token_interface};
 use std::collections::HashSet;
+
+pub fn detect_reward_type(
+    mint: &InterfaceAccount<Mint>,
+    metadata: &Option<mpl_token_metadata::accounts::Metadata>,
+) -> Result<RewardType> {
+    let mint_owner = mint.to_account_info().owner;
+    let supply = mint.supply;
+    let decimals = mint.decimals;
+
+    let is_nft = supply == 1 && decimals == 0;
+
+    if is_nft {
+        if let Some(metadata) = metadata {
+            match metadata.token_standard {
+                Some(
+                    mpl_token_metadata::types::TokenStandard::NonFungible
+                    | mpl_token_metadata::types::TokenStandard::NonFungibleEdition,
+                ) => Ok(RewardType::LegacyNft),
+                Some(
+                    mpl_token_metadata::types::TokenStandard::ProgrammableNonFungible
+                    | mpl_token_metadata::types::TokenStandard::ProgrammableNonFungibleEdition,
+                ) => Ok(RewardType::ProgrammableNft),
+                _ => Err(RewardError::UnsupportedAssetType.into()),
+            }
+        } else {
+            Err(RewardError::MissingMetadataForProgrammableNft.into())
+        }
+    } else {
+        require!(
+            mint_owner == &token::ID || mint_owner == &token_interface::ID,
+            RewardError::InvalidTokenProgramOwner
+        );
+
+        if mint_owner == &token_interface::ID {
+            Ok(RewardType::SplToken2022)
+        } else {
+            Ok(RewardType::SplToken)
+        }
+    }
+}
 
 /// Validates individual reward state
 pub fn validate_reward_state(reward: &Reward) -> Result<()> {
@@ -52,6 +94,8 @@ pub fn validate_reward(reward_list: &RewardsList) -> Result<()> {
         // First validate individual reward state
         validate_reward_state(reward)?;
 
+        // Reward names are treated as stable identifiers by the dashboard and
+        // update/remove flows, so they must stay unique within a reward list.
         if !seen_names.insert(reward.name.as_str()) {
             return Err(RewardError::DuplicateRewardName.into());
         }
@@ -159,8 +203,8 @@ pub fn validate_reward_inventory(
     mint: Option<&InterfaceAccount<Mint>>,
     token_account: Option<&InterfaceAccount<TokenAccount>>,
 ) -> Result<()> {
-    // NFT rewards track their available inventory through the remaining mint
-    // list, while fungible rewards share a single token balance per mint.
+    // NFT rewards consume from their remaining mint pool, while fungible rewards
+    // share a token-account balance per mint.
     for reward in &reward_list.rewards {
         if matches!(
             reward.reward_type,
@@ -183,6 +227,8 @@ pub fn validate_reward_inventory(
         }
     }
 
+    // NFT-only validations can stop here. Fungible inventory checks require the
+    // matching mint and distributor token account.
     let (mint, token_account) = match (mint, token_account) {
         (Some(mint), Some(token_account)) => (mint, token_account),
         _ => return Ok(()),

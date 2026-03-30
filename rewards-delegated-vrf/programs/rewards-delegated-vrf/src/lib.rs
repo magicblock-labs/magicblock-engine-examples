@@ -10,7 +10,6 @@ pub mod errors;
 pub mod helpers;
 pub mod instructions;
 pub mod state;
-pub mod token_detection;
 
 declare_id!("rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y");
 

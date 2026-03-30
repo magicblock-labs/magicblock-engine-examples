@@ -2,9 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_spl::metadata::mpl_token_metadata;
 
 use crate::errors::RewardError;
-use crate::helpers::{validate_reward, validate_reward_inventory};
+use crate::helpers::{detect_reward_type, validate_reward, validate_reward_inventory};
 use crate::state::{Reward, RewardType};
-use crate::token_detection::detect_reward_type;
 use crate::AddReward;
 
 fn parse_metadata(
@@ -65,16 +64,9 @@ pub fn add_reward(
     let reward_list = &mut ctx.accounts.reward_list;
     let mint = &ctx.accounts.mint;
     let token_account = &ctx.accounts.token_account;
-    msg!(
-        "Processing mint {} for reward '{}' in reward list: {:?}",
-        mint.key(),
-        reward_name,
-        reward_list.key()
-    );
 
     let metadata = parse_metadata(&ctx.accounts.metadata)?;
     let detected_type = detect_reward_type(mint, &metadata)?;
-    msg!("Detected reward type: {:?}", detected_type);
     let existing_reward_index = reward_list
         .rewards
         .iter()
@@ -95,13 +87,8 @@ pub fn add_reward(
                 .checked_add(redemptions_added)
                 .ok_or(RewardError::ArithmeticOverflow)?;
 
+            // Existing fungible rewards only grow their redeemable inventory.
             reward_list.rewards[reward_index].redemption_limit = updated_limit;
-            msg!(
-                "Updated redemption_limit for token reward '{}': {} -> {}",
-                reward_name,
-                old_limit,
-                updated_limit
-            );
         }
         (Some(reward_index), RewardType::LegacyNft | RewardType::ProgrammableNft) => {
             let existing_reward = &reward_list.rewards[reward_index];
@@ -116,6 +103,8 @@ pub fn add_reward(
             );
 
             let reward = &mut reward_list.rewards[reward_index];
+            // NFT rewards extend by appending another concrete mint into the
+            // remaining reward pool.
             reward.reward_mints.push(mint.key());
             reward.redemption_limit = reward.redemption_count + reward.reward_mints.len() as u64;
 
@@ -169,7 +158,6 @@ pub fn add_reward(
             });
         }
         (None, _) => {
-            msg!("Unsupported reward type: {:?}", detected_type);
             return Err(RewardError::UnsupportedAssetType.into());
         }
     }
@@ -186,12 +174,6 @@ pub fn add_reward(
     ) {
         validate_reward_inventory(reward_list, Some(mint), Some(token_account))?;
     }
-
-    msg!(
-        "Successfully updated reward '{}' for mint {}",
-        reward_name,
-        mint.key()
-    );
 
     Ok(())
 }

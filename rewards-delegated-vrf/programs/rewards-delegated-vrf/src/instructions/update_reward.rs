@@ -21,6 +21,8 @@ pub fn update_reward(
         .ok_or(RewardError::RewardNotFound)?;
     let reward_type = reward.reward_type.clone();
 
+    // Only apply fields explicitly supplied by the caller. This keeps update
+    // semantics aligned with the dashboard's "edit only what changed" flow.
     if let Some(updated_name) = updated_reward_name {
         reward.name = updated_name;
     }
@@ -43,6 +45,8 @@ pub fn update_reward(
     validate_reward(reward_list)?;
     match reward_type {
         RewardType::SplToken | RewardType::SplToken2022 => {
+            // Fungible rewards must still prove the distributor holds enough
+            // balance after the update is applied.
             let mint = ctx.accounts.mint.as_ref().ok_or(RewardError::MissingMint)?;
             let token_account = ctx
                 .accounts
@@ -62,6 +66,7 @@ pub fn update_reward(
             validate_reward_inventory(reward_list, Some(mint), Some(token_account))?;
         }
         RewardType::LegacyNft | RewardType::ProgrammableNft => {
+            // NFT availability is derived from the reward's remaining mint pool.
             validate_reward_inventory(reward_list, None, None)?;
         }
         _ => {}
