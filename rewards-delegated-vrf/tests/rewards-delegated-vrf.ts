@@ -51,7 +51,7 @@ describe.only("rewards-delegated-vrf", () => {
   ) as Program<RewardsDelegatedVrf>;
 
   const wallet = anchor.Wallet.local();
-  const user = loadOrGenerateUserKeypair("tests/user-keypair.json");
+  const user = loadOrGenerateUserKeypair("tests/fixtures/user-keypair.json");
 
   const rewardDistributorPda = PDAs.getRewardDistributor(program.programId, wallet.publicKey);
   const rewardListPda = PDAs.getRewardList(program.programId, rewardDistributorPda);
@@ -166,7 +166,7 @@ describe.only("rewards-delegated-vrf", () => {
 
     try {
       // Initialize or load mints file
-      const mintsPath = "tests/nft-mints.json";
+      const mintsPath = "tests/fixtures/nft-mints.json";
       let mintsData = { collectionMint: null, nfts: [] };
 
       if (fs.existsSync(mintsPath)) {
@@ -439,7 +439,7 @@ describe.only("rewards-delegated-vrf", () => {
       );
 
       // Load existing mints and add the new NFT
-      const mintsPath = "tests/nft-mints.json";
+      const mintsPath = "tests/fixtures/nft-mints.json";
       let mintsData: any = {
         collectionMint: "",
         nfts: [],
@@ -675,7 +675,7 @@ it("Set Reward List Parameters", async () => {
     console.log("\n=== Adding NFT Mint to Silver Prize Reward ===");
     try {
       // Load NFT mints from file
-      const mintsPath = "tests/nft-mints.json";
+      const mintsPath = "tests/fixtures/nft-mints.json";
       if (!fs.existsSync(mintsPath)) {
         console.log("No NFT mints found");
         return;
