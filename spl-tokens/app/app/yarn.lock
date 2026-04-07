@@ -1870,19 +1870,9 @@
   dependencies:
     "@lit-labs/ssr-dom-shim" "^1.5.0"
 
-"@magicblock-labs/ephemeral-rollups-sdk@^0.10.3":
-  version "0.10.3"
-  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.10.3.tgz#2b68b0dece5e78b12573b8464da9c54d813b85ac"
-  integrity sha512-pmr9m7GDAQXoMxhTlIvuaK9zPR6n5UmXqPQLgEmviIFsbxFWwVEcajEOz2OLyw8+uK4u6sx1vrR9LIZrafqlkw==
-  dependencies:
-    "@noble/curves" "^1.4.2"
-    "@noble/hashes" "^1.4.0"
-    "@phala/dcap-qvl" "^0.3.9"
-    "@solana/web3.js" "^1.98.0"
-    bs58 "^6.0.0"
-    rpc-websockets "^9.0.4"
-    tweetnacl "^1.0.3"
-    typescript "^5.3.0"
+"@magicblock-labs/ephemeral-rollups-sdk@link:../../../../ephemeral-rollups-sdk/ts/web3js":
+  version "0.0.0"
+  uid ""
 
 "@mobily/ts-belt@^3.13.1":
   version "3.13.1"

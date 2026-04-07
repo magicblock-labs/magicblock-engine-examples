@@ -6,7 +6,7 @@
     "dependencies": {
         "@coral-xyz/anchor": "^0.32.1",
         "@craco/craco": "^7.1.0",
-        "@magicblock-labs/ephemeral-rollups-sdk": "^0.10.3",
+        "@magicblock-labs/ephemeral-rollups-sdk": "0.10.5",
         "@solana/wallet-adapter-base": "^0.9.23",
         "@solana/wallet-adapter-react": "^0.15.35",
         "@solana/wallet-adapter-react-ui": "^0.9.35",
