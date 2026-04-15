@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
+use ephemeral_rollups_sdk::ephem::{FoldableIntentBuilder, MagicIntentBundleBuilder};
 
 use crate::UndelegateRewardList;
 

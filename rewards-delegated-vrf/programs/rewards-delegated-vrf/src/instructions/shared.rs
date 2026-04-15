@@ -21,7 +21,7 @@ pub fn execute_reward_transfer<'info>(
     destination: AccountInfo<'info>,
     magic_fee_vault: AccountInfo<'info>,
     // Seeds for PDA signing — reward_list is now the payer so it must sign via seeds
-    payer_seeds: &[&[&[u8]]],
+    _payer_seeds: &[&[&[u8]]],
 ) -> Result<()> {
     let token_program = transfer_lookup_table.lookup_accounts[0];
     let ata_program = transfer_lookup_table.lookup_accounts[1];
@@ -93,7 +93,7 @@ pub fn execute_reward_transfer<'info>(
             .magic_fee_vault(magic_fee_vault.to_account_info())
             .commit(&[reward_list.to_account_info()])
             .add_post_commit_actions([action])
-            .build_and_invoke_signed(payer_seeds)?;
+            .build_and_invoke()? // payer_seeds)?;
         }
         RewardType::ProgrammableNft => {
             let instruction_data = anchor_lang::InstructionData::data(
@@ -200,7 +200,7 @@ pub fn execute_reward_transfer<'info>(
             .magic_fee_vault(magic_fee_vault.to_account_info())
             .commit(&[reward_list.to_account_info()])
             .add_post_commit_actions([action])
-            .build_and_invoke_signed(payer_seeds)?;
+            .build_and_invoke()?; // (payer_seeds)?;
         }
         _ => return Err(RewardError::UnsupportedAssetType.into()),
     }
