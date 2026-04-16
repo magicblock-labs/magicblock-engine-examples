@@ -18,3 +18,4 @@
 !**/anchor-minter/target/idl/
 !**/anchor-counter/target/idl/
 !**/anchor-minter/target/deploy/anchor-counter/magicblock-test-storage/
+anchor-counter/magicblock-test-storage/
