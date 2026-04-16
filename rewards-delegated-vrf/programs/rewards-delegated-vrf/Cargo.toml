@@ -13,14 +13,14 @@ cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build"]
+idl-build = ["anchor-spl/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
-anchor-spl = { version = "0.32.1", features = ["idl-build", "metadata", "associated_token"] }
+anchor-spl = { version = "0.32.1", features = ["metadata", "associated_token"] }
 ephemeral-rollups-sdk = { version = "0.10.5" , features = ["anchor", "disable-realloc"] }
 ephemeral-vrf-sdk = {version = "0.2.3", features = ["anchor"]}
 spl-associated-token-account = { version = "7", features = ["no-entrypoint"] }
