@@ -1,13 +1,13 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
-import { AnchorCounter } from "../target/types/anchor_counter";
+import { PublicCounter } from "../target/types/public_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const COUNTER_SEED = "counter"; 
 
-describe("anchor-counter", () => {
-  console.log("anchor-counter.ts");
+describe("public-counter", () => {
+  console.log("public-counter.ts");
 
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
@@ -38,7 +38,7 @@ describe("anchor-counter", () => {
     console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
   });
 
-  const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
+  const program = anchor.workspace.PublicCounter as Program<PublicCounter>;
   const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(COUNTER_SEED)],
     program.programId,
@@ -93,7 +93,13 @@ describe("anchor-counter", () => {
               isWritable: false,
             },
           ]
-        : [];
+        : [
+            {
+              pubkey: new web3.PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"),
+              isSigner: false,
+              isWritable: false,
+            },
+        ];
     let tx = await program.methods
       .delegate()
       .accounts({

@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
-import { AnchorCounter } from "../target/types/anchor_counter";
+import { PublicCounter } from "../target/types/public_counter";
 import { LAMPORTS_PER_SOL, sendAndConfirmTransaction } from "@solana/web3.js";
 import {
     ConnectionMagicRouter, GetCommitmentSignature
@@ -30,7 +30,7 @@ testSuite("magic-router-and-multiple-atomic-ixs", () => {
     )
     const providerMagic = new anchor.AnchorProvider(connection,anchor.Wallet.local());
 
-  const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
+  const program = anchor.workspace.PublicCounter as Program<PublicCounter>;
   const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(COUNTER_SEED)],
     program.programId,
