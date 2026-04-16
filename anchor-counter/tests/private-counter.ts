@@ -247,13 +247,12 @@ describe.only("private-counter", () => {
     await new Promise((resolve) => setTimeout(resolve, 5000));
   });
 
-  it.only("Commit and undelegate permission from ER to Solana", async () => {
+  it("Commit and undelegate permission from ER to Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
       .commitAndUndelegatePermission()
       .accounts({
-        payer: providerEphemeralRollup.wallet.publicKey,
-        counter: permissionPDA,
+        payer: providerEphemeralRollup.wallet.publicKey
       })
       .transaction();
     tx.feePayer = providerEphemeralRollup.wallet.publicKey;
