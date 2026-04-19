@@ -8,7 +8,7 @@ use ephemeral_rollups_sdk::consts::PERMISSION_PROGRAM_ID;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 
-declare_id!("9SBBpJa9rd8DRP6tkcqnyad4LaCWWB3FgSFmZ2tFVhq");
+declare_id!("6wABXyMw9akNgmBG8LXEVjUaexWZC1vCQjxafQ8vTEfe");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";
@@ -161,6 +161,7 @@ pub mod anchor_rock_paper_scissor {
             vec![&game.to_account_info()],
             magic_context,
             magic_program,
+            None,
         )?;
 
         Ok(())
