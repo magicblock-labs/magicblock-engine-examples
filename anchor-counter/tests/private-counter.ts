@@ -4,14 +4,20 @@ import { PrivateCounter } from "../target/types/private_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { GetCommitmentSignature, getAuthToken, TX_LOGS_FLAG, PERMISSION_SEED, PERMISSION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 import * as nacl from "tweetnacl";
+import bs58 from "bs58"
 
 const COUNTER_SEED = "counter";
 
 describe.only("private-counter", () => {
   console.log("private-counter.ts");
 
-  // Configure the client to use the local cluster.
-  const provider = anchor.AnchorProvider.env();
+  let provider = new anchor.AnchorProvider(
+    new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com", {
+      wsEndpoint: process.env.PROVIDER_ENDPOINT || undefined,
+      commitment: "confirmed",
+    }),
+    anchor.Wallet.local(),
+  );
   anchor.setProvider(provider);
 
   const teeUrl = "https://devnet-tee.magicblock.app";
@@ -226,6 +232,33 @@ describe.only("private-counter", () => {
     );
   });
 
+  it.only("Commit and undelegate permission from ER to Solana", async () => {
+    const start = Date.now();
+    let tx = await program.methods
+      .commitAndUndelegatePermission()
+      .accounts({
+        payer: providerEphemeralRollup.wallet.publicKey,
+      })
+      .transaction();
+    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
+    tx.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
+    // Legacy transaction
+    const sigBytes = tx.signatures[0].signature;
+    console.log("Signature:", bs58.encode(sigBytes));
+
+    const txHash = await providerEphemeralRollup.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+    });
+    console.log(
+      `${Date.now() - start}ms (ER) Undelegate Permission txHash: ${txHash}`,
+    );
+    // Wait for permission undelegation to settle back on the base layer
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  });
+
   it("Increment and undelegate counter from ER to Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
@@ -244,27 +277,6 @@ describe.only("private-counter", () => {
       `${Date.now() - start}ms (ER) Increment and Undelegate txHash: ${txHash}`,
     );
     // Wait for counter undelegation to settle back on the base layer
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-  });
-
-  it("Commit and undelegate permission from ER to Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
-      .commitAndUndelegatePermission()
-      .accounts({
-        payer: providerEphemeralRollup.wallet.publicKey
-      })
-      .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-    console.log(
-      `${Date.now() - start}ms (ER) Undelegate Permission txHash: ${txHash}`,
-    );
-    // Wait for permission undelegation to settle back on the base layer
     await new Promise((resolve) => setTimeout(resolve, 5000));
   });
 
