@@ -111,10 +111,16 @@ if [ -z "$CLUSTER" ]; then
   exit 1
 fi
 
+# Restore the terminal before printing anything in case a previous validator run
+# left newline translation disabled.
+[ -t 1 ] && stty sane < /dev/tty 2>/dev/null || true
+
 echo -e "${GREEN}Detected Cluster: ${CLUSTER}${NC}"
 
 # Cleanup function
 cleanup() {
+  # Belt-and-braces: restore the TTY if a validator's progress UI left it in raw mode.
+  [ -t 1 ] && stty sane < /dev/tty 2>/dev/null || true
   if [ "$CLUSTER" = "localnet" ]; then
     # Only cleanup validators if we started them
     if [ "$MB_VALIDATOR_STARTED_BY_US" = true ] || [ "$EPHEMERAL_VALIDATOR_STARTED_BY_US" = true ]; then
@@ -203,6 +209,7 @@ if [ "$CLUSTER" = "localnet" ]; then
     for i in {1..60}; do
       if curl -s http://127.0.0.1:8899/health > /dev/null 2>&1; then
         echo -e "${GREEN}solana-test-validator is ready${NC}"
+        [ -t 1 ] && stty sane < /dev/tty 2>/dev/null || true
         break
       fi
       if [ $i -eq 60 ]; then
@@ -235,13 +242,27 @@ if [ "$CLUSTER" = "localnet" ]; then
     # Wait for ephemeral-validator to be ready
     echo -e "${YELLOW}Waiting for ephemeral-validator to be ready...${NC}"
     for i in {1..60}; do
-      if curl -s http://127.0.0.1:7799/health > /dev/null 2>&1; then
+      if curl -s --max-time 1 http://127.0.0.1:7799/health > /dev/null 2>&1; then
         echo -e "${GREEN}ephemeral-validator is ready${NC}"
+        [ -t 1 ] && stty sane < /dev/tty 2>/dev/null || true
         break
+      fi
+      if ! kill -0 "$EPHEMERAL_VALIDATOR_PID" 2>/dev/null; then
+        echo -e "${RED}Error: ephemeral-validator exited before becoming ready${NC}"
+        if [ -f /tmp/ephemeral-validator.log ]; then
+          echo "Startup log (/tmp/ephemeral-validator.log):"
+          sed -n '1,80p' /tmp/ephemeral-validator.log
+        fi
+        exit 1
       fi
       if [ $i -eq 60 ]; then
         echo -e "${RED}Error: ephemeral-validator failed to start${NC}"
-        echo "Check logs at /tmp/ephemeral-validator.log"
+        if [ -f /tmp/ephemeral-validator.log ]; then
+          echo "Startup log (/tmp/ephemeral-validator.log):"
+          sed -n '1,80p' /tmp/ephemeral-validator.log
+        else
+          echo "Check logs at /tmp/ephemeral-validator.log"
+        fi
         exit 1
       fi
       sleep 1
