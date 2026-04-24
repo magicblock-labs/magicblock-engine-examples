@@ -9,8 +9,16 @@ const COUNTER_SEED = "counter";
 describe("public-counter", () => {
   console.log("public-counter.ts");
 
-  // Configure the client to use the local cluster.
-  const provider = anchor.AnchorProvider.env();
+  const provider = new anchor.AnchorProvider(
+    new anchor.web3.Connection(
+      process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
+      {
+        wsEndpoint: process.env.PROVIDER_WS_ENDPOINT || undefined,
+        commitment: "confirmed",
+      },
+    ),
+    anchor.Wallet.local(),
+  );
   anchor.setProvider(provider);
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
@@ -20,6 +28,7 @@ describe("public-counter", () => {
       {
         wsEndpoint:
           process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
+        commitment: "confirmed",
       },
     ),
     anchor.Wallet.local(),
@@ -32,10 +41,14 @@ describe("public-counter", () => {
   console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`);
 
   before(async function () {
-    const balance = await provider.connection.getBalance(
-      anchor.Wallet.local().publicKey,
-    );
-    console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
+    try {
+      const balance = await provider.connection.getBalance(
+        anchor.Wallet.local().publicKey,
+      );
+      console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
+    } catch (error) { 
+      console.log("Error fetching balance:", error);
+    }
   });
 
   const program = anchor.workspace.PublicCounter as Program<PublicCounter>;
@@ -172,7 +185,9 @@ describe("public-counter", () => {
     const start = Date.now();
     let tx = await program.methods
       .incrementAndCommit()
-      .accounts({})
+      .accounts({
+        payer: providerEphemeralRollup.wallet.publicKey
+      })
       .transaction();
     tx.feePayer = providerEphemeralRollup.wallet.publicKey;
     tx.recentBlockhash = (

@@ -41,11 +41,15 @@ describe("private-counter", () => {
   console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`);
 
   before(async function () {
-    const balance = await provider.connection.getBalance(
-      anchor.Wallet.local().publicKey,
-    );
-    console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
-
+    try {
+      const balance = await provider.connection.getBalance(
+        anchor.Wallet.local().publicKey,
+      );
+      console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
+    } catch (error) { 
+      console.log("Error fetching balance:", error);
+    }
+    
     // Fetch auth token for the TEE endpoint and rebuild the ER provider with it
     if (ephemeralRpcEndpoint.includes("tee")) {
       const payer = (provider.wallet as anchor.Wallet).payer;
@@ -235,9 +239,7 @@ describe("private-counter", () => {
     const start = Date.now();
     let tx = await program.methods
       .commitAndUndelegatePermission()
-      .accountsPartial({
-        permission: permissionPDA,
-        counter: counterPDA,
+      .accounts({
         payer: providerEphemeralRollup.wallet.publicKey,
       })
       .transaction();

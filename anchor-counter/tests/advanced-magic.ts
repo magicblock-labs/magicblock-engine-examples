@@ -44,8 +44,14 @@ testSuite("magic-router-and-multiple-atomic-ixs", () => {
       console.log("Endpoint:", connection.rpcEndpoint.toString());
       ephemeralValidator = await connection.getClosestValidator();
       console.log("Detected validator identity:", ephemeralValidator);
-      const balance = await connection.getBalance(anchor.Wallet.local().publicKey)
-      console.log('Current balance is', balance / LAMPORTS_PER_SOL, ' SOL','\n')
+      try {
+        const balance = await connection.getBalance(
+          anchor.Wallet.local().publicKey,
+        );
+        console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
+      } catch (error) { 
+        console.log("Error fetching balance:", error);
+      }
   })
   
   it("Initialize counter on Solana", async () => {
