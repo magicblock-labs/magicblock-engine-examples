@@ -51,12 +51,12 @@ jobs:
 
       - name: Configure Validator Limits
         run: |
-          sudo prlimit --pid $$ --nofile=1048576:1048576
           sudo sysctl fs.inotify.max_user_instances=1280
           sudo sysctl fs.inotify.max_user_watches=655360
 
       - name: Test anchor-counter
         run: |
+          sudo prlimit --pid $$ --nofile=1048576:1048576
           cd anchor-counter
           yarn install
           anchor test
