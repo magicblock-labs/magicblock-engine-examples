@@ -49,6 +49,12 @@ jobs:
           solana config set --url localhost
           solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
 
+      - name: Configure Validator Limits
+        run: |
+          sudo prlimit --pid $$ --nofile=1048576:1048576
+          sudo sysctl fs.inotify.max_user_instances=1280
+          sudo sysctl fs.inotify.max_user_watches=655360
+
       - name: Test anchor-counter
         run: |
           cd anchor-counter
