@@ -25,7 +25,7 @@ export class SimpleProvider implements Provider {
 }
 
 export const Wallet: FC<WalletProps> = ({ app }) => {
-    const endpoint = process.env.REACT_APP_PROVIDER_ENDPOINT || "https://rpc.magicblock.app/devnet"
+    const endpoint = process.env.REACT_APP_PROVIDER_ENDPOINT || "https://api.devnet.solana.com"
 
     const wallets = useMemo(() => [
         new PhantomWalletAdapter(),

@@ -44,6 +44,7 @@ const App: React.FC = () => {
         return params.get('mode') === 'private';
     });
     const [isInitializingEr, setIsInitializingEr] = useState<boolean>(false);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
     const counterProgramClient = useRef<Program | null>(null);
     const counterSubscriptionId = useRef<number | null>(null);
     const ephemeralCounterSubscriptionId = useRef<number | null>(null);
@@ -132,6 +133,7 @@ const App: React.FC = () => {
             setCounter(0);
             setEphemeralCounter(0);
             setIsDelegated(false);
+            setIsLoading(true);
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isPrivate]);
@@ -154,6 +156,7 @@ const App: React.FC = () => {
                     setIsDelegated(!accountInfo.owner.equals(COUNTER_PROGRAM));
                     await subscribeToCounter();
                 }
+                setIsLoading(false);
             }
 
             // 2. ER connection (skip if already initialized or program client missing)
@@ -462,6 +465,7 @@ const App: React.FC = () => {
                     ind={Number(0)}
                     updateSquares={(index: string | number) => updateCounter(Number(index))}
                     clsName={isDelegated ? '' : counter.toString()}
+                    loading={isLoading}
                 />
                 <Square
                     key="1"
@@ -474,6 +478,7 @@ const App: React.FC = () => {
                             <div className="placeholder-hint">click to count</div>
                         </>
                     ) : undefined}
+                    loading={isLoading}
                 />
             </div>
 

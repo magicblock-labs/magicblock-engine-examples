@@ -87,6 +87,19 @@ body {
     transform: scale(1.03);
 }
 
+.square.square-loading {
+    cursor: default;
+}
+
+.square .square-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid rgba(238, 238, 238, 0.15);
+    border-radius: 50%;
+    border-left-color: rgba(238, 238, 238, 0.7);
+    animation: spin 1s linear infinite;
+}
+
 .square .placeholder {
     display: flex;
     flex-direction: column;
