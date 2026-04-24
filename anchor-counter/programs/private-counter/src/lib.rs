@@ -9,7 +9,7 @@ use ephemeral_rollups_sdk::consts::PERMISSION_PROGRAM_ID;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
-declare_id!("DKzcLz4S9P9BBn1QnWpwc4uJHLxUssh9iU5DEwnAeHjw");
+declare_id!("91L33vBqfNaNfieqNCoqpxGZ2xVyJ29N3VcErR6LoepZ");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 
@@ -167,7 +167,7 @@ pub mod private_counter {
         CommitAndUndelegatePermissionCpiBuilder::new(
             &ctx.accounts.permission_program.to_account_info(),
         )
-        .authority(&ctx.accounts.payer.to_account_info(), false)
+        .authority(&ctx.accounts.payer.to_account_info(), true)
         .permissioned_account(&ctx.accounts.counter.to_account_info(), true)
         .permission(&ctx.accounts.permission.to_account_info())
         .magic_context(&ctx.accounts.magic_context.to_account_info())

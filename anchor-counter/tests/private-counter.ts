@@ -4,11 +4,10 @@ import { PrivateCounter } from "../target/types/private_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { GetCommitmentSignature, getAuthToken, TX_LOGS_FLAG, PERMISSION_SEED, PERMISSION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 import * as nacl from "tweetnacl";
-import bs58 from "bs58"
 
 const COUNTER_SEED = "counter";
 
-describe.only("private-counter", () => {
+describe("private-counter", () => {
   console.log("private-counter.ts");
 
   let provider = new anchor.AnchorProvider(
@@ -232,11 +231,13 @@ describe.only("private-counter", () => {
     );
   });
 
-  it.only("Commit and undelegate permission from ER to Solana", async () => {
+  it("Commit and undelegate permission from ER to Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
       .commitAndUndelegatePermission()
-      .accounts({
+      .accountsPartial({
+        permission: permissionPDA,
+        counter: counterPDA,
         payer: providerEphemeralRollup.wallet.publicKey,
       })
       .transaction();
@@ -245,10 +246,6 @@ describe.only("private-counter", () => {
       await providerEphemeralRollup.connection.getLatestBlockhash()
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    // Legacy transaction
-    const sigBytes = tx.signatures[0].signature;
-    console.log("Signature:", bs58.encode(sigBytes));
-
     const txHash = await providerEphemeralRollup.sendAndConfirm(tx, [], {
       skipPreflight: true,
     });
