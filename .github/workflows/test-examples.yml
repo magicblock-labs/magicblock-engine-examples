@@ -67,7 +67,7 @@ jobs:
           RUST_LOG=info ephemeral-validator \
             --remotes "http://localhost:8899" \
             --remotes "ws://localhost:8900" \
-            -l "7799" \
+            -l "127.0.0.1:7799" \
             --lifecycle ephemeral \
             > /tmp/ephemeral-validator.log 2>&1 &
 
