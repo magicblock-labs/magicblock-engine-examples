@@ -7,7 +7,7 @@ import * as nacl from "tweetnacl";
 
 const COUNTER_SEED = "counter";
 
-describe.only("private-counter", () => {
+describe("private-counter", () => {
   console.log("private-counter.ts");
 
   let provider = new anchor.AnchorProvider(

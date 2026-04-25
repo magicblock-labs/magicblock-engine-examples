@@ -6,7 +6,7 @@ import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const COUNTER_SEED = "counter"; 
 
-describe("public-counter", () => {
+describe.only("public-counter", () => {
   console.log("public-counter.ts");
 
   const provider = new anchor.AnchorProvider(
