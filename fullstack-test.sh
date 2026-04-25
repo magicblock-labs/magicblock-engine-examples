@@ -58,6 +58,17 @@ has_anchor_cli_skip_local_validator() {
   return 1
 }
 
+dump_validator_logs() {
+  if [ -f /tmp/ephemeral-validator.log ]; then
+    echo "=== ephemeral-validator log (size=$(wc -c < /tmp/ephemeral-validator.log) bytes) ==="
+    sed -n '1,200p' /tmp/ephemeral-validator.log
+  fi
+  if [ -f /tmp/mb-test-validator.log ]; then
+    echo "=== mb-test-validator log (size=$(wc -c < /tmp/mb-test-validator.log) bytes) ==="
+    sed -n '1,200p' /tmp/mb-test-validator.log
+  fi
+}
+
 airdrop_upgrade_authority() {
   local cluster_url=$1
   local keypair=${2:-"${HOME}/.config/solana/id.json"}
@@ -168,8 +179,22 @@ if [ "$CLUSTER" = "localnet" ]; then
     if check_port 8899 && ! pgrep -f "mb-test-validator" > /dev/null 2>&1; then
       echo -e "${YELLOW}Non-MagicBlock validator detected on port 8899, killing it...${NC}"
       echo -e "${YELLOW}Tip: run with 'anchor test --skip-local-validator --skip-build --skip-deploy' to avoid this${NC}"
-      lsof -ti :8899 | xargs kill 2>/dev/null
-      sleep 1
+      lsof -ti :8899 | xargs -r kill -TERM 2>/dev/null || true
+      for _ in $(seq 1 10); do
+        check_port 8899 || break
+        sleep 0.5
+      done
+      if check_port 8899; then
+        lsof -ti :8899 | xargs -r kill -KILL 2>/dev/null || true
+        for _ in $(seq 1 10); do
+          check_port 8899 || break
+          sleep 0.5
+        done
+      fi
+      if check_port 8899; then
+        echo -e "${RED}Error: port 8899 is still in use after kill${NC}"
+        exit 1
+      fi
     fi
   fi
 
@@ -204,17 +229,33 @@ if [ "$CLUSTER" = "localnet" ]; then
     MB_VALIDATOR_PID=$!
     MB_VALIDATOR_STARTED_BY_US=true
 
-    # Wait for solana-test-validator to be ready
-    echo -e "${YELLOW}Waiting for solana-test-validator to be ready...${NC}"
-    for i in {1..60}; do
-      if curl -s http://127.0.0.1:8899/health > /dev/null 2>&1; then
-        echo -e "${GREEN}solana-test-validator is ready${NC}"
+    # Wait for solana-test-validator to be producing slots. /health returns "ok"
+    # well before the bank is producing — ephemeral-validator's chainlink fails to
+    # bootstrap against a non-producing remote and exits silently.
+    echo -e "${YELLOW}Waiting for solana-test-validator to be producing slots...${NC}"
+    for i in $(seq 1 90); do
+      if [ "$MB_VALIDATOR_STARTED_BY_US" = true ] && ! kill -0 "$MB_VALIDATOR_PID" 2>/dev/null; then
+        echo -e "${RED}Error: mb-test-validator exited before becoming ready${NC}"
+        if [ -f /tmp/mb-test-validator.log ]; then
+          echo "Startup log (/tmp/mb-test-validator.log):"
+          sed -n '1,200p' /tmp/mb-test-validator.log
+        fi
+        exit 1
+      fi
+      slot=$(curl -s --max-time 1 -X POST -H "content-type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"getSlot","id":1}' http://127.0.0.1:8899 2>/dev/null \
+        | sed -n 's/.*"result":\([0-9]\+\).*/\1/p')
+      if [ -n "$slot" ] && [ "$slot" -gt 0 ]; then
+        echo -e "${GREEN}solana-test-validator is ready (slot=$slot)${NC}"
         [ -t 1 ] && stty sane < /dev/tty 2>/dev/null || true
         break
       fi
-      if [ $i -eq 60 ]; then
-        echo -e "${RED}Error: solana-test-validator failed to start${NC}"
-        echo "Check logs at /tmp/mb-test-validator.log"
+      if [ $i -eq 90 ]; then
+        echo -e "${RED}Error: solana-test-validator failed to produce slots within 90s${NC}"
+        if [ -f /tmp/mb-test-validator.log ]; then
+          echo "Startup log (/tmp/mb-test-validator.log):"
+          sed -n '1,200p' /tmp/mb-test-validator.log
+        fi
         exit 1
       fi
       sleep 1
@@ -248,21 +289,15 @@ if [ "$CLUSTER" = "localnet" ]; then
         break
       fi
       if ! kill -0 "$EPHEMERAL_VALIDATOR_PID" 2>/dev/null; then
-        echo -e "${RED}Error: ephemeral-validator exited before becoming ready${NC}"
-        if [ -f /tmp/ephemeral-validator.log ]; then
-          echo "Startup log (/tmp/ephemeral-validator.log):"
-          sed -n '1,80p' /tmp/ephemeral-validator.log
-        fi
+        wait "$EPHEMERAL_VALIDATOR_PID" 2>/dev/null
+        ev_exit=$?
+        echo -e "${RED}Error: ephemeral-validator exited before becoming ready (exit=${ev_exit})${NC}"
+        dump_validator_logs
         exit 1
       fi
       if [ $i -eq 60 ]; then
-        echo -e "${RED}Error: ephemeral-validator failed to start${NC}"
-        if [ -f /tmp/ephemeral-validator.log ]; then
-          echo "Startup log (/tmp/ephemeral-validator.log):"
-          sed -n '1,80p' /tmp/ephemeral-validator.log
-        else
-          echo "Check logs at /tmp/ephemeral-validator.log"
-        fi
+        echo -e "${RED}Error: ephemeral-validator failed to start within 60s${NC}"
+        dump_validator_logs
         exit 1
       fi
       sleep 1
