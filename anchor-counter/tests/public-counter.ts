@@ -1,16 +1,24 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
-import { AnchorCounter } from "../target/types/anchor_counter";
+import { PublicCounter } from "../target/types/public_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const COUNTER_SEED = "counter"; 
 
-describe("anchor-counter", () => {
-  console.log("anchor-counter.ts");
+describe("public-counter", () => {
+  console.log("public-counter.ts");
 
-  // Configure the client to use the local cluster.
-  const provider = anchor.AnchorProvider.env();
+  const provider = new anchor.AnchorProvider(
+    new anchor.web3.Connection(
+      process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
+      {
+        wsEndpoint: process.env.PROVIDER_ENDPOINT?.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://") || undefined,
+        commitment: "confirmed",
+      },
+    ),
+    anchor.Wallet.local(),
+  );
   anchor.setProvider(provider);
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
@@ -19,7 +27,8 @@ describe("anchor-counter", () => {
         "https://devnet-as.magicblock.app/",
       {
         wsEndpoint:
-          process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
+          process.env.EPHEMERAL_PROVIDER_ENDPOINT?.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://") || "wss://devnet-as.magicblock.app/",
+        commitment: "confirmed",
       },
     ),
     anchor.Wallet.local(),
@@ -32,13 +41,17 @@ describe("anchor-counter", () => {
   console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`);
 
   before(async function () {
-    const balance = await provider.connection.getBalance(
-      anchor.Wallet.local().publicKey,
-    );
-    console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
+    try {
+      const balance = await provider.connection.getBalance(
+        anchor.Wallet.local().publicKey,
+      );
+      console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
+    } catch (error) { 
+      console.log("Error fetching balance:", error);
+    }
   });
 
-  const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
+  const program = anchor.workspace.PublicCounter as Program<PublicCounter>;
   const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(COUNTER_SEED)],
     program.programId,
@@ -93,7 +106,13 @@ describe("anchor-counter", () => {
               isWritable: false,
             },
           ]
-        : [];
+        : [
+            {
+              pubkey: new web3.PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"),
+              isSigner: false,
+              isWritable: false,
+            },
+        ];
     let tx = await program.methods
       .delegate()
       .accounts({
@@ -166,7 +185,9 @@ describe("anchor-counter", () => {
     const start = Date.now();
     let tx = await program.methods
       .incrementAndCommit()
-      .accounts({})
+      .accounts({
+        payer: providerEphemeralRollup.wallet.publicKey
+      })
       .transaction();
     tx.feePayer = providerEphemeralRollup.wallet.publicKey;
     tx.recentBlockhash = (

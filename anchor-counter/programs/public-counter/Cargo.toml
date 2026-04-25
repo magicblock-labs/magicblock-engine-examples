@@ -1,12 +1,12 @@
 [package]
-name = "magic-actions"
+name = "public-counter"
 version = "0.1.0"
 description = "Created with Anchor"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "magic_actions"
+name = "public_counter"
 
 [features]
 default = []
@@ -15,10 +15,10 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build"]
-anchor-debug = []
 custom-heap = []
 custom-panic = []
+anchor-debug = []
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
-ephemeral-rollups-sdk = { version = "0.11.1", features = ["anchor"] }
+ephemeral-rollups-sdk = { version = "0.11.1", features = ["anchor", "disable-realloc"] }

@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
-import { AnchorCounter } from "../target/types/anchor_counter";
+import { PublicCounter } from "../target/types/public_counter";
 import { LAMPORTS_PER_SOL, sendAndConfirmTransaction } from "@solana/web3.js";
 import {
     ConnectionMagicRouter, GetCommitmentSignature
@@ -25,12 +25,12 @@ testSuite("magic-router-and-multiple-atomic-ixs", () => {
     const connection = new ConnectionMagicRouter(
       process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app/", 
         {
-          wsEndpoint: process.env.WS_ROUTER_ENDPOINT || "wss://devnet-router.magicblock.app/"
+          wsEndpoint: process.env.ROUTER_ENDPOINT?.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://") || "wss://devnet-router.magicblock.app/"
         }
     )
     const providerMagic = new anchor.AnchorProvider(connection,anchor.Wallet.local());
 
-  const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
+  const program = anchor.workspace.PublicCounter as Program<PublicCounter>;
   const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(COUNTER_SEED)],
     program.programId,
@@ -44,8 +44,14 @@ testSuite("magic-router-and-multiple-atomic-ixs", () => {
       console.log("Endpoint:", connection.rpcEndpoint.toString());
       ephemeralValidator = await connection.getClosestValidator();
       console.log("Detected validator identity:", ephemeralValidator);
-      const balance = await connection.getBalance(anchor.Wallet.local().publicKey)
-      console.log('Current balance is', balance / LAMPORTS_PER_SOL, ' SOL','\n')
+      try {
+        const balance = await connection.getBalance(
+          anchor.Wallet.local().publicKey,
+        );
+        console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
+      } catch (error) { 
+        console.log("Error fetching balance:", error);
+      }
   })
   
   it("Initialize counter on Solana", async () => {

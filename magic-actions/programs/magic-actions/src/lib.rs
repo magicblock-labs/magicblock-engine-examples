@@ -2,7 +2,6 @@ use anchor_lang::prelude::*;
 use anchor_lang::Discriminator;
 use ephemeral_rollups_sdk::anchor::{action, commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_rollups_sdk::ephem::{CallHandler, MagicIntentBundleBuilder};
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 
@@ -64,17 +63,18 @@ pub mod magic_actions {
     }
 
     pub fn undelegate(ctx: Context<UndelegateCounter>) -> Result<()> {
-        commit_and_undelegate_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit_and_undelegate(&[ctx.accounts.counter.to_account_info()])
+        .build_and_invoke()?;
         Ok(())
     }
 
     pub fn commit_and_update_leaderboard(ctx: Context<CommitAndUpdateLeaderboard>) -> Result<()> {
-        // Create action instruction
+        // Build the post-commit action that updates the leaderboard on base layer
         let instruction_data =
             anchor_lang::InstructionData::data(&crate::instruction::UpdateLeaderboard {});
         let action_args = ActionArgs::new(instruction_data);
@@ -92,17 +92,18 @@ pub mod magic_actions {
             destination_program: crate::ID,
             accounts: action_accounts,
             args: action_args,
-            escrow_authority: ctx.accounts.payer.to_account_info(), // Signer authorized to pay transaction fees for action from escrow PDA
+            // Signer that pays transaction fees for the action from its escrow PDA
+            escrow_authority: ctx.accounts.payer.to_account_info(),
             compute_units: 200_000,
         };
 
-        let magic_action = MagicIntentBundleBuilder::new(
+        MagicIntentBundleBuilder::new(
             ctx.accounts.payer.to_account_info(),
             ctx.accounts.magic_context.to_account_info(),
             ctx.accounts.magic_program.to_account_info(),
         )
         .commit(&[ctx.accounts.counter.to_account_info()])
-        .add_post_commit_actions(vec![action])
+        .add_post_commit_actions([action])
         .build_and_invoke()?;
 
         Ok(())

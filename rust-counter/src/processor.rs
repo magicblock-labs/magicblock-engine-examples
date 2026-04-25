@@ -13,7 +13,7 @@ use solana_program::{
 use ephemeral_rollups_sdk::cpi::{
     delegate_account, undelegate_account, DelegateAccounts, DelegateConfig,
 };
-use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
+use ephemeral_rollups_sdk::ephem::{FoldableIntentBuilder, MagicIntentBundleBuilder};
 
 use crate::{instruction::ProgramInstruction, state::Counter};
 
@@ -242,12 +242,13 @@ pub fn process_commit(_program_id: &Pubkey, accounts: &[AccountInfo]) -> Program
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    commit_accounts(
-        initializer,
-        vec![counter_account],
-        magic_context,
-        magic_program,
-    )?;
+    MagicIntentBundleBuilder::new(
+        initializer.clone(),
+        magic_context.clone(),
+        magic_program.clone(),
+    )
+    .commit(&[counter_account.clone()])
+    .build_and_invoke()?;
 
     Ok(())
 }
@@ -270,12 +271,13 @@ pub fn process_commit_and_undelegate(
     }
 
     // Commit and undelegate counter_account on ER
-    commit_and_undelegate_accounts(
-        initializer,
-        vec![counter_account],
-        magic_context,
-        magic_program,
-    )?;
+    MagicIntentBundleBuilder::new(
+        initializer.clone(),
+        magic_context.clone(),
+        magic_program.clone(),
+    )
+    .commit_and_undelegate(&[counter_account.clone()])
+    .build_and_invoke()?;
 
     Ok(())
 }
@@ -312,12 +314,13 @@ pub fn process_increment_commit(
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    commit_accounts(
-        initializer,
-        vec![counter_account],
-        magic_context,
-        magic_program,
-    )?;
+    MagicIntentBundleBuilder::new(
+        initializer.clone(),
+        magic_context.clone(),
+        magic_program.clone(),
+    )
+    .commit(&[counter_account.clone()])
+    .build_and_invoke()?;
 
     Ok(())
 }
@@ -354,12 +357,13 @@ pub fn process_increment_undelegate(
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    commit_and_undelegate_accounts(
-        initializer,
-        vec![counter_account],
-        magic_context,
-        magic_program,
-    )?;
+    MagicIntentBundleBuilder::new(
+        initializer.clone(),
+        magic_context.clone(),
+        magic_program.clone(),
+    )
+    .commit_and_undelegate(&[counter_account.clone()])
+    .build_and_invoke()?;
 
     Ok(())
 }

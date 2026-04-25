@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
+use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
 declare_id!("9RPwaXayVZHna1BYuRS4cLPJZuNGU1uS5V3heXB7v6Qi");
 
@@ -9,7 +9,7 @@ pub const COUNTER_SEED: &[u8] = b"counter";
 
 #[ephemeral]
 #[program]
-pub mod anchor_counter {
+pub mod public_counter {
     use super::*;
 
     /// Initialize the counter.
@@ -48,23 +48,25 @@ pub mod anchor_counter {
 
     /// Manual commit the account in the ER.
     pub fn commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
-        commit_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit(&[ctx.accounts.counter.to_account_info()])
+        .build_and_invoke()?;
         Ok(())
     }
 
     /// Undelegate the account from the delegation program
     pub fn undelegate(ctx: Context<IncrementAndCommit>) -> Result<()> {
-        commit_and_undelegate_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit_and_undelegate(&[ctx.accounts.counter.to_account_info()])
+        .build_and_invoke()?;
         Ok(())
     }
 
@@ -74,12 +76,13 @@ pub mod anchor_counter {
         counter.count += 1;
         msg!("PDA {} count: {}", counter.key(), counter.count);
         counter.exit(&crate::ID)?;
-        commit_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit(&[ctx.accounts.counter.to_account_info()])
+        .build_and_invoke()?;
         Ok(())
     }
 
@@ -90,12 +93,13 @@ pub mod anchor_counter {
         msg!("PDA {} count: {}", counter.key(), counter.count);
         // Serialize the Anchor counter account, commit and undelegate
         counter.exit(&crate::ID)?;
-        commit_and_undelegate_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit_and_undelegate(&[ctx.accounts.counter.to_account_info()])
+        .build_and_invoke()?;
         Ok(())
     }
 }
