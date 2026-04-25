@@ -13,7 +13,7 @@ describe("public-counter", () => {
     new anchor.web3.Connection(
       process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
       {
-        wsEndpoint: process.env.PROVIDER_ENDPOINT?.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://") || undefined,
+        wsEndpoint: process.env.WS_ENDPOINT || undefined,
         commitment: "confirmed",
       },
     ),
@@ -27,7 +27,7 @@ describe("public-counter", () => {
         "https://devnet-as.magicblock.app/",
       {
         wsEndpoint:
-          process.env.EPHEMERAL_PROVIDER_ENDPOINT?.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://") || "wss://devnet-as.magicblock.app/",
+          process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
         commitment: "confirmed",
       },
     ),

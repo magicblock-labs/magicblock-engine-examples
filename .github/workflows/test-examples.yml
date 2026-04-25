@@ -61,6 +61,7 @@ jobs:
           EPHEMERAL_PROVIDER_ENDPOINT: http://127.0.0.1:7799
           EPHEMERAL_WS_ENDPOINT: ws://127.0.0.1:7800
           TEE_PROVIDER_ENDPOINT: http://127.0.0.1:7799
+          TEE_WS_ENDPOINT: ws://127.0.0.1:7800
           ROUTER_ENDPOINT: http://127.0.0.1:7799
         run: |
           sudo prlimit --pid $$ --nofile=1048576:1048576
