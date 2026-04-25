@@ -59,7 +59,7 @@ jobs:
           sudo prlimit --pid $$ --nofile=1048576:1048576
           cd anchor-counter
           yarn install
-          anchor test
+          anchor test --provider.cluster localnet
 
       # - name: Test anchor-minter
       #   run: |

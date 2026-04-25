@@ -51,6 +51,46 @@ has_ancestor_flag() {
   return 1
 }
 
+get_provider_cluster_override() {
+  # Inspect this script's own args first.
+  local prev=""
+  for arg in "$@"; do
+    case "$arg" in
+      --provider.cluster=*)
+        echo "${arg#--provider.cluster=}"
+        return 0
+        ;;
+    esac
+    if [ "$prev" = "--provider.cluster" ]; then
+      echo "$arg"
+      return 0
+    fi
+    prev="$arg"
+  done
+
+  # Then walk ancestor processes — anchor's own argv is what we usually find.
+  local pid=$$
+  local depth=0
+  local cmd
+  local match
+  while [ -n "$pid" ] && [ "$pid" -ne 1 ] && [ "$depth" -lt 20 ]; do
+    cmd="$(ps -p "$pid" -o args= -ww 2>/dev/null | tr '\n' ' ')"
+    match="$(echo "$cmd" | sed -nE 's/.*--provider\.cluster[ =]+([^ ]+).*/\1/p' | head -1)"
+    if [ -n "$match" ]; then
+      echo "$match"
+      return 0
+    fi
+    local ppid
+    ppid="$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d ' ')"
+    if [ -z "$ppid" ] || [ "$ppid" = "$pid" ] || [ "$ppid" = "0" ]; then
+      break
+    fi
+    pid="$ppid"
+    depth=$((depth + 1))
+  done
+  return 1
+}
+
 has_anchor_cli_skip_local_validator() {
   if pgrep -af "anchor" 2>/dev/null | awk '($0 ~ /test/) && ($0 ~ /--skip-local-validator/) { found=1; exit } END { exit (found?0:1) }'; then
     return 0
@@ -116,9 +156,14 @@ if [ ! -f "$ANCHOR_TOML" ]; then
   exit 1
 fi
 
-CLUSTER=$(grep -A 1 "^\[provider\]" "$ANCHOR_TOML" | grep "cluster" | sed 's/.*cluster = "\(.*\)".*/\1/' | tr -d ' ')
+# --provider.cluster on the anchor CLI wins over Anchor.toml so that callers
+# (CI, local overrides) can target a different cluster without rewriting the file.
+CLUSTER="$(get_provider_cluster_override "$@" || true)"
 if [ -z "$CLUSTER" ]; then
-  echo -e "${RED}Error: Could not determine cluster from Anchor.toml${NC}"
+  CLUSTER=$(grep -A 1 "^\[provider\]" "$ANCHOR_TOML" | grep "cluster" | sed 's/.*cluster = "\(.*\)".*/\1/' | tr -d ' ')
+fi
+if [ -z "$CLUSTER" ]; then
+  echo -e "${RED}Error: Could not determine cluster (no --provider.cluster flag and no [provider] cluster in Anchor.toml)${NC}"
   exit 1
 fi
 
