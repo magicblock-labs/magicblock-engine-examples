@@ -101,7 +101,9 @@ has_anchor_cli_skip_local_validator() {
 dump_validator_logs() {
   if [ -f /tmp/ephemeral-validator.log ]; then
     echo "=== ephemeral-validator log (size=$(wc -c < /tmp/ephemeral-validator.log) bytes) ==="
-    sed -n '1,200p' /tmp/ephemeral-validator.log
+    # Strip ANSI escape sequences from TUI output so the log stays readable.
+    sed -E $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g; s/\x1b[()][AB012]//g' /tmp/ephemeral-validator.log \
+      | sed -n '1,200p'
   fi
   if [ -f /tmp/mb-test-validator.log ]; then
     echo "=== mb-test-validator log (size=$(wc -c < /tmp/mb-test-validator.log) bytes) ==="
@@ -287,9 +289,13 @@ if [ "$CLUSTER" = "localnet" ]; then
         fi
         exit 1
       fi
+      # commitment=processed reports the latest slot the bank has processed,
+      # so we see slot>0 within ~1s instead of waiting ~15s for finalization.
+      # `sed -nE` is portable across BSD sed (macOS) and GNU sed (Linux/CI);
+      # plain BRE `\+` silently fails on BSD sed and never extracts a value.
       slot=$(curl -s --max-time 1 -X POST -H "content-type: application/json" \
-        -d '{"jsonrpc":"2.0","method":"getSlot","id":1}' http://127.0.0.1:8899 2>/dev/null \
-        | sed -n 's/.*"result":\([0-9]\+\).*/\1/p')
+        -d '{"jsonrpc":"2.0","method":"getSlot","params":[{"commitment":"processed"}],"id":1}' http://127.0.0.1:8899 2>/dev/null \
+        | sed -nE 's/.*"result":([0-9]+).*/\1/p')
       if [ -n "$slot" ] && [ "$slot" -gt 0 ]; then
         echo -e "${GREEN}solana-test-validator is ready (slot=$slot)${NC}"
         [ -t 1 ] && stty sane < /dev/tty 2>/dev/null || true
@@ -314,14 +320,25 @@ if [ "$CLUSTER" = "localnet" ]; then
     # Try to get the PID of the running validator
     EPHEMERAL_VALIDATOR_PID=$(lsof -ti :7799 | head -1)
   else
-    # Start ephemeral-validator
+    # Start ephemeral-validator. 0.8.x ships a mandatory ratatui/crossterm TUI;
+    # without a controlling TTY (e.g. when stdout is redirected to a file as in
+    # CI or when run as a background job), crossterm's alternate-screen setup
+    # fails and the binary exits silently with code 0 before opening port 7799.
+    # Wrap in a pty via python3 so the validator sees a real terminal; the TUI
+    # ANSI escape codes go into the log file (which is fine for diagnostics).
     echo -e "[SETUP] ${GREEN}Starting ephemeral-validator...${NC}"
-    RUST_LOG=info ephemeral-validator \
-      --remotes "http://127.0.0.1:8899" \
-      --remotes "ws://127.0.0.1:8900" \
-      -l "127.0.0.1:7799" \
-      --reset \
-      > /tmp/ephemeral-validator.log 2>&1 &
+    RUST_LOG=info python3 -c '
+import pty, os, sys
+status = pty.spawn([
+    "ephemeral-validator",
+    "--remotes", "http://127.0.0.1:8899",
+    "--remotes", "ws://127.0.0.1:8900",
+    "-l", "127.0.0.1:7799",
+    "--reset",
+    "--lifecycle", "ephemeral",
+])
+sys.exit(os.WEXITSTATUS(status) if os.WIFEXITED(status) else 128 + os.WTERMSIG(status))
+' </dev/null > /tmp/ephemeral-validator.log 2>&1 &
     EPHEMERAL_VALIDATOR_PID=$!
     EPHEMERAL_VALIDATOR_STARTED_BY_US=true
 
