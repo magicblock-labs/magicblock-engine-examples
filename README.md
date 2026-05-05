@@ -17,6 +17,12 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 - [Crank Counter](./crank-counter/README.md) - A counter program with scheduled cranks for automatic execution using MagicBlock's crank system.
 - [Dummy Token Transfer](./dummy-token-transfer/README.md) - A token transferer that can delegate and execute both on-chain and in the ephemeral rollup.
 - [Magic Actions](./magic-actions/README.md) - Demonstrates using Magic Actions to execute base chain actions from an ephemeral rollup.
+- [Magic Action - Shared Payer](./magic-action-shared-payer/README.md) - Extends Magic Actions to use a protocol-owned PDA as the shared escrow authority instead of the user's wallet.
+- [Magic Actions on Delegation](./magic-actions-on-delegation/README.md) - Demonstrates post-delegation actions: instructions queued at delegation time that the ER validator fires automatically when the account is first cloned.
+
+## 📚 Guides
+
+- [Post-Delegation Actions](./docs/post-delegation-actions.md) - How to schedule ER-side instructions from a base-layer delegation instruction, including account, signer, validator, encryption, and funding constraints.
 
 ## 🚧 Under Testing 🚧
 
