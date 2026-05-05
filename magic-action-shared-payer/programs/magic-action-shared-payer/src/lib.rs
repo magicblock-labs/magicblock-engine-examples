@@ -141,7 +141,8 @@ pub struct Increment<'info> {
 pub struct UpdateLeaderboard<'info> {
     #[account(mut, seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: Account<'info, Leaderboard>,
-    /// CHECK: PDA owner depends on: 1) Delegated: Delegation Program; 2) Undelegated: Your program ID
+    /// CHECK: owner varies (delegation program when delegated, this program when not); address locked by seeds
+    #[account(seeds = [COUNTER_SEED], bump)]
     pub counter: UncheckedAccount<'info>,
 }
 

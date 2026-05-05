@@ -35,11 +35,11 @@ Run the tests with existing program:
 anchor test --skip-deploy --skip-build --skip-local-validator
 ```
 
-Build, deploy and run the tests with new program (note: delete keypairs in `/target/deploy` folder):
+Build, deploy and run the tests with new program (note: delete keypairs in `target/deploy` folder):
 
 ```bash
 # Delete keypairs in the deploy folder
-rm -rf /target/deploy/*.keypair
+rm -rf target/deploy/*.keypair
 
 # Build, deploy and test program
 anchor test

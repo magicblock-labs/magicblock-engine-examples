@@ -160,7 +160,8 @@ pub struct DelegateCounter<'info> {
     #[account(mut)]
     pub delegation_metadata: AccountInfo<'info>,
 
-    /// CHECK: must be the MagicBlock delegation program
+    /// CHECK: address constraint ensures this is the MagicBlock delegation program
+    #[account(address = ephemeral_rollups_sdk::id())]
     pub delegation_program: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
