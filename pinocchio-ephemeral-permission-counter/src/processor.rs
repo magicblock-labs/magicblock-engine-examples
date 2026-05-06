@@ -263,14 +263,11 @@ pub fn process_update_permission(accounts: &[AccountView]) -> ProgramResult {
         magic_program: magic_program,
         vault: vault_info,
         args: EphemeralMembersArgs {
-            members: &[Member {
-                flags: MemberFlags::default(),
-                pubkey: *payer_info.address(),
-            }],
+            members: &[],
             is_private: true,
         },
     }
-    .invoke_signed::<{ data_buffer_size(1) }>(&[signer])?;
+    .invoke_signed::<{ data_buffer_size(0) }>(&[signer])?;
 
     Ok(())
 }

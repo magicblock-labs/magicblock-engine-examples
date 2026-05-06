@@ -429,6 +429,88 @@ describe("pinocchio-ephemeral-secret-counter", async () => {
     );
   });
 
+  it("Update permission on ER", async () => {
+    const ixData = Buffer.from([5, 0, 0, 0, 0, 0, 0, 0]);
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        programId: PROGRAM_ID,
+        data: ixData,
+        keys: [
+          {
+            pubkey: userKeypair.publicKey,
+            isSigner: true,
+            isWritable: true,
+          },
+          {
+            pubkey: counterPda,
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: PERMISSION_PROGRAM_ID,
+            isSigner: false,
+            isWritable: false,
+          },
+          {
+            pubkey: permissionPda,
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: MAGIC_PROGRAM_ID,
+            isSigner: false,
+            isWritable: false,
+          },
+          {
+            pubkey: VAULT,
+            isSigner: false,
+            isWritable: true,
+          },
+        ],
+      }),
+    );
+
+    const txHash = await sendAndConfirmTransaction(
+      connectionEphemeralRollup,
+      tx,
+      [userKeypair],
+      {
+        commitment: "confirmed",
+        skipPreflight: true,
+      },
+    );
+    console.log(`(ER) Create permission txHash: ${txHash}`);
+    expect(txHash).toBeDefined();
+
+    // Check readability
+    let counter = await connectionEphemeralRollup.getAccountInfo(counterPda);
+    if (teeUrl.includes("tee")) {
+      expect(counter).toBeNull();
+    } else {
+      expect(counter).toBeDefined();
+      expect(counter?.data.subarray(32, 40)).toEqual(
+        Buffer.from([2, 0, 0, 0, 0, 0, 0, 0]),
+      );
+    }
+
+    counter = await unauthorizedConnection.getAccountInfo(counterPda);
+    if (teeUrl.includes("tee")) {
+      expect(counter).toBeNull();
+    } else {
+      expect(counter).toBeDefined();
+      expect(counter?.data.subarray(32, 40)).toEqual(
+        Buffer.from([2, 0, 0, 0, 0, 0, 0, 0]),
+      );
+    }
+
+    // Check permission
+    let permission =
+      await connectionEphemeralRollup.getAccountInfo(permissionPda);
+    expect(permission).toBeDefined();
+    expect(permission?.data.subarray(36, 68)).toEqual(PROGRAM_ID.toBuffer());
+    expect(permission?.data.length).toEqual(68);
+  });
+
   it("Close permission on ER", async () => {
     const ixData = Buffer.from([6, 0, 0, 0, 0, 0, 0, 0]);
     const tx = new Transaction().add(
