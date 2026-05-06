@@ -110,16 +110,7 @@ pub fn process_delegate(accounts: &[AccountView]) -> ProgramResult {
     };
     let validator = rest.first().map(|account| *account.address());
 
-    if !counter_info.owned_by(&crate::ID) {
-        return Err(ProgramError::IllegalOwner);
-    }
-
-    let (bump, id, counter_pda) = {
-        let data = counter_info.try_borrow()?;
-        let counter_data = Counter::load(&data)?;
-        let counter_pda = Counter::derive_pda(&counter_data.id, &[counter_data.bump])?;
-        (counter_data.bump, counter_data.id, counter_pda)
-    };
+    let (bump, id) = load_and_verify_counter(counter_info)?;
 
     let seed_1 = b"counter";
     let seed_2 = id.as_ref();
@@ -129,10 +120,6 @@ pub fn process_delegate(accounts: &[AccountView]) -> ProgramResult {
         validator,
         ..Default::default()
     };
-
-    if &counter_pda != counter_info.address() {
-        return Err(ProgramError::InvalidSeeds);
-    }
 
     delegate_account(
         &[
@@ -162,19 +149,7 @@ pub fn process_commit_and_undelegate(accounts: &[AccountView]) -> ProgramResult 
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    if !counter_info.owned_by(&crate::ID) {
-        return Err(ProgramError::IllegalOwner);
-    }
-
-    {
-        let data = counter_info.try_borrow()?;
-        let counter_data = Counter::load(&data)?;
-        let counter_pda = Counter::derive_pda(&counter_data.id, &[counter_data.bump])?;
-
-        if &counter_pda != counter_info.address() {
-            return Err(ProgramError::InvalidSeeds);
-        }
-    }
+    load_and_verify_counter(counter_info)?;
 
     commit_and_undelegate_accounts(
         payer_info,
@@ -196,20 +171,7 @@ pub fn process_create_permission(accounts: &[AccountView]) -> ProgramResult {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    if !counter_info.owned_by(&crate::ID) {
-        return Err(ProgramError::IllegalOwner);
-    }
-
-    let (bump, id, counter_pda) = {
-        let data = counter_info.try_borrow()?;
-        let counter_data = Counter::load(&data)?;
-        let counter_pda = Counter::derive_pda(&counter_data.id, &[counter_data.bump])?;
-        (counter_data.bump, counter_data.id, counter_pda)
-    };
-
-    if &counter_pda != counter_info.address() {
-        return Err(ProgramError::InvalidSeeds);
-    }
+    let (bump, id) = load_and_verify_counter(counter_info)?;
 
     let bump_seed = [bump];
     let seeds = [
@@ -249,20 +211,7 @@ pub fn process_update_permission(accounts: &[AccountView]) -> ProgramResult {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    if !counter_info.owned_by(&crate::ID) {
-        return Err(ProgramError::IllegalOwner);
-    }
-
-    let (bump, id, counter_pda) = {
-        let data = counter_info.try_borrow()?;
-        let counter_data = Counter::load(&data)?;
-        let counter_pda = Counter::derive_pda(&counter_data.id, &[counter_data.bump])?;
-        (counter_data.bump, counter_data.id, counter_pda)
-    };
-
-    if &counter_pda != counter_info.address() {
-        return Err(ProgramError::InvalidSeeds);
-    }
+    let (bump, id) = load_and_verify_counter(counter_info)?;
 
     let bump_seed = [bump];
     let seeds = [
@@ -299,20 +248,7 @@ pub fn process_close_permission(accounts: &[AccountView]) -> ProgramResult {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    if !counter_info.owned_by(&crate::ID) {
-        return Err(ProgramError::IllegalOwner);
-    }
-
-    let (bump, id, counter_pda) = {
-        let data = counter_info.try_borrow()?;
-        let counter_data = Counter::load(&data)?;
-        let counter_pda = Counter::derive_pda(&counter_data.id, &[counter_data.bump])?;
-        (counter_data.bump, counter_data.id, counter_pda)
-    };
-
-    if &counter_pda != counter_info.address() {
-        return Err(ProgramError::InvalidSeeds);
-    }
+    let (bump, id) = load_and_verify_counter(counter_info)?;
 
     let bump_seed = [bump];
     let seeds = [
@@ -344,4 +280,19 @@ pub fn process_undelegation_callback(accounts: &[AccountView], ix_data: &[u8]) -
     };
     undelegate(counter_info, &crate::ID, buffer_acc, payer_info, ix_data)?;
     Ok(())
+}
+
+/// Borrow `counter_info`, validate it is the PDA derived from its own state,
+/// and return (bump, id).
+fn load_and_verify_counter(counter_info: &AccountView) -> Result<(u8, Address), ProgramError> {
+    if !counter_info.owned_by(&crate::ID) {
+        return Err(ProgramError::IllegalOwner);
+    }
+    let data = counter_info.try_borrow()?;
+    let counter = Counter::load(&data)?;
+    let pda = Counter::derive_pda(&counter.id, &[counter.bump])?;
+    if &pda != counter_info.address() {
+        return Err(ProgramError::InvalidSeeds);
+    }
+    Ok((counter.bump, counter.id))
 }
