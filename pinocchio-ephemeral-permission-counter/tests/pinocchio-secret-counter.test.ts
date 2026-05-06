@@ -494,7 +494,7 @@ describe("pinocchio-ephemeral-secret-counter", async () => {
     );
   });
 
-  it.skip("Commit and undelegate counter on ER to Solana", async function () {
+  it("Commit and undelegate counter on ER to Solana", async function () {
     const ixData = Buffer.from([3, 0, 0, 0, 0, 0, 0, 0]);
     const tx = new Transaction().add(
       new TransactionInstruction({
@@ -535,10 +535,20 @@ describe("pinocchio-ephemeral-secret-counter", async () => {
     console.log(`(ER) Undelegate txHash: ${txHash}`);
     expect(txHash).toBeDefined();
 
-    await GetCommitmentSignature(txHash, connectionEphemeralRollup);
+    const commitHash = await GetCommitmentSignature(
+      txHash,
+      connectionEphemeralRollup,
+    );
+    console.log(`(ER) Commit txHash: ${commitHash}`);
+    expect(commitHash).toBeDefined();
 
-    // Check readability
-    let counter = await connectionBaseLayer.getAccountInfo(counterPda);
+    const result = await connectionBaseLayer.confirmTransaction(commitHash);
+    console.log(`(Base Layer) Commit result: ${result}`);
+    expect(result.value?.err).toBeNull();
+
+    let counter = await connectionBaseLayer.getAccountInfo(counterPda, {
+      commitment: "confirmed",
+    });
     expect(counter?.owner.equals(PROGRAM_ID)).toBe(true);
   });
 });
