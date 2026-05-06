@@ -10,7 +10,7 @@ pub struct Counter {
 }
 
 impl Counter {
-    pub const SIZE: usize = 32 + 8 + 8;
+    pub const SIZE: usize = core::mem::size_of::<Self>();
 
     pub fn load(data: &[u8]) -> Result<&Self, ProgramError> {
         if data.len() < Self::SIZE {
@@ -20,7 +20,7 @@ impl Counter {
         if !(ptr as usize).is_multiple_of(core::mem::align_of::<Self>()) {
             return Err(ProgramError::InvalidAccountData);
         }
-        // Safety: caller ensures the account data is valid for Counter.
+        // SAFETY: ensured there are enough bytes in the data buffer for Counter.
         Ok(unsafe { &*ptr })
     }
 
@@ -32,7 +32,7 @@ impl Counter {
         if !(ptr as usize).is_multiple_of(core::mem::align_of::<Self>()) {
             return Err(ProgramError::InvalidAccountData);
         }
-        // Safety: caller ensures the account data is valid for Counter.
+        // SAFETY: ensured there are enough bytes in the data buffer for Counter.
         Ok(unsafe { &mut *ptr })
     }
 
