@@ -104,7 +104,9 @@ pub(crate) fn inner_process_instruction(
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
     let discriminator = InstructionDiscriminator::from_bytes(discriminator)?;
-    let payload = &instruction_data[8..];
+    let payload = instruction_data
+        .get(8..)
+        .ok_or(ProgramError::InvalidInstructionData)?;
 
     #[cfg(feature = "logging")]
     log_instruction(discriminator);
@@ -112,7 +114,9 @@ pub(crate) fn inner_process_instruction(
     match discriminator {
         InstructionDiscriminator::InitializeCounter => {
             let id = Address::new_from_array(
-                payload[..32]
+                payload
+                    .get(..32)
+                    .ok_or(ProgramError::InvalidInstructionData)?
                     .try_into()
                     .map_err(|_| ProgramError::InvalidInstructionData)?,
             );
