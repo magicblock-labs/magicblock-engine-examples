@@ -17,6 +17,11 @@ use pinocchio::{
 use pinocchio_log::log;
 use pinocchio_system::instructions::CreateAccount;
 
+// TODO: Use method from SDK
+fn rent_for(size: u64) -> u64 {
+    (size + 60) * 32
+}
+
 /// Create and initialize the counter PDA for the initializer.
 pub fn process_initialize_counter(accounts: &[AccountView], id: &Address) -> ProgramResult {
     let [payer_info, counter_info, _system_program] = accounts else {
@@ -47,8 +52,8 @@ pub fn process_initialize_counter(accounts: &[AccountView], id: &Address) -> Pro
     // Create counter account if it doesn't exist.
     log!("Creating counter ...");
     let rent_exempt_lamports = Rent::get()?.try_minimum_balance(Counter::SIZE)?;
-    // TODO: Use method from SDK
-    let ephemeral_rent = (35 + 2 * MAX_MEMBER_SIZE as u64 + 60) * 32;
+    // Header size + 2 members
+    let ephemeral_rent = rent_for(35 + 2 * MAX_MEMBER_SIZE as u64);
     log!("Rent exempt lamports: {}", rent_exempt_lamports);
     CreateAccount {
         from: payer_info,
