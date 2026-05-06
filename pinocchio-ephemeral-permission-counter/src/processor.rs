@@ -62,7 +62,7 @@ pub fn process_initialize_counter(accounts: &[AccountView], id: &Address) -> Pro
         space: Counter::SIZE as u64,
         owner: &crate::ID,
     }
-    .invoke_signed(&[signer.clone()])?;
+    .invoke_signed(core::slice::from_ref(&signer))?;
     log!("Counter created successfully");
 
     // Initialize counter to 0.
@@ -153,7 +153,7 @@ pub fn process_commit_and_undelegate(accounts: &[AccountView]) -> ProgramResult 
 
     commit_and_undelegate_accounts(
         payer_info,
-        &[counter_info.clone()],
+        core::slice::from_ref(counter_info),
         magic_context,
         magic_program,
         None,
@@ -185,8 +185,8 @@ pub fn process_create_permission(accounts: &[AccountView]) -> ProgramResult {
         payer: counter_info,
         permissioned_account: counter_info,
         permission: permission_info,
-        permission_program: permission_program,
-        magic_program: magic_program,
+        permission_program,
+        magic_program,
         vault: vault_info,
         args: EphemeralMembersArgs {
             members: &[Member {
@@ -226,9 +226,9 @@ pub fn process_update_permission(accounts: &[AccountView]) -> ProgramResult {
         authority_is_signer: true,
         payer: counter_info,
         permissioned_account: counter_info,
-        permission: permission,
-        permission_program: permission_program,
-        magic_program: magic_program,
+        permission,
+        permission_program,
+        magic_program,
         vault: vault_info,
         args: EphemeralMembersArgs {
             members: &[],
@@ -263,9 +263,9 @@ pub fn process_close_permission(accounts: &[AccountView]) -> ProgramResult {
         authority_is_signer: true,
         payer: counter_info,
         permissioned_account: counter_info,
-        permission: permission,
-        permission_program: permission_program,
-        magic_program: magic_program,
+        permission,
+        permission_program,
+        magic_program,
         vault: vault_info,
     }
     .invoke_signed(&[signer])?;
