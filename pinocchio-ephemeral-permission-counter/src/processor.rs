@@ -89,12 +89,6 @@ pub fn process_increase_counter(accounts: &[AccountView], increase_by: u64) -> P
         return Err(ProgramError::InvalidSeeds);
     }
 
-    log!(
-        "Increasing counter by {} from {} to {}",
-        increase_by,
-        counter_data.count,
-        counter_data.count + increase_by
-    );
     counter_data.count = counter_data
         .count
         .checked_add(increase_by)
