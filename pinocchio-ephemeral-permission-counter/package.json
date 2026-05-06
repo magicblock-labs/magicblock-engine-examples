@@ -1,0 +1,35 @@
+{
+  "name": "pinocchio-ephemeral-permission-counter",
+  "version": "0.1.0",
+  "description": "Tests for pinocchio-ephemeral-permission-counter program",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run tests/",
+    "test:watch": "vitest watch tests/",
+    "build": "cargo build-sbf",
+    "check": "cargo check"
+  },
+  "keywords": [
+    "solana",
+    "pinocchio",
+    "ephemeral",
+    "permission",
+    "counter",
+    "program"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@magicblock-labs/ephemeral-rollups-sdk": "^0.11.1",
+    "@solana-program/system": "^0.10.0",
+    "@solana/kit": "^5.4.0",
+    "@solana/web3.js": "^1.93.0",
+    "@types/node": "^20.0.0",
+    "borsh": "^0.7.0",
+    "dotenv": "^16.0.0",
+    "ts-node": "^10.9.0",
+    "tweetnacl": "^1.0.3",
+    "typescript": "^5.0.0",
+    "vitest": "^0.34.0"
+  }
+}

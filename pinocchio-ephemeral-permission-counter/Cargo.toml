@@ -1,0 +1,18 @@
+[package]
+name = "pinocchio-ephemeral-permission-counter"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+logging = []
+
+[dependencies]
+pinocchio = { version = "0.10.1", features = ["cpi", "copy"] }
+pinocchio-log = { version = "0.5.1" }
+pinocchio-system = { version = "0.5" }
+solana-address = { version = "2.6", features = ["syscalls"] }
+# ephemeral-rollups-pinocchio = { git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git", rev = "a8ecea450d3bbe5bac119a3f4c55cd9f96b4837b" }
+ephemeral-rollups-pinocchio = { path = "../../ephemeral-rollups-sdk/rust/pinocchio" }
