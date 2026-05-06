@@ -336,13 +336,17 @@ describe("pinocchio-ephemeral-permission-counter", async () => {
     expect(txHash).toBeDefined();
 
     // Check readability
-    let counter = await connectionEphemeralRollup.getAccountInfo(counterPda);
+    let counter = await connectionEphemeralRollup.getAccountInfo(counterPda, {
+      commitment: "confirmed",
+    });
     expect(counter).toBeDefined();
     expect(counter?.data.subarray(32, 40)).toEqual(
       Buffer.from([2, 0, 0, 0, 0, 0, 0, 0]),
     );
 
-    counter = await unauthorizedConnection.getAccountInfo(counterPda);
+    counter = await unauthorizedConnection.getAccountInfo(counterPda, {
+      commitment: "confirmed",
+    });
     expect(counter).toBeDefined();
     expect(counter?.data.subarray(32, 40)).toEqual(
       Buffer.from([2, 0, 0, 0, 0, 0, 0, 0]),
@@ -403,13 +407,17 @@ describe("pinocchio-ephemeral-permission-counter", async () => {
     expect(txHash).toBeDefined();
 
     // Check readability
-    let counter = await connectionEphemeralRollup.getAccountInfo(counterPda);
+    let counter = await connectionEphemeralRollup.getAccountInfo(counterPda, {
+      commitment: "confirmed",
+    });
     expect(counter).toBeDefined();
     expect(counter?.data.subarray(32, 40)).toEqual(
       Buffer.from([2, 0, 0, 0, 0, 0, 0, 0]),
     );
 
-    counter = await unauthorizedConnection.getAccountInfo(counterPda);
+    counter = await unauthorizedConnection.getAccountInfo(counterPda, {
+      commitment: "confirmed",
+    });
     if (teeUrl.includes("tee")) {
       expect(counter).toBeNull();
     } else {
@@ -420,8 +428,12 @@ describe("pinocchio-ephemeral-permission-counter", async () => {
     }
 
     // Check permission
-    let permission =
-      await connectionEphemeralRollup.getAccountInfo(permissionPda);
+    let permission = await connectionEphemeralRollup.getAccountInfo(
+      permissionPda,
+      {
+        commitment: "confirmed",
+      },
+    );
     expect(permission).toBeDefined();
     expect(permission?.data.subarray(36, 68)).toEqual(PROGRAM_ID.toBuffer());
     expect(permission?.data.subarray(69, 101)).toEqual(
@@ -483,7 +495,9 @@ describe("pinocchio-ephemeral-permission-counter", async () => {
     expect(txHash).toBeDefined();
 
     // Check readability
-    let counter = await connectionEphemeralRollup.getAccountInfo(counterPda);
+    let counter = await connectionEphemeralRollup.getAccountInfo(counterPda, {
+      commitment: "confirmed",
+    });
     if (teeUrl.includes("tee")) {
       expect(counter).toBeNull();
     } else {
@@ -493,7 +507,9 @@ describe("pinocchio-ephemeral-permission-counter", async () => {
       );
     }
 
-    counter = await unauthorizedConnection.getAccountInfo(counterPda);
+    counter = await unauthorizedConnection.getAccountInfo(counterPda, {
+      commitment: "confirmed",
+    });
     if (teeUrl.includes("tee")) {
       expect(counter).toBeNull();
     } else {
@@ -504,8 +520,12 @@ describe("pinocchio-ephemeral-permission-counter", async () => {
     }
 
     // Check permission
-    let permission =
-      await connectionEphemeralRollup.getAccountInfo(permissionPda);
+    let permission = await connectionEphemeralRollup.getAccountInfo(
+      permissionPda,
+      {
+        commitment: "confirmed",
+      },
+    );
     expect(permission).toBeDefined();
     expect(permission?.data.subarray(36, 68)).toEqual(PROGRAM_ID.toBuffer());
     expect(permission?.data.length).toEqual(68);
@@ -559,17 +579,21 @@ describe("pinocchio-ephemeral-permission-counter", async () => {
     );
     console.log(`(ER) Close permission txHash: ${txHash}`);
     const result = await connectionEphemeralRollup.confirmTransaction(txHash);
-    expect(result.value?.err).toBeNull();
+    expect(result.value.err).toBeNull();
     expect(txHash).toBeDefined();
 
     // Check readability
-    let counter = await connectionEphemeralRollup.getAccountInfo(counterPda);
+    let counter = await connectionEphemeralRollup.getAccountInfo(counterPda, {
+      commitment: "confirmed",
+    });
     expect(counter).toBeDefined();
     expect(counter?.data.subarray(32, 40)).toEqual(
       Buffer.from([2, 0, 0, 0, 0, 0, 0, 0]),
     );
 
-    counter = await unauthorizedConnection.getAccountInfo(counterPda);
+    counter = await unauthorizedConnection.getAccountInfo(counterPda, {
+      commitment: "confirmed",
+    });
     expect(counter).toBeDefined();
     expect(counter?.data.subarray(32, 40)).toEqual(
       Buffer.from([2, 0, 0, 0, 0, 0, 0, 0]),
@@ -626,7 +650,7 @@ describe("pinocchio-ephemeral-permission-counter", async () => {
 
     const result = await connectionBaseLayer.confirmTransaction(commitHash);
     console.log(`(Base Layer) Commit result: ${result}`);
-    expect(result.value?.err).toBeNull();
+    expect(result.value.err).toBeNull();
 
     let counter = await connectionBaseLayer.getAccountInfo(counterPda, {
       commitment: "confirmed",
