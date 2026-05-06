@@ -33,7 +33,7 @@ const PROGRAM_ID = new PublicKey(
   "AAWCg4eJHpdmUtM8Wz6Thm8FDi6C3vnMksf1pt2vfxhf",
 );
 
-describe("pinocchio-ephemeral-secret-counter", async () => {
+describe("pinocchio-ephemeral-permission-counter", async () => {
   // Open user keypair from private key or default location
   const KEYPAIR =
     process.env.PRIVATE_KEY ||

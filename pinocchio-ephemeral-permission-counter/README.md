@@ -6,12 +6,12 @@ The program is `no_std`, does not use Borsh, and keeps account data in a fixed-s
 
 ## Requirements
 
-| Software | Version | Installation Guide |
-| -------- | ------- | ------------------ |
-| Solana CLI | 2.3.13 | [Install Solana](https://docs.anza.xyz/cli/install) |
-| Rust | 1.85.0 | [Install Rust](https://www.rust-lang.org/tools/install) |
-| Node.js | 24.10.0 | [Install Node](https://nodejs.org/en/download/current) |
-| Yarn | 4.x | [Install Yarn](https://yarnpkg.com/getting-started/install) |
+| Software   | Version | Installation Guide                                          |
+| ---------- | ------- | ----------------------------------------------------------- |
+| Solana CLI | 2.3.13  | [Install Solana](https://docs.anza.xyz/cli/install)         |
+| Rust       | 1.87.0  | [Install Rust](https://www.rust-lang.org/tools/install)     |
+| Node.js    | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)      |
+| Yarn       | 4.x     | [Install Yarn](https://yarnpkg.com/getting-started/install) |
 
 ## Setup
 
@@ -66,12 +66,12 @@ The counter PDA is derived with:
 
 where `id` is a 32-byte client-provided public key. The account stores:
 
-| Field | Size | Description |
-| ----- | ---- | ----------- |
-| `id` | 32 bytes | Identifier used in the PDA seeds |
-| `count` | 8 bytes | Little-endian `u64` counter value |
-| `bump` | 1 byte | PDA bump |
-| `_pad` | 7 bytes | Alignment padding |
+| Field   | Size     | Description                       |
+| ------- | -------- | --------------------------------- |
+| `id`    | 32 bytes | Identifier used in the PDA seeds  |
+| `count` | 8 bytes  | Little-endian `u64` counter value |
+| `bump`  | 1 byte   | PDA bump                          |
+| `_pad`  | 7 bytes  | Alignment padding                 |
 
 Total size: 48 bytes.
 
@@ -79,15 +79,15 @@ Total size: 48 bytes.
 
 Each instruction starts with an 8-byte little-endian discriminator.
 
-| Discriminator | Instruction | Payload | Description |
-| ------------- | ----------- | ------- | ----------- |
-| `0` | `InitializeCounter` | `id` (`[u8; 32]`) | Creates the counter PDA and initializes `count` to `0`. |
-| `1` | `IncreaseCounter` | `increase_by` (`u64`) | Adds `increase_by` to the counter with overflow checking. |
-| `2` | `Delegate` | None | Delegates the counter PDA to the Ephemeral Rollups delegation program. |
-| `3` | `CommitAndUndelegate` | None | Commits the counter state and undelegates it back to the base layer. |
-| `4` | `CreatePermission` | None | Creates a private ephemeral permission for the counter. |
-| `5` | `UpdatePermission` | None | Updates the counter permission membership. |
-| `6` | `ClosePermission` | None | Closes the counter permission account. |
+| Discriminator | Instruction           | Payload               | Description                                                            |
+| ------------- | --------------------- | --------------------- | ---------------------------------------------------------------------- |
+| `0`           | `InitializeCounter`   | `id` (`[u8; 32]`)     | Creates the counter PDA and initializes `count` to `0`.                |
+| `1`           | `IncreaseCounter`     | `increase_by` (`u64`) | Adds `increase_by` to the counter with overflow checking.              |
+| `2`           | `Delegate`            | None                  | Delegates the counter PDA to the Ephemeral Rollups delegation program. |
+| `3`           | `CommitAndUndelegate` | None                  | Commits the counter state and undelegates it back to the base layer.   |
+| `4`           | `CreatePermission`    | None                  | Creates a private ephemeral permission for the counter.                |
+| `5`           | `UpdatePermission`    | None                  | Updates the counter permission membership.                             |
+| `6`           | `ClosePermission`     | None                  | Closes the counter permission account.                                 |
 
 The delegation program also invokes the undelegation callback discriminator:
 
