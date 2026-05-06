@@ -30,6 +30,6 @@
     "ts-node": "^10.9.0",
     "tweetnacl": "^1.0.3",
     "typescript": "^5.0.0",
-    "vitest": "^0.34.0"
+    "vitest": "^3.0.0"
   }
 }
