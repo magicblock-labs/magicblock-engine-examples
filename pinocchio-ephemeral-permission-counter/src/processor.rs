@@ -81,6 +81,10 @@ pub fn process_increase_counter(accounts: &[AccountView], increase_by: u64) -> P
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
+    if !counter_info.owned_by(&crate::ID) {
+        return Err(ProgramError::IllegalOwner);
+    }
+
     let mut data = counter_info.try_borrow_mut()?;
     let counter_data = Counter::load_mut(&mut data)?;
     let counter_pda = Counter::derive_pda(&counter_data.id, &[counter_data.bump])?;
@@ -105,6 +109,10 @@ pub fn process_delegate(accounts: &[AccountView]) -> ProgramResult {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
     let validator = rest.first().map(|account| *account.address());
+
+    if !counter_info.owned_by(&crate::ID) {
+        return Err(ProgramError::IllegalOwner);
+    }
 
     let (bump, id, counter_pda) = {
         let data = counter_info.try_borrow()?;
@@ -154,6 +162,10 @@ pub fn process_commit_and_undelegate(accounts: &[AccountView]) -> ProgramResult 
         return Err(ProgramError::MissingRequiredSignature);
     }
 
+    if !counter_info.owned_by(&crate::ID) {
+        return Err(ProgramError::IllegalOwner);
+    }
+
     {
         let data = counter_info.try_borrow()?;
         let counter_data = Counter::load(&data)?;
@@ -183,6 +195,10 @@ pub fn process_create_permission(accounts: &[AccountView]) -> ProgramResult {
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
+
+    if !counter_info.owned_by(&crate::ID) {
+        return Err(ProgramError::IllegalOwner);
+    }
 
     let (bump, id, counter_pda) = {
         let data = counter_info.try_borrow()?;
@@ -233,6 +249,10 @@ pub fn process_update_permission(accounts: &[AccountView]) -> ProgramResult {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
+    if !counter_info.owned_by(&crate::ID) {
+        return Err(ProgramError::IllegalOwner);
+    }
+
     let (bump, id, counter_pda) = {
         let data = counter_info.try_borrow()?;
         let counter_data = Counter::load(&data)?;
@@ -278,6 +298,10 @@ pub fn process_close_permission(accounts: &[AccountView]) -> ProgramResult {
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
+
+    if !counter_info.owned_by(&crate::ID) {
+        return Err(ProgramError::IllegalOwner);
+    }
 
     let (bump, id, counter_pda) = {
         let data = counter_info.try_borrow()?;
