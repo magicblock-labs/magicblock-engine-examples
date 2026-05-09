@@ -1,0 +1,27 @@
+[package]
+name = "rewards-delegated-vrf"
+version = "0.1.0"
+description = "MagicBlock Rewards Program"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
+anchor-spl = { version = "1.0.0", features = ["idl-build", "metadata", "associated_token"] }
+ephemeral-rollups-sdk = { path = "/Users/snawaz/projects/mb/ephemeral-rollups-sdk/rust/sdk", features = ["anchor"] }
+ephemeral-vrf-sdk = { path = "../../vendor/ephemeral-vrf-sdk", features = ["anchor"] }
+spl-associated-token-account = { version = "7", features = ["no-entrypoint"] }
+solana-program = "3.0.0"
