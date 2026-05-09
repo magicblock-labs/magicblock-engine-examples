@@ -1,9 +1,0 @@
-/.next/
-/out/
-/build/
-*.pem
-.DS_Store
-/.env.local
-/.env
-node_modules/
-.eslintrc.json
