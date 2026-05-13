@@ -1,0 +1,17 @@
+[package]
+name = "pinocchio-compressed-counter"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+logging = []
+
+[dependencies]
+pinocchio = { version = "0.10.1", default-features = false, features = ["cpi", "copy"] }
+pinocchio-log = { version = "0.5" }
+pinocchio-system = { version = "0.5", default-features = false }
+ephemeral-rollups-pinocchio = { path = "../../ephemeral-rollups-sdk/rust/pinocchio", default-features = false }
+solana-address = { version = "2.6", default-features = false }
