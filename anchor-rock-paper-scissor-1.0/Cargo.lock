@@ -719,7 +719,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.13.0"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ae3aa5c7008f05087491aed1159c712a660539bcb5c03af7e2d7007ae21a587"
 dependencies = [
  "anchor-lang",
  "base64ct",
@@ -743,7 +745,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-action"
-version = "0.13.0"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "650a79f916d6390c611cf59b0cd7a8bd7c21793f29ebf06f1d0440658fbd40f9"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -751,7 +755,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.13.0"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7f58d68d75345eead2d53d16fe35755354a7a729eede1773890e2879e2bff62"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -759,7 +765,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.13.0"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec1ae1fb73f2bd746826931194dc4fea8610657ff0521eaf0bdb32f63f2f42cc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -768,7 +776,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.13.0"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d41f91ce34e46a30265150fb1498fc8818e0ee52e94a9e775d257f7346942272"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -777,7 +787,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral-accounts"
-version = "0.13.0"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8efb3751f9225f9e0e2cd3c33694bbb141da83076e5a94f4ade589bb8bb3b255"
 dependencies = [
  "proc-macro2",
  "quote",
