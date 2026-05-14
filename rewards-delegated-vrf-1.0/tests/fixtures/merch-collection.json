@@ -1,0 +1,26 @@
+{
+  "name": "MagicBlock Rewards",
+  "symbol": "MBR",
+  "description": "The official MagicBlock Rewards collection. A series of onchain collectibles tied to limited-edition apparel, creative drops, and community experiences. Each item represents a piece of the MagicBlock universe.",
+  "image": "https://storage.magicblock.app/assets/merch-collection.png",
+  "external_url": "https://magicblock.xyz",
+  "attributes": [
+    {
+      "trait_type": "Category",
+      "value": "Rewards"
+    },
+    {
+      "trait_type": "Brand",
+      "value": "MagicBlock"
+    }
+  ],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://storage.magicblock.app/assets/merch-collection.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image"
+  }
+}
