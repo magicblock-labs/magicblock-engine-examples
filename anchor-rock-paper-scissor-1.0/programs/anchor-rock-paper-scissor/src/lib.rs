@@ -1,7 +1,10 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
-use anchor_lang::solana_program::program::{invoke, invoke_signed};
+use ephemeral_rollups_sdk::access_control::instructions::{
+    CreatePermissionCpiBuilder, UpdatePermissionCpiBuilder,
+};
+use ephemeral_rollups_sdk::access_control::structs::{Member, MembersArgs};
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::consts::PERMISSION_PROGRAM_ID;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 
@@ -9,10 +12,6 @@ declare_id!("6wABXyMw9akNgmBG8LXEVjUaexWZC1vCQjxafQ8vTEfe");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";
-pub const PERMISSION_PROGRAM_ID: Pubkey =
-    Pubkey::from_str_const("ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1");
-const CREATE_PERMISSION_DISCRIMINATOR: u64 = 0;
-const UPDATE_PERMISSION_DISCRIMINATOR: u64 = 1;
 
 #[ephemeral]
 #[program]
@@ -122,42 +121,36 @@ pub mod anchor_rock_paper_scissor {
             _ => GameResult::Tie,
         };
 
-        invoke_update_permission(
-            permission_program,
-            (&game.to_account_info(), false),
-            (&game.to_account_info(), true),
-            permission_game,
-            MembersArgs { members: None },
-            &[&[GAME_SEED, &game.game_id.to_le_bytes(), &[ctx.bumps.game]]],
-        )?;
+        UpdatePermissionCpiBuilder::new(&permission_program)
+            .permissioned_account(&game.to_account_info(), true)
+            .authority(&game.to_account_info(), false)
+            .permission(&permission_game.to_account_info())
+            .args(MembersArgs { members: None })
+            .invoke_signed(&[&[GAME_SEED, &game.game_id.to_le_bytes(), &[ctx.bumps.game]]])?;
 
-        invoke_update_permission(
-            permission_program,
-            (&player1_choice.to_account_info(), false),
-            (&player1_choice.to_account_info(), true),
-            permission1,
-            MembersArgs { members: None },
-            &[&[
+        UpdatePermissionCpiBuilder::new(&permission_program)
+            .permissioned_account(&player1_choice.to_account_info(), true)
+            .authority(&player1_choice.to_account_info(), false)
+            .permission(&permission1.to_account_info())
+            .args(MembersArgs { members: None })
+            .invoke_signed(&[&[
                 PLAYER_CHOICE_SEED,
                 &player1_choice.game_id.to_le_bytes(),
                 &player1_choice.player.as_ref(),
                 &[ctx.bumps.player1_choice],
-            ]],
-        )?;
+            ]])?;
 
-        invoke_update_permission(
-            permission_program,
-            (&player2_choice.to_account_info(), false),
-            (&player2_choice.to_account_info(), true),
-            permission2,
-            MembersArgs { members: None },
-            &[&[
+        UpdatePermissionCpiBuilder::new(&permission_program)
+            .permissioned_account(&player2_choice.to_account_info(), true)
+            .authority(&player2_choice.to_account_info(), false)
+            .permission(&permission2.to_account_info())
+            .args(MembersArgs { members: None })
+            .invoke_signed(&[&[
                 PLAYER_CHOICE_SEED,
                 &player2_choice.game_id.to_le_bytes(),
                 &player2_choice.player.as_ref(),
                 &[ctx.bumps.player2_choice],
-            ]],
-        )?;
+            ]])?;
 
         msg!("Result: {:?}", &game.result);
 
@@ -218,15 +211,13 @@ pub mod anchor_rock_paper_scissor {
         seeds.push(vec![bump]);
         let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
 
-        invoke_create_permission(
-            &permission_program.to_account_info(),
-            &permissioned_account.to_account_info(),
-            &permission.to_account_info(),
-            &payer.to_account_info(),
-            &system_program.to_account_info(),
-            MembersArgs { members },
-            &[seed_refs.as_slice()],
-        )?;
+        CreatePermissionCpiBuilder::new(&permission_program)
+            .permissioned_account(&permissioned_account.to_account_info())
+            .permission(&permission)
+            .payer(&payer)
+            .system_program(&system_program)
+            .args(MembersArgs { members })
+            .invoke_signed(&[seed_refs.as_slice()])?;
         Ok(())
     }
 }
@@ -377,17 +368,6 @@ impl Game {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, Debug)]
-pub struct Member {
-    pub flags: u8,
-    pub pubkey: Pubkey,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, Debug)]
-pub struct MembersArgs {
-    pub members: Option<Vec<Member>>,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, Debug)]
 pub enum GameResult {
     Winner(Pubkey),
     Tie,
@@ -423,8 +403,6 @@ pub enum GameError {
     MissingOpponent,
     #[msg("Game is already full.")]
     GameFull,
-    #[msg("Failed to serialize permission instruction data.")]
-    PermissionSerializationFailed,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -446,113 +424,4 @@ fn derive_seeds_from_account_type(account_type: &AccountType) -> Vec<Vec<u8>> {
             ]
         }
     }
-}
-
-#[derive(AnchorSerialize)]
-struct CreatePermissionInstructionData {
-    discriminator: u64,
-}
-
-#[derive(AnchorSerialize)]
-struct CreatePermissionInstructionArgs {
-    args: MembersArgs,
-}
-
-#[derive(AnchorSerialize)]
-struct UpdatePermissionInstructionData {
-    discriminator: u64,
-}
-
-#[derive(AnchorSerialize)]
-struct UpdatePermissionInstructionArgs {
-    args: MembersArgs,
-}
-
-fn serialize_permission_data<T: AnchorSerialize>(value: &T) -> Result<Vec<u8>> {
-    let mut data = Vec::new();
-    value
-        .serialize(&mut data)
-        .map_err(|_| error!(GameError::PermissionSerializationFailed))?;
-    Ok(data)
-}
-
-fn invoke_create_permission<'info>(
-    program: &AccountInfo<'info>,
-    permissioned_account: &AccountInfo<'info>,
-    permission: &AccountInfo<'info>,
-    payer: &AccountInfo<'info>,
-    system_program: &AccountInfo<'info>,
-    args: MembersArgs,
-    signers_seeds: &[&[&[u8]]],
-) -> Result<()> {
-    let mut data = serialize_permission_data(&CreatePermissionInstructionData {
-        discriminator: CREATE_PERMISSION_DISCRIMINATOR,
-    })?;
-    data.extend(serialize_permission_data(&CreatePermissionInstructionArgs { args })?);
-
-    let instruction = Instruction {
-        program_id: PERMISSION_PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new_readonly(*permissioned_account.key, true),
-            AccountMeta::new(*permission.key, false),
-            AccountMeta::new(*payer.key, true),
-            AccountMeta::new_readonly(*system_program.key, false),
-        ],
-        data,
-    };
-
-    let account_infos = vec![
-        program.clone(),
-        permissioned_account.clone(),
-        permission.clone(),
-        payer.clone(),
-        system_program.clone(),
-    ];
-
-    if signers_seeds.is_empty() {
-        invoke(&instruction, &account_infos)?;
-    } else {
-        invoke_signed(&instruction, &account_infos, signers_seeds)?;
-    }
-
-    Ok(())
-}
-
-fn invoke_update_permission<'info>(
-    program: &AccountInfo<'info>,
-    authority: (&AccountInfo<'info>, bool),
-    permissioned_account: (&AccountInfo<'info>, bool),
-    permission: &AccountInfo<'info>,
-    args: MembersArgs,
-    signers_seeds: &[&[&[u8]]],
-) -> Result<()> {
-    let mut data = serialize_permission_data(&UpdatePermissionInstructionData {
-        discriminator: UPDATE_PERMISSION_DISCRIMINATOR,
-    })?;
-    data.extend(serialize_permission_data(&UpdatePermissionInstructionArgs { args })?);
-
-    let instruction = Instruction {
-        program_id: PERMISSION_PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new_readonly(*authority.0.key, authority.1),
-            AccountMeta::new_readonly(*permissioned_account.0.key, permissioned_account.1),
-            AccountMeta::new(*permission.key, false),
-        ],
-        data,
-    };
-
-    let account_infos = vec![
-        program.clone(),
-        authority.0.clone(),
-        permissioned_account.0.clone(),
-        permission.clone(),
-    ];
-
-    if signers_seeds.is_empty() {
-        invoke(&instruction, &account_infos)?;
-    } else {
-        invoke_signed(&instruction, &account_infos, signers_seeds)?;
-    }
-
-    Ok(())
 }

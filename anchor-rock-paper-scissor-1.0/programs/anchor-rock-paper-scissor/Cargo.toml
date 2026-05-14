@@ -1,7 +1,7 @@
 [package]
 name = "anchor-rock-paper-scissor"
 version = "0.1.0"
-description = "Created with Anchor"
+description = "Created with Anchor 1.0"
 edition = "2021"
 
 [lib]
@@ -21,4 +21,5 @@ anchor-debug = []
 
 [dependencies]
 anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
-ephemeral-rollups-sdk = { version = "0.14.0", features = ["anchor"] }
+#ephemeral-rollups-sdk = { version = "0.14.0", features = ["anchor", "access-control"] }
+ephemeral-rollups-sdk = { path = "/Users/snawaz/projects/mb/ephemeral-rollups-sdk/rust/sdk", features = ["anchor", "access-control"] }
