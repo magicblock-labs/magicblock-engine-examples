@@ -24,7 +24,12 @@ import {assert} from "chai";
 describe("spl-tokens", () => {
     console.log("spl-tokens.ts");
 
-    const provider = anchor.AnchorProvider.env();
+    const provider = process.env.PROVIDER_ENDPOINT
+        ? new anchor.AnchorProvider(
+            new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT, "confirmed"),
+            anchor.Wallet.local(),
+        )
+        : anchor.AnchorProvider.env();
     anchor.setProvider(provider);
     const connection = provider.connection;
     let validator: PublicKey;
@@ -55,20 +60,20 @@ describe("spl-tokens", () => {
      */
     before(async () => {
         const payer = (provider.wallet as anchor.Wallet).payer;
-
+        
         recipientA = Keypair.generate();
         recipientB = Keypair.generate();
 
-        // fund recipients so they can exist and sign if needed
+        // fund recipients from payer wallet (avoids faucet rate limits / 429s)
+        const fundTx = new anchor.web3.Transaction();
         for (const r of [recipientA, recipientB]) {
-            await connection.confirmTransaction(
-                await connection.requestAirdrop(
-                    r.publicKey,
-                    0.2 * LAMPORTS_PER_SOL
-                ),
-                "confirmed"
-            );
+            fundTx.add(SystemProgram.transfer({
+                fromPubkey: payer.publicKey,
+                toPubkey: r.publicKey,
+                lamports: 0.2 * LAMPORTS_PER_SOL,
+            }));
         }
+        await anchor.web3.sendAndConfirmTransaction(connection, fundTx, [payer]);
 
         mint = Keypair.generate();
         const decimals = 0;
@@ -171,7 +176,8 @@ describe("spl-tokens", () => {
 
         // Delegate 50 tokens for recipientA
         // multiply amount if decimals > 0: * (10n ** BigInt(decimals))
-        const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 50n, {validator: validator});
+        // initVaultIfMissing=true: vault PDA must be created the first time a mint is delegated
+        const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 50n, {validator: validator, initVaultIfMissing: true});
         const tx = new anchor.web3.Transaction();
         ixs.forEach(ix => tx.add(ix));
         await provider.sendAndConfirm(tx, [recipientA], { commitment: "confirmed", skipPreflight: true });
@@ -205,7 +211,14 @@ describe("spl-tokens", () => {
         // Undelegate ER balance
         const ixUndelegateA = undelegateIx(recipientA.publicKey, mint.publicKey);
         const ixUndelegateB = undelegateIx(recipientB.publicKey, mint.publicKey);
-        sgn = await providerEphemeralRollup.sendAndConfirm(new anchor.web3.Transaction().add(ixUndelegateA).add(ixUndelegateB), [recipientA, recipientB], { commitment: "confirmed", skipPreflight: true });
+        try {
+            sgn = await providerEphemeralRollup.sendAndConfirm(new anchor.web3.Transaction().add(ixUndelegateA).add(ixUndelegateB), [recipientA, recipientB], { commitment: "confirmed", skipPreflight: false });
+        } catch (e: any) {
+            console.error("Undelegate failed. Raw error:", e);
+            if (e?.getLogs) console.error("Program logs:", await e.getLogs(ephemeralConnection));
+            if (e?.logs) console.error("Logs:", e.logs);
+            throw e;
+        }
         console.log(`Undelegate signature: ${sgn}`)
         const txCommitSgn = await GetCommitmentSignature(
             sgn,

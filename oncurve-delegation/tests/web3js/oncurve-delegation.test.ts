@@ -25,12 +25,10 @@ describe("on-curve-delegation-web3js", async () => {
 
   // Set up connections
   const connectionBaseLayer = new Connection(
-    process.env.PROVIDER_ENDPOINT || "https://rpc.magicblock.app/devnet",
-    { wsEndpoint: process.env.WS_ENDPOINT || "wss://rpc.magicblock.app/devnet" }
+    process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com"
   );
   const ephemeralConnection = new Connection(
-    process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app",
-    { wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app" }
+    process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app"
   );
   console.log("Base Layer Connection: ", connectionBaseLayer.rpcEndpoint);
   console.log("Ephemeral Connection: ", ephemeralConnection.rpcEndpoint);
