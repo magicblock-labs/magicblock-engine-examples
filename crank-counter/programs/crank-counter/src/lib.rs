@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
+use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
 use anchor_lang::solana_program::{
     instruction::{AccountMeta, Instruction},
@@ -10,15 +10,15 @@ use anchor_lang::solana_program::{
 use ephemeral_rollups_sdk::consts::MAGIC_PROGRAM_ID;
 use magicblock_magic_program_api::{args::ScheduleTaskArgs, instruction::MagicBlockInstruction};
 
-declare_id!("CSYoUGHEE5urpgmH3qXpwHJSVggwiDY6fqDXLBgHSMcH");
+declare_id!("E91p5Drj4deMEe1RVLWMLWUfTCwDfronioJe6NRYkbxZ");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct ScheduleIncrementArgs {
-    pub task_id: u64,
-    pub execution_interval_millis: u64,
-    pub iterations: u64,
+    pub task_id: i64,
+    pub execution_interval_millis: i64,
+    pub iterations: i64,
 }
 
 #[ephemeral]
@@ -105,12 +105,13 @@ pub mod anchor_counter {
 
     /// Undelegate the account from the delegation program
     pub fn undelegate(ctx: Context<UndelegateInput>) -> Result<()> {
-        commit_and_undelegate_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.counter.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit_and_undelegate(&[ctx.accounts.counter.to_account_info()])
+        .build_and_invoke()?;
         Ok(())
     }
 }
