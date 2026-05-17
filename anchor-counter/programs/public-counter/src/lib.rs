@@ -120,7 +120,7 @@ pub struct DelegateInput<'info> {
     pub payer: Signer<'info>,
     /// CHECK The pda to delegate
     #[account(mut, del)]
-    pub pda: AccountInfo<'info>,
+    pub pda: UncheckedAccount<'info>,
 }
 
 /// Account for the increment instruction.

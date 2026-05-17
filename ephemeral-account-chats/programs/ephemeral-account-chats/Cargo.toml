@@ -20,8 +20,8 @@ custom-heap = []
 custom-panic = []
 
 [dependencies]
-anchor-lang = "0.32.1"
-ephemeral-rollups-sdk = { version = "0.8.8", features = ["anchor"] }
+anchor-lang = "1.0.2"
+ephemeral-rollups-sdk = { version = "0.14.1", features = ["anchor"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [

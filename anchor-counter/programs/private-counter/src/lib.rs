@@ -208,22 +208,22 @@ pub struct DelegateCounterPrivately<'info> {
     pub payer: Signer<'info>,
     /// CHECK: The PDA to delegate
     #[account(mut, del, seeds = [COUNTER_SEED], bump)]
-    pub counter: AccountInfo<'info>,
+    pub counter: UncheckedAccount<'info>,
     /// CHECK: Permission account for the counter PDA
     #[account(mut, seeds = [PERMISSION_SEED, counter.key().as_ref()], bump, seeds::program = permission_program.key())]
-    pub permission: AccountInfo<'info>,
+    pub permission: UncheckedAccount<'info>,
     /// CHECK: Buffer for permission delegation
     #[account(mut, seeds = [ephemeral_rollups_sdk::pda::DELEGATE_BUFFER_TAG, permission.key().as_ref()], bump, seeds::program = PERMISSION_PROGRAM_ID)]
-    pub buffer_permission: AccountInfo<'info>,
+    pub buffer_permission: UncheckedAccount<'info>,
     /// CHECK: Delegation record for permission
     #[account(mut, seeds = [ephemeral_rollups_sdk::pda::DELEGATION_RECORD_TAG, permission.key().as_ref()], bump, seeds::program = ephemeral_rollups_sdk::id())]
-    pub delegation_record_permission: AccountInfo<'info>,
+    pub delegation_record_permission: UncheckedAccount<'info>,
     /// CHECK: Delegation metadata for permission
     #[account(mut, seeds = [ephemeral_rollups_sdk::pda::DELEGATION_METADATA_TAG, permission.key().as_ref()], bump, seeds::program = ephemeral_rollups_sdk::id())]
-    pub delegation_metadata_permission: AccountInfo<'info>,
+    pub delegation_metadata_permission: UncheckedAccount<'info>,
     /// CHECK: Permission Program
     #[account(address = PERMISSION_PROGRAM_ID)]
-    pub permission_program: AccountInfo<'info>,
+    pub permission_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     /// CHECK: Checked by the delegate program
     pub validator: Option<AccountInfo<'info>>,
@@ -258,7 +258,7 @@ pub struct UndelegateCounter<'info> {
     pub counter: Account<'info, Counter>,
     /// CHECK: Checked by the permission program
     #[account(mut, seeds = [PERMISSION_SEED, counter.key().as_ref()], bump, seeds::program = permission_program.key())]
-    pub permission: AccountInfo<'info>,
+    pub permission: UncheckedAccount<'info>,
     /// CHECK: Permission Program
     #[account(address = PERMISSION_PROGRAM_ID)]
     pub permission_program: UncheckedAccount<'info>,

@@ -1,0 +1,20 @@
+*.DS_Store
+.idea
+**/*.rs.bk
+**/target/*
+**/build
+**/node_modules
+**/test-ledger
+**/.anchor
+**/.bolt
+**/.yarn
+**/.next/
+**/.env
+!/anchor-counter/target/deploy/anchor_counter-keypair.json
+!/bolt-counter/target/deploy/counter-keypair.json
+!/bolt-counter/target/deploy/increase-keypair.json
+
+# But don't ignore the target/idl/ directory
+!**/anchor-minter/target/idl/
+!**programs/spl-tokens/target/idl/
+!**/anchor-minter/target/deploy/
