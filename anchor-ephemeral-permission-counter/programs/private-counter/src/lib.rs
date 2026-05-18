@@ -226,9 +226,11 @@ pub struct Increment<'info> {
 
 #[derive(Accounts)]
 pub struct PermissionContext<'info> {
+    pub authority: Signer<'info>,
     #[account(
         mut,
         seeds = [COUNTER_SEED, counter.authority.as_ref()],
+        has_one = authority,
         bump
     )]
     pub counter: Account<'info, Counter>,

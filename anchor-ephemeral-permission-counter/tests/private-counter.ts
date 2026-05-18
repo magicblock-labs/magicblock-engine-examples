@@ -5,10 +5,8 @@ import { Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
   GetCommitmentSignature,
   getAuthToken,
-  PERMISSION_SEED,
   PERMISSION_PROGRAM_ID,
   MAGIC_PROGRAM_ID,
-  MAGIC_CONTEXT_ID,
   permissionPdaFromAccount,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import * as nacl from "tweetnacl";
@@ -189,6 +187,7 @@ describe("private-counter", () => {
       .initializePermission()
       .accountsPartial({
         counter: counterPDA,
+        authority: provider.wallet.publicKey,
         permission: permissionPDA,
         magicProgram: MAGIC_PROGRAM_ID,
         permissionProgram: PERMISSION_PROGRAM_ID,
@@ -229,6 +228,7 @@ describe("private-counter", () => {
       .updatePermission(Keypair.generate().publicKey)
       .accountsPartial({
         counter: counterPDA,
+        authority: provider.wallet.publicKey,
         permission: permissionPDA,
         magicProgram: MAGIC_PROGRAM_ID,
         permissionProgram: PERMISSION_PROGRAM_ID,
@@ -252,6 +252,7 @@ describe("private-counter", () => {
       .closePermission()
       .accountsPartial({
         counter: counterPDA,
+        authority: provider.wallet.publicKey,
         permission: permissionPDA,
         magicProgram: MAGIC_PROGRAM_ID,
         permissionProgram: PERMISSION_PROGRAM_ID,
