@@ -23,7 +23,7 @@ jobs:
         run: corepack enable
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.94.0"
 
