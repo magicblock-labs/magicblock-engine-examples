@@ -21,7 +21,7 @@ anchor-debug = []
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
-ephemeral-rollups-sdk = { git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git", rev = "93b3d10d7", features = [
+ephemeral-rollups-sdk = { git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git", rev = "d32189fea8b4", features = [
     "anchor-compat",
     "backward-compat",
     "access-control",
