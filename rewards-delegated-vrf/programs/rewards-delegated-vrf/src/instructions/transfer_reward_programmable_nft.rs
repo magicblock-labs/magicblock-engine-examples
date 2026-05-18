@@ -24,7 +24,7 @@ pub fn transfer_reward_programmable_nft(
     let cpi_signer_seeds = &[seeds.as_slice()];
 
     let cpi_ata_accounts = Create {
-        payer: ctx.accounts.escrow.to_account_info(),
+        payer: ctx.accounts.escrow_auth.to_account_info(),
         associated_token: ctx.accounts.destination_token_account.to_account_info(),
         authority: ctx.accounts.user.to_account_info(),
         mint: ctx.accounts.mint.to_account_info(),
@@ -50,7 +50,7 @@ pub fn transfer_reward_programmable_nft(
         &ctx.accounts.destination_token_record.to_account_info(),
     ))
     .authority(&ctx.accounts.reward_distributor.to_account_info())
-    .payer(&ctx.accounts.escrow.to_account_info())
+    .payer(&ctx.accounts.escrow_auth.to_account_info())
     .system_program(&ctx.accounts.system_program.to_account_info())
     .sysvar_instructions(&ctx.accounts.sysvar_instruction_program.to_account_info())
     .spl_token_program(&ctx.accounts.token_program.to_account_info())

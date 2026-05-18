@@ -23,22 +23,23 @@ jobs:
         run: corepack enable
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
+          toolchain: "1.94.0"
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev pkg-config
 
       - name: Install Solana
         run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v2.3.13/install)"
+          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.7/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
       - name: Install Anchor
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          avm install 0.32.1
-          avm use 0.32.1
-          echo "$HOME/.avm/bin" >> $GITHUB_PATH
+          cargo install --git https://github.com/solana-foundation/anchor --tag v0.32.1 anchor-cli
 
       - name: Install MagicBlock Ephemeral Validator
         run: |

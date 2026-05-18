@@ -5,14 +5,11 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
+[programs.devnet]
+crank_counter = "E91p5Drj4deMEe1RVLWMLWUfTCwDfronioJe6NRYkbxZ"
+
 [programs.localnet]
 crank_counter = "FW2QPnTK9WwYLNG29GhH7PGYdp7Jwq3pGQrUuNdUnK44"
-
-[programs.devnet]
-crank_counter = "FW2QPnTK9WwYLNG29GhH7PGYdp7Jwq3pGQrUuNdUnK44"
-
-[registry]
-url = "https://api.apr.dev"
 
 [provider]
 cluster = "devnet"
@@ -20,3 +17,5 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 \"tests/**/*.ts\""
+
+[hooks]

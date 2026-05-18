@@ -375,7 +375,7 @@ sys.exit(os.WEXITSTATUS(status) if os.WIFEXITED(status) else 128 + os.WTERMSIG(s
 
   echo -e "${GREEN}Running anchor test...${NC}"
   run_clean_output anchor build
-  run_clean_output anchor deploy --provider.cluster localnet
+  run_clean_output anchor deploy --provider.cluster localnet --no-idl
 
   run_clean_output yarn ts-mocha --colors -p ./tsconfig.json -t 1000000 --exit tests/**/*.ts --provider.cluster localnet --skip-local-validator --skip-build --skip-deploy
   TEST_EXIT_CODE=$?

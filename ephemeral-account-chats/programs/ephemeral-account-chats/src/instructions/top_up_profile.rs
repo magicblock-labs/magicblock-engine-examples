@@ -13,10 +13,7 @@ pub fn top_up_profile(ctx: Context<TopUpProfile>, lamports: u64) -> Result<()> {
     };
 
     transfer(
-        CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
-            transfer_accounts,
-        ),
+        CpiContext::new(ctx.accounts.system_program.key(), transfer_accounts),
         lamports,
     )?;
 

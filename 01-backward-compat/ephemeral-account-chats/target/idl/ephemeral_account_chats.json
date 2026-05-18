@@ -1,0 +1,1086 @@
+{
+  "address": "D781aD7RTUVeAU9SZDdCNciYJe8yDyZJs1JbFtHd8Urj",
+  "metadata": {
+    "name": "ephemeral_account_chats",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "append_message",
+      "discriminator": [
+        180,
+        85,
+        91,
+        83,
+        18,
+        62,
+        31,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "profile_owner",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_owner.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "profile_other",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_other.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "conversation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  115,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_owner.handle",
+                "account": "Profile"
+              },
+              {
+                "kind": "account",
+                "path": "profile_other.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "body",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "close_conversation",
+      "discriminator": [
+        50,
+        203,
+        250,
+        219,
+        37,
+        118,
+        74,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "profile_owner"
+          ]
+        },
+        {
+          "name": "profile_owner",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_owner.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "profile_other",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_other.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "conversation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  115,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_owner.handle",
+                "account": "Profile"
+              },
+              {
+                "kind": "account",
+                "path": "profile_other.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "address": "MagicVau1t999999999999999999999999999999999"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_profile",
+      "discriminator": [
+        167,
+        36,
+        181,
+        8,
+        136,
+        158,
+        46,
+        207
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "profile"
+          ]
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_conversation",
+      "discriminator": [
+        30,
+        90,
+        208,
+        53,
+        75,
+        232,
+        26,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "profile_owner"
+          ]
+        },
+        {
+          "name": "profile_owner",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_owner.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "profile_other",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_other.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "conversation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  115,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_owner.handle",
+                "account": "Profile"
+              },
+              {
+                "kind": "account",
+                "path": "profile_other.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "address": "MagicVau1t999999999999999999999999999999999"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_profile",
+      "discriminator": [
+        225,
+        205,
+        234,
+        143,
+        17,
+        186,
+        50,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "handle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "handle",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "delegate_profile",
+      "discriminator": [
+        197,
+        115,
+        194,
+        166,
+        110,
+        39,
+        73,
+        134
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "profile"
+          ]
+        },
+        {
+          "name": "buffer_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                179,
+                221,
+                167,
+                112,
+                88,
+                153,
+                236,
+                194,
+                58,
+                233,
+                137,
+                69,
+                163,
+                1,
+                236,
+                13,
+                53,
+                178,
+                228,
+                216,
+                237,
+                231,
+                97,
+                230,
+                92,
+                212,
+                45,
+                221,
+                175,
+                218,
+                67,
+                40
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_program",
+          "address": "D781aD7RTUVeAU9SZDdCNciYJe8yDyZJs1JbFtHd8Urj"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "validator",
+          "type": {
+            "option": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "extend_conversation",
+      "discriminator": [
+        165,
+        160,
+        127,
+        156,
+        115,
+        152,
+        102,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "profile_sender"
+          ]
+        },
+        {
+          "name": "profile_sender",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_sender.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "profile_other",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_other.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "conversation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  115,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile_sender.handle",
+                "account": "Profile"
+              },
+              {
+                "kind": "account",
+                "path": "profile_other.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "address": "MagicVau1t999999999999999999999999999999999"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "additional_messages",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer"
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "top_up_profile",
+      "discriminator": [
+        239,
+        73,
+        151,
+        165,
+        156,
+        188,
+        208,
+        57
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "profile"
+          ]
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "undelegate_profile",
+      "discriminator": [
+        48,
+        29,
+        12,
+        69,
+        45,
+        87,
+        67,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "profile"
+          ]
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile.handle",
+                "account": "Profile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Conversation",
+      "discriminator": [
+        171,
+        46,
+        180,
+        58,
+        245,
+        221,
+        103,
+        174
+      ]
+    },
+    {
+      "name": "Profile",
+      "discriminator": [
+        184,
+        101,
+        165,
+        188,
+        95,
+        63,
+        127,
+        188
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidHandle",
+      "msg": "The provided handle is invalid."
+    },
+    {
+      "code": 6001,
+      "name": "InvalidMessage",
+      "msg": "The provided message body is invalid."
+    },
+    {
+      "code": 6002,
+      "name": "ConversationCountOverflow",
+      "msg": "The profile conversation count overflowed."
+    },
+    {
+      "code": 6003,
+      "name": "ConversationCountUnderflow",
+      "msg": "The profile conversation count underflowed."
+    },
+    {
+      "code": 6004,
+      "name": "InvalidConversationOwner",
+      "msg": "The conversation owner does not match the signer."
+    },
+    {
+      "code": 6005,
+      "name": "InvalidConversationOther",
+      "msg": "The conversation other does not match the expected account."
+    },
+    {
+      "code": 6006,
+      "name": "ConversationCapacityExceeded",
+      "msg": "The conversation does not have enough allocated capacity for another message."
+    },
+    {
+      "code": 6007,
+      "name": "ActiveConversationsExist",
+      "msg": "The profile still has active conversations."
+    },
+    {
+      "code": 6008,
+      "name": "InvalidTopUpAmount",
+      "msg": "The top up amount must be greater than zero."
+    },
+    {
+      "code": 6009,
+      "name": "InvalidExtensionSize",
+      "msg": "The conversation extension amount must be greater than zero."
+    }
+  ],
+  "types": [
+    {
+      "name": "Conversation",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "handle_owner",
+            "type": "string"
+          },
+          {
+            "name": "handle_other",
+            "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "messages",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "ConversationMessage"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConversationMessage",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sender",
+            "type": "pubkey"
+          },
+          {
+            "name": "body",
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Profile",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "active_conversation_count",
+            "type": "u64"
+          },
+          {
+            "name": "handle",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ]
+}

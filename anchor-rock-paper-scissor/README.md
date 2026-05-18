@@ -16,17 +16,17 @@ The following software packages may be required, other versions may also be comp
 
 | Software | Version | Installation Guide |
 |----------|---------|-------------------|
-| Solana | 2.3.13 | [Install Solana](https://docs.solana.com/cli/install-solana-cli-tools) |
-| Rust | 1.85.0 | [Install Rust](https://www.rust-lang.org/tools/install) |
-| Anchor | 0.32.1 | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
+| Solana | 3.1.9 | [Install Solana](https://docs.solana.com/cli/install-solana-cli-tools) |
+| Rust | 1.89.0 | [Install Rust](https://www.rust-lang.org/tools/install) |
+| Anchor | 1.0.2 | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
 | Node | 24.10.0 | [Install Node](https://nodejs.org/) |
 
 ## Prerequisites
 
-- **Rust**: 1.85.0
+- **Rust**: 1.89.0
 - **Node.js**: 24.10.0
-- **Solana CLI**: 2.3.13
-- **Anchor CLI**: 0.32.1
+- **Solana CLI**: 3.1.9
+- **Anchor CLI**: 1.0.2
 - **Yarn**: Package manager (or npm)
 
 ### Installation
@@ -38,14 +38,14 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 2. Install Solana CLI:
 ```bash
-sh -c "$(curl -sSfL https://release.anza.xyz/v2.3.13/install)"
+sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.9/install)"
 ```
 
 3. Install Anchor:
 ```bash
 cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-avm install 0.32.1
-avm use 0.32.1
+avm install 1.0.2
+avm use 1.0.2
 ```
 
 4. Configure Solana (optional, for devnet):

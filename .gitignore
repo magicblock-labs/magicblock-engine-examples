@@ -10,9 +10,7 @@
 **/.next/
 **/.env
 **/tsconfig.tsbuildinfo
-!/anchor-counter/target/deploy/
 /anchor-counter/target/deploy/*
-!/anchor-counter/target/deploy/*-keypair.json
 !/bolt-counter/target/deploy/counter-keypair.json
 !/bolt-counter/target/deploy/increase-keypair.json
 

@@ -7,7 +7,7 @@ use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{commit_and_undelegate_accounts};
 
 
-declare_id!("D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM");
+declare_id!("2VDJk6yp82MxgXjcxs2RHyVYTbaq74xrs25MfYxYuqD6");
 
 
 pub const PLAYER_SEED: &[u8] = b"playerd2";

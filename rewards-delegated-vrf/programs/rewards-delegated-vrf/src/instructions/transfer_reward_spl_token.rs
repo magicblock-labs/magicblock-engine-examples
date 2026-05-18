@@ -5,10 +5,7 @@ use anchor_spl::token_interface::{transfer_checked, TransferChecked};
 use crate::constants::REWARD_DISTRIBUTOR_SEED;
 use crate::TransferRewardSplToken;
 
-pub fn transfer_reward_spl_token(
-    ctx: Context<TransferRewardSplToken>,
-    amount: u64,
-) -> Result<()> {
+pub fn transfer_reward_spl_token(ctx: Context<TransferRewardSplToken>, amount: u64) -> Result<()> {
     msg!(
         "Transferring SPL token reward: {} tokens to user {:?}",
         amount,
@@ -24,7 +21,7 @@ pub fn transfer_reward_spl_token(
     let cpi_signer_seeds = &[seeds.as_slice()];
 
     let cpi_ata_accounts = Create {
-        payer: ctx.accounts.escrow.to_account_info(),
+        payer: ctx.accounts.escrow_auth.to_account_info(),
         associated_token: ctx.accounts.destination_token_account.to_account_info(),
         authority: ctx.accounts.user.to_account_info(),
         mint: ctx.accounts.mint.to_account_info(),

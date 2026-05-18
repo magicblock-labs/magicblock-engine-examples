@@ -3,7 +3,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer as SplTransfer};
 
 use ephemeral_rollups_sdk::anchor::ephemeral;
 
-declare_id!("FgvEeit1djLPPjozq9zW9R8Ahu5JpijcdWQxqL4P887");
+declare_id!("DnxzJfHaXUaYCrKo4avb8GeUaTPvfgbCGoD8N4GSe3Z6");
 
 #[ephemeral]
 #[program]
@@ -20,7 +20,7 @@ pub mod spl_tokens {
             to: ctx.accounts.to.to_account_info(),
             authority: ctx.accounts.payer.to_account_info(),
         };
-        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
 
         token::transfer(cpi_ctx, amount)?;
 

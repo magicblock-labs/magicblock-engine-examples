@@ -5,7 +5,7 @@ use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{CallHandler, MagicIntentBundleBuilder};
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 
-declare_id!("CrWQv121NBNzXjxVe5pNL7MsT2yW13dMheE4nemoudQ1");
+declare_id!("HnAdFav4AoQV8WUDt6UQjwR8nNPCJRZBGaac61VUqMC6");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 pub const LEADERBOARD_SEED: &[u8] = b"leaderboard";
@@ -80,11 +80,11 @@ pub mod magic_actions {
         let action_args = ActionArgs::new(instruction_data);
         let action_accounts = vec![
             ShortAccountMeta {
-                pubkey: ctx.accounts.leaderboard.key(),
+                pubkey: ctx.accounts.leaderboard.key().to_bytes().into(),
                 is_writable: true,
             },
             ShortAccountMeta {
-                pubkey: ctx.accounts.counter.key(),
+                pubkey: ctx.accounts.counter.key().to_bytes().into(),
                 is_writable: false,
             },
         ];
@@ -142,7 +142,7 @@ pub struct DelegateCounter<'info> {
     pub payer: Signer<'info>,
     #[account(mut, del)]
     /// CHECK: the correct pda
-    pub pda: AccountInfo<'info>,
+    pub pda: UncheckedAccount<'info>,
 }
 
 #[commit]
@@ -168,7 +168,7 @@ pub struct CommitAndUpdateLeaderboard<'info> {
     pub leaderboard: UncheckedAccount<'info>,
 
     /// CHECK: Your program ID
-    pub program_id: AccountInfo<'info>,
+    pub program_id: UncheckedAccount<'info>,
 }
 
 #[account]
