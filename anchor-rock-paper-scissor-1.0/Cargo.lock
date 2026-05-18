@@ -756,6 +756,7 @@ dependencies = [
 name = "ephemeral-rollups-sdk-attribute-commit"
 version = "0.14.1"
 dependencies = [
+ "proc-macro2",
  "quote",
  "syn 1.0.109",
 ]

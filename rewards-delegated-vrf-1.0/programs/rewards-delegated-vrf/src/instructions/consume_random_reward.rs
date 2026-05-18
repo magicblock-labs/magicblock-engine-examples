@@ -89,7 +89,7 @@ pub fn consume_random_reward(
                             ruleset_pda,
                             amount,
                             ctx.accounts.reward_list.to_account_info(),
-                            user.clone(),
+                            user.as_ref().clone(),
                             ctx.accounts.magic_fee_vault.to_account_info(),
                             payer_seeds,
                         )?;
