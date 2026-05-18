@@ -187,43 +187,6 @@ pub mod private_counter {
         .build_and_invoke()?;
         Ok(())
     }
-
-    /// Increment the counter + manual commit the account in the ER.
-    /// ANYONE can invoke_signed, may want to set checks/guards
-    pub fn increment_and_commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
-        let counter = &mut ctx.accounts.counter;
-        counter.count += 1;
-        msg!("PDA {} count: {}", counter.key(), counter.count);
-        counter.exit(&crate::ID)?;
-        MagicIntentBundleBuilder::new(
-            ctx.accounts.payer.to_account_info(),
-            ctx.accounts.magic_context.to_account_info(),
-            ctx.accounts.magic_program.to_account_info(),
-        )
-        .commit(&[ctx.accounts.counter.to_account_info()])
-        .build_and_invoke()?;
-        Ok(())
-    }
-
-    /// Increment the counter + commit and undelegate both the permission account
-    /// and the counter in one atomic ER transaction.
-    pub fn increment_and_undelegate(ctx: Context<UndelegateCounter>) -> Result<()> {
-        let counter = &mut ctx.accounts.counter;
-        counter.count += 1;
-        msg!("PDA {} count: {}", counter.key(), counter.count);
-        // Serialize the Anchor counter account before the commit+undelegate CPIs
-        counter.exit(&crate::ID)?;
-
-        // 2. Commit and undelegate the counter
-        MagicIntentBundleBuilder::new(
-            ctx.accounts.payer.to_account_info(),
-            ctx.accounts.magic_context.to_account_info(),
-            ctx.accounts.magic_program.to_account_info(),
-        )
-        .commit_and_undelegate(&[ctx.accounts.counter.to_account_info()])
-        .build_and_invoke()?;
-        Ok(())
-    }
 }
 
 #[derive(Accounts)]

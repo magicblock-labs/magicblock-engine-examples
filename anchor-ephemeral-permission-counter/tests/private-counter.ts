@@ -299,10 +299,10 @@ describe("private-counter", () => {
     );
   });
 
-  it("Increase counter on ER and commit", async () => {
+  it("Undelegate counter from ER to Solana", async () => {
     const start = Date.now();
     let tx = await program.methods
-      .incrementAndCommit()
+      .undelegate()
       .accountsPartial({
         payer: providerEphemeralRollup.wallet.publicKey,
         counter: counterPDA,
@@ -315,29 +315,9 @@ describe("private-counter", () => {
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
     const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
     console.log(
-      `${Date.now() - start}ms (ER) Increment and Commit txHash: ${txHash}`,
+      `${Date.now() - start}ms (ER) Undelegate txHash: ${txHash}`,
     );
-  });
-
-  it("Commit and undelegate counter from ER to Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
-      .incrementAndUndelegate()
-      .accountsPartial({
-        payer: providerEphemeralRollup.wallet.publicKey,
-        counter: counterPDA,
-      })
-      .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-    console.log(
-      `${Date.now() - start}ms (ER) Increment and Undelegate txHash: ${txHash}`,
-    );
-    // Wait for both permission and counter undelegations to settle back on the base layer
+    // Wait for counter undelegation to settle back on the base layer
     await new Promise((resolve) => setTimeout(resolve, 5000));
   });
 });
