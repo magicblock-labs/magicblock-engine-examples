@@ -170,8 +170,6 @@ describe("private-counter", () => {
     console.log(
       `${Date.now() - start}ms (Base Layer) Delegate txHash: ${txHash}`,
     );
-    // Wait for delegation to propagate to the ER
-    await new Promise((resolve) => setTimeout(resolve, 3000));
   });
 
   it("Initialize permission on ER", async () => {
@@ -318,7 +316,20 @@ describe("private-counter", () => {
     console.log(
       `${Date.now() - start}ms (ER) Undelegate txHash: ${txHash}`,
     );
+
     // Wait for counter undelegation to settle back on the base layer
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    let retries = 10;
+    while (retries > 0) {
+      const account = await provider.connection.getAccountInfo(counterPDA);
+      if (account?.owner.equals(program.programId)) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      retries--;
+
+      if (retries === 0) {
+        throw new Error("Counter undelegation failed");
+      }
+    }
   });
 });
