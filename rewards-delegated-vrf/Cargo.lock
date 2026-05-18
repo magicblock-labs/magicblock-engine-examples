@@ -823,8 +823,6 @@ dependencies = [
 [[package]]
 name = "ephemeral-rollups-sdk"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a7ea831c9aa59c144076a2ba45b6963d5ea3fb12e8f67d9dc8d92290ee39cf2"
 dependencies = [
  "anchor-lang",
  "base64ct",
@@ -849,8 +847,6 @@ dependencies = [
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-action"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc05c84ebdddd61da0b7d8c2997b0f3cbc84f525afe35db74d5fc78c2ad294a8"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -859,8 +855,6 @@ dependencies = [
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e81cdb38226293cd6aeaed2e7afa16a94137851a1cb0fc7b3826c672daa920c"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -869,8 +863,6 @@ dependencies = [
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e8762af53348f7841f5f258dcdd891b277438a1610d76369ae05af63863a213"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -880,8 +872,6 @@ dependencies = [
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b83f1f73d13933fa458d51f4c15844f575fc1d0f400a525472156e8741d13a9d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -891,8 +881,6 @@ dependencies = [
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral-accounts"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "480bb72f860df7b19df3e02b9ec384295f32b5475acdc46ec4a1d4e94197a589"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1301,14 +1289,15 @@ dependencies = [
 
 [[package]]
 name = "magicblock-magic-program-api"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "410003292a8918c9836b9ce03cecd7f6a58d3ee1de134c54cc68ea10dd4fcc27"
+version = "0.10.0"
 dependencies = [
  "bincode",
+ "const-crypto",
  "serde",
  "solana-program 2.2.1",
- "solana-signature",
+ "solana-program 3.0.0",
+ "solana-signature 2.3.0",
+ "solana-signature 3.4.0",
 ]
 
 [[package]]
@@ -3309,13 +3298,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-signature"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7a73c6e97cc2108be0adf6a6ea326434f8398df9d7eed81da2a4548b69e971c"
+dependencies = [
+ "five8 1.0.0",
+ "serde",
+ "serde-big-array",
+ "serde_derive",
+ "solana-sanitize 3.0.1",
+ "wincode",
+]
+
+[[package]]
 name = "solana-signer"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c41991508a4b02f021c1342ba00bcfa098630b213726ceadc7cb032e051975b"
 dependencies = [
  "solana-pubkey 2.4.0",
- "solana-signature",
+ "solana-signature 2.3.0",
  "solana-transaction-error 2.2.1",
 ]
 
@@ -3606,7 +3609,7 @@ dependencies = [
  "solana-sdk-ids 2.2.1",
  "solana-seed-derivable",
  "solana-seed-phrase",
- "solana-signature",
+ "solana-signature 2.3.0",
  "solana-signer",
  "subtle",
  "thiserror 2.0.18",

@@ -21,4 +21,5 @@ anchor-debug = []
 
 [dependencies]
 anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
-ephemeral-rollups-sdk = { version = "0.14.1", features = ["anchor", "access-control"] }
+# ephemeral-rollups-sdk = { version = "0.14.1", features = ["anchor", "access-control"] }
+ephemeral-rollups-sdk = { path = "/Users/snawaz/projects/mb/ephemeral-rollups-sdk/rust/sdk", features = ["anchor", "access-control"] }
