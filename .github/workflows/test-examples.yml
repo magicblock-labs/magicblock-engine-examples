@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Enable Corepack
         run: corepack enable
@@ -25,7 +25,7 @@ jobs:
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: "1.85.0"
+          toolchain: "1.94.0"
           override: true
 
       - name: Install Solana
