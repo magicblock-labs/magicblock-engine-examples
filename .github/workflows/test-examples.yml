@@ -23,10 +23,9 @@ jobs:
         run: corepack enable
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.94.0"
-          override: true
 
       - name: Install Solana
         run: |
