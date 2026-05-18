@@ -34,9 +34,7 @@ jobs:
 
       - name: Install Anchor
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          avm install 0.32.1
-          avm use 0.32.1
+          cargo install --git https://github.com/solana-foundation/anchor --tag v0.32.1 anchor-cli
           echo "$HOME/.avm/bin" >> $GITHUB_PATH
 
       - name: Install MagicBlock Ephemeral Validator
