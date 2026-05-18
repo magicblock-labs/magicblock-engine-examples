@@ -31,15 +31,15 @@ describe("private-counter", () => {
   );
   anchor.setProvider(provider);
 
-  const teeUrl = "https://devnet-tee.magicblock.app";
-  const teeWsUrl = "wss://devnet-tee.magicblock.app";
+  const teeUrl = process.env.TEE_PROVIDER_ENDPOINT || "https://devnet-tee.magicblock.app";
+  const teeWsUrl = process.env.TEE_WS_ENDPOINT || "wss://devnet-tee.magicblock.app";
   const ephemeralRpcEndpoint = (
-    process.env.TEE_PROVIDER_ENDPOINT || teeUrl
+    teeUrl
   ).replace(/\/$/, "");
 
   let providerEphemeralRollup = new anchor.AnchorProvider(
     new anchor.web3.Connection(ephemeralRpcEndpoint, {
-      wsEndpoint: process.env.TEE_WS_ENDPOINT || undefined,
+      wsEndpoint: teeWsUrl,
       commitment: "confirmed",
     }),
     anchor.Wallet.local(),
