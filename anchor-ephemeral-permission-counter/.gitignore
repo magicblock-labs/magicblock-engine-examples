@@ -3,27 +3,18 @@
 **/*.rs.bk
 **/target/*
 **/node_modules
-**/test-ledger*
+**/test-ledger
 **/.anchor
 **/.bolt
 **/.yarn
 **/.next/
 **/.env
-**/tsconfig.tsbuildinfo
-/anchor-counter/target/deploy/*
+**/magicblock-test-storage
 !/bolt-counter/target/deploy/counter-keypair.json
 !/bolt-counter/target/deploy/increase-keypair.json
 
 # But don't ignore the target/idl/ directory
 !**/anchor-minter/target/idl/
 !**/anchor-counter/target/idl/
-!**/anchor-minter/target/deploy/
-!**/ephemeral-account-chats/target/idl/
-!**/ephemeral-account-chats/target/types/
-!**/ephemeral-account-chats/target/deploy/*.json
-
-# 
-**/tests-kit
-
-# Logs
-**/**/**.log
+!**/anchor-minter/target/deploy/anchor-counter/magicblock-test-storage/
+anchor-counter/magicblock-test-storage/
