@@ -822,7 +822,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anchor-lang",
  "base64ct",
@@ -846,7 +846,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-action"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -854,7 +854,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -863,7 +863,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -872,7 +872,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -881,7 +881,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral-accounts"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -891,20 +891,20 @@ dependencies = [
 [[package]]
 name = "ephemeral-vrf-sdk"
 version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25ff20b2a2d23ac2ab4adc69f7af4e9ef0f880db3ae2ae04a895a3f77380d681"
 dependencies = [
  "anchor-lang",
+ "borsh 0.10.4",
  "borsh 1.5.7",
  "ephemeral-vrf-sdk-vrf-macro",
  "solana-program 2.2.1",
+ "solana-program 3.0.0",
+ "solana-pubkey 2.4.0",
+ "solana-system-interface 3.2.0",
 ]
 
 [[package]]
 name = "ephemeral-vrf-sdk-vrf-macro"
 version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ea39346a86e65d6b44ed861f0b8151ac07d52d68c7f6f7ea47f67cfbe0280e8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1290,7 +1290,7 @@ dependencies = [
 
 [[package]]
 name = "magicblock-magic-program-api"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "bincode",
  "const-crypto",
@@ -3445,6 +3445,21 @@ dependencies = [
  "solana-msg 3.1.0",
  "solana-program-error 3.0.1",
  "solana-pubkey 3.0.0",
+]
+
+[[package]]
+name = "solana-system-interface"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55b54965bf0b76fa8e2b35376583efddd4d916618cfe595bf48c7d7b55a9e628"
+dependencies = [
+ "num-traits",
+ "serde",
+ "serde_derive",
+ "solana-address 2.6.0",
+ "solana-instruction 3.4.0",
+ "solana-msg 3.1.0",
+ "solana-program-error 3.0.1",
 ]
 
 [[package]]

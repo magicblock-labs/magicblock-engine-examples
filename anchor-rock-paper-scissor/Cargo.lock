@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anchor-lang",
  "base64ct",
@@ -761,7 +761,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-action"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -769,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -778,7 +778,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -787,7 +787,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -796,7 +796,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral-accounts"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1152,7 +1152,7 @@ dependencies = [
 
 [[package]]
 name = "magicblock-magic-program-api"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "bincode",
  "const-crypto",
