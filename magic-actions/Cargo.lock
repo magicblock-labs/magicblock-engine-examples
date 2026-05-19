@@ -462,9 +462,9 @@ dependencies = [
 
 [[package]]
 name = "bytemuck"
-version = "1.24.0"
+version = "1.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fbdf580320f38b612e485521afda1ee26d10cc9884efaaa750d383e13e3c5f4"
+checksum = "c8efb64bd706a16a1bdde310ae86b351e4d21550d98d056f22f8a7f7a2183fec"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -726,11 +726,14 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.14.1"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98afff417a51248d367e645bf1a1a8c0be4522a9dd6ce1717c253ade9b53bc16"
 dependencies = [
  "anchor-lang",
  "base64ct",
  "bincode",
+ "bytemuck",
  "ephemeral-rollups-sdk-attribute-action",
  "ephemeral-rollups-sdk-attribute-commit",
  "ephemeral-rollups-sdk-attribute-delegate",
@@ -750,7 +753,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-action"
-version = "0.14.1"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40ae9132b7e5c3bc4ef70e8feb8d2e00688bb1251e4acb528cca603776e1c026"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -758,15 +763,20 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.14.1"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c079886a3a6d5a887c2b12ceaea953715c4d1e507c27c198c2ada1c3119c057"
 dependencies = [
+ "proc-macro2",
  "quote",
  "syn 1.0.109",
 ]
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.14.1"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a669ca7d003e2f6c1148f052f3bc9a4163489b8773d284961c5585e5210bf48f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -775,7 +785,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.14.1"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a7395b56b45f11779afbc5d2016dd2a5f140477f0441c0023ef5606418c4084"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -784,7 +796,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral-accounts"
-version = "0.14.1"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "569ddbe7759347c13ba5ce3f68d60c242041cfbbd0a04d653c04b042e81b0c77"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1154,7 +1168,9 @@ dependencies = [
 
 [[package]]
 name = "magicblock-magic-program-api"
-version = "0.10.0"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1dc8fba0307c90b91b70c9ed06d4242d6c4159f331b2f05bf8f875c2a94e0e98"
 dependencies = [
  "bincode",
  "const-crypto",

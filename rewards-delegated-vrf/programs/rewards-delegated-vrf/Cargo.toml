@@ -21,8 +21,7 @@ custom-panic = []
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
 anchor-spl = { version = "0.32.1", features = ["idl-build", "metadata", "associated_token"] }
-#ephemeral-rollups-sdk = { version = "0.14.1", features = ["anchor-compat"] }
-ephemeral-rollups-sdk = { path = "/Users/snawaz/projects/mb/ephemeral-rollups-sdk/rust/sdk", features = ["anchor-compat"] }
+ephemeral-rollups-sdk = { version = "0.14.2", features = ["anchor-compat"] }
 #ephemeral-vrf-sdk = {version = "0.2.3", features = ["anchor"]}
 ephemeral-vrf-sdk = { path = "/Users/snawaz/projects/mb/ephemeral-vrf/sdk", features = ["anchor-compat"] }
 spl-associated-token-account = { version = "7", features = ["no-entrypoint"] }
