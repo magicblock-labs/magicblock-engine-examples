@@ -104,6 +104,206 @@ export type RewardsDelegatedVrf = {
       ]
     },
     {
+      "name": "adminTransfer",
+      "discriminator": [
+        196,
+        77,
+        244,
+        188,
+        16,
+        7,
+        192,
+        73
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "rewardDistributor"
+        },
+        {
+          "name": "rewardList",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  108,
+                  105,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rewardDistributor"
+              }
+            ]
+          }
+        },
+        {
+          "name": "transferLookupTable",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  102,
+                  101,
+                  114,
+                  95,
+                  108,
+                  111,
+                  111,
+                  107,
+                  117,
+                  112,
+                  95,
+                  116,
+                  97,
+                  98,
+                  108,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "sourceTokenAccount",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "rewardDistributor"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "user"
+        },
+        {
+          "name": "delegationRecordRewardList"
+        },
+        {
+          "name": "magicFeeVault",
+          "writable": true
+        },
+        {
+          "name": "magicProgram",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magicContext",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "consumeRandomReward",
       "discriminator": [
         217,
@@ -187,6 +387,10 @@ export type RewardsDelegatedVrf = {
               }
             ]
           }
+        },
+        {
+          "name": "magicFeeVault",
+          "writable": true
         },
         {
           "name": "magicProgram",
@@ -663,6 +867,13 @@ export type RewardsDelegatedVrf = {
           "name": "destination"
         },
         {
+          "name": "delegationRecordRewardList"
+        },
+        {
+          "name": "magicFeeVault",
+          "writable": true
+        },
+        {
           "name": "magicProgram",
           "address": "Magic11111111111111111111111111111111111111"
         },
@@ -754,6 +965,9 @@ export type RewardsDelegatedVrf = {
           "name": "oracleQueue",
           "writable": true,
           "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+        },
+        {
+          "name": "delegationRecordRewardList"
         },
         {
           "name": "programIdentity",
@@ -941,16 +1155,16 @@ export type RewardsDelegatedVrf = {
       ]
     },
     {
-      "name": "transferRewardProgrammableNft",
+      "name": "transferProgrammableNft",
       "discriminator": [
-        108,
-        62,
-        71,
-        162,
-        24,
-        220,
-        74,
-        161
+        160,
+        198,
+        250,
+        77,
+        171,
+        102,
+        253,
+        168
       ],
       "accounts": [
         {
@@ -1012,8 +1226,7 @@ export type RewardsDelegatedVrf = {
           "name": "escrowAuth"
         },
         {
-          "name": "escrow",
-          "writable": true
+          "name": "escrow"
         }
       ],
       "args": [
@@ -1024,16 +1237,16 @@ export type RewardsDelegatedVrf = {
       ]
     },
     {
-      "name": "transferRewardSplToken",
+      "name": "transferSplToken",
       "discriminator": [
-        48,
-        92,
-        159,
-        119,
-        218,
-        101,
-        20,
-        229
+        75,
+        213,
+        193,
+        42,
+        238,
+        168,
+        160,
+        138
       ],
       "accounts": [
         {
@@ -1071,8 +1284,7 @@ export type RewardsDelegatedVrf = {
           "name": "escrowAuth"
         },
         {
-          "name": "escrow",
-          "writable": true
+          "name": "escrow"
         }
       ],
       "args": [
@@ -1401,28 +1613,88 @@ export type RewardsDelegatedVrf = {
     },
     {
       "code": 6025,
+      "name": "rewardRangeMismatch",
+      "msg": "Provided draw range does not match the existing reward range"
+    },
+    {
+      "code": 6026,
+      "name": "rewardAmountMismatch",
+      "msg": "Provided reward amount does not match the existing reward amount"
+    },
+    {
+      "code": 6027,
+      "name": "duplicateRewardName",
+      "msg": "Reward name is already used by another reward"
+    },
+    {
+      "code": 6028,
+      "name": "missingRedemptionsAdded",
+      "msg": "Existing token rewards require a redemption increment to be provided"
+    },
+    {
+      "code": 6029,
       "name": "mintNotFoundInReward",
       "msg": "Mint not found in reward"
     },
     {
-      "code": 6026,
+      "code": 6030,
       "name": "insufficientRedemptionLimit",
       "msg": "Insufficient redemption limit to remove"
     },
     {
-      "code": 6027,
+      "code": 6031,
       "name": "invalidDrawRange",
       "msg": "Invalid draw range: draw_range_min must be less than or equal to draw_range_max"
     },
     {
-      "code": 6028,
+      "code": 6032,
       "name": "invalidRedemptionState",
       "msg": "Invalid redemption state: redemption_count cannot exceed redemption_limit"
     },
     {
-      "code": 6029,
+      "code": 6033,
       "name": "invalidRewardAmount",
       "msg": "Invalid reward amount: must be greater than 0"
+    },
+    {
+      "code": 6034,
+      "name": "insufficientTokenBalanceForReward",
+      "msg": "Distributor token account does not hold enough tokens for the requested reward inventory"
+    },
+    {
+      "code": 6035,
+      "name": "arithmeticOverflow",
+      "msg": "Arithmetic overflow while calculating reward inventory requirements"
+    },
+    {
+      "code": 6036,
+      "name": "nftMintAlreadyAssigned",
+      "msg": "NFT mint is already used by another reward"
+    },
+    {
+      "code": 6037,
+      "name": "rewardListAlreadyInitialized",
+      "msg": "Reward list rewards can only be initialized once"
+    },
+    {
+      "code": 6038,
+      "name": "insufficientRewardMints",
+      "msg": "Reward does not have enough remaining mints for its remaining redemptions"
+    },
+    {
+      "code": 6039,
+      "name": "missingMintAccountForReward",
+      "msg": "Missing mint account for reward inventory validation"
+    },
+    {
+      "code": 6040,
+      "name": "mintAlreadyInReward",
+      "msg": "Mint is already part of the existing reward"
+    },
+    {
+      "code": 6041,
+      "name": "invalidDelegationRecord",
+      "msg": "Failed to deserialize the delegation record for reward_list"
     }
   ],
   "types": [

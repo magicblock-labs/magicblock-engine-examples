@@ -3,11 +3,11 @@ use anchor_spl::associated_token::{create_idempotent, Create};
 use anchor_spl::token_interface::{transfer_checked, TransferChecked};
 
 use crate::constants::REWARD_DISTRIBUTOR_SEED;
-use crate::TransferRewardSplToken;
+use crate::TransferSplToken;
 
-pub fn transfer_reward_spl_token(ctx: Context<TransferRewardSplToken>, amount: u64) -> Result<()> {
+pub fn transfer_spl_token(ctx: Context<TransferSplToken>, amount: u64) -> Result<()> {
     msg!(
-        "Transferring SPL token reward: {} tokens to user {:?}",
+        "Transferring SPL token: {} tokens to user {:?}",
         amount,
         ctx.accounts.user.key()
     );

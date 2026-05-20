@@ -8,7 +8,7 @@ import { sendTransaction, sendTransactionWithKeypair } from "@/lib/sendTransacti
 // Instruction builders
 import { buildInitializeDistributor, buildSetAdmins, buildSetWhitelist, buildSetRewardList } from "@/lib/instructions/admin";
 import { buildDelegateRewardList, buildUndelegateRewardList } from "@/lib/instructions/delegation";
-import { buildRequestRandomReward, buildAddReward, buildAddRewardsBatch, buildRemoveReward, buildRemoveRewardsBatch, buildUpdateReward, listenForVrfCallback } from "@/lib/instructions/rewards";
+import { buildRequestRandomReward, buildAddReward, buildAddRewardsBatch, buildRemoveReward, buildRemoveRewardsBatch, buildUpdateReward, buildAdminTransfer, listenForVrfCallback } from "@/lib/instructions/rewards";
 import { buildMintNftCollection, buildMintNftToCollection, buildUpdateNftMetadata } from "@/lib/instructions/nft";
 import { buildSplTokenTransfer } from "@/lib/instructions/tokens";
 import { buildSponsoredLamportsTransfer, checkRewardListDelegated } from "@/lib/instructions/sponsoredLamports";
@@ -214,6 +214,44 @@ export const useTransaction = (props?: UseTransactionProps) => {
     [publicKey, ep, distributorPda, exec]
   );
 
+  /**
+   * Admin transfer: send distributor-held assets to an arbitrary user outside
+   * the VRF/redemption flow. Always submitted to the ER endpoint because
+   * reward_list (which the on-chain handler reads for the availability check)
+   * is delegated. Pre-flights the delegation record so we fail fast with a
+   * clear message if reward_list isn't delegated.
+   */
+  const adminTransfer = useCallback(
+    async (mint: PublicKey, user: PublicKey, amount: number) => {
+      if (!publicKey || !signTransaction) return { success: false, error: "Wallet not connected" };
+      if (amount <= 0) return { success: false, error: "Amount must be greater than 0" };
+      const dist = distributorPda();
+      if (!dist) return { success: false, error: "No distributor selected" };
+
+      // Delegation state lives on base — read it from the Solana endpoint.
+      const solanaEndpoint = ep("solana");
+      const solanaConn = new Connection(solanaEndpoint, "confirmed");
+      const isDelegated = await checkRewardListDelegated(
+        solanaConn,
+        PDAs.getRewardList(dist)[0]
+      );
+      if (!isDelegated) {
+        return {
+          success: false,
+          error: "Reward list is not delegated. Delegate it to the ER first.",
+        };
+      }
+
+      // admin_transfer is `#[commit]` — must run on the ER endpoint.
+      const endpoint = ep("magicblock");
+      return exec(
+        (conn) => buildAdminTransfer(conn, publicKey, dist, mint, user, amount),
+        endpoint
+      );
+    },
+    [publicKey, signTransaction, ep, distributorPda, exec]
+  );
+
   // -------------------------------------------------------------------------
   // NFTs (need mintKeypair partial signing)
   // -------------------------------------------------------------------------
@@ -367,5 +405,6 @@ export const useTransaction = (props?: UseTransactionProps) => {
     sendSplTokenToDistributor,
     sendSponsoredLamportsToRewardList,
     topUpEphemeralBalance,
+    adminTransfer,
   };
 };

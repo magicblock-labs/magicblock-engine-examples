@@ -25,7 +25,7 @@ fn as_signer<'info>(signer: AccountInfo<'info>) -> AccountInfo<'info> {
     }
 }
 
-pub fn execute_reward_transfer<'info>(
+pub fn schedule_transfer_action<'info>(
     reward_distributor: &Account<'info, RewardDistributor>,
     transfer_lookup_table: &Account<'info, TransferLookupTable>,
     reward_list: &AccountInfo<'info>,
@@ -54,7 +54,7 @@ pub fn execute_reward_transfer<'info>(
     match reward_type {
         RewardType::SplToken | RewardType::LegacyNft => {
             let instruction_data =
-                anchor_lang::InstructionData::data(&crate::instruction::TransferRewardSplToken {
+                anchor_lang::InstructionData::data(&crate::instruction::TransferSplToken {
                     amount,
                 });
 
@@ -118,7 +118,7 @@ pub fn execute_reward_transfer<'info>(
         }
         RewardType::ProgrammableNft => {
             let instruction_data = anchor_lang::InstructionData::data(
-                &crate::instruction::TransferRewardProgrammableNft { amount },
+                &crate::instruction::TransferProgrammableNft { amount },
             );
 
             let source_token_address =

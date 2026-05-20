@@ -1,5 +1,6 @@
 import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { PDAs } from "@/lib/pda";
 import { PROGRAM_ID } from "@/lib/constants";
@@ -301,5 +302,55 @@ export async function buildUpdateReward(
       drawRangeMax
     )
     .accounts(accounts)
+    .transaction();
+}
+
+/**
+ * Build an admin_transfer tx. Runs on the ER (reward_list is delegated there);
+ * the caller must submit to the magicblock endpoint, not Solana base.
+ *
+ * The on-chain handler enforces `source_token_account.amount >= committed + amount`,
+ * where `committed` is the total still owed across all reward_list entries for
+ * this mint. `amount` is in UI units; the action handler multiplies by decimals.
+ */
+export async function buildAdminTransfer(
+  connection: Connection,
+  publicKey: PublicKey,
+  rewardDistributorPda: PublicKey,
+  mint: PublicKey,
+  user: PublicKey,
+  amount: number
+): Promise<Transaction> {
+  const provider = createReadonlyProvider(publicKey, connection);
+  const program = await createProgram(provider);
+  const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
+  const [transferLookupTablePda] = PDAs.getTransferLookupTable();
+  const [delegationRecordRewardList] = PDAs.getDelegationRecord(rewardListPda);
+  // Read the validator off the delegation record so we can derive the matching
+  // magic_fee_vault (same pattern as buildRemoveReward).
+  const validator = await getValidatorFromDelegationRecord(connection, delegationRecordRewardList);
+  const [magicFeeVault] = PDAs.getMagicFeeVault(validator);
+  // The distributor's ATA for this mint — passed in so the ER can clone it
+  // read-only and check available balance.
+  const sourceTokenAccount = getAssociatedTokenAddressSync(
+    mint,
+    rewardDistributorPda,
+    true
+  );
+  return program.methods
+    .adminTransfer(new anchor.BN(amount))
+    .accounts({
+      admin: publicKey,
+      rewardDistributor: rewardDistributorPda,
+      rewardList: rewardListPda,
+      transferLookupTable: transferLookupTablePda,
+      mint,
+      sourceTokenAccount,
+      user,
+      delegationRecordRewardList,
+      magicFeeVault,
+      magicProgram: MAGIC_PROGRAM_ID,
+      magicContext: MAGIC_CONTEXT_ID,
+    } as any)
     .transaction();
 }
