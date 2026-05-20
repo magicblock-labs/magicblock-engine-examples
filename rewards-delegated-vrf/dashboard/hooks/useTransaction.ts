@@ -12,6 +12,7 @@ import { buildRequestRandomReward, buildAddReward, buildAddRewardsBatch, buildRe
 import { buildMintNftCollection, buildMintNftToCollection, buildUpdateNftMetadata } from "@/lib/instructions/nft";
 import { buildSplTokenTransfer } from "@/lib/instructions/tokens";
 import { buildSponsoredLamportsTransfer, checkRewardListDelegated } from "@/lib/instructions/sponsoredLamports";
+import { buildTopUpEphemeralBalance } from "@/lib/instructions/ephemeralBalance";
 
 export type { TransactionResponse, VrfCallbackData } from "@/lib/instructions/types";
 
@@ -318,6 +319,34 @@ export const useTransaction = (props?: UseTransactionProps) => {
     [publicKey, signTransaction, ep]
   );
 
+  // -------------------------------------------------------------------------
+  // Top up the reward distributor's ephemeral balance (escrow PDA on DLP)
+  // -------------------------------------------------------------------------
+
+  const topUpEphemeralBalance = useCallback(
+    async (amountLamports: bigint) => {
+      if (!publicKey || !signTransaction) return { success: false, error: "Wallet not connected" };
+      if (amountLamports <= 0n) return { success: false, error: "Amount must be greater than 0" };
+      const dist = distributorPda();
+      if (!dist) return { success: false, error: "No distributor selected" };
+
+      setStatus({ loading: true, error: null, signature: null });
+      try {
+        // Ephemeral balance lives on the Solana base layer.
+        const endpoint = ep("solana");
+        const tx = buildTopUpEphemeralBalance(publicKey, dist, amountLamports);
+        const result = await sendTransaction(tx, publicKey, signTransaction, endpoint);
+        setStatus({ loading: false, error: result.error ?? null, signature: result.signature ?? null });
+        return result;
+      } catch (err) {
+        const error = err instanceof Error ? err.message : "Unknown error";
+        setStatus({ loading: false, error, signature: null });
+        return { success: false, error };
+      }
+    },
+    [publicKey, signTransaction, ep, distributorPda]
+  );
+
   return {
     status,
     initializeRewardDistributor,
@@ -337,5 +366,6 @@ export const useTransaction = (props?: UseTransactionProps) => {
     updateNftMetadata,
     sendSplTokenToDistributor,
     sendSponsoredLamportsToRewardList,
+    topUpEphemeralBalance,
   };
 };

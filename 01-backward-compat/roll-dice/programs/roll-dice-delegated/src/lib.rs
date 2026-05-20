@@ -1,0 +1,169 @@
+use anchor_lang::prelude::*;
+use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::cpi::DelegateConfig;
+use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
+use ephemeral_vrf_sdk::anchor::vrf;
+use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
+use ephemeral_vrf_sdk::types::SerializableAccountMeta;
+
+declare_id!("2VDJk6yp82MxgXjcxs2RHyVYTbaq74xrs25MfYxYuqD6");
+
+pub const PLAYER_SEED: &[u8] = b"playerd2";
+
+#[ephemeral]
+#[program]
+pub mod random_dice_delegated {
+    use super::*;
+
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        msg!(
+            "Initializing player account: {:?}",
+            ctx.accounts.player.key()
+        );
+        let player = &mut ctx.accounts.player;
+        player.last_result = 0;
+        player.rollnum = 0;
+        Ok(())
+    }
+
+    pub fn roll_dice_delegated(
+        ctx: Context<DoRollDiceDelegatedCtx>,
+        client_seed: u8,
+    ) -> Result<()> {
+        msg!("Requesting randomness...");
+        let ix = create_request_randomness_ix(RequestRandomnessParams {
+            payer: ctx.accounts.payer.key(),
+            oracle_queue: ctx.accounts.oracle_queue.key(),
+            callback_program_id: ID,
+            callback_discriminator: instruction::CallbackRollDiceSimple::DISCRIMINATOR.to_vec(),
+            caller_seed: [client_seed; 32],
+            accounts_metas: Some(vec![SerializableAccountMeta {
+                pubkey: ctx.accounts.player.key(),
+                is_signer: false,
+                is_writable: true,
+            }]),
+            ..Default::default()
+        });
+        ctx.accounts
+            .invoke_signed_vrf(&ctx.accounts.payer.to_account_info(), &ix)?;
+        Ok(())
+    }
+
+    pub fn callback_roll_dice_simple(
+        ctx: Context<CallbackRollDiceSimpleCtx>,
+        randomness: [u8; 32],
+    ) -> Result<()> {
+        let player = &mut ctx.accounts.player;
+        let rnd_u8 = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 6);
+        msg!("Consuming random number: {:?}", rnd_u8);
+        player.rollnum = player.rollnum.saturating_add(1);
+        msg!("Roll number: {:?}", player.rollnum);
+        player.last_result = rnd_u8;
+        Ok(())
+    }
+
+    // Delegate the player account to use the VRF in the ephemeral rollups
+    /// Set specific validator based on ER, see https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup
+    pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
+        ctx.accounts.delegate_player(
+            &ctx.accounts.user,
+            &[PLAYER_SEED, &ctx.accounts.user.key().to_bytes().as_slice()],
+            DelegateConfig {
+                // Optionally set a specific validator from the first remaining account
+                validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
+                ..Default::default()
+            },
+        )?;
+        Ok(())
+    }
+
+    // Undelegate the player account
+    pub fn undelegate(ctx: Context<Undelegate>) -> Result<()> {
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+        )
+        .commit_and_undelegate(&[ctx.accounts.user.to_account_info()])
+        .build_and_invoke()?;
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(init_if_needed, payer = payer, space = 8 + 2, seeds = [PLAYER_SEED, payer.key().to_bytes().as_slice()], bump)]
+    pub player: Account<'info, Player>,
+    pub system_program: Program<'info, System>,
+}
+
+#[vrf]
+#[derive(Accounts)]
+pub struct DoRollDiceCtx<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(seeds = [PLAYER_SEED, payer.key().to_bytes().as_slice()], bump)]
+    pub player: Account<'info, Player>,
+    /// CHECK: The oracle queue
+    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
+    pub oracle_queue: AccountInfo<'info>,
+}
+
+#[vrf]
+#[derive(Accounts)]
+pub struct DoRollDiceDelegatedCtx<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(seeds = [PLAYER_SEED, payer.key().to_bytes().as_slice()], bump)]
+    pub player: Account<'info, Player>,
+    /// CHECK: The oracle queue
+    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
+    pub oracle_queue: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CallbackRollDiceCtx<'info> {
+    /// This check ensure that the vrf_program_identity (which is a PDA) is a singer
+    /// enforcing the callback is executed by the VRF program trough CPI
+    #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
+    pub vrf_program_identity: Signer<'info>,
+    #[account(mut)]
+    pub player: Account<'info, Player>,
+}
+
+#[derive(Accounts)]
+pub struct CallbackRollDiceSimpleCtx<'info> {
+    /// This check ensure that the vrf_program_identity (which is a PDA) is a singer
+    /// enforcing the callback is executed by the VRF program trough CPI
+    #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
+    pub vrf_program_identity: Signer<'info>,
+    #[account(mut)]
+    pub player: Account<'info, Player>,
+}
+
+#[delegate]
+#[derive(Accounts)]
+pub struct DelegateInput<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    /// CHECK The pda to delegate
+    #[account(mut, del, seeds = [PLAYER_SEED, user.key().to_bytes().as_slice()], bump)]
+    pub player: Account<'info, Player>,
+}
+
+#[commit]
+#[derive(Accounts)]
+pub struct Undelegate<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut, seeds = [PLAYER_SEED, payer.key().to_bytes().as_slice()], bump)]
+    pub user: Account<'info, Player>,
+}
+
+#[account]
+pub struct Player {
+    pub last_result: u8,
+    pub rollnum: u8,
+}

@@ -26,6 +26,10 @@ import {
 } from "@/lib/tokenAccounts";
 import { TransactionModal } from "./TransactionModal";
 import { CopyableAddress } from "./CopyableAddress";
+import {
+  deriveEphemeralBalancePda,
+  DEFAULT_ESCROW_INDEX,
+} from "@/lib/instructions/ephemeralBalance";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { requestDashboardDataRefresh } from "@/lib/refresh";
 import { shortAddress } from "@/lib/utils";
@@ -54,7 +58,8 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     removeRewardsBatch,
     updateReward,
     sendSponsoredLamportsToRewardList,
-  } = useTransaction({ 
+    topUpEphemeralBalance,
+  } = useTransaction({
     selectedDistributor,
     onTransactionAdd: addTransaction,
     onTransactionUpdate: updateTransaction,
@@ -98,6 +103,9 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     fundRewardList: {
       amountSol: "",
     },
+    topUpEphemeralBalance: {
+      amountSol: "",
+    },
     removeReward: {
       rewardName: "",
       rewardMint: "",
@@ -121,6 +129,15 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
   const [rewardListBalance, setRewardListBalance] = useState<{
     totalLamports: number;
     rentExemptLamports: number;
+    loading: boolean;
+  } | null>(null);
+
+  // SOL balance of the distributor's escrow PDA (DLP "ephemeral balance"), fetched from base
+  const escrowPda = targetDistributor
+    ? deriveEphemeralBalancePda(targetDistributor, DEFAULT_ESCROW_INDEX)[0]
+    : null;
+  const [escrowBalance, setEscrowBalance] = useState<{
+    totalLamports: number;
     loading: boolean;
   } | null>(null);
 
@@ -198,6 +215,60 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
 
     setForms((prev) => ({ ...prev, fundRewardList: { amountSol: suggested } }));
   }, [activeModal, rewardListBalance]);
+
+  // Fetch the distributor escrow PDA's lamport balance from base when the modal opens
+  useEffect(() => {
+    if (activeModal !== "topUpEphemeralBalance" || !escrowPda) {
+      setEscrowBalance(null);
+      return;
+    }
+
+    let cancelled = false;
+    setEscrowBalance({ totalLamports: 0, loading: true });
+
+    const fetchBalance = async () => {
+      try {
+        const solEndpoint = resolveEndpoint(connection.rpcEndpoint, "solana");
+        const solConn = new Connection(solEndpoint, "confirmed");
+        const lamports = await solConn.getBalance(escrowPda, "confirmed");
+        if (!cancelled) setEscrowBalance({ totalLamports: lamports ?? 0, loading: false });
+      } catch {
+        if (!cancelled) setEscrowBalance({ totalLamports: 0, loading: false });
+      }
+    };
+
+    void fetchBalance();
+    return () => { cancelled = true; };
+  }, [activeModal, escrowPda?.toBase58(), connection.rpcEndpoint]);
+
+  // Auto-fill the suggested top-up amount for the escrow PDA. Rationale:
+  // each scheduled SPL/NFT transfer callback creates a destination ATA on base
+  // (rent-exempt deposit) plus pays the tx fee. Budget = remaining-redemptions
+  // × (tx fee + rent for the ATA size class) + 20% buffer, minus what's already
+  // sitting in the escrow.
+  useEffect(() => {
+    if (activeModal !== "topUpEphemeralBalance" || !escrowBalance || escrowBalance.loading) return;
+
+    const LAMPORTS_PER_TX = 50_000;
+    // Rent-exempt minimum for a 165-byte SPL token ATA. Programmable NFTs need
+    // a slightly larger token record, but 165 is the dominant case and we add
+    // a buffer below.
+    const LAMPORTS_PER_TOKEN_ACCOUNT = 2_039_280;
+    const LAMPORTS_PER_REDEMPTION = LAMPORTS_PER_TX + LAMPORTS_PER_TOKEN_ACCOUNT;
+
+    const totalRemaining = (rewardList?.rewards ?? []).reduce(
+      (sum: number, r: any) => sum + Math.max(0, Number(r.redemptionLimit) - Number(r.redemptionCount)),
+      0
+    );
+
+    const neededLamports = Math.ceil(totalRemaining * LAMPORTS_PER_REDEMPTION * 1.2);
+    const deficitLamports = Math.max(0, neededLamports - escrowBalance.totalLamports);
+
+    const sol = deficitLamports / 1e9;
+    const suggested = deficitLamports === 0 ? "0" : sol.toFixed(9).replace(/\.?0+$/, "");
+
+    setForms((prev) => ({ ...prev, topUpEphemeralBalance: { amountSol: suggested } }));
+  }, [activeModal, escrowBalance, rewardList?.rewards]);
 
   interface BatchRewardEntry {
     rewardName: string;
@@ -636,6 +707,24 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     const result = await sendSponsoredLamportsToRewardList(rewardListPda, lamports);
     await handleTransactionResult(result, "Fund Reward List (Sponsored Lamports)", () => {
       setForms((prev) => ({ ...prev, fundRewardList: { amountSol: "" } }));
+    });
+  };
+
+  const handleTopUpEphemeralBalance = async () => {
+    if (!targetDistributor) {
+      setValidationError("No distributor selected");
+      return;
+    }
+    const solAmount = parseFloat(forms.topUpEphemeralBalance.amountSol);
+    if (isNaN(solAmount) || solAmount <= 0) {
+      setValidationError("Enter a valid SOL amount");
+      return;
+    }
+    setLoadingStatus();
+    const lamports = BigInt(Math.floor(solAmount * 1_000_000_000));
+    const result = await topUpEphemeralBalance(lamports);
+    await handleTransactionResult(result, "Top Up Ephemeral Balance", () => {
+      setForms((prev) => ({ ...prev, topUpEphemeralBalance: { amountSol: "" } }));
     });
   };
 
@@ -1225,6 +1314,18 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
             <div className="text-xs text-gray-400">Send SOL via sponsored lamports transfer</div>
           </span>
         </button>
+
+        {/* Top Up Ephemeral Balance (distributor escrow PDA) */}
+        <button
+          onClick={() => openModal("topUpEphemeralBalance")}
+          className="card p-4 hover:bg-gray-700 transition flex items-center gap-3 group"
+        >
+          <Coins className="w-5 h-5 text-emerald-400 group-hover:text-emerald-300" />
+          <span className="text-left">
+            <div className="font-medium text-white">Top Up Ephemeral Balance</div>
+            <div className="text-xs text-gray-400">Fund the distributor escrow that pays for scheduled callbacks</div>
+          </span>
+        </button>
       </div>
 
       {/* Fund Reward List Modal */}
@@ -1322,6 +1423,89 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
             <p>💡 This calls the e-token program&apos;s <code className="text-orange-300">SponsoredLamportsTransfer</code> instruction.</p>
             <p>A lamports PDA is created, funded, delegated, and a post-delegation action transfers the SOL to the reward list on the ER.</p>
             <p className="text-yellow-400">Setup fee: ~0.0003 SOL (sponsored rent, returned after completion)</p>
+          </div>
+        </div>
+      </TransactionModal>
+
+      {/* Top Up Ephemeral Balance Modal */}
+      <TransactionModal
+        isOpen={activeModal === "topUpEphemeralBalance"}
+        title="Top Up Ephemeral Balance"
+        description="Fund the distributor's escrow PDA on base — pays fees + ATA rent for scheduled SPL/NFT transfer callbacks"
+        loading={localStatus.loading}
+        error={localStatus.error}
+        signature={localStatus.signature}
+        endpoint={localStatus.endpoint || connection.rpcEndpoint}
+        onClose={closeModal}
+        onConfirm={handleTopUpEphemeralBalance}
+      >
+        <div className="space-y-3">
+          {targetDistributor && (
+            <div className="bg-gray-800 p-2 rounded text-xs">
+              <p className="text-gray-400 mb-1">Authority (Reward Distributor PDA)</p>
+              <CopyableAddress address={targetDistributor.toBase58()} />
+            </div>
+          )}
+
+          {escrowPda && (
+            <div className="bg-gray-800 p-2 rounded text-xs">
+              <p className="text-gray-400 mb-1">
+                Escrow PDA (index {DEFAULT_ESCROW_INDEX}, derived via DLP)
+              </p>
+              <CopyableAddress address={escrowPda.toBase58()} />
+            </div>
+          )}
+
+          <div className="rounded border border-gray-700 bg-gray-900/60 p-3 text-xs">
+            <p className="text-gray-300 font-medium mb-2">Current Balance (on base)</p>
+            {escrowBalance?.loading ? (
+              <p className="text-gray-500 italic">Fetching…</p>
+            ) : escrowBalance ? (
+              <div className="flex justify-between">
+                <span className="text-gray-400">Total</span>
+                <span className="text-white font-mono">
+                  {(escrowBalance.totalLamports / 1e9).toFixed(9)} SOL
+                </span>
+              </div>
+            ) : (
+              <p className="text-gray-500 italic">—</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-2">
+              Amount (SOL)
+            </label>
+            <input
+              type="number"
+              step="0.001"
+              min="0"
+              value={forms.topUpEphemeralBalance.amountSol}
+              onChange={(e) =>
+                setForms((prev) => ({
+                  ...prev,
+                  topUpEphemeralBalance: { amountSol: e.target.value },
+                }))
+              }
+              placeholder="e.g. 0.05"
+              disabled={localStatus.loading}
+              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-emerald-500 focus:outline-none disabled:opacity-50 text-sm"
+            />
+            {forms.topUpEphemeralBalance.amountSol && !isNaN(parseFloat(forms.topUpEphemeralBalance.amountSol)) && (
+              <p className="text-xs text-gray-400 mt-1">
+                = {Math.floor(parseFloat(forms.topUpEphemeralBalance.amountSol) * 1_000_000_000).toLocaleString()} lamports
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-2">
+              Suggested amount covers the remaining redemptions across all rewards
+              (tx fee + ~0.002 SOL ATA rent per redemption, +20% buffer) minus what
+              the escrow already holds. You can override.
+            </p>
+          </div>
+
+          <div className="bg-gray-800 p-2 rounded text-xs text-gray-400 space-y-1">
+            <p>💡 This calls DLP&apos;s <code className="text-emerald-300">TopUpEphemeralBalance</code> instruction directly.</p>
+            <p>Your wallet pays. The escrow PDA stays undelegated on base — only its authority (the reward distributor PDA) is used to derive it, no signature from the distributor is needed for top-ups.</p>
           </div>
         </div>
       </TransactionModal>

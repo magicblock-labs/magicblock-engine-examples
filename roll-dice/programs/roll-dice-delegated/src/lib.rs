@@ -1,20 +1,19 @@
 use anchor_lang::prelude::*;
+use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::cpi::DelegateConfig;
+use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
-use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
-use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::{commit_and_undelegate_accounts};
-
 
 declare_id!("2VDJk6yp82MxgXjcxs2RHyVYTbaq74xrs25MfYxYuqD6");
-
 
 pub const PLAYER_SEED: &[u8] = b"playerd2";
 
 #[ephemeral]
 #[program]
 pub mod random_dice_delegated {
+
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
@@ -28,8 +27,10 @@ pub mod random_dice_delegated {
         Ok(())
     }
 
-
-    pub fn roll_dice_delegated(ctx: Context<DoRollDiceDelegatedCtx>, client_seed: u8) -> Result<()> {
+    pub fn roll_dice_delegated(
+        ctx: Context<DoRollDiceDelegatedCtx>,
+        client_seed: u8,
+    ) -> Result<()> {
         msg!("Requesting randomness...");
         let ix = create_request_randomness_ix(RequestRandomnessParams {
             payer: ctx.accounts.payer.key(),
@@ -79,12 +80,13 @@ pub mod random_dice_delegated {
 
     // Undelegate the player account
     pub fn undelegate(ctx: Context<Undelegate>) -> Result<()> {
-        commit_and_undelegate_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.user.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+        )
+        .commit_and_undelegate(&[ctx.accounts.user.to_account_info()])
+        .build_and_invoke()?;
         Ok(())
     }
 }
@@ -107,7 +109,7 @@ pub struct DoRollDiceCtx<'info> {
     pub player: Account<'info, Player>,
     /// CHECK: The oracle queue
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
-    pub oracle_queue: AccountInfo<'info>,
+    pub oracle_queue: UncheckedAccount<'info>,
 }
 
 #[vrf]
@@ -119,7 +121,7 @@ pub struct DoRollDiceDelegatedCtx<'info> {
     pub player: Account<'info, Player>,
     /// CHECK: The oracle queue
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
-    pub oracle_queue: AccountInfo<'info>,
+    pub oracle_queue: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]

@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
+use ephemeral_rollups_sdk::anchor::delegate;
+use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
-use ephemeral_rollups_sdk::anchor::{delegate};
-use ephemeral_rollups_sdk::cpi::DelegateConfig;
 
 declare_id!("8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP");
 
@@ -87,7 +87,7 @@ pub struct DoRollDiceCtx<'info> {
     pub player: Account<'info, Player>,
     /// CHECK: The oracle queue
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
-    pub oracle_queue: AccountInfo<'info>,
+    pub oracle_queue: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -107,7 +107,7 @@ pub struct DelegateInput<'info> {
     pub payer: Signer<'info>,
     /// CHECK The pda to delegate
     #[account(mut, del, seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
-    pub pda: AccountInfo<'info>,
+    pub pda: UncheckedAccount<'info>,
 }
 
 #[account]

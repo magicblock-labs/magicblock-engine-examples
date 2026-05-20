@@ -29,7 +29,7 @@ pub fn transfer_reward_spl_token(ctx: Context<TransferRewardSplToken>, amount: u
         token_program: ctx.accounts.token_program.to_account_info(),
     };
     let cpi_ata_program = ctx.accounts.token_program.to_account_info();
-    let cpi_ata_ctx = CpiContext::new(cpi_ata_program, cpi_ata_accounts);
+    let cpi_ata_ctx = CpiContext::new(cpi_ata_program.key(), cpi_ata_accounts);
     create_idempotent(cpi_ata_ctx)?;
 
     let cpi_transfer_accounts = TransferChecked {
@@ -40,7 +40,7 @@ pub fn transfer_reward_spl_token(ctx: Context<TransferRewardSplToken>, amount: u
     };
     let cpi_transfer_program = ctx.accounts.token_program.to_account_info();
     let cpi_transfer_ctx = CpiContext::new_with_signer(
-        cpi_transfer_program,
+        cpi_transfer_program.key(),
         cpi_transfer_accounts,
         cpi_signer_seeds,
     );

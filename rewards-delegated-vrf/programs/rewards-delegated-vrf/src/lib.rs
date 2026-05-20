@@ -306,11 +306,6 @@ pub struct TransferRewardSplToken<'info> {
     /// CHECK: Source program
     #[account(address = crate::ID)]
     pub source_program: AccountInfo<'info>,
-    /// CHECK: Escrow Authority
-    pub escrow_auth: UncheckedAccount<'info>,
-    #[account(mut)]
-    /// CHECK: Escrow
-    pub escrow: UncheckedAccount<'info>,
 }
 
 #[action]
@@ -348,11 +343,6 @@ pub struct TransferRewardProgrammableNft<'info> {
     /// CHECK: Source program
     #[account(address = crate::ID)]
     pub source_program: AccountInfo<'info>,
-    /// CHECK: Escrow Authority
-    pub escrow_auth: UncheckedAccount<'info>,
-    #[account(mut)]
-    /// CHECK: Escrow
-    pub escrow: UncheckedAccount<'info>,
 }
 
 #[commit]

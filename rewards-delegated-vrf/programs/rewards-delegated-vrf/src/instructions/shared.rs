@@ -81,7 +81,7 @@ pub fn execute_reward_transfer<'info>(
                 destination_program: crate::ID,
                 accounts: action_accounts,
                 args: action_args,
-                escrow_authority: payer.to_account_info(),
+                escrow_authority: reward_distributor.to_account_info(),
                 compute_units: 200_000,
             };
 
@@ -188,7 +188,7 @@ pub fn execute_reward_transfer<'info>(
                 destination_program: crate::ID,
                 accounts: action_accounts,
                 args: action_args,
-                escrow_authority: payer.to_account_info(),
+                escrow_authority: reward_distributor.to_account_info(),
                 compute_units: 200_000,
             };
 
