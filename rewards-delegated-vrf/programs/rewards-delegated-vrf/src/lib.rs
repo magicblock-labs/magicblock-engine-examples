@@ -75,10 +75,7 @@ pub mod rewards_delegated_vrf {
         instructions::consume_random_reward::consume_random_reward(ctx, randomness)
     }
 
-    pub fn transfer_spl_token(
-        ctx: Context<TransferSplToken>,
-        amount: u64,
-    ) -> Result<()> {
+    pub fn transfer_spl_token(ctx: Context<TransferSplToken>, amount: u64) -> Result<()> {
         instructions::transfer_spl_token::transfer_spl_token(ctx, amount)
     }
 
@@ -209,7 +206,7 @@ pub struct DelegateRewardList<'info> {
 #[derive(Accounts)]
 pub struct RequestRandomReward<'info> {
     /// CHECK: User/destination
-    pub user: AccountInfo<'info>,
+    pub user: UncheckedAccount<'info>,
     #[account(constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()) || reward_distributor.whitelist.contains(&admin.key()))]
     pub admin: Signer<'info>,
     pub reward_distributor: Account<'info, state::RewardDistributor>,
@@ -218,10 +215,10 @@ pub struct RequestRandomReward<'info> {
     pub transfer_lookup_table: Account<'info, state::TransferLookupTable>,
     /// CHECK: Validated by address constraint against the known VRF oracle queue
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
-    pub oracle_queue: AccountInfo<'info>,
+    pub oracle_queue: UncheckedAccount<'info>,
     /// CHECK: Delegation record for reward_list — authority field contains the validator, used to derive magic_fee_vault for the callback
     #[account(address = ephemeral_rollups_sdk::pda::delegation_record_pda_from_delegated_account(&reward_list.key()))]
-    pub delegation_record_reward_list: AccountInfo<'info>,
+    pub delegation_record_reward_list: UncheckedAccount<'info>,
 }
 
 #[commit]
@@ -230,7 +227,7 @@ pub struct ConsumeRandomReward<'info> {
     #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
     pub vrf_program_identity: Signer<'info>,
     /// CHECK: The user account is passed from the request_random_reward and used for the reward destination
-    pub user: AccountInfo<'info>,
+    pub user: UncheckedAccount<'info>,
     pub reward_distributor: Account<'info, state::RewardDistributor>,
     #[account(mut, seeds = [constants::REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
     pub reward_list: Account<'info, state::RewardsList>,
@@ -238,7 +235,7 @@ pub struct ConsumeRandomReward<'info> {
     pub transfer_lookup_table: Account<'info, state::TransferLookupTable>,
     /// CHECK: Magic fee vault — required when reward_list payer is delegated
     #[account(mut)]
-    pub magic_fee_vault: AccountInfo<'info>,
+    pub magic_fee_vault: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -269,13 +266,13 @@ pub struct RemoveReward<'info> {
     #[account(seeds = [constants::TRANSFER_LOOKUP_TABLE_SEED], bump)]
     pub transfer_lookup_table: Account<'info, state::TransferLookupTable>,
     /// CHECK: destination of the removed reward
-    pub destination: AccountInfo<'info>,
+    pub destination: UncheckedAccount<'info>,
     /// CHECK: Delegation record for reward_list — authority field contains the validator, used to derive magic_fee_vault
     #[account(address = ephemeral_rollups_sdk::pda::delegation_record_pda_from_delegated_account(&reward_list.key()))]
-    pub delegation_record_reward_list: AccountInfo<'info>,
+    pub delegation_record_reward_list: UncheckedAccount<'info>,
     /// CHECK: Magic fee vault — derived from the validator in the delegation record
     #[account(mut)]
-    pub magic_fee_vault: AccountInfo<'info>,
+    pub magic_fee_vault: UncheckedAccount<'info>,
 }
 
 /// Admin-triggered transfer of distributor-held assets to an arbitrary user,
@@ -298,13 +295,13 @@ pub struct AdminTransfer<'info> {
     )]
     pub source_token_account: InterfaceAccount<'info, TokenAccount>,
     /// CHECK: recipient pubkey (ATA is derived + created on base by the scheduled action)
-    pub user: AccountInfo<'info>,
+    pub user: UncheckedAccount<'info>,
     /// CHECK: Delegation record for reward_list — authority field contains the validator, used to derive magic_fee_vault
     #[account(address = ephemeral_rollups_sdk::pda::delegation_record_pda_from_delegated_account(&reward_list.key()))]
-    pub delegation_record_reward_list: AccountInfo<'info>,
+    pub delegation_record_reward_list: UncheckedAccount<'info>,
     /// CHECK: Magic fee vault — derived from the validator in the delegation record
     #[account(mut)]
-    pub magic_fee_vault: AccountInfo<'info>,
+    pub magic_fee_vault: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -330,13 +327,13 @@ pub struct TransferSplToken<'info> {
     pub destination_token_account: UncheckedAccount<'info>,
     pub reward_distributor: Account<'info, state::RewardDistributor>,
     /// CHECK: User/destination
-    pub user: AccountInfo<'info>,
+    pub user: UncheckedAccount<'info>,
     /// CHECK: Associated Token Program
-    pub associated_token_program: AccountInfo<'info>,
+    pub associated_token_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     /// CHECK: Source program
     #[account(address = crate::ID)]
-    pub source_program: AccountInfo<'info>,
+    pub source_program: UncheckedAccount<'info>,
 }
 
 #[action]
@@ -351,9 +348,9 @@ pub struct TransferProgrammableNft<'info> {
     pub destination_token_account: UncheckedAccount<'info>,
     pub reward_distributor: Account<'info, state::RewardDistributor>,
     /// CHECK: User/destination
-    pub user: AccountInfo<'info>,
+    pub user: UncheckedAccount<'info>,
     /// CHECK: Associated Token Program
-    pub associated_token_program: AccountInfo<'info>,
+    pub associated_token_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     /// CHECK: Token Metadata Program
     pub token_metadata_program: UncheckedAccount<'info>,
@@ -373,7 +370,7 @@ pub struct TransferProgrammableNft<'info> {
     pub auth_rule: UncheckedAccount<'info>,
     /// CHECK: Source program
     #[account(address = crate::ID)]
-    pub source_program: AccountInfo<'info>,
+    pub source_program: UncheckedAccount<'info>,
 }
 
 #[commit]

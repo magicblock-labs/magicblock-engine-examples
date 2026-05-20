@@ -21,9 +21,9 @@ pub fn admin_transfer(ctx: Context<AdminTransfer>, amount: u64) -> Result<()> {
     let decimals = ctx.accounts.mint.decimals;
 
     msg!(
-        "Admin transfer: {} (UI units) of {:?} to user {:?}",
-        amount,
+        "Admin transfer of mint: {:?} | amount: {} | destination: {:?}",
         mint_key,
+        amount,
         ctx.accounts.user.key()
     );
 
@@ -38,10 +38,7 @@ pub fn admin_transfer(ctx: Context<AdminTransfer>, amount: u64) -> Result<()> {
         .iter()
         .find(|r| r.reward_mints.contains(&mint_key));
     let (reward_type, ruleset_pda) = match reward_match {
-        Some(r) => (
-            r.reward_type.clone(),
-            r.additional_pubkeys.first().copied(),
-        ),
+        Some(r) => (r.reward_type.clone(), r.additional_pubkeys.first().copied()),
         None => (RewardType::SplToken, None),
     };
 
@@ -55,11 +52,8 @@ pub fn admin_transfer(ctx: Context<AdminTransfer>, amount: u64) -> Result<()> {
 
     // Committed = base-unit amount reserved across all reward_list entries
     // using this mint. For mints not in reward_list, this returns 0.
-    let committed = total_required_inventory_for_mint(
-        &ctx.accounts.reward_list.rewards,
-        mint_key,
-        decimals,
-    )?;
+    let committed =
+        total_required_inventory_for_mint(&ctx.accounts.reward_list.rewards, mint_key, decimals)?;
 
     let total_needed = amount_in_base_units
         .checked_add(committed)
