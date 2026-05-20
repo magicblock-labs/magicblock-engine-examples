@@ -7,6 +7,24 @@ use ephemeral_rollups_sdk::{ephem::CallHandler, ActionArgs, ShortAccountMeta};
 use crate::errors::RewardError;
 use crate::state::{RewardDistributor, RewardType, TransferLookupTable};
 
+/// Workaround for ephemeral-rollups-sdk ≥0.11: `MagicIntentBundleBuilder::build()`
+/// copies `is_signer` verbatim from each input AccountInfo
+/// (ephem/mod.rs:233). For PDA payers and PDA escrow authorities that arrive via
+/// callbacks (e.g. VRF) with `is_signer=false`, the SDK then builds the Magic
+/// CPI with `is_signer=false` — and Magic rejects with `MissingRequiredSignature`.
+/// We return a fresh AccountInfo with `is_signer=true`; the seeds passed to
+/// `build_and_invoke_signed` give the runtime authority to honor the claim.
+///
+/// Inconsistent with the same builder's `build_callback_ixs`, which already
+/// hardcodes `is_signer=true` for the payer (ephem/mod.rs:189). Remove once the
+/// SDK applies the same convention in `build()`.
+fn as_signer<'info>(signer: AccountInfo<'info>) -> AccountInfo<'info> {
+    AccountInfo {
+        is_signer: true,
+        ..signer
+    }
+}
+
 pub fn execute_reward_transfer<'info>(
     reward_distributor: &Account<'info, RewardDistributor>,
     transfer_lookup_table: &Account<'info, TransferLookupTable>,
@@ -29,6 +47,9 @@ pub fn execute_reward_transfer<'info>(
     let token_metadata_program = transfer_lookup_table.lookup_accounts[3];
     let sysvar_instructions_program = transfer_lookup_table.lookup_accounts[4];
     let auth_rule_program = transfer_lookup_table.lookup_accounts[5];
+
+    // See `as_signer` doc — both PDAs sign the Magic CPI via `payer_seeds`.
+    let payer = as_signer(payer);
 
     match reward_type {
         RewardType::SplToken | RewardType::LegacyNft => {
@@ -81,7 +102,7 @@ pub fn execute_reward_transfer<'info>(
                 destination_program: crate::ID,
                 accounts: action_accounts,
                 args: action_args,
-                escrow_authority: reward_distributor.to_account_info(),
+                escrow_authority: as_signer(reward_distributor.to_account_info()),
                 compute_units: 200_000,
             };
 
@@ -188,7 +209,7 @@ pub fn execute_reward_transfer<'info>(
                 destination_program: crate::ID,
                 accounts: action_accounts,
                 args: action_args,
-                escrow_authority: reward_distributor.to_account_info(),
+                escrow_authority: as_signer(reward_distributor.to_account_info()),
                 compute_units: 200_000,
             };
 
