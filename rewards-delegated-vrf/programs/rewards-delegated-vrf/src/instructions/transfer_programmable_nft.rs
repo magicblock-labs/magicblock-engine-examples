@@ -3,14 +3,14 @@ use anchor_spl::associated_token::{create_idempotent, Create};
 use anchor_spl::metadata::mpl_token_metadata;
 
 use crate::constants::REWARD_DISTRIBUTOR_SEED;
-use crate::TransferRewardProgrammableNft;
+use crate::TransferProgrammableNft;
 
-pub fn transfer_reward_programmable_nft(
-    ctx: Context<TransferRewardProgrammableNft>,
+pub fn transfer_programmable_nft(
+    ctx: Context<TransferProgrammableNft>,
     amount: u64,
 ) -> Result<()> {
     msg!(
-        "Transferring programmable NFT token reward: {} token(s) to user {:?}",
+        "Transferring programmable NFT: {} token(s) to user {:?}",
         amount,
         ctx.accounts.user.key()
     );

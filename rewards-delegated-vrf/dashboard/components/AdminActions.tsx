@@ -723,7 +723,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
     setLoadingStatus();
     const lamports = BigInt(Math.floor(solAmount * 1_000_000_000));
     const result = await topUpEphemeralBalance(lamports);
-    await handleTransactionResult(result, "Top Up Ephemeral Balance", () => {
+    await handleTransactionResult(result, "Top Up Escrow", () => {
       setForms((prev) => ({ ...prev, topUpEphemeralBalance: { amountSol: "" } }));
     });
   };
@@ -1322,7 +1322,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         >
           <Coins className="w-5 h-5 text-emerald-400 group-hover:text-emerald-300" />
           <span className="text-left">
-            <div className="font-medium text-white">Top Up Ephemeral Balance</div>
+            <div className="font-medium text-white">Top Up Escrow</div>
             <div className="text-xs text-gray-400">Fund the distributor escrow that pays for scheduled callbacks</div>
           </span>
         </button>
@@ -1427,11 +1427,11 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
         </div>
       </TransactionModal>
 
-      {/* Top Up Ephemeral Balance Modal */}
+      {/* Top Up Escrow Modal */}
       <TransactionModal
         isOpen={activeModal === "topUpEphemeralBalance"}
-        title="Top Up Ephemeral Balance"
-        description="Fund the distributor's escrow PDA on base — pays fees + ATA rent for scheduled SPL/NFT transfer callbacks"
+        title="Top Up Escrow"
+        description="Fund the distributor's escrow PDA on base — pays ATA rent for scheduled SPL/NFT transfer callbacks"
         loading={localStatus.loading}
         error={localStatus.error}
         signature={localStatus.signature}

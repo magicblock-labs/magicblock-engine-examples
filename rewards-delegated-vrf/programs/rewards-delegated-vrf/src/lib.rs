@@ -75,20 +75,22 @@ pub mod rewards_delegated_vrf {
         instructions::consume_random_reward::consume_random_reward(ctx, randomness)
     }
 
-    pub fn transfer_reward_spl_token(
-        ctx: Context<TransferRewardSplToken>,
+    pub fn transfer_spl_token(
+        ctx: Context<TransferSplToken>,
         amount: u64,
     ) -> Result<()> {
-        instructions::transfer_reward_spl_token::transfer_reward_spl_token(ctx, amount)
+        instructions::transfer_spl_token::transfer_spl_token(ctx, amount)
     }
 
-    pub fn transfer_reward_programmable_nft(
-        ctx: Context<TransferRewardProgrammableNft>,
+    pub fn transfer_programmable_nft(
+        ctx: Context<TransferProgrammableNft>,
         amount: u64,
     ) -> Result<()> {
-        instructions::transfer_reward_programmable_nft::transfer_reward_programmable_nft(
-            ctx, amount,
-        )
+        instructions::transfer_programmable_nft::transfer_programmable_nft(ctx, amount)
+    }
+
+    pub fn admin_transfer(ctx: Context<AdminTransfer>, amount: u64) -> Result<()> {
+        instructions::admin_transfer::admin_transfer(ctx, amount)
     }
 
     pub fn undelegate_reward_list(ctx: Context<UndelegateRewardList>) -> Result<()> {
@@ -276,6 +278,35 @@ pub struct RemoveReward<'info> {
     pub magic_fee_vault: AccountInfo<'info>,
 }
 
+/// Admin-triggered transfer of distributor-held assets to an arbitrary user,
+/// outside the VRF/redemption flow. Enforces that the transfer does not eat
+/// into assets committed to outstanding reward redemptions.
+#[commit]
+#[derive(Accounts)]
+pub struct AdminTransfer<'info> {
+    #[account(constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
+    pub admin: Signer<'info>,
+    pub reward_distributor: Account<'info, state::RewardDistributor>,
+    #[account(mut, seeds = [constants::REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
+    pub reward_list: Account<'info, state::RewardsList>,
+    #[account(seeds = [constants::TRANSFER_LOOKUP_TABLE_SEED], bump)]
+    pub transfer_lookup_table: Account<'info, state::TransferLookupTable>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        associated_token::mint = mint,
+        associated_token::authority = reward_distributor,
+    )]
+    pub source_token_account: InterfaceAccount<'info, TokenAccount>,
+    /// CHECK: recipient pubkey (ATA is derived + created on base by the scheduled action)
+    pub user: AccountInfo<'info>,
+    /// CHECK: Delegation record for reward_list — authority field contains the validator, used to derive magic_fee_vault
+    #[account(address = ephemeral_rollups_sdk::pda::delegation_record_pda_from_delegated_account(&reward_list.key()))]
+    pub delegation_record_reward_list: AccountInfo<'info>,
+    /// CHECK: Magic fee vault — derived from the validator in the delegation record
+    #[account(mut)]
+    pub magic_fee_vault: AccountInfo<'info>,
+}
+
 #[derive(Accounts)]
 pub struct UpdateReward<'info> {
     #[account(constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
@@ -289,7 +320,7 @@ pub struct UpdateReward<'info> {
 
 #[action]
 #[derive(Accounts)]
-pub struct TransferRewardSplToken<'info> {
+pub struct TransferSplToken<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     #[account(mut)]
     pub source_token_account: InterfaceAccount<'info, TokenAccount>,
@@ -310,7 +341,7 @@ pub struct TransferRewardSplToken<'info> {
 
 #[action]
 #[derive(Accounts)]
-pub struct TransferRewardProgrammableNft<'info> {
+pub struct TransferProgrammableNft<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     #[account(mut)]
     pub source_token_account: InterfaceAccount<'info, TokenAccount>,

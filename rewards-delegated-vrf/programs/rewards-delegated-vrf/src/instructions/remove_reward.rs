@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::errors::RewardError;
 use crate::helpers::validate_reward;
-use crate::instructions::shared::execute_reward_transfer;
+use crate::instructions::shared::schedule_transfer_action;
 use crate::state::RewardType;
 use crate::RemoveReward;
 
@@ -123,7 +123,7 @@ pub fn remove_reward(
         crate::errors::RewardError::InvalidDelegationRecord
     );
 
-    execute_reward_transfer(
+    schedule_transfer_action(
         &ctx.accounts.reward_distributor,
         &ctx.accounts.transfer_lookup_table,
         &ctx.accounts.reward_list.to_account_info(),

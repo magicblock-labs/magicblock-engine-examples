@@ -9,13 +9,17 @@ import {
   unpackAccount,
 } from "@solana/spl-token";
 import { Metadata } from "@metaplex-foundation/mpl-token-metadata";
-import { Zap, Grid, Edit3, Send } from "lucide-react";
+import { Zap, Grid, Edit3, Send, ArrowRightLeft } from "lucide-react";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useGlobalTransactionHistory } from "@/hooks/useGlobalTransactionHistory";
+import { useRewardData } from "@/hooks/useRewardData";
 import { getBaseLayerSolanaEndpoint, getDefaultSolanaEndpoint } from "@/lib/clusterContext";
 import { requestDashboardDataRefresh } from "@/lib/refresh";
 import { TransactionModal } from "./TransactionModal";
 import { TokenActions } from "./TokenActions";
+import { CopyableAddress } from "./CopyableAddress";
+import { PDAs } from "@/lib/pda";
+import { fetchOwnedSplMintOptions, type OwnedSplMintOption } from "@/lib/tokenAccounts";
 import { shortAddress } from "@/lib/utils";
 
 interface ActionForm {
@@ -41,8 +45,14 @@ interface NftOption {
 export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) => {
   const { publicKey } = useWallet();
   const { connection } = useConnection();
-  const { mintNftCollection, mintNftToCollection, updateNftMetadata } = useTransaction();
+  const { mintNftCollection, mintNftToCollection, updateNftMetadata, adminTransfer } = useTransaction({ selectedDistributor });
   const { addTransaction, updateTransaction } = useGlobalTransactionHistory();
+
+  // Distributor used for the admin_transfer flow — falls back to the wallet's
+  // primary distributor when nothing is selected (mirrors AdminActions).
+  const targetDistributor =
+    selectedDistributor || (publicKey ? PDAs.getRewardDistributor(publicKey)[0] : null);
+  const { rewardList } = useRewardData(publicKey, targetDistributor);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState({
@@ -69,7 +79,20 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
       symbol: "",
       uri: "",
     },
+    adminTransfer: {
+      mint: "",
+      user: "",
+      amount: "",
+    },
   });
+
+  // Distributor SPL holdings — populated when the Admin Transfer modal opens.
+  const [distributorMints, setDistributorMints] = useState<OwnedSplMintOption[]>([]);
+  const [distributorMintsLoading, setDistributorMintsLoading] = useState(false);
+  const [distributorMintsError, setDistributorMintsError] = useState<string | null>(null);
+  // Tracks which mint we've already auto-filled the amount for, so we don't
+  // overwrite user edits while leaving the door open to refill on mint change.
+  const [adminTransferAutofilledMint, setAdminTransferAutofilledMint] = useState<string | null>(null);
   const [availableCollections, setAvailableCollections] = useState<CollectionOption[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
   const [collectionFetchError, setCollectionFetchError] = useState<string | null>(null);
@@ -460,6 +483,167 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
     }
   };
 
+  // Fetch distributor's SPL mints when the Admin Transfer modal opens.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (activeModal !== "adminTransfer" || !targetDistributor) {
+        setDistributorMints([]);
+        setDistributorMintsError(null);
+        setDistributorMintsLoading(false);
+        return;
+      }
+      setDistributorMintsLoading(true);
+      setDistributorMintsError(null);
+      try {
+        // Distributor's token accounts live on base — use the base-layer endpoint.
+        const readEndpoint = getBaseLayerSolanaEndpoint(connection.rpcEndpoint);
+        const readConnection =
+          readEndpoint === connection.rpcEndpoint
+            ? connection
+            : new Connection(readEndpoint, "confirmed");
+        const result = await fetchOwnedSplMintOptions(readConnection, targetDistributor);
+        if (!cancelled) setDistributorMints(result.options);
+      } catch (error) {
+        if (!cancelled) {
+          setDistributorMints([]);
+          setDistributorMintsError(
+            error instanceof Error ? error.message : "Unknown fetch error"
+          );
+        }
+      } finally {
+        if (!cancelled) setDistributorMintsLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeModal, targetDistributor?.toBase58(), connection.rpcEndpoint]);
+
+  // Live availability preview for the selected mint in the Admin Transfer
+  // modal. Mirrors the on-chain check `available = total - committed`,
+  // where `committed = sum over reward_list of (remaining * reward_amount)`
+  // for rewards using this mint (in base units).
+  const adminTransferPreview = (() => {
+    const mintStr = forms.adminTransfer.mint;
+    if (!mintStr) return null;
+    const opt = distributorMints.find((m) => m.mint === mintStr);
+    if (!opt) return null;
+    const decimals = opt.decimals ?? 0;
+    const multiplier = Math.pow(10, decimals);
+    // opt.balanceLabel is the UI-unit display; raw amount isn't exposed by the
+    // option type, so reconstruct from balanceLabel * multiplier.
+    const totalBaseUnits = Math.floor((parseFloat(opt.balanceLabel) || 0) * multiplier);
+    const committedBaseUnits = (rewardList?.rewards ?? []).reduce(
+      (sum: number, r: any) => {
+        const mints: string[] = (r.rewardMints ?? []).map((m: any) => m?.toString?.());
+        if (!mints.includes(mintStr)) return sum;
+        const remaining = Math.max(
+          0,
+          Number(r.redemptionLimit) - Number(r.redemptionCount)
+        );
+        const amount = Number(r.rewardAmount) * multiplier;
+        return sum + remaining * amount;
+      },
+      0
+    );
+    const availableBaseUnits = Math.max(0, totalBaseUnits - committedBaseUnits);
+    return {
+      decimals,
+      totalUi: totalBaseUnits / multiplier,
+      committedUi: committedBaseUnits / multiplier,
+      availableUi: availableBaseUnits / multiplier,
+    };
+  })();
+
+  // Auto-fill the amount with the available-to-transfer value once per mint
+  // selection. Won't overwrite later user edits (we track which mint we've
+  // already filled). Reset when the modal closes so reopening starts fresh.
+  useEffect(() => {
+    if (activeModal !== "adminTransfer") {
+      if (adminTransferAutofilledMint !== null) {
+        setAdminTransferAutofilledMint(null);
+      }
+      return;
+    }
+    const mint = forms.adminTransfer.mint;
+    const available = adminTransferPreview?.availableUi;
+    if (!mint || available == null) return;
+    if (mint === adminTransferAutofilledMint) return;
+    setForms((prev) => ({
+      ...prev,
+      adminTransfer: { ...prev.adminTransfer, amount: String(available) },
+    }));
+    setAdminTransferAutofilledMint(mint);
+  }, [
+    activeModal,
+    forms.adminTransfer.mint,
+    adminTransferPreview?.availableUi,
+    adminTransferAutofilledMint,
+  ]);
+
+  const handleAdminTransfer = async () => {
+    if (!targetDistributor) {
+      setLocalStatus({ loading: false, error: "No distributor selected", signature: null, endpoint: undefined });
+      return;
+    }
+    const cfg = forms.adminTransfer;
+    if (!cfg.mint) {
+      setLocalStatus({ loading: false, error: "Select a mint", signature: null, endpoint: undefined });
+      return;
+    }
+    if (!cfg.user.trim()) {
+      setLocalStatus({ loading: false, error: "Enter a recipient pubkey", signature: null, endpoint: undefined });
+      return;
+    }
+    let userPk: PublicKey;
+    try {
+      userPk = new PublicKey(cfg.user.trim());
+    } catch {
+      setLocalStatus({ loading: false, error: "Invalid recipient pubkey", signature: null, endpoint: undefined });
+      return;
+    }
+    const amount = parseFloat(cfg.amount);
+    if (isNaN(amount) || amount <= 0) {
+      setLocalStatus({ loading: false, error: "Enter a valid amount", signature: null, endpoint: undefined });
+      return;
+    }
+
+    setLocalStatus({ loading: true, error: null, signature: null, endpoint: undefined });
+    const result = await adminTransfer(new PublicKey(cfg.mint), userPk, amount);
+
+    if ("signature" in result && result.signature) {
+      const txId = addTransaction(
+        result.signature,
+        "Admin Transfer",
+        "devnet",
+        result.endpoint || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || getDefaultSolanaEndpoint()
+      );
+      updateTransaction(txId, {
+        status: result.success ? "confirmed" : "failed",
+        error: result.error,
+      });
+      if (result.success) requestDashboardDataRefresh();
+      setLocalStatus({ loading: false, error: null, signature: result.signature, endpoint: result.endpoint });
+      setTimeout(() => {
+        setActiveModal(null);
+        setForms((prev) => ({
+          ...prev,
+          adminTransfer: { mint: "", user: "", amount: "" },
+        }));
+        setLocalStatus({ loading: false, error: null, signature: null, endpoint: undefined });
+      }, 2000);
+    } else {
+      setLocalStatus({
+        loading: false,
+        error: result.error || "Unknown error",
+        signature: null,
+        endpoint: undefined,
+      });
+    }
+  };
+
   if (!publicKey) {
     return (
       <div className="card p-8 text-center">
@@ -519,6 +703,18 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
           <span className="text-left">
             <div className="font-medium text-white">Send SPL Token</div>
             <div className="text-xs text-gray-400">Transfer tokens to distributor</div>
+          </span>
+        </button>
+
+        {/* Admin Transfer (distributor → user, ER-scheduled, availability-checked) */}
+        <button
+          onClick={() => setActiveModal("adminTransfer")}
+          className="card p-4 hover:bg-gray-700 transition flex items-center gap-3 group"
+        >
+          <ArrowRightLeft className="w-5 h-5 text-emerald-400 group-hover:text-emerald-300" />
+          <span className="text-left">
+            <div className="font-medium text-white">Admin Transfer</div>
+            <div className="text-xs text-gray-400">Send distributor assets to a user (non-VRF)</div>
           </span>
         </button>
       </div>
@@ -782,6 +978,128 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
               disabled={localStatus.loading}
               className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
             />
+          </div>
+        </div>
+      </TransactionModal>
+
+      {/* Admin Transfer Modal — ER-scheduled, on-chain availability check */}
+      <TransactionModal
+        isOpen={activeModal === "adminTransfer"}
+        title="Admin Transfer"
+        description="Send distributor-held assets to a user, outside the VRF flow. Runs on the ER; the on-chain check prevents draining assets committed to outstanding redemptions."
+        loading={localStatus.loading}
+        error={localStatus.error}
+        signature={localStatus.signature}
+        endpoint={localStatus.endpoint}
+        onClose={() => setActiveModal(null)}
+        onConfirm={handleAdminTransfer}
+      >
+        <div className="space-y-3">
+          {targetDistributor && (
+            <div className="bg-gray-800 p-2 rounded text-xs">
+              <p className="text-gray-400 mb-1">Source (Reward Distributor PDA)</p>
+              <CopyableAddress address={targetDistributor.toBase58()} />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Mint</label>
+            {distributorMintsError && (
+              <div className="mt-2 rounded border border-red-700 bg-red-900/20 p-2 text-xs text-red-300">
+                Fetch error: {distributorMintsError}
+              </div>
+            )}
+            <select
+              value={forms.adminTransfer.mint}
+              onChange={(e) =>
+                setForms({
+                  ...forms,
+                  adminTransfer: { ...forms.adminTransfer, mint: e.target.value },
+                })
+              }
+              disabled={localStatus.loading || distributorMintsLoading || distributorMints.length === 0}
+              className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-emerald-500 focus:outline-none disabled:opacity-50 text-sm"
+            >
+              <option value="">
+                {distributorMintsLoading
+                  ? "Loading distributor mints..."
+                  : distributorMints.length > 0
+                    ? "Select a mint the distributor holds"
+                    : "Distributor holds no SPL tokens"}
+              </option>
+              {distributorMints.map((opt) => (
+                <option key={opt.tokenAccount} value={opt.mint}>
+                  {shortAddress(opt.mint, 5)} ({opt.balanceLabel})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {adminTransferPreview && (
+            <div className="rounded border border-gray-700 bg-gray-900/60 p-3 text-xs">
+              <p className="text-gray-300 font-medium mb-2">Availability (base layer)</p>
+              <div className="space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Total held</span>
+                  <span className="text-white font-mono">{adminTransferPreview.totalUi}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Committed to redemptions</span>
+                  <span className="text-gray-300 font-mono">{adminTransferPreview.committedUi}</span>
+                </div>
+                <div className="flex justify-between border-t border-gray-700 pt-1 mt-1">
+                  <span className="text-gray-400">Available to transfer</span>
+                  <span
+                    className={`font-mono ${
+                      adminTransferPreview.availableUi > 0 ? "text-green-400" : "text-yellow-400"
+                    }`}
+                  >
+                    {adminTransferPreview.availableUi}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Recipient (pubkey)</label>
+            <input
+              type="text"
+              value={forms.adminTransfer.user}
+              onChange={(e) =>
+                setForms({
+                  ...forms,
+                  adminTransfer: { ...forms.adminTransfer, user: e.target.value },
+                })
+              }
+              placeholder="e.g. 7xKXt..."
+              disabled={localStatus.loading}
+              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-emerald-500 focus:outline-none disabled:opacity-50 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Amount (UI units)</label>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              value={forms.adminTransfer.amount}
+              onChange={(e) =>
+                setForms({
+                  ...forms,
+                  adminTransfer: { ...forms.adminTransfer, amount: e.target.value },
+                })
+              }
+              placeholder={adminTransferPreview ? `up to ${adminTransferPreview.availableUi}` : "e.g. 100"}
+              disabled={localStatus.loading}
+              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-emerald-500 focus:outline-none disabled:opacity-50 text-sm"
+            />
+          </div>
+
+          <div className="bg-gray-800 p-2 rounded text-xs text-gray-400 space-y-1">
+            <p>💡 Submitted on the ER endpoint. The on-chain handler reads the delegated <code className="text-emerald-300">reward_list</code> to compute committed amounts and rejects the tx if the transfer would dip into reserved assets.</p>
+            <p>Reward redemption counts are <strong>not</strong> changed by this action.</p>
           </div>
         </div>
       </TransactionModal>
