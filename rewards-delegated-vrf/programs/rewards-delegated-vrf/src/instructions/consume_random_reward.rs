@@ -13,7 +13,10 @@ pub fn consume_random_reward(
     let user = &ctx.accounts.user;
     let transfer_lookup_table = &ctx.accounts.transfer_lookup_table;
 
-    // Build PDA signer seeds for reward_list — it is now the payer for the intent bundle
+    // Build PDA signer seeds. Two PDAs must sign the Magic schedule CPI:
+    //   - reward_list: payer for the intent bundle (delegated, holds ER lamports)
+    //   - reward_distributor: escrow_authority (Magic enforces that the
+    //     escrow_authority signs the schedule tx; see BaseAction::try_from_args)
     let reward_list_bump = ctx.bumps.reward_list;
     let reward_distributor_key = ctx.accounts.reward_distributor.key();
     let reward_list_seeds: &[&[u8]] = &[
@@ -21,7 +24,14 @@ pub fn consume_random_reward(
         reward_distributor_key.as_ref(),
         &[reward_list_bump],
     ];
-    let payer_seeds = &[reward_list_seeds];
+    let super_admin = ctx.accounts.reward_distributor.super_admin;
+    let reward_distributor_bump = ctx.accounts.reward_distributor.bump;
+    let reward_distributor_seeds: &[&[u8]] = &[
+        constants::REWARD_DISTRIBUTOR_SEED,
+        super_admin.as_ref(),
+        &[reward_distributor_bump],
+    ];
+    let payer_seeds: &[&[&[u8]]] = &[reward_list_seeds, reward_distributor_seeds];
 
     {
         let reward_list = &mut ctx.accounts.reward_list;

@@ -1,5 +1,6 @@
 [toolchain]
 package_manager = "yarn"
+anchor_version = "1.0.2"
 
 [features]
 resolution = true

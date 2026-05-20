@@ -32,7 +32,7 @@ pub fn transfer_reward_programmable_nft(
         token_program: ctx.accounts.token_program.to_account_info(),
     };
     let cpi_ata_program = ctx.accounts.token_program.to_account_info();
-    let cpi_ata_ctx = CpiContext::new(cpi_ata_program, cpi_ata_accounts);
+    let cpi_ata_ctx = CpiContext::new(cpi_ata_program.key(), cpi_ata_accounts);
     create_idempotent(cpi_ata_ctx)?;
 
     mpl_token_metadata::instructions::TransferCpiBuilder::new(

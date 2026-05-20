@@ -1,0 +1,26 @@
+[package]
+name = "roll-dice"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "roll_dice"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+ephemeral-rollups-sdk = { version = "0.14.2", features = ["anchor-compat"] }
+ephemeral-vrf-sdk = { version = "0.2.1", features = ["anchor"] }
+
