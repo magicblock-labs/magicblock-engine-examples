@@ -521,24 +521,20 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
     };
   }, [activeModal, targetDistributor?.toBase58(), connection.rpcEndpoint]);
 
-  // Live availability preview for the selected mint in the Admin Transfer
-  // modal. Mirrors the on-chain check `available = total - committed`,
-  // where `committed = sum over reward_list of (remaining * reward_amount)`
-  // for rewards using this mint (in base units).
-  const adminTransferPreview = (() => {
-    const mintStr = forms.adminTransfer.mint;
-    if (!mintStr) return null;
-    const opt = distributorMints.find((m) => m.mint === mintStr);
-    if (!opt) return null;
+  // Per-mint availability computation. Mirrors the on-chain check
+  // `available = total - committed`, where
+  // `committed = sum over reward_list of (remaining * reward_amount)` for
+  // rewards using this mint (in base units).
+  const computeMintAvailability = (opt: OwnedSplMintOption) => {
     const decimals = opt.decimals ?? 0;
     const multiplier = Math.pow(10, decimals);
-    // opt.balanceLabel is the UI-unit display; raw amount isn't exposed by the
-    // option type, so reconstruct from balanceLabel * multiplier.
+    // opt.balanceLabel is the UI-unit display; raw amount isn't exposed by
+    // the option type, so reconstruct from balanceLabel * multiplier.
     const totalBaseUnits = Math.floor((parseFloat(opt.balanceLabel) || 0) * multiplier);
     const committedBaseUnits = (rewardList?.rewards ?? []).reduce(
       (sum: number, r: any) => {
         const mints: string[] = (r.rewardMints ?? []).map((m: any) => m?.toString?.());
-        if (!mints.includes(mintStr)) return sum;
+        if (!mints.includes(opt.mint)) return sum;
         const remaining = Math.max(
           0,
           Number(r.redemptionLimit) - Number(r.redemptionCount)
@@ -555,6 +551,21 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
       committedUi: committedBaseUnits / multiplier,
       availableUi: availableBaseUnits / multiplier,
     };
+  };
+
+  // Mints with non-zero transferable balance — the only ones we surface in
+  // the Admin Transfer dropdown.
+  const transferableMints = distributorMints
+    .map((opt) => ({ opt, availability: computeMintAvailability(opt) }))
+    .filter((entry) => entry.availability.availableUi > 0);
+
+  // Preview for the currently selected mint, derived from the same helper.
+  const adminTransferPreview = (() => {
+    const mintStr = forms.adminTransfer.mint;
+    if (!mintStr) return null;
+    const opt = distributorMints.find((m) => m.mint === mintStr);
+    if (!opt) return null;
+    return computeMintAvailability(opt);
   })();
 
   // Auto-fill the amount with the available-to-transfer value once per mint
@@ -1017,19 +1028,21 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
                   adminTransfer: { ...forms.adminTransfer, mint: e.target.value },
                 })
               }
-              disabled={localStatus.loading || distributorMintsLoading || distributorMints.length === 0}
+              disabled={localStatus.loading || distributorMintsLoading || transferableMints.length === 0}
               className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-emerald-500 focus:outline-none disabled:opacity-50 text-sm"
             >
               <option value="">
                 {distributorMintsLoading
                   ? "Loading distributor mints..."
-                  : distributorMints.length > 0
-                    ? "Select a mint the distributor holds"
-                    : "Distributor holds no SPL tokens"}
+                  : transferableMints.length > 0
+                    ? "Select a mint with available balance"
+                    : distributorMints.length > 0
+                      ? "All mints fully committed to redemptions"
+                      : "Distributor holds no SPL tokens"}
               </option>
-              {distributorMints.map((opt) => (
+              {transferableMints.map(({ opt, availability }) => (
                 <option key={opt.tokenAccount} value={opt.mint}>
-                  {shortAddress(opt.mint, 5)} ({opt.balanceLabel})
+                  {shortAddress(opt.mint, 5)} (available: {availability.availableUi})
                 </option>
               ))}
             </select>
