@@ -50,6 +50,12 @@ pub fn schedule_transfer_action<'info>(
 
     // See `as_signer` doc — both PDAs sign the Magic CPI via `payer_seeds`.
     let payer = as_signer(payer);
+    msg!(
+        "Scheduling transfer of mint: {} | amount: {} | destination: {}",
+        mint,
+        amount,
+        destination.key()
+    );
 
     match reward_type {
         RewardType::SplToken | RewardType::LegacyNft => {
@@ -117,9 +123,10 @@ pub fn schedule_transfer_action<'info>(
             .build_and_invoke_signed(payer_seeds)?;
         }
         RewardType::ProgrammableNft => {
-            let instruction_data = anchor_lang::InstructionData::data(
-                &crate::instruction::TransferProgrammableNft { amount },
-            );
+            let instruction_data =
+                anchor_lang::InstructionData::data(&crate::instruction::TransferProgrammableNft {
+                    amount,
+                });
 
             let source_token_address =
                 get_associated_token_address(&reward_distributor.key(), &mint);
