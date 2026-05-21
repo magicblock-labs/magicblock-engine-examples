@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
+use ephemeral_rollups_sdk::crank::crank_signer_pda;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
 use anchor_lang::solana_program::{
@@ -10,7 +11,7 @@ use anchor_lang::solana_program::{
 use ephemeral_rollups_sdk::consts::MAGIC_PROGRAM_ID;
 use magicblock_magic_program_api::{args::ScheduleTaskArgs, instruction::MagicBlockInstruction};
 
-declare_id!("E91p5Drj4deMEe1RVLWMLWUfTCwDfronioJe6NRYkbxZ");
+declare_id!("HetkBSVTbemvzJzcmnTS6Ge6LP9KVVXkbtdL6qguG2g9");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 
@@ -38,9 +39,14 @@ pub mod anchor_counter {
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
-        if counter.count > 1000 {
-            counter.count = 0;
-        }
+        msg!("PDA {} count: {}", counter.key(), counter.count);
+        Ok(())
+    }
+
+    /// Increment the counter.
+    pub fn increment_permissioned(ctx: Context<IncrementPermissioned>) -> Result<()> {
+        let counter = &mut ctx.accounts.counter;
+        counter.count += 1;
         msg!("PDA {} count: {}", counter.key(), counter.count);
         Ok(())
     }
@@ -52,24 +58,21 @@ pub mod anchor_counter {
     ) -> Result<()> {
         let increment_ix = Instruction {
             program_id: crate::ID,
-            accounts: vec![AccountMeta::new(ctx.accounts.counter.key(), false)],
+            accounts: crate::accounts::Increment {
+                counter: *ctx.accounts.counter.key,
+            }
+            .to_account_metas(None),
             data: anchor_lang::InstructionData::data(&crate::instruction::Increment {}),
         };
 
-        let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(ScheduleTaskArgs {
-            task_id: args.task_id,
-            execution_interval_millis: args.execution_interval_millis,
-            iterations: args.iterations,
-            instructions: vec![increment_ix],
-        }))
-        .map_err(|err| {
-            msg!("ERROR: failed to serialize args {:?}", err);
-            ProgramError::InvalidArgument
-        })?;
-
-        let schedule_ix = Instruction::new_with_bytes(
+        let schedule_ix = Instruction::new_with_bincode(
             MAGIC_PROGRAM_ID,
-            &ix_data,
+            &MagicBlockInstruction::ScheduleTask(ScheduleTaskArgs {
+                task_id: args.task_id,
+                execution_interval_millis: args.execution_interval_millis,
+                iterations: args.iterations,
+                instructions: vec![increment_ix],
+            }),
             vec![
                 AccountMeta::new(ctx.accounts.payer.key(), true),
                 AccountMeta::new(ctx.accounts.counter.key(), false),
@@ -83,6 +86,48 @@ pub mod anchor_counter {
                 ctx.accounts.counter.to_account_info(),
             ],
             &[],
+        )?;
+
+        Ok(())
+    }
+
+    // Schedules permissioned crank for increment counter
+    pub fn schedule_increment_permissioned(
+        ctx: Context<ScheduleIncrement>,
+        args: ScheduleIncrementArgs,
+    ) -> Result<()> {
+        let increment_ix = Instruction {
+            program_id: crate::ID,
+            accounts: crate::accounts::IncrementPermissioned {
+                counter: *ctx.accounts.counter.key,
+                crank_signer: crank_signer_pda(ctx.accounts.counter.key),
+            }
+            .to_account_metas(None),
+            data: anchor_lang::InstructionData::data(&crate::instruction::IncrementPermissioned {}),
+        };
+
+        let schedule_ix = Instruction::new_with_bincode(
+            MAGIC_PROGRAM_ID,
+            &MagicBlockInstruction::ScheduleTask(ScheduleTaskArgs {
+                task_id: args.task_id,
+                execution_interval_millis: args.execution_interval_millis,
+                iterations: args.iterations,
+                instructions: vec![increment_ix],
+            }),
+            vec![
+                AccountMeta::new(ctx.accounts.counter.key(), true), // Counter as authority
+                AccountMeta::new(ctx.accounts.counter.key(), false),
+            ],
+        );
+
+        let signer_seeds = [COUNTER_SEED, &[ctx.bumps.counter]];
+        invoke_signed(
+            &schedule_ix,
+            &[
+                ctx.accounts.counter.to_account_info(),
+                ctx.accounts.counter.to_account_info(),
+            ],
+            &[&signer_seeds],
         )?;
 
         Ok(())
@@ -132,7 +177,7 @@ pub struct DelegateInput<'info> {
     pub payer: Signer<'info>,
     /// CHECK The pda to delegate
     #[account(mut, del)]
-    pub pda: AccountInfo<'info>,
+    pub pda: UncheckedAccount<'info>,
 }
 
 /// Account for the increment instruction.
@@ -140,6 +185,15 @@ pub struct DelegateInput<'info> {
 pub struct Increment<'info> {
     #[account(mut, seeds = [COUNTER_SEED], bump)]
     pub counter: Account<'info, Counter>,
+}
+
+/// Account for the increment instruction.
+#[derive(Accounts)]
+pub struct IncrementPermissioned<'info> {
+    #[account(mut, seeds = [COUNTER_SEED], bump)]
+    pub counter: Account<'info, Counter>,
+    #[account(address = crank_signer_pda(&counter.key()))]
+    pub crank_signer: Signer<'info>,
 }
 
 /// Account for the increment instruction + manual commit.
@@ -159,14 +213,12 @@ pub struct Counter {
 
 #[derive(Accounts)]
 pub struct ScheduleIncrement<'info> {
-    /// CHECK: used for CPI
-    #[account()]
-    pub magic_program: AccountInfo<'info>,
     #[account(mut)]
     pub payer: Signer<'info>,
     /// CHECK: Passed to CPI - using AccountInfo to avoid Anchor re-serializing stale data after CPI
     #[account(mut, seeds = [COUNTER_SEED], bump)]
-    pub counter: AccountInfo<'info>,
+    pub counter: UncheckedAccount<'info>,
     /// CHECK: used for CPI
-    pub program: AccountInfo<'info>,
+    #[account(address = MAGIC_PROGRAM_ID)]
+    pub magic_program: UncheckedAccount<'info>,
 }
