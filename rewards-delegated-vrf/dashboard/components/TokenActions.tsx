@@ -102,7 +102,8 @@ export const TokenActions: React.FC<TokenActionsProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [activeModal, connection.rpcEndpoint, publicKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeModal, connection.rpcEndpoint, publicKey?.toString()]);
 
   // Fetch Metaplex metadata symbols for wallet mints
   useEffect(() => {
