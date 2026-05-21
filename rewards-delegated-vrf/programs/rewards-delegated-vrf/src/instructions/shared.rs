@@ -1,11 +1,12 @@
 use anchor_lang::prelude::*;
+use anchor_lang::InstructionData;
 use anchor_spl::associated_token::get_associated_token_address;
 use anchor_spl::metadata::mpl_token_metadata;
 use ephemeral_rollups_sdk::ephem::{FoldableIntentBuilder, MagicIntentBundleBuilder};
 use ephemeral_rollups_sdk::{ephem::CallHandler, ActionArgs, ShortAccountMeta};
 
 use crate::errors::RewardError;
-use crate::state::{RewardDistributor, RewardType, TransferLookupTable};
+use crate::state::{RewardType, SourceKind, TransferLookupTable};
 
 /// Workaround for ephemeral-rollups-sdk ≥0.11: `MagicIntentBundleBuilder::build()`
 /// copies `is_signer` verbatim from each input AccountInfo
@@ -25,8 +26,62 @@ fn as_signer<'info>(signer: AccountInfo<'info>) -> AccountInfo<'info> {
     }
 }
 
+/// Which PDA owns the source ATA — and therefore which seed components
+/// the post-commit handler signs with. Both source kinds share a single
+/// `transfer_spl_token` / `transfer_programmable_nft` post-commit handler;
+/// the kind + second-seed pubkey + bump are passed via instruction data
+/// so the handler can derive the correct signer seeds at runtime without
+/// needing a typed `Account` field in its context.
+pub enum TransferSource<'info> {
+    RewardDistributor {
+        authority: AccountInfo<'info>,
+    },
+    WhitelistDistributor {
+        authority: AccountInfo<'info>,
+    },
+}
+
+impl<'info> TransferSource<'info> {
+    fn authority_key(&self) -> Pubkey {
+        match self {
+            Self::RewardDistributor { authority } => authority.key(),
+            Self::WhitelistDistributor { authority } => authority.key(),
+        }
+    }
+
+    fn authority_info(&self) -> AccountInfo<'info> {
+        match self {
+            Self::RewardDistributor { authority } => authority.clone(),
+            Self::WhitelistDistributor { authority } => authority.clone(),
+        }
+    }
+
+    fn kind(&self) -> SourceKind {
+        match self {
+            Self::RewardDistributor { .. } => SourceKind::RewardDistributor,
+            Self::WhitelistDistributor { .. } => SourceKind::WhitelistDistributor,
+        }
+    }
+
+    fn spl_token_instruction_data(&self, amount: u64) -> Vec<u8> {
+        crate::instruction::TransferSplToken {
+            amount,
+            source: self.kind(),
+        }
+        .data()
+    }
+
+    fn programmable_nft_instruction_data(&self, amount: u64) -> Vec<u8> {
+        crate::instruction::TransferProgrammableNft {
+            amount,
+            source: self.kind(),
+        }
+        .data()
+    }
+}
+
 pub fn schedule_transfer_action<'info>(
-    reward_distributor: &Account<'info, RewardDistributor>,
+    source: TransferSource<'info>,
     transfer_lookup_table: &Account<'info, TransferLookupTable>,
     reward_list: &AccountInfo<'info>,
     magic_context: &AccountInfo<'info>,
@@ -38,7 +93,9 @@ pub fn schedule_transfer_action<'info>(
     payer: AccountInfo<'info>,
     destination: AccountInfo<'info>,
     magic_fee_vault: AccountInfo<'info>,
-    // Seeds for PDA signing — reward_list is now the payer so it must sign via seeds
+    // Seeds for PDA signing — reward_list is the payer so it must sign via
+    // seeds, and the escrow authority (reward_distributor OR whitelist_distributor
+    // depending on `source`) is also a PDA so its seeds are bundled here too.
     payer_seeds: &[&[&[u8]]],
 ) -> Result<()> {
     let token_program = transfer_lookup_table.lookup_accounts[0];
@@ -50,22 +107,21 @@ pub fn schedule_transfer_action<'info>(
 
     // See `as_signer` doc — both PDAs sign the Magic CPI via `payer_seeds`.
     let payer = as_signer(payer);
+    let source_authority_key = source.authority_key();
     msg!(
-        "Scheduling transfer of mint: {} | amount: {} | destination: {}",
+        "Scheduling transfer of mint: {} | amount: {} | source: {} | destination: {}",
         mint,
         amount,
+        source_authority_key,
         destination.key()
     );
 
     match reward_type {
         RewardType::SplToken | RewardType::LegacyNft => {
-            let instruction_data =
-                anchor_lang::InstructionData::data(&crate::instruction::TransferSplToken {
-                    amount,
-                });
+            let instruction_data = source.spl_token_instruction_data(amount);
 
             let source_token_address =
-                get_associated_token_address(&reward_distributor.key(), &mint);
+                get_associated_token_address(&source_authority_key, &mint);
             let destination_token_address = get_associated_token_address(&destination.key(), &mint);
 
             let action_args = ActionArgs::new(instruction_data);
@@ -86,9 +142,12 @@ pub fn schedule_transfer_action<'info>(
                     pubkey: destination_token_address,
                     is_writable: true,
                 },
+                // source_authority — RewardDistributor or WhitelistDistributor
+                // PDA. The handler reads its on-chain data to recover the
+                // bump + second-seed and uses them to sign the SPL CPI.
                 ShortAccountMeta {
-                    pubkey: reward_distributor.key(),
-                    is_writable: true,
+                    pubkey: source_authority_key,
+                    is_writable: false,
                 },
                 ShortAccountMeta {
                     pubkey: destination.key(),
@@ -108,7 +167,7 @@ pub fn schedule_transfer_action<'info>(
                 destination_program: crate::ID,
                 accounts: action_accounts,
                 args: action_args,
-                escrow_authority: as_signer(reward_distributor.to_account_info()),
+                escrow_authority: as_signer(source.authority_info()),
                 compute_units: 200_000,
             };
 
@@ -123,13 +182,10 @@ pub fn schedule_transfer_action<'info>(
             .build_and_invoke_signed(payer_seeds)?;
         }
         RewardType::ProgrammableNft => {
-            let instruction_data =
-                anchor_lang::InstructionData::data(&crate::instruction::TransferProgrammableNft {
-                    amount,
-                });
+            let instruction_data = source.programmable_nft_instruction_data(amount);
 
             let source_token_address =
-                get_associated_token_address(&reward_distributor.key(), &mint);
+                get_associated_token_address(&source_authority_key, &mint);
             let destination_token_address = get_associated_token_address(&destination.key(), &mint);
 
             let (metadata_pda, _) = mpl_token_metadata::accounts::Metadata::find_pda(&mint);
@@ -162,9 +218,10 @@ pub fn schedule_transfer_action<'info>(
                     pubkey: destination_token_address,
                     is_writable: true,
                 },
+                // source_authority — see SPL/LegacyNFT branch comment.
                 ShortAccountMeta {
-                    pubkey: reward_distributor.key(),
-                    is_writable: true,
+                    pubkey: source_authority_key,
+                    is_writable: false,
                 },
                 ShortAccountMeta {
                     pubkey: destination.key(),
@@ -216,7 +273,7 @@ pub fn schedule_transfer_action<'info>(
                 destination_program: crate::ID,
                 accounts: action_accounts,
                 args: action_args,
-                escrow_authority: as_signer(reward_distributor.to_account_info()),
+                escrow_authority: as_signer(source.authority_info()),
                 compute_units: 200_000,
             };
 

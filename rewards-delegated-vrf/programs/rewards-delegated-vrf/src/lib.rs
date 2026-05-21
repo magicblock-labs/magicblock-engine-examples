@@ -75,19 +75,28 @@ pub mod rewards_delegated_vrf {
         instructions::consume_random_reward::consume_random_reward(ctx, randomness)
     }
 
-    pub fn transfer_spl_token(ctx: Context<TransferSplToken>, amount: u64) -> Result<()> {
-        instructions::transfer_spl_token::transfer_spl_token(ctx, amount)
+    pub fn transfer_spl_token(
+        ctx: Context<TransferSplToken>,
+        amount: u64,
+        source: state::SourceKind,
+    ) -> Result<()> {
+        instructions::transfer_spl_token::transfer_spl_token(ctx, amount, source)
     }
 
     pub fn transfer_programmable_nft(
         ctx: Context<TransferProgrammableNft>,
         amount: u64,
+        source: state::SourceKind,
     ) -> Result<()> {
-        instructions::transfer_programmable_nft::transfer_programmable_nft(ctx, amount)
+        instructions::transfer_programmable_nft::transfer_programmable_nft(ctx, amount, source)
     }
 
     pub fn admin_transfer(ctx: Context<AdminTransfer>, amount: u64) -> Result<()> {
         instructions::admin_transfer::admin_transfer(ctx, amount)
+    }
+
+    pub fn whitelist_transfer(ctx: Context<WhitelistTransfer>, amount: u64) -> Result<()> {
+        instructions::whitelist_transfer::whitelist_transfer(ctx, amount)
     }
 
     pub fn undelegate_reward_list(ctx: Context<UndelegateRewardList>) -> Result<()> {
@@ -151,6 +160,11 @@ pub struct InitializeRewardDistributor<'info> {
     pub initializer: Signer<'info>,
     #[account(init_if_needed, payer = initializer, space = 8 + 32 + 1 + 4 + (32 * 10) + 4 + (32 * 10), seeds = [constants::REWARD_DISTRIBUTOR_SEED, initializer.key().as_ref()], bump)]
     pub reward_distributor: Account<'info, state::RewardDistributor>,
+    /// Whitelist token bag — created alongside reward_distributor so the
+    /// two PDAs stay in lockstep. `init_if_needed` backfills the account
+    /// on distributors that were created before this PDA existed.
+    #[account(init_if_needed, payer = initializer, space = 8 + state::WhitelistDistributor::MAX_SIZE, seeds = [constants::WHITELIST_DISTRIBUTOR_SEED, reward_distributor.key().as_ref()], bump)]
+    pub whitelist_distributor: Account<'info, state::WhitelistDistributor>,
     pub system_program: Program<'info, System>,
 }
 
@@ -304,6 +318,53 @@ pub struct AdminTransfer<'info> {
     pub magic_fee_vault: UncheckedAccount<'info>,
 }
 
+/// Whitelist-driven transfer from the per-distributor `whitelist_distributor`
+/// PDA to a user. Runs on the ER (same Magic intent infrastructure as
+/// `admin_transfer`) so the post-commit handler can sign the SPL CPI with
+/// the whitelist_distributor PDA's seeds. Authorization (super_admin /
+/// admin / whitelist member) is enforced via the `signer` constraint.
+///
+/// Unlike `admin_transfer`, the on-chain check is just an ATA-balance
+/// check — the whitelist bag is intentionally separate from the reward
+/// inventory, so there's no committed-amount math.
+#[commit]
+#[derive(Accounts)]
+pub struct WhitelistTransfer<'info> {
+    #[account(
+        constraint = signer.key() == reward_distributor.super_admin
+            || reward_distributor.admins.contains(&signer.key())
+            || reward_distributor.whitelist.contains(&signer.key())
+            @ errors::RewardError::Unauthorized
+    )]
+    pub signer: Signer<'info>,
+    pub reward_distributor: Account<'info, state::RewardDistributor>,
+    #[account(
+        seeds = [constants::WHITELIST_DISTRIBUTOR_SEED, reward_distributor.key().as_ref()],
+        bump = whitelist_distributor.bump,
+        constraint = whitelist_distributor.reward_distributor == reward_distributor.key() @ errors::RewardError::Unauthorized
+    )]
+    pub whitelist_distributor: Account<'info, state::WhitelistDistributor>,
+    #[account(mut, seeds = [constants::REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
+    pub reward_list: Account<'info, state::RewardsList>,
+    #[account(seeds = [constants::TRANSFER_LOOKUP_TABLE_SEED], bump)]
+    pub transfer_lookup_table: Account<'info, state::TransferLookupTable>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        associated_token::mint = mint,
+        associated_token::authority = whitelist_distributor,
+    )]
+    pub source_token_account: InterfaceAccount<'info, TokenAccount>,
+    /// CHECK: recipient pubkey (ATA derived + created on base by the scheduled action)
+    pub user: UncheckedAccount<'info>,
+    /// CHECK: Delegation record for reward_list — authority field contains the validator, used to derive magic_fee_vault
+    #[account(address = ephemeral_rollups_sdk::pda::delegation_record_pda_from_delegated_account(&reward_list.key()))]
+    pub delegation_record_reward_list: UncheckedAccount<'info>,
+    /// CHECK: Magic fee vault — derived from the validator in the delegation record
+    #[account(mut)]
+    pub magic_fee_vault: UncheckedAccount<'info>,
+}
+
+
 #[derive(Accounts)]
 pub struct UpdateReward<'info> {
     #[account(constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
@@ -315,6 +376,16 @@ pub struct UpdateReward<'info> {
     pub token_account: Option<InterfaceAccount<'info, TokenAccount>>,
 }
 
+/// Post-commit action for SPL/LegacyNFT transfers. `source_authority` is
+/// the on-chain RewardDistributor OR WhitelistDistributor PDA — both share
+/// the same `[8 disc][32 second_seed][1 bump]` prefix in their account
+/// data, so a single handler can read the bump + second-seed from either
+/// type without needing a typed `Account<T>` field. The `SourceKind` ix
+/// param tells the handler which seed prefix to combine those with.
+///
+/// `escrow` (auto-injected by `#[action]`) is the Magic-managed SOL
+/// escrow used to pay for any rent (destination ATA creation). It is
+/// NOT the source-authority signer.
 #[action]
 #[derive(Accounts)]
 pub struct TransferSplToken<'info> {
@@ -325,7 +396,11 @@ pub struct TransferSplToken<'info> {
     #[account(mut)]
     /// CHECK: destination Token Account
     pub destination_token_account: UncheckedAccount<'info>,
-    pub reward_distributor: Account<'info, state::RewardDistributor>,
+    /// CHECK: source authority PDA (RewardDistributor or WhitelistDistributor).
+    /// Must be owned by this program and the SPL transfer will fail if its
+    /// derived PDA doesn't match `source_token_account.owner`.
+    #[account(owner = crate::ID)]
+    pub source_authority: UncheckedAccount<'info>,
     /// CHECK: User/destination
     pub user: UncheckedAccount<'info>,
     /// CHECK: Associated Token Program
@@ -336,6 +411,8 @@ pub struct TransferSplToken<'info> {
     pub source_program: UncheckedAccount<'info>,
 }
 
+/// Post-commit action for programmable-NFT transfers. See
+/// `TransferSplToken` for the unified-source rationale.
 #[action]
 #[derive(Accounts)]
 pub struct TransferProgrammableNft<'info> {
@@ -346,7 +423,11 @@ pub struct TransferProgrammableNft<'info> {
     #[account(mut)]
     /// CHECK: destination Token Account
     pub destination_token_account: UncheckedAccount<'info>,
-    pub reward_distributor: Account<'info, state::RewardDistributor>,
+    /// CHECK: source authority PDA (RewardDistributor or WhitelistDistributor).
+    /// Must be owned by this program and the Metaplex transfer will fail if
+    /// its derived PDA doesn't match `source_token_account.owner`.
+    #[account(owner = crate::ID)]
+    pub source_authority: UncheckedAccount<'info>,
     /// CHECK: User/destination
     pub user: UncheckedAccount<'info>,
     /// CHECK: Associated Token Program

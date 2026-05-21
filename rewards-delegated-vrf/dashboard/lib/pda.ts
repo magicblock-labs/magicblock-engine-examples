@@ -4,6 +4,7 @@ import {
   REWARD_DISTRIBUTOR_SEED,
   REWARD_LIST_SEED,
   TRANSFER_LOOKUP_TABLE_SEED,
+  WHITELIST_DISTRIBUTOR_SEED,
   DELEGATION_PROGRAM_ID,
 } from "./constants";
 
@@ -27,6 +28,20 @@ export class PDAs {
   static getTransferLookupTable(): [PublicKey, number] {
     const [pda, bump] = PublicKey.findProgramAddressSync(
       [Buffer.from(TRANSFER_LOOKUP_TABLE_SEED)],
+      PROGRAM_ID
+    );
+    return [pda, bump];
+  }
+
+  /** Whitelist distributor PDA — derived per reward distributor. Holds the
+   *  token bag whose authority is the PDA itself; only `whitelist_transfer`
+   *  (signed by reward_distributor admins/super_admin or whitelist members)
+   *  can move funds out. */
+  static getWhitelistDistributor(
+    rewardDistributor: PublicKey
+  ): [PublicKey, number] {
+    const [pda, bump] = PublicKey.findProgramAddressSync(
+      [Buffer.from(WHITELIST_DISTRIBUTOR_SEED), rewardDistributor.toBuffer()],
       PROGRAM_ID
     );
     return [pda, bump];

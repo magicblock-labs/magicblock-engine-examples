@@ -657,6 +657,49 @@
           }
         },
         {
+          "name": "whitelist_distributor",
+          "docs": [
+            "Whitelist token bag — created alongside reward_distributor so the",
+            "two PDAs stay in lockstep. `init_if_needed` backfills the account",
+            "on distributors that were created before this PDA existed."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  104,
+                  105,
+                  116,
+                  101,
+                  108,
+                  105,
+                  115,
+                  116,
+                  95,
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "reward_distributor"
+              }
+            ]
+          }
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -1176,7 +1219,11 @@
           "writable": true
         },
         {
-          "name": "reward_distributor"
+          "name": "source_authority",
+          "docs": [
+            "Must be owned by this program and the Metaplex transfer will fail if",
+            "its derived PDA doesn't match `source_token_account.owner`."
+          ]
         },
         {
           "name": "user"
@@ -1227,6 +1274,14 @@
         {
           "name": "amount",
           "type": "u64"
+        },
+        {
+          "name": "source",
+          "type": {
+            "defined": {
+              "name": "SourceKind"
+            }
+          }
         }
       ]
     },
@@ -1258,7 +1313,11 @@
           "writable": true
         },
         {
-          "name": "reward_distributor"
+          "name": "source_authority",
+          "docs": [
+            "Must be owned by this program and the SPL transfer will fail if its",
+            "derived PDA doesn't match `source_token_account.owner`."
+          ]
         },
         {
           "name": "user"
@@ -1285,6 +1344,14 @@
         {
           "name": "amount",
           "type": "u64"
+        },
+        {
+          "name": "source",
+          "type": {
+            "defined": {
+              "name": "SourceKind"
+            }
+          }
         }
       ]
     },
@@ -1436,6 +1503,243 @@
           }
         }
       ]
+    },
+    {
+      "name": "whitelist_transfer",
+      "discriminator": [
+        254,
+        207,
+        47,
+        182,
+        77,
+        243,
+        66,
+        148
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "reward_distributor"
+        },
+        {
+          "name": "whitelist_distributor",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  104,
+                  105,
+                  116,
+                  101,
+                  108,
+                  105,
+                  115,
+                  116,
+                  95,
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "reward_distributor"
+              }
+            ]
+          }
+        },
+        {
+          "name": "reward_list",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  108,
+                  105,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "reward_distributor"
+              }
+            ]
+          }
+        },
+        {
+          "name": "transfer_lookup_table",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  102,
+                  101,
+                  114,
+                  95,
+                  108,
+                  111,
+                  111,
+                  107,
+                  117,
+                  112,
+                  95,
+                  116,
+                  97,
+                  98,
+                  108,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "source_token_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "whitelist_distributor"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "user"
+        },
+        {
+          "name": "delegation_record_reward_list"
+        },
+        {
+          "name": "magic_fee_vault",
+          "writable": true
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1476,6 +1780,19 @@
         204,
         67,
         62
+      ]
+    },
+    {
+      "name": "WhitelistDistributor",
+      "discriminator": [
+        176,
+        131,
+        124,
+        116,
+        152,
+        164,
+        43,
+        76
       ]
     }
   ],
@@ -1838,6 +2155,26 @@
       }
     },
     {
+      "name": "SourceKind",
+      "docs": [
+        "Which PDA the post-commit SPL/Metaplex CPI should sign as. Encoded in",
+        "the post-commit instruction data so a single handler can sign as either",
+        "RewardDistributor or WhitelistDistributor without needing the typed",
+        "Account in its context."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "RewardDistributor"
+          },
+          {
+            "name": "WhitelistDistributor"
+          }
+        ]
+      }
+    },
+    {
       "name": "TransferLookupTable",
       "type": {
         "kind": "struct",
@@ -1851,6 +2188,32 @@
             "type": {
               "vec": "pubkey"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WhitelistDistributor",
+      "docs": [
+        "Auxiliary PDA owned by the rewards program that holds a separate token",
+        "bag for whitelist-driven payouts. Lives at",
+        "`[WHITELIST_DISTRIBUTOR_SEED, reward_distributor]` so each reward",
+        "distributor gets exactly one. The PDA itself is the token authority,",
+        "and `whitelist_transfer` signs CPIs with the bump stored here.",
+        "",
+        "Authority to move funds is delegated to either the distributor's admins",
+        "(and super_admin) OR the addresses in `reward_distributor.whitelist`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "reward_distributor",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

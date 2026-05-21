@@ -46,6 +46,7 @@ export const TokenActions: React.FC<TokenActionsProps> = ({
     sendToken: {
       tokenMint: "",
       amount: 0,
+      target: "reward" as "reward" | "whitelist",
     },
   });
   const [availableWalletMints, setAvailableWalletMints] = useState<OwnedSplMintOption[]>([]);
@@ -172,13 +173,16 @@ export const TokenActions: React.FC<TokenActionsProps> = ({
     const result = await sendSplTokenToDistributor(
       new PublicKey(config.tokenMint),
       config.amount,
-      selectedMintOption?.decimals ?? 0
+      selectedMintOption?.decimals ?? 0,
+      config.target
     );
 
     if ('signature' in result && result.signature) {
       const txId = addTransaction(
         result.signature,
-        "Send SPL Token to Distributor",
+        config.target === "whitelist"
+          ? "Send SPL Token to Whitelist Distributor"
+          : "Send SPL Token to Reward Distributor",
         "devnet",
         result.endpoint || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || getDefaultSolanaEndpoint()
       );
@@ -194,7 +198,7 @@ export const TokenActions: React.FC<TokenActionsProps> = ({
         handleClose();
         setForms({
           ...forms,
-          sendToken: { tokenMint: "", amount: 0 },
+          sendToken: { tokenMint: "", amount: 0, target: "reward" },
         });
         setLocalStatus({ loading: false, error: null, signature: null, endpoint: undefined });
       }, 2000);
@@ -210,8 +214,16 @@ export const TokenActions: React.FC<TokenActionsProps> = ({
   return (
     <TransactionModal
       isOpen={activeModal === "sendToken"}
-      title="Send SPL Token to Distributor"
-      description="Transfer SPL tokens to the reward distributor"
+      title={
+        forms.sendToken.target === "whitelist"
+          ? "Send SPL Token to Whitelist Distributor"
+          : "Send SPL Token to Reward Distributor"
+      }
+      description={
+        forms.sendToken.target === "whitelist"
+          ? "Fund the whitelist token bag"
+          : "Fund the reward distributor's main token bag"
+      }
       loading={localStatus.loading}
       error={localStatus.error}
       signature={localStatus.signature}
@@ -220,6 +232,36 @@ export const TokenActions: React.FC<TokenActionsProps> = ({
       onConfirm={handleSendToken}
     >
       <div className="space-y-3">
+        <div>
+          <label className="block text-sm text-gray-300 mb-1">Destination PDA</label>
+          <div className="flex gap-2">
+            {(["reward", "whitelist"] as const).map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() =>
+                  setForms({
+                    ...forms,
+                    sendToken: { ...forms.sendToken, target: opt },
+                  })
+                }
+                disabled={localStatus.loading}
+                className={`flex-1 rounded border p-2 text-xs font-medium transition disabled:opacity-50 ${
+                  forms.sendToken.target === opt
+                    ? "border-blue-500 bg-blue-500/15 text-blue-200"
+                    : "border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+              >
+                {opt === "reward" ? "Reward Distributor" : "Whitelist Distributor"}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-[11px] text-gray-500">
+            {forms.sendToken.target === "reward"
+              ? "Funds the main reward bag — eligible for VRF redemptions and admin_transfer."
+              : "Funds the whitelist bag."}
+          </p>
+        </div>
         <div>
           <label className="block text-sm text-gray-300 mb-1">Token Mint</label>
           {walletMintFetchError && (

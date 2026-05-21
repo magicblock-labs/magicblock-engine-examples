@@ -8,6 +8,35 @@ pub struct RewardDistributor {
     pub whitelist: Vec<Pubkey>,
 }
 
+/// Auxiliary PDA owned by the rewards program that holds a separate token
+/// bag for whitelist-driven payouts. Lives at
+/// `[WHITELIST_DISTRIBUTOR_SEED, reward_distributor]` so each reward
+/// distributor gets exactly one. The PDA itself is the token authority,
+/// and `whitelist_transfer` signs CPIs with the bump stored here.
+///
+/// Authority to move funds is delegated to either the distributor's admins
+/// (and super_admin) OR the addresses in `reward_distributor.whitelist`.
+#[account]
+pub struct WhitelistDistributor {
+    pub reward_distributor: Pubkey,
+    pub bump: u8,
+}
+
+impl WhitelistDistributor {
+    // 32 (Pubkey) + 1 (u8) = 33
+    pub const MAX_SIZE: usize = 32 + 1;
+}
+
+/// Which PDA the post-commit SPL/Metaplex CPI should sign as. Encoded in
+/// the post-commit instruction data so a single handler can sign as either
+/// RewardDistributor or WhitelistDistributor without needing the typed
+/// Account in its context.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
+pub enum SourceKind {
+    RewardDistributor,
+    WhitelistDistributor,
+}
+
 #[account]
 pub struct RewardsList {
     pub reward_distributor: Pubkey,

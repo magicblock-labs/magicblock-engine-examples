@@ -1,8 +1,20 @@
 import { useState, useEffect } from "react";
 import { AccountInfo, PublicKey } from "@solana/web3.js";
 import { useConnection } from "@solana/wallet-adapter-react";
+import bs58 from "bs58";
 import { PROGRAM_ID } from "@/lib/constants";
 import { DASHBOARD_DATA_REFRESH_EVENT } from "@/lib/refresh";
+
+/**
+ * Anchor discriminator for `RewardDistributor` (sha256("account:RewardDistributor")[..8]).
+ * Sourced from the IDL — filters `getProgramAccounts` to just this account
+ * type so other program-owned accounts (RewardsList, WhitelistDistributor,
+ * TransferLookupTable) aren't returned, which keeps the response small enough
+ * to fit under public-RPC scan caps.
+ */
+const REWARD_DISTRIBUTOR_DISCRIMINATOR = Uint8Array.from([
+  215, 10, 217, 199, 104, 194, 97, 227,
+]);
 
 export interface DiscoveredDistributor {
   publicKey: PublicKey;
@@ -35,13 +47,23 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
       }> = [];
       
       try {
-        accounts = [...(await connection.getProgramAccounts(PROGRAM_ID))];
-        
-        // Filter to reasonable sizes locally
-        accounts = accounts.filter((acc) => {
-          const size = acc.account.data.length;
-          return size >= 41 && size <= 10000;
-        });
+        // Filter server-side to just the RewardDistributor discriminator.
+        // Without this filter the RPC returns every account from the program
+        // (RewardsList, WhitelistDistributor, TransferLookupTable, …) and
+        // public RPCs frequently truncate large results — causing the user's
+        // own distributor to be missed.
+        accounts = [
+          ...(await connection.getProgramAccounts(PROGRAM_ID, {
+            filters: [
+              {
+                memcmp: {
+                  offset: 0,
+                  bytes: bs58.encode(REWARD_DISTRIBUTOR_DISCRIMINATOR),
+                },
+              },
+            ],
+          })),
+        ];
       } catch (err) {
         console.error("Failed to fetch program accounts:", err);
         return;
