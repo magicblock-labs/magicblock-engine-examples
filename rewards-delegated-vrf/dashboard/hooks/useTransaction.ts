@@ -10,7 +10,10 @@ import { buildInitializeDistributor, buildSetAdmins, buildSetWhitelist, buildSet
 import { buildDelegateRewardList, buildUndelegateRewardList } from "@/lib/instructions/delegation";
 import { buildRequestRandomReward, buildAddReward, buildAddRewardsBatch, buildRemoveReward, buildRemoveRewardsBatch, buildUpdateReward, buildAdminTransfer, listenForVrfCallback } from "@/lib/instructions/rewards";
 import { buildMintNftCollection, buildMintNftToCollection, buildUpdateNftMetadata } from "@/lib/instructions/nft";
-import { buildSplTokenTransfer } from "@/lib/instructions/tokens";
+import {
+  buildSplTokenTransfer,
+  buildWhitelistTransfer,
+} from "@/lib/instructions/tokens";
 import { buildSponsoredLamportsTransfer, checkRewardListDelegated } from "@/lib/instructions/sponsoredLamports";
 import { buildTopUpEphemeralBalance } from "@/lib/instructions/ephemeralBalance";
 
@@ -312,14 +315,74 @@ export const useTransaction = (props?: UseTransactionProps) => {
   // SPL Token transfer
   // -------------------------------------------------------------------------
 
+  /**
+   * Send SPL tokens from the connected wallet to one of the distributor's
+   * token bags. `target` selects which PDA receives the funds:
+   *   - "reward": the main reward_distributor PDA (used by VRF redemptions
+   *     and admin_transfer, inventory-checked on chain).
+   *   - "whitelist": the per-distributor whitelist_distributor PDA (its
+   *     own bag, only movable via whitelist_transfer).
+   */
   const sendSplTokenToDistributor = useCallback(
-    (tokenMint: PublicKey, amount: number, decimals: number) => {
+    (
+      tokenMint: PublicKey,
+      amount: number,
+      decimals: number,
+      target: "reward" | "whitelist" = "reward"
+    ) => {
       const endpoint = ep("solana");
       const dist = distributorPda();
       if (!publicKey || !dist) return Promise.resolve({ success: false, error: "Wallet not connected" });
-      return exec((conn) => buildSplTokenTransfer(conn, publicKey, dist, tokenMint, amount, decimals), endpoint);
+      const destinationPda =
+        target === "whitelist" ? PDAs.getWhitelistDistributor(dist)[0] : dist;
+      return exec(
+        (conn) =>
+          buildSplTokenTransfer(conn, publicKey, destinationPda, tokenMint, amount, decimals),
+        endpoint
+      );
     },
     [publicKey, ep, distributorPda, exec]
+  );
+
+  /**
+   * Whitelist transfer: move SPL tokens from the whitelist_distributor PDA
+   * to a user. Signer must be the distributor's super_admin / admin / or a
+   * member of `reward_distributor.whitelist`. Runs on the ER (same Magic
+   * intent infrastructure as admin_transfer) — `reward_list` must be
+   * delegated. Pre-flights the delegation record so we fail fast with a
+   * clear message if it isn't.
+   */
+  const whitelistTransfer = useCallback(
+    async (mint: PublicKey, user: PublicKey, amount: number) => {
+      if (!publicKey || !signTransaction) return { success: false, error: "Wallet not connected" };
+      if (amount <= 0) return { success: false, error: "Amount must be greater than 0" };
+      const dist = distributorPda();
+      if (!dist) return { success: false, error: "No distributor selected" };
+
+      // Delegation state lives on base — read it from the Solana endpoint.
+      const solanaEndpoint = ep("solana");
+      const solanaConn = new Connection(solanaEndpoint, "confirmed");
+      const isDelegated = await checkRewardListDelegated(
+        solanaConn,
+        PDAs.getRewardList(dist)[0]
+      );
+      if (!isDelegated) {
+        return {
+          success: false,
+          error: "Reward list is not delegated. Delegate it to the ER first.",
+        };
+      }
+
+      // whitelist_transfer is `#[commit]` — must run on the ER endpoint.
+      // The ER proxies undelegated base accounts (like the delegation
+      // record) on read, so the builder can derive magic_fee_vault.
+      const endpoint = ep("magicblock");
+      return exec(
+        (conn) => buildWhitelistTransfer(conn, publicKey, dist, mint, user, amount),
+        endpoint
+      );
+    },
+    [publicKey, signTransaction, ep, distributorPda, exec]
   );
 
   // -------------------------------------------------------------------------
@@ -406,5 +469,6 @@ export const useTransaction = (props?: UseTransactionProps) => {
     sendSponsoredLamportsToRewardList,
     topUpEphemeralBalance,
     adminTransfer,
+    whitelistTransfer,
   };
 };

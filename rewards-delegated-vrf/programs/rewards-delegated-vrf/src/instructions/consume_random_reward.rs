@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::constants;
-use crate::instructions::shared::schedule_transfer_action;
+use crate::instructions::shared::{schedule_transfer_action, TransferSource};
 use crate::state::RewardType;
 use crate::ConsumeRandomReward;
 
@@ -89,7 +89,9 @@ pub fn consume_random_reward(
                         let ruleset_pda = reward.additional_pubkeys.first().copied();
 
                         schedule_transfer_action(
-                            reward_distributor,
+                            TransferSource::RewardDistributor {
+                                authority: reward_distributor.to_account_info(),
+                            },
                             transfer_lookup_table,
                             &ctx.accounts.reward_list.to_account_info(),
                             &ctx.accounts.magic_context.to_account_info(),

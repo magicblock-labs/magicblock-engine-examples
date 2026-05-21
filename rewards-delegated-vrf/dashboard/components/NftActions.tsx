@@ -45,7 +45,13 @@ interface NftOption {
 export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) => {
   const { publicKey } = useWallet();
   const { connection } = useConnection();
-  const { mintNftCollection, mintNftToCollection, updateNftMetadata, adminTransfer } = useTransaction({ selectedDistributor });
+  const {
+    mintNftCollection,
+    mintNftToCollection,
+    updateNftMetadata,
+    adminTransfer,
+    whitelistTransfer,
+  } = useTransaction({ selectedDistributor });
   const { addTransaction, updateTransaction } = useGlobalTransactionHistory();
 
   // Distributor used for the admin_transfer flow — falls back to the wallet's
@@ -84,7 +90,21 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
       user: "",
       amount: "",
     },
+    whitelistTransfer: {
+      mint: "",
+      user: "",
+      amount: "",
+    },
   });
+
+  // Whitelist distributor's SPL holdings — populated when the Whitelist
+  // Transfer modal opens. Reads from the per-distributor PDA token accounts.
+  const [whitelistMints, setWhitelistMints] = useState<OwnedSplMintOption[]>([]);
+  const [whitelistMintsLoading, setWhitelistMintsLoading] = useState(false);
+  const [whitelistMintsError, setWhitelistMintsError] = useState<string | null>(null);
+  const whitelistDistributorPda = targetDistributor
+    ? PDAs.getWhitelistDistributor(targetDistributor)[0]
+    : null;
 
   // Distributor SPL holdings — populated when the Admin Transfer modal opens.
   const [distributorMints, setDistributorMints] = useState<OwnedSplMintOption[]>([]);
@@ -483,6 +503,109 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
     }
   };
 
+  // Fetch the whitelist distributor's SPL mints when the Whitelist Transfer
+  // modal opens. Reads from the base layer — the whitelist_distributor PDA
+  // holds tokens directly (no ER delegation).
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (activeModal !== "whitelistTransfer" || !whitelistDistributorPda) {
+        setWhitelistMints([]);
+        setWhitelistMintsError(null);
+        setWhitelistMintsLoading(false);
+        return;
+      }
+      setWhitelistMintsLoading(true);
+      setWhitelistMintsError(null);
+      try {
+        const readEndpoint = getBaseLayerSolanaEndpoint(connection.rpcEndpoint);
+        const readConnection =
+          readEndpoint === connection.rpcEndpoint
+            ? connection
+            : new Connection(readEndpoint, "confirmed");
+        const result = await fetchOwnedSplMintOptions(
+          readConnection,
+          whitelistDistributorPda
+        );
+        if (!cancelled) setWhitelistMints(result.options);
+      } catch (error) {
+        if (!cancelled) {
+          setWhitelistMints([]);
+          setWhitelistMintsError(
+            error instanceof Error ? error.message : "Unknown fetch error"
+          );
+        }
+      } finally {
+        if (!cancelled) setWhitelistMintsLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeModal, whitelistDistributorPda?.toBase58(), connection.rpcEndpoint]);
+
+  const handleWhitelistTransfer = async () => {
+    if (!targetDistributor) {
+      setLocalStatus({ loading: false, error: "No distributor selected", signature: null, endpoint: undefined });
+      return;
+    }
+    const cfg = forms.whitelistTransfer;
+    if (!cfg.mint) {
+      setLocalStatus({ loading: false, error: "Select a mint", signature: null, endpoint: undefined });
+      return;
+    }
+    if (!cfg.user.trim()) {
+      setLocalStatus({ loading: false, error: "Enter a recipient pubkey", signature: null, endpoint: undefined });
+      return;
+    }
+    let userPk: PublicKey;
+    try {
+      userPk = new PublicKey(cfg.user.trim());
+    } catch {
+      setLocalStatus({ loading: false, error: "Invalid recipient pubkey", signature: null, endpoint: undefined });
+      return;
+    }
+    const amount = parseFloat(cfg.amount);
+    if (isNaN(amount) || amount <= 0) {
+      setLocalStatus({ loading: false, error: "Enter a valid amount", signature: null, endpoint: undefined });
+      return;
+    }
+
+    setLocalStatus({ loading: true, error: null, signature: null, endpoint: undefined });
+    const result = await whitelistTransfer(new PublicKey(cfg.mint), userPk, amount);
+
+    if ("signature" in result && result.signature) {
+      const txId = addTransaction(
+        result.signature,
+        "Whitelist Transfer",
+        "devnet",
+        result.endpoint || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || getDefaultSolanaEndpoint()
+      );
+      updateTransaction(txId, {
+        status: result.success ? "confirmed" : "failed",
+        error: result.error,
+      });
+      if (result.success) requestDashboardDataRefresh();
+      setLocalStatus({ loading: false, error: null, signature: result.signature, endpoint: result.endpoint });
+      setTimeout(() => {
+        setActiveModal(null);
+        setForms((prev) => ({
+          ...prev,
+          whitelistTransfer: { mint: "", user: "", amount: "" },
+        }));
+        setLocalStatus({ loading: false, error: null, signature: null, endpoint: undefined });
+      }, 2000);
+    } else {
+      setLocalStatus({
+        loading: false,
+        error: result.error || "Unknown error",
+        signature: null,
+        endpoint: undefined,
+      });
+    }
+  };
+
   // Fetch distributor's SPL mints when the Admin Transfer modal opens.
   useEffect(() => {
     let cancelled = false;
@@ -726,6 +849,18 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
           <span className="text-left">
             <div className="font-medium text-white">Admin Transfer</div>
             <div className="text-xs text-gray-400">Send distributor assets to a user (non-VRF)</div>
+          </span>
+        </button>
+
+        {/* Whitelist Transfer (whitelist_distributor → user, base layer) */}
+        <button
+          onClick={() => setActiveModal("whitelistTransfer")}
+          className="card p-4 hover:bg-gray-700 transition flex items-center gap-3 group"
+        >
+          <ArrowRightLeft className="w-5 h-5 text-purple-400 group-hover:text-purple-300" />
+          <span className="text-left">
+            <div className="font-medium text-white">Whitelist Transfer</div>
+            <div className="text-xs text-gray-400">Move tokens from the whitelist bag to a user</div>
           </span>
         </button>
       </div>
@@ -1113,6 +1248,117 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
           <div className="bg-gray-800 p-2 rounded text-xs text-gray-400 space-y-1">
             <p>💡 Submitted on the ER endpoint. The on-chain handler reads the delegated <code className="text-emerald-300">reward_list</code> to compute committed amounts and rejects the tx if the transfer would dip into reserved assets.</p>
             <p>Reward redemption counts are <strong>not</strong> changed by this action.</p>
+          </div>
+        </div>
+      </TransactionModal>
+
+      {/* Whitelist Transfer Modal — moves tokens out of the per-distributor
+          whitelist_distributor PDA on the base layer. Signer must be admin/
+          super_admin or in `reward_distributor.whitelist`. */}
+      <TransactionModal
+        isOpen={activeModal === "whitelistTransfer"}
+        title="Whitelist Transfer"
+        description="Move SPL tokens out of the whitelist_distributor PDA to a user. Signer must be admin, super_admin, or a whitelist member."
+        loading={localStatus.loading}
+        error={localStatus.error}
+        signature={localStatus.signature}
+        endpoint={localStatus.endpoint}
+        onClose={() => setActiveModal(null)}
+        onConfirm={handleWhitelistTransfer}
+      >
+        <div className="space-y-3">
+          {whitelistDistributorPda && (
+            <div className="bg-gray-800 p-2 rounded text-xs">
+              <p className="text-gray-400 mb-1">Source (Whitelist Distributor PDA)</p>
+              <CopyableAddress address={whitelistDistributorPda.toBase58()} />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Mint</label>
+            {whitelistMintsError && (
+              <div className="mt-2 rounded border border-red-700 bg-red-900/20 p-2 text-xs text-red-300">
+                Fetch error: {whitelistMintsError}
+              </div>
+            )}
+            <select
+              value={forms.whitelistTransfer.mint}
+              onChange={(e) =>
+                setForms({
+                  ...forms,
+                  whitelistTransfer: {
+                    ...forms.whitelistTransfer,
+                    mint: e.target.value,
+                  },
+                })
+              }
+              disabled={
+                localStatus.loading ||
+                whitelistMintsLoading ||
+                whitelistMints.length === 0
+              }
+              className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-purple-500 focus:outline-none disabled:opacity-50 text-sm"
+            >
+              <option value="">
+                {whitelistMintsLoading
+                  ? "Loading whitelist mints..."
+                  : whitelistMints.length > 0
+                    ? "Select a mint"
+                    : "Whitelist bag holds no SPL tokens"}
+              </option>
+              {whitelistMints.map((opt) => (
+                <option key={opt.tokenAccount} value={opt.mint}>
+                  {shortAddress(opt.mint, 5)} ({opt.balanceLabel})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Recipient (pubkey)</label>
+            <input
+              type="text"
+              value={forms.whitelistTransfer.user}
+              onChange={(e) =>
+                setForms({
+                  ...forms,
+                  whitelistTransfer: {
+                    ...forms.whitelistTransfer,
+                    user: e.target.value,
+                  },
+                })
+              }
+              placeholder="e.g. 7xKXt..."
+              disabled={localStatus.loading}
+              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-purple-500 focus:outline-none disabled:opacity-50 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Amount (UI units)</label>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              value={forms.whitelistTransfer.amount}
+              onChange={(e) =>
+                setForms({
+                  ...forms,
+                  whitelistTransfer: {
+                    ...forms.whitelistTransfer,
+                    amount: e.target.value,
+                  },
+                })
+              }
+              placeholder="e.g. 100"
+              disabled={localStatus.loading}
+              className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-purple-500 focus:outline-none disabled:opacity-50 text-sm"
+            />
+          </div>
+
+          <div className="bg-gray-800 p-2 rounded text-xs text-gray-400 space-y-1">
+            <p>💡 Submitted on the ER endpoint. The on-chain handler signs the SPL CPI with the whitelist_distributor PDA's seeds; reward_list must be delegated so the Magic intent can be paid for from the rollup.</p>
+            <p>Reward inventory checks do <strong>not</strong> apply — the whitelist bag is intentionally separate from the reward distributor's main token holdings.</p>
           </div>
         </div>
       </TransactionModal>

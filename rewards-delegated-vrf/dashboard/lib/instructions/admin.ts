@@ -11,11 +11,17 @@ export async function buildInitializeDistributor(
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
+  // `whitelist_distributor` is the per-distributor PDA created alongside
+  // the reward_distributor (init_if_needed). Passing the derived address
+  // lets Anchor + the program initialize it if it doesn't exist yet.
+  const whitelistDistributorPda =
+    PDAs.getWhitelistDistributor(rewardDistributorPda)[0];
   return program.methods
     .initializeRewardDistributor(whitelist)
     .accounts({
       initializer: publicKey,
       rewardDistributor: rewardDistributorPda,
+      whitelistDistributor: whitelistDistributorPda,
       systemProgram: anchor.web3.SystemProgram.programId,
     } as any)
     .transaction();

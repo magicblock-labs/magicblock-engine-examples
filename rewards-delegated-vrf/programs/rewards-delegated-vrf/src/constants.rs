@@ -2,6 +2,10 @@
 pub const REWARD_DISTRIBUTOR_SEED: &[u8] = b"reward_distributor";
 pub const REWARD_LIST_SEED: &[u8] = b"reward_list";
 pub const TRANSFER_LOOKUP_TABLE_SEED: &[u8] = b"transfer_lookup_table";
+/// Seed for the per-distributor whitelist token bag. Derived against
+/// `[WHITELIST_DISTRIBUTOR_SEED, reward_distributor]` so the PDA is unique
+/// per reward distributor.
+pub const WHITELIST_DISTRIBUTOR_SEED: &[u8] = b"whitelist_distributor";
 
 /// Metaplex constants
 pub const RULE_SET_SEED: &[u8] = b"rule_set";

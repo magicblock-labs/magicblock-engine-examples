@@ -2,25 +2,34 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::{create_idempotent, Create};
 use anchor_spl::metadata::mpl_token_metadata;
 
-use crate::constants::REWARD_DISTRIBUTOR_SEED;
+use crate::constants::{REWARD_DISTRIBUTOR_SEED, WHITELIST_DISTRIBUTOR_SEED};
+use crate::instructions::transfer_spl_token::read_seed_payload;
+use crate::state::SourceKind;
 use crate::TransferProgrammableNft;
 
+/// Post-commit handler for programmable-NFT transfers. Unified for both
+/// reward and whitelist sources — see `transfer_spl_token.rs` for the
+/// design rationale. Seed components are read from `source_authority`'s
+/// on-chain account data.
 pub fn transfer_programmable_nft(
     ctx: Context<TransferProgrammableNft>,
     amount: u64,
+    source: SourceKind,
 ) -> Result<()> {
     msg!(
-        "Transferring programmable NFT: {} token(s) to user {:?}",
+        "Transferring programmable NFT: {} token(s) to user {:?} (source: {:?})",
         amount,
-        ctx.accounts.user.key()
+        ctx.accounts.user.key(),
+        source
     );
 
-    let super_admin: Pubkey = ctx.accounts.reward_distributor.super_admin.key();
-    let seeds = [
-        REWARD_DISTRIBUTOR_SEED,
-        super_admin.as_ref(),
-        &[ctx.accounts.reward_distributor.bump],
-    ];
+    let (second_seed, bump) = read_seed_payload(&ctx.accounts.source_authority)?;
+    let prefix: &[u8] = match source {
+        SourceKind::RewardDistributor => REWARD_DISTRIBUTOR_SEED,
+        SourceKind::WhitelistDistributor => WHITELIST_DISTRIBUTOR_SEED,
+    };
+    let bump_arr = [bump];
+    let seeds: [&[u8]; 3] = [prefix, second_seed.as_ref(), &bump_arr];
     let cpi_signer_seeds = &[seeds.as_slice()];
 
     let cpi_ata_accounts = Create {
@@ -39,7 +48,7 @@ pub fn transfer_programmable_nft(
         &ctx.accounts.token_metadata_program.to_account_info(),
     )
     .token(&ctx.accounts.source_token_account.to_account_info())
-    .token_owner(&ctx.accounts.reward_distributor.to_account_info())
+    .token_owner(&ctx.accounts.source_authority.to_account_info())
     .destination_token(&ctx.accounts.destination_token_account.to_account_info())
     .destination_owner(&ctx.accounts.user.to_account_info())
     .mint(&ctx.accounts.mint.to_account_info())
@@ -49,7 +58,7 @@ pub fn transfer_programmable_nft(
     .destination_token_record(Some(
         &ctx.accounts.destination_token_record.to_account_info(),
     ))
-    .authority(&ctx.accounts.reward_distributor.to_account_info())
+    .authority(&ctx.accounts.source_authority.to_account_info())
     .payer(&ctx.accounts.escrow.to_account_info())
     .system_program(&ctx.accounts.system_program.to_account_info())
     .sysvar_instructions(&ctx.accounts.sysvar_instruction_program.to_account_info())

@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::errors::RewardError;
 use crate::helpers::validate_reward;
-use crate::instructions::shared::schedule_transfer_action;
+use crate::instructions::shared::{schedule_transfer_action, TransferSource};
 use crate::state::RewardType;
 use crate::RemoveReward;
 
@@ -124,7 +124,9 @@ pub fn remove_reward(
     );
 
     schedule_transfer_action(
-        &ctx.accounts.reward_distributor,
+        TransferSource::RewardDistributor {
+            authority: ctx.accounts.reward_distributor.to_account_info(),
+        },
         &ctx.accounts.transfer_lookup_table,
         &ctx.accounts.reward_list.to_account_info(),
         &ctx.accounts.magic_context.to_account_info(),

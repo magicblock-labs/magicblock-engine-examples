@@ -7,6 +7,7 @@ export const PROGRAM_ID = new PublicKey(
 export const REWARD_DISTRIBUTOR_SEED = "reward_distributor";
 export const REWARD_LIST_SEED = "reward_list";
 export const TRANSFER_LOOKUP_TABLE_SEED = "transfer_lookup_table";
+export const WHITELIST_DISTRIBUTOR_SEED = "whitelist_distributor";
 
 export const DELEGATION_PROGRAM_ID = new PublicKey(
   "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"

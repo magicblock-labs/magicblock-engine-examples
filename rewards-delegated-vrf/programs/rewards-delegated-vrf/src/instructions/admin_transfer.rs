@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::errors::RewardError;
 use crate::helpers::total_required_inventory_for_mint;
-use crate::instructions::shared::schedule_transfer_action;
+use crate::instructions::shared::{schedule_transfer_action, TransferSource};
 use crate::state::RewardType;
 use crate::AdminTransfer;
 
@@ -116,7 +116,9 @@ pub fn admin_transfer(ctx: Context<AdminTransfer>, amount: u64) -> Result<()> {
     let payer_seeds: &[&[&[u8]]] = &[reward_list_seeds, reward_distributor_seeds];
 
     schedule_transfer_action(
-        &ctx.accounts.reward_distributor,
+        TransferSource::RewardDistributor {
+            authority: ctx.accounts.reward_distributor.to_account_info(),
+        },
         &ctx.accounts.transfer_lookup_table,
         &ctx.accounts.reward_list.to_account_info(),
         &ctx.accounts.magic_context.to_account_info(),
