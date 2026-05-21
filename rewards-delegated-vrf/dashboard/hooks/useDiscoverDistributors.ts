@@ -180,11 +180,19 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
     }
   };
 
+  // Depend on the base58 string, NOT the PublicKey object itself —
+  // useWallet() can return a new PublicKey instance on incidental
+  // re-renders even when the underlying wallet hasn't changed, which
+  // would re-fire this effect on every render and (combined with the
+  // setDistributors([]) → re-render cycle below) produce a steady drip
+  // of getProgramAccounts RPC calls every ~500ms.
+  const userPublicKeyStr = userPublicKey?.toString() ?? null;
+
   useEffect(() => {
     setDistributors([]);
     setError(null);
 
-    if (!userPublicKey) {
+    if (!userPublicKeyStr) {
       return;
     }
 
@@ -202,7 +210,8 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
       clearTimeout(timer);
       window.removeEventListener(DASHBOARD_DATA_REFRESH_EVENT, handleRefresh);
     };
-  }, [userPublicKey, connection.rpcEndpoint]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userPublicKeyStr, connection.rpcEndpoint]);
 
   return { distributors, loading, error, refetch: discoverDistributors };
 };

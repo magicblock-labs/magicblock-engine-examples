@@ -238,7 +238,8 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
     return () => {
       cancelled = true;
     };
-  }, [activeModal, connection.rpcEndpoint, publicKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeModal, connection.rpcEndpoint, publicKey?.toString()]);
 
   useEffect(() => {
     let cancelled = false;
@@ -353,7 +354,8 @@ export const NftActions: React.FC<NftActionsProps> = ({ selectedDistributor }) =
     return () => {
       cancelled = true;
     };
-  }, [activeModal, connection.rpcEndpoint, publicKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeModal, connection.rpcEndpoint, publicKey?.toString()]);
 
   const handleMintCollection = async () => {
     setLocalStatus({ loading: true, error: null, signature: null, endpoint: undefined });

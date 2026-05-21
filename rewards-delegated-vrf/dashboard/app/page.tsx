@@ -48,12 +48,15 @@ export default function Home() {
     setSelectedDistributor(null);
   }, [connection.rpcEndpoint]);
 
-  // Auto-select first discovered distributor
+  // Auto-select first discovered distributor. Depend on the pubkey string
+  // (not the object) to avoid re-firing on incidental useWallet() instance
+  // changes.
   useEffect(() => {
     if (publicKey && !selectedDistributor && distributors.length > 0) {
       setSelectedDistributor(distributors[0].publicKey.toString());
     }
-  }, [publicKey, distributors, selectedDistributor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicKey?.toString(), distributors, selectedDistributor]);
 
   const distributorPda = selectedDistributor
     ? new PublicKey(selectedDistributor)
