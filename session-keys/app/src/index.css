@@ -1,0 +1,233 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap');
+
+* {
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #222;
+    font-family: 'Roboto', sans-serif;
+}
+
+.counter-ui {
+    width: fit-content;
+    margin: 40px auto;
+    text-align: center;
+}
+.counter-ui h1 {
+    color: #eee;
+}
+
+.counter-ui button {
+    padding: 8px 12px;
+    margin: 25px;
+    background: transparent;
+    border: 2px solid #eee;
+    color: #eee;
+    width: 100px;
+    border-radius: 5px;
+    transition: 0.2s;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.counter-ui button:hover {
+    background: #eee !important;
+    color: #222 !important;
+}
+
+.counter-ui .button-container {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+}
+
+.counter-ui .game {
+    display: flex;
+    justify-content: space-around;
+    gap: 10px;
+}
+.turn {
+    display: flex;
+    justify-content: center;
+    margin: 15px auto;
+    width: fit-content;
+    position: relative;
+    border-radius: 10px;
+}
+
+.turn .square,
+.winner .square {
+    width: 70px;
+    height: 70px;
+    pointer-events: none;
+    border-color: transparent;
+}
+
+.turn .square span.x::before,
+.turn .square span.x::after {
+    background: #222;
+    transition: 0.2s;
+}
+
+.turn .square span.o {
+    transition: 0.2s;
+    border-color: #222;
+}
+.square {
+    width: 100px;
+    height: 100px;
+    border: 2px solid #eee;
+    border-radius: 5px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    position: relative;
+}
+
+.square .counter {
+    color: #fff;
+    font-size: 3rem;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    font-weight: bold;
+    line-height: 1;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+.turn::after {
+    position: absolute;
+    content: "";
+    width: 50%;
+    height: 100%;
+    top: 0;
+    background: #49ff58;
+    border-radius: 9px;
+    z-index: -1;
+    transition: 0.2s;
+}
+
+.turn.left::after {
+    left: 0;
+}
+
+.turn.left span.o {
+    border-color: #eee;
+}
+.turn.right span.x::before,
+.turn.right span.x::after {
+    background: #eee;
+}
+.turn.right::after {
+    left: 50%;
+}
+
+.winner {
+    position: absolute;
+    width: 100vw;
+    height: 100vh;
+    top: 0;
+    left: 0;
+    display: grid;
+    place-items: center;
+    background-color: rgba(0, 0, 0, 0.7);
+}
+.winner .text {
+    background: #111;
+    width: 70%;
+    max-width: 400px;
+    height: 300px;
+    border: 2px solid #eee;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+}
+
+.winner .text h2 {
+    font-size: 2.5em;
+    margin: 15px 0;
+    color: #eee;
+}
+
+.winner .win {
+    margin: 0 auto;
+    width: fit-content;
+    border: 2px solid #eee;
+    border-radius: 10px;
+    display: flex;
+    gap: 15px;
+}
+
+.wallet-buttons button {
+    min-width: 12rem;
+}
+
+.magicblock-logo {
+    position: fixed;
+    left: 1em;
+    bottom: 1em;
+    width: 10rem;
+    height: auto;
+    z-index: 10;
+}
+
+.spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border-left-color: #09f;
+    animation: spin 1s ease infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.join-game {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin: -30px 0 0;
+}
+
+.join-game input[type="text"] {
+    padding: 7px;
+    border: 2px solid #fff;
+    background-color: transparent;
+    color: white;
+    border-radius: 4px;
+    font-size: 16px;
+    width: 70%;
+    margin-right: 0;
+}
+
+.join-game input[type="text"] ::placeholder {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.join-game input[type="text"] :focus {
+    outline: none;
+    border-color: #62fffc;
+}
+
+.join-game button {
+    width: 30%;
+    margin-left: 5px;
+    margin-right: 0;
+}
