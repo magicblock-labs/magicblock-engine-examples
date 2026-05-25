@@ -2,6 +2,27 @@
 
 VERSION="0.14.3"
 PACKAGES=("ephemeral-rollups-sdk" "ephemeral-rollups-kit" "ephemeral-rollups-pinocchio")
+MIN_NODE_VERSION="20.19.0"
+
+# Preflight: enforce minimum Node version
+require_node_version() {
+  local required="$1"
+  local current
+  current=$(node -v 2>/dev/null | sed 's/^v//')
+  if [ -z "$current" ]; then
+    echo "ERROR: node is not installed or not on PATH"
+    exit 1
+  fi
+  # Sort -V puts versions in order; if required wins the sort, current is older
+  if [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]; then
+    echo "ERROR: node $current is older than required $required"
+    echo "  If you use nvm: nvm install $required && nvm use $required"
+    echo "  Or set NVM_DIR and source ~/.nvm/nvm.sh, then re-run this script."
+    exit 1
+  fi
+  echo "Node $current (>= $required required) ✓"
+}
+require_node_version "$MIN_NODE_VERSION"
 
 # Report tracking arrays
 UPDATED_FILES=()
