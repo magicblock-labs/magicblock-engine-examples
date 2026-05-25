@@ -75,7 +75,11 @@ find . -name "Cargo.toml" -type f | while read -r file; do
   dir=$(dirname "$file")
   if [ -f "$dir/Cargo.lock" ]; then
     if [ -f "$dir/Anchor.toml" ]; then
-      build_cmd="anchor build"
+      if [[ "$dir" == *"00-LEGACY_EXAMPLES"* ]]; then
+        build_cmd="anchor build"
+      else
+        build_cmd="anchor build --ignore-keys"
+      fi
     else
       build_cmd="cargo build-sbf"
     fi
