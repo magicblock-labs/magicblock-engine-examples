@@ -24,40 +24,40 @@ echo ""
 # Update package.json files
 echo "Updating package.json files..."
 for package in "${PACKAGES[@]}"; do
-  find . -name "package.json" -type f -not -path "*/node_modules/*" -not -path "*/private-payments/*" | while read -r file; do
+  while read -r file; do
     if grep -q "$package" "$file"; then
       # Create backup for diff
       cp "$file" "$TEMP_DIR/$(basename $file).bak"
-      
+
       sed -i '' "s/\"@magicblock-labs\/$package\": \"[^\"]*\"/\"@magicblock-labs\/$package\": \"$VERSION\"/g" "$file"
       sed -i '' "s/\"$package\": \"[^\"]*\"/\"$package\": \"$VERSION\"/g" "$file"
-      
+
       echo "  ✓ $file"
       UPDATED_FILES+=("$file")
     fi
-  done
+  done < <(find . -name "package.json" -type f -not -path "*/node_modules/*" -not -path "*/private-payments/*")
 done
 
 # Update Cargo.toml files
 echo "Updating Cargo.toml files..."
 for package in "${PACKAGES[@]}"; do
-  find . -name "Cargo.toml" -type f -not -path "*/private-payments/*" | while read -r file; do
+  while read -r file; do
     if grep -q "$package" "$file"; then
       # Create backup for diff
       cp "$file" "$TEMP_DIR/$(basename $file).bak"
-      
+
       sed -i '' "s/$package = { version = \"[^\"]*\"/$package = { version = \"$VERSION\"/g" "$file"
       sed -i '' "s/$package = \"[^\"]*\"/$package = \"$VERSION\"/g" "$file"
-      
+
       echo "  ✓ $file"
       UPDATED_FILES+=("$file")
     fi
-  done
+  done < <(find . -name "Cargo.toml" -type f -not -path "*/private-payments/*")
 done
 
 # Update yarn.lock files
 echo "Regenerating yarn.lock files..."
-find . -name "package.json" -type f -not -path "*/node_modules/*" | while read -r file; do
+while read -r file; do
   dir=$(dirname "$file")
   if [ -f "$dir/yarn.lock" ]; then
     if (cd "$dir" && yarn install 2>/dev/null); then
@@ -67,11 +67,11 @@ find . -name "package.json" -type f -not -path "*/node_modules/*" | while read -
       YARN_ERRORS+=("$dir")
     fi
   fi
-done
+done < <(find . -name "package.json" -type f -not -path "*/node_modules/*")
 
 # Regenerate Cargo.lock files
 echo "Regenerating Cargo.lock files..."
-find . -name "Cargo.toml" -type f | while read -r file; do
+while read -r file; do
   dir=$(dirname "$file")
   if [ -f "$dir/Cargo.lock" ]; then
     if [ -f "$dir/Anchor.toml" ]; then
@@ -90,7 +90,7 @@ find . -name "Cargo.toml" -type f | while read -r file; do
       CARGO_ERRORS+=("$dir")
     fi
   fi
-done
+done < <(find . -name "Cargo.toml" -type f)
 
 # Generate summary report
 echo ""

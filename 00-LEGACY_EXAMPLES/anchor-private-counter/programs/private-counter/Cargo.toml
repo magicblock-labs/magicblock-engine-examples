@@ -1,12 +1,12 @@
 [package]
-name = "roll-dice-delegated"
+name = "private-counter"
 version = "0.1.0"
 description = "Created with Anchor"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "roll_dice_delegated"
+name = "private_counter"
 
 [features]
 default = []
@@ -15,13 +15,13 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build"]
-anchor-debug = []
 custom-heap = []
 custom-panic = []
-
+anchor-debug = []
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
-ephemeral-rollups-sdk = { version = "0.14.3", features = ["anchor-compat"] }
-ephemeral-vrf-sdk = {version = "0.3.0", features = ["anchor-compat"]}
-
+ephemeral-rollups-sdk = { version = "0.14.3", features = [
+    "anchor-compat",
+    "access-control",
+] }

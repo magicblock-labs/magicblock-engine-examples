@@ -211,10 +211,10 @@ pub struct DelegateCounterPrivately<'info> {
     pub authority: Signer<'info>,
     /// CHECK: The PDA to delegate
     #[account(mut, del, seeds = [COUNTER_SEED, authority.key().as_ref()], bump)]
-    pub counter: AccountInfo<'info>,
+    pub counter: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     /// CHECK: Checked by the delegate program
-    pub validator: Option<AccountInfo<'info>>,
+    pub validator: Option<UncheckedAccount<'info>>,
 }
 
 /// Account for the increment instruction.
