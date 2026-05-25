@@ -1,7 +1,7 @@
 #!/bin/bash
 
-VERSION="0.6.5"
-PACKAGES=("ephemeral-rollups-sdk" "ephemeral-rollups-kit")
+VERSION="0.14.3"
+PACKAGES=("ephemeral-rollups-sdk" "ephemeral-rollups-kit" "ephemeral-rollups-pinocchio")
 
 # Report tracking arrays
 UPDATED_FILES=()
@@ -74,10 +74,15 @@ echo "Regenerating Cargo.lock files..."
 find . -name "Cargo.toml" -type f | while read -r file; do
   dir=$(dirname "$file")
   if [ -f "$dir/Cargo.lock" ]; then
-    if (cd "$dir" && cargo build 2>/dev/null); then
-      echo "  ✓ $dir/Cargo.lock"
+    if [ -f "$dir/Anchor.toml" ]; then
+      build_cmd="anchor build"
     else
-      echo "  ✗ $dir/Cargo.lock (cargo build failed)"
+      build_cmd="cargo build-sbf"
+    fi
+    if (cd "$dir" && $build_cmd 2>/dev/null); then
+      echo "  ✓ $dir/Cargo.lock ($build_cmd)"
+    else
+      echo "  ✗ $dir/Cargo.lock ($build_cmd failed)"
       CARGO_ERRORS+=("$dir")
     fi
   fi

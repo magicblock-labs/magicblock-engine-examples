@@ -159,10 +159,10 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
-"@magicblock-labs/ephemeral-rollups-kit@0.14.1":
-  version "0.14.1"
-  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-kit/-/ephemeral-rollups-kit-0.14.1.tgz#2921a9b3b58c503b7427a4e81c56060f3c5b520c"
-  integrity sha512-Qt6sq5AC9h20Fmg9j3ilJr3t3kkdOWveI6npKO4NW4dloIhhiLmYexma0TqGjfEZ5mzWqlmVrvo7dpo3Wkouqw==
+"@magicblock-labs/ephemeral-rollups-kit@0.14.3":
+  version "0.14.3"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-kit/-/ephemeral-rollups-kit-0.14.3.tgz#599045705218ba35486a5cb92638d5c6566247cd"
+  integrity sha512-taQaRDWgY12My0wSPJAU5WTTNjk1rJcUebgsKIRiWH6Jy1A1yPZSfI+Xzd/GTu7PPZTmV5ldbC8lY/EGir2wyA==
   dependencies:
     "@noble/curves" "^1.4.2"
     "@noble/hashes" "^1.4.0"
@@ -175,10 +175,10 @@
     tweetnacl "^1.0.3"
     typescript "^5.3.0"
 
-"@magicblock-labs/ephemeral-rollups-sdk@0.14.1":
-  version "0.14.1"
-  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.14.1.tgz#56db3900bdee21a2540c8cbb90a82572adbe3045"
-  integrity sha512-WaMlIuLckBNc22NiF11AV4/NKHwyLydhDc9qOLLbi86cQ+vvIzUBOO7kBHLqh5t2Xgf3il/4UDNEkuwrKERMqQ==
+"@magicblock-labs/ephemeral-rollups-sdk@0.14.3":
+  version "0.14.3"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.14.3.tgz#536c215d1daefdbcfa82a79304b08f5014405c58"
+  integrity sha512-CoByiXHLLS+l7Ojl6XJuYypP/k08ymFkab8+Gh/HCv5Gn2oC4VkwszEQoTDnKo++8Oxbqr9YVGzAMUW4Km7cLA==
   dependencies:
     "@noble/curves" "^1.4.2"
     "@noble/hashes" "^1.4.0"
