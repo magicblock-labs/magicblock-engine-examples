@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"is_signer\\\\|fn build\\\\b\\\\|payer_meta\\\\|all_accounts\" /Users/jonasxchen/GitHub/MagicBlock/ephemeral-rollups-sdk/rust/sdk/src/ephem/mod.rs | head -40)",
+      "Read(//Users/jonasxchen/GitHub/MagicBlock/ephemeral-rollups-sdk/rust/sdk/src/ephem/**)",
+      "Bash(find /Users/jonasxchen/GitHub/MagicBlock/ephemeral-rollups-sdk -name \"lib.rs\" -path \"*commit-attribute*\" 2>/dev/null | head -3; find /Users/jonasxchen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f -type d -name \"*attribute-commit*\" 2>/dev/null | head -3)",
+      "Read(//Users/jonasxchen/GitHub/MagicBlock/ephemeral-rollups-sdk/**)",
+      "Read(//Users/jonasxchen/GitHub/MagicBlock/magicblock-questline-app/app/api/buyback/**)",
+      "Read(//Users/jonasxchen/GitHub/MagicBlock/magicblock-questline-app/app/providers/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/jonasxchen/GitHub/MagicBlock/magicblock-questline-app/app/api/buyback",
+      "/Users/jonasxchen/GitHub/MagicBlock/magicblock-questline-app/app/rewards/components"
+    ]
+  }
+}

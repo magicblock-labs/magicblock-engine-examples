@@ -186,7 +186,7 @@ export function getValidatorAccounts(rpcEndpoint: string): any[] {
   ) {
     return [
       {
-        pubkey: new web3.PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"),
+        pubkey: new web3.PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
         isSigner: false,
         isWritable: false,
       },

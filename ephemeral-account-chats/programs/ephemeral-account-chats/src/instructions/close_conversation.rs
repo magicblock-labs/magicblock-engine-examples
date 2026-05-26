@@ -45,5 +45,5 @@ pub struct CloseConversation<'info> {
         eph,
         bump
     )]
-    pub conversation: AccountInfo<'info>,
+    pub conversation: UncheckedAccount<'info>,
 }

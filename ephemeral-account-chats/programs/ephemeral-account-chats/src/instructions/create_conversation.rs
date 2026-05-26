@@ -51,5 +51,5 @@ pub struct CreateConversation<'info> {
         seeds = [b"conversation", profile_owner.handle.as_bytes(), profile_other.handle.as_bytes()],
         bump
     )]
-    pub conversation: AccountInfo<'info>,
+    pub conversation: UncheckedAccount<'info>,
 }

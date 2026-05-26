@@ -24,7 +24,7 @@ describe("magic-router-and-multiple-atomic-ixs", async () => {
     const connection = new ConnectionMagicRouter(
         process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app", 
         {
-            wsEndpoint: process.env.WS_ROUTER_ENDPOINT || "wss://devnet-router.magicblock.app"
+            wsEndpoint: process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app"
         }
     );
     

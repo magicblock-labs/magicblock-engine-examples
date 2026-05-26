@@ -168,20 +168,15 @@ describe("basic-test", async () => {
     async () => {
       const start = Date.now();
 
-      // Add local validator identity to the remaining accounts if running on localnet
-      const remainingAccounts = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1")
-        ? [
-            {
-              address: address("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
-              role: AccountRole.READONLY
-            }
-        ]
-        : [
-            {
-              address: address("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"),
-              role: AccountRole.READONLY
-            }
-        ];
+      // Validator identity for delegation: env override wins; otherwise default by network.
+      const isLocal = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1");
+      const validatorAddress = address(
+        process.env.VALIDATOR ||
+        (isLocal ? "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev" : "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")
+      );
+      const remainingAccounts = [
+        { address: validatorAddress, role: AccountRole.READONLY }
+      ];
 
       // Prepare transaction
       const accounts = [

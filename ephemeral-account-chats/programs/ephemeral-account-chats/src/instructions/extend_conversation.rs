@@ -50,5 +50,5 @@ pub struct ExtendConversation<'info> {
         ],
         bump
     )]
-    pub conversation: AccountInfo<'info>,
+    pub conversation: UncheckedAccount<'info>,
 }

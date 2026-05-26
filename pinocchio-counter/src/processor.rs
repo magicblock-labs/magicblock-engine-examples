@@ -1,8 +1,6 @@
 use crate::state::Counter;
-use ephemeral_rollups_pinocchio::instruction::delegate_account;
-use ephemeral_rollups_pinocchio::instruction::{
-    commit_accounts, commit_and_undelegate_accounts, undelegate,
-};
+use ephemeral_rollups_pinocchio::instruction::{delegate_account, undelegate};
+use ephemeral_rollups_pinocchio::intent_bundle::MagicIntentBundleBuilder;
 use ephemeral_rollups_pinocchio::types::DelegateConfig;
 use pinocchio::{
     account::AccountView,
@@ -11,6 +9,8 @@ use pinocchio::{
     Address, ProgramResult,
 };
 use pinocchio_system::instructions::CreateAccount;
+
+const INTENT_BUNDLE_DATA_BUF_SIZE: usize = 512;
 
 /// Derive the counter PDA from the caller-provided bump.
 fn counter_address_from_bump(
@@ -169,12 +169,10 @@ pub fn process_commit(_program_id: &Address, accounts: &[AccountView]) -> Progra
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    commit_accounts(
-        initializer,
-        &[*counter_account],
-        magic_context,
-        magic_program,
-    )?;
+    let mut intent_bundle_data = [0u8; INTENT_BUNDLE_DATA_BUF_SIZE];
+    MagicIntentBundleBuilder::new(*initializer, *magic_context, *magic_program)
+        .commit(&[*counter_account])
+        .build_and_invoke(&mut intent_bundle_data)?;
 
     Ok(())
 }
@@ -192,12 +190,10 @@ pub fn process_commit_and_undelegate(
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    commit_and_undelegate_accounts(
-        initializer,
-        &[*counter_account],
-        magic_context,
-        magic_program,
-    )?;
+    let mut intent_bundle_data = [0u8; INTENT_BUNDLE_DATA_BUF_SIZE];
+    MagicIntentBundleBuilder::new(*initializer, *magic_context, *magic_program)
+        .commit_and_undelegate(&[*counter_account])
+        .build_and_invoke(&mut intent_bundle_data)?;
 
     Ok(())
 }
@@ -227,12 +223,10 @@ pub fn process_increment_commit(
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    commit_accounts(
-        initializer,
-        &[*counter_account],
-        magic_context,
-        magic_program,
-    )?;
+    let mut intent_bundle_data = [0u8; INTENT_BUNDLE_DATA_BUF_SIZE];
+    MagicIntentBundleBuilder::new(*initializer, *magic_context, *magic_program)
+        .commit(&[*counter_account])
+        .build_and_invoke(&mut intent_bundle_data)?;
 
     Ok(())
 }
@@ -262,12 +256,10 @@ pub fn process_increment_undelegate(
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    commit_and_undelegate_accounts(
-        initializer,
-        &[*counter_account],
-        magic_context,
-        magic_program,
-    )?;
+    let mut intent_bundle_data = [0u8; INTENT_BUNDLE_DATA_BUF_SIZE];
+    MagicIntentBundleBuilder::new(*initializer, *magic_context, *magic_program)
+        .commit_and_undelegate(&[*counter_account])
+        .build_and_invoke(&mut intent_bundle_data)?;
 
     Ok(())
 }

@@ -53,8 +53,8 @@ describe("basic-test", async () => {
 
 
   // Connections
-  const connection = await Connection.create(process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app", process.env.WS_ROUTER_ENDPOINT || "wss://devnet-router.magicblock.app")
-  const ephemeralConnection = await Connection.create(process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app", process.env.WS_ROUTER_ENDPOINT || "wss://devnet-router.magicblock.app")
+  const connection = await Connection.create(process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app", process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app")
+  const ephemeralConnection = await Connection.create(process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app", process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app")
 
   console.log("Base Layer RPC:", connection.clusterUrlHttp, "| Websocket:",  connection.clusterUrlWs);
   console.log("ER RPC:", ephemeralConnection.clusterUrlHttp, "| Websocket:", ephemeralConnection.clusterUrlWs);
@@ -93,7 +93,7 @@ describe("basic-test", async () => {
       const remainingAccounts = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1")
           ? [
               {
-                address: address("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+                address: address(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
                 role: AccountRole.READONLY
               },
           ]
