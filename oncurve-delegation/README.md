@@ -69,8 +69,8 @@ EPHEMERAL_WS_ENDPOINT=wss://devnet-as.magicblock.app            # ER WebSocket
 
 Key dependencies for this project:
 
-- `@magicblock-labs/ephemeral-rollups-kit`: v0.6.0 - High-level SDK for ER interactions
-- `@magicblock-labs/ephemeral-rollups-sdk`: v0.6.0 - Low-level ER SDK
+- `@magicblock-labs/ephemeral-rollups-kit`: v0.14.3 - High-level SDK for ER interactions
+- `@magicblock-labs/ephemeral-rollups-sdk`: v0.14.3 - Low-level ER SDK
 - `@solana/kit`: v4.0.0 - Solana Kit library
 - `@solana/web3.js`: v1.98.2 - Web3.js library
 - `vitest`: v3.2.4 - Test runner
