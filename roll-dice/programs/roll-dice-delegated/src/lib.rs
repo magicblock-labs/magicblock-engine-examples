@@ -6,7 +6,7 @@ use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-declare_id!("2VDJk6yp82MxgXjcxs2RHyVYTbaq74xrs25MfYxYuqD6");
+declare_id!("D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM");
 
 pub const PLAYER_SEED: &[u8] = b"playerd2";
 
@@ -151,7 +151,7 @@ pub struct DelegateInput<'info> {
     pub user: Signer<'info>,
     /// CHECK The pda to delegate
     #[account(mut, del, seeds = [PLAYER_SEED, user.key().to_bytes().as_slice()], bump)]
-    pub player: Account<'info, Player>,
+    pub player: UncheckedAccount<'info>,
 }
 
 #[commit]
