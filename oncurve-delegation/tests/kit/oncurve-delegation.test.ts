@@ -65,7 +65,7 @@ describe.skip("on-curve-delegation-kit", async () => {
   console.log("Owner Program:", ownerProgramAddress);
 
   // The validator to delegate to
-  const validatorAddress = address("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
+  const validatorAddress = address(process.env.VALIDATOR || "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
   console.log("Validator:", validatorAddress);
 
   // Ensure test wallets have SOL

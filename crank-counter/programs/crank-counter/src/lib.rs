@@ -132,7 +132,7 @@ pub struct DelegateInput<'info> {
     pub payer: Signer<'info>,
     /// CHECK The pda to delegate
     #[account(mut, del)]
-    pub pda: AccountInfo<'info>,
+    pub pda: UncheckedAccount<'info>,
 }
 
 /// Account for the increment instruction.
@@ -161,12 +161,12 @@ pub struct Counter {
 pub struct ScheduleIncrement<'info> {
     /// CHECK: used for CPI
     #[account()]
-    pub magic_program: AccountInfo<'info>,
+    pub magic_program: UncheckedAccount<'info>,
     #[account(mut)]
     pub payer: Signer<'info>,
-    /// CHECK: Passed to CPI - using AccountInfo to avoid Anchor re-serializing stale data after CPI
+    /// CHECK: Passed to CPI - using UncheckedAccount to avoid Anchor re-serializing stale data after CPI
     #[account(mut, seeds = [COUNTER_SEED], bump)]
-    pub counter: AccountInfo<'info>,
+    pub counter: UncheckedAccount<'info>,
     /// CHECK: used for CPI
-    pub program: AccountInfo<'info>,
+    pub program: UncheckedAccount<'info>,
 }

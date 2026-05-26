@@ -8,18 +8,18 @@ This program has utilized the following software packages.
 
 | Software   | Version | Installation Guide                                      |
 | ---------- | ------- | ------------------------------------------------------- |
-| **Solana** | 2.3.13  | [Install Solana](https://docs.anza.xyz/cli/install)     |
-| **Rust**   | 1.85.0  | [Install Rust](https://www.rust-lang.org/tools/install) |
+| **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)     |
+| **Rust**   | 1.89.0  | [Install Rust](https://www.rust-lang.org/tools/install) |
 | **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)  |
 
 ````sh
 # Check and initialize your Solana version
 agave-install list
-agave-install init 2.3.13
+agave-install init 3.1.9
 
 # Check and initialize your Rust version
 rustup show
-rustup install 1.85.0
+rustup install 1.89.0
 
 ## ✨ Build and Test
 

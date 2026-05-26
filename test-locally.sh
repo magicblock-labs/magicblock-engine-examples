@@ -12,20 +12,40 @@ FAILED_TESTS_NAMES=()
 FAILED_TESTS_ERRORS=()
 TEST_COUNT=0
 
+# Portable line reverser: GNU has tac, macOS has tail -r.
+if command -v tac >/dev/null 2>&1; then
+  reverse_lines() { tac "$@"; }
+else
+  reverse_lines() { tail -r "$@"; }
+fi
+
 # Test runner function
 run_test() {
   local test_name=$1
   local test_command=$2
   local test_log="/tmp/test_${test_name}.log"
-  
+
   ((TEST_COUNT++))
-  
+
   echo ""
   echo "========================================"
   echo "Testing: $TEST_COUNT. $test_name"
   echo "========================================"
+  # Test target summary — pulled from the env this script exports.
+  # Program ID is best-effort: scans the project's target/deploy for the first keypair.
+  local project_dir="${test_name%% *}"  # take token before first space (e.g. "roll-dice + ...")
+  local program_id="(deploy first)"
+  local keypair
+  keypair=$(ls "$project_dir"/target/deploy/*-keypair.json 2>/dev/null | head -1)
+  if [ -n "$keypair" ] && command -v solana-keygen >/dev/null 2>&1; then
+    program_id=$(solana-keygen pubkey "$keypair" 2>/dev/null || echo "(unreadable)")
+  fi
+  echo "Base Layer Endpoint: ${PROVIDER_ENDPOINT:-?}"
+  echo "ER Endpoint:         ${EPHEMERAL_PROVIDER_ENDPOINT:-${TEE_PROVIDER_ENDPOINT:-?}}"
+  echo "ER Validator:        ${VALIDATOR:-?}"
+  echo "Program ID:          $program_id"
   echo ""
-  
+
   # Start test in background and monitor progress
   ( FORCE_COLOR=1 CARGO_TERM_COLOR=always NO_COLOR= eval "$test_command" ) > "$test_log" 2>&1 &
   local test_pid=$!
@@ -207,7 +227,7 @@ run_test() {
     
     # Extract test failures section - find last occurrence of test suite and get failures from there
     # Get the last test suite block (after the last blank line followed by test name pattern)
-    local error_details=$(tac "$test_log" | sed -n '/^  [0-9]\+)/,/^[[:space:]]*$/p' | tac)
+    local error_details=$(reverse_lines "$test_log" | sed -n '/^  [0-9]\+)/,/^[[:space:]]*$/p' | reverse_lines)
     
     if [ -z "$error_details" ]; then
       # Fallback: get from "failing" keyword to end
@@ -320,6 +340,8 @@ solana-test-validator \
   --clone-upgradeable-program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz \
   --clone-upgradeable-program BTWAqWNBmF2TboMh3fxMJfgR16xGHYD7Kgr2dPwbRPBi \
   --clone-upgradeable-program ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1 \
+  --clone-upgradeable-program SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2 \
+  --clone-upgradeable-program Hydra17i1feui9deaxu6d1TzSQMRNHeBRkDR1Awy7zea \
   --url https://api.devnet.solana.com > ./test-ledger.log 2>&1 &
 
 SOLANA_PID=$!
@@ -348,23 +370,90 @@ EPHEMERAL_PID=$!
 echo "Validators ready. Running tests..."
 echo ""
 
-run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT='http://localhost:7799' EPHEMERAL_WS_ENDPOINT='ws://localhost:7800' PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --provider.cluster localnet --skip-local-validator --skip-deploy; cd .."
+# MagicBlock validator identities (used as the `validator` arg when delegating):
+#   Localnet:
+#     Local ER (http://localhost:7799)            : mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
+#   Devnet:
+#     Asia (https://devnet-as.magicblock.app)     : MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57
+#     EU   (https://devnet-eu.magicblock.app)     : MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e
+#     US   (https://devnet-us.magicblock.app)     : MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd
+#     TEE  (https://devnet-tee.magicblock.app)    : MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo
 
-run_test "anchor-minter" "cd anchor-minter && anchor build && anchor deploy --provider.cluster localnet && yarn install && anchor test  --skip-build --skip-deploy --skip-local-validator; cd .."
+# ---- Local tests: base layer = local solana-test-validator; ER = local ephemeral-validator ----
+# Exported so every child test process sees them (and any test that ignores them
+# and dials devnet will fail loudly rather than silently hit the wrong network).
+export PROVIDER_ENDPOINT=http://localhost:8899
+export WS_ENDPOINT=ws://localhost:8900
+export EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799
+export EPHEMERAL_WS_ENDPOINT=ws://localhost:7800
+# Anchor SDK reads ANCHOR_PROVIDER_URL/ANCHOR_WALLET when test code calls
+# AnchorProvider.env(). Without these, `anchor test` overrides them based on the
+# Anchor.toml [provider] cluster (often devnet) and tests silently hit the wrong network.
+export ANCHOR_PROVIDER_URL=$PROVIDER_ENDPOINT
+export ANCHOR_WALLET="${HOME}/.config/solana/id.json"
+# Router-style tests (advanced-magic, magic-actions, dummy-token-transfer) point at the
+# MagicBlock router on devnet — locally there's no router, so route them at the local ER.
+export ROUTER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT
+export ROUTER_WS_ENDPOINT=$EPHEMERAL_WS_ENDPOINT
+export VALIDATOR=mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
 
-run_test "anchor-rock-paper-scissor" "cd anchor-rock-paper-scissor && anchor build && yarn install && anchor test --skip-deploy; cd .."
+# anchor-counter has 3 test files: public-counter (local), private-counter (TEE), advanced-magic (router).
+# Locally we run only public-counter.ts. The other two run from the TEE/devnet block below.
+run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts; cd .."
 
-run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
+# anchor-rock-paper-scissor uses TEE (base layer hardcoded to devnet) — can't run
+# against the local validators here. Move to a future test-devnet.sh.
 
-run_test "magic-actions" "cd magic-actions && yarn install && anchor build && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
-run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test-web3js; cd .."
 
-run_test "roll-dice + roll-dice-delegated" "cd roll-dice && anchor build && anchor deploy --provider.cluster localnet && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
+run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
 
-run_test "rust-counter" "cd rust-counter && yarn install && EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 PROVIDER_ENDPOINT=http://localhost:8899 WS_ENDPOINT=http://localhost:8900 yarn test; cd .."
+# dummy-token-transfer and magic-actions have router-based tests (devnet-router) plus
+# local *-local.ts variants that use split base/ER connections. test-locally.sh runs
+# only the *-local.ts variants. The router ones belong in a future test-devnet.sh.
+run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts; cd .."
 
-run_test "session-keys" "cd session-keys && anchor build && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
+# ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
+# anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
+run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
+
+run_test "magic-actions" "cd magic-actions && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts; cd .."
+
+run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js; cd .."
+
+run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && yarn test; cd .."
+
+run_test "pinocchio-secret-counter" "cd pinocchio-secret-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_secret_counter-keypair.json target/deploy/pinocchio_secret_counter.so && yarn install && yarn test; cd .."
+
+run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor build && anchor deploy --provider.cluster localnet && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
+
+# roll-dice + roll-dice-delegated skipped locally — move to a future test-devnet.sh.
+
+
+
+# rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
+run_test "rust-counter" "cd rust-counter && yarn install && npx vitest run ./tests/kit/rust-counter.test.ts; cd .."
+
+# session-keys: skip ./tests/advanced-magic.ts — it's router-based (devnet-router).
+run_test "session-keys" "cd session-keys && anchor build && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/anchor-counter-session.ts; cd .."
+
+# spl-tokens: bypass `anchor test` (which calls fullstack-test.sh — that script
+# branches on Anchor.toml's cluster=devnet and overrides ANCHOR_PROVIDER_URL,
+# fighting our locally-exported env). Invoke ts-mocha directly.
+run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts; cd .."
+
+# ---- TEE tests: base layer = Solana devnet; ER = MagicBlock TEE devnet ----
+# TEE attestation isn't available locally, so these examples are tested against
+# devnet TEE (validator MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo).
+# Requires: solana CLI default keypair funded with devnet SOL for the program deploy.
+# Set SKIP_TEE_TESTS=1 to skip this block.
+if [ "${SKIP_TEE_TESTS:-0}" != "1" ]; then
+  TEE_ENV="PROVIDER_ENDPOINT=https://api.devnet.solana.com WS_ENDPOINT=wss://api.devnet.solana.com TEE_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app TEE_WS_ENDPOINT=wss://devnet-tee.magicblock.app ROUTER_ENDPOINT=https://devnet-router.magicblock.app ROUTER_WS_ENDPOINT=wss://devnet-router.magicblock.app VALIDATOR=MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
+
+  run_test "anchor-private-counter (devnet TEE)" "cd anchor-private-counter && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet; cd .."
+
+  run_test "anchor-counter private-counter (devnet TEE)" "cd anchor-counter && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV npx ts-mocha -p ./tsconfig.json -t 1000000 tests/private-counter.ts; cd .."
+fi
 
 # Print summary report
 echo "========================================"

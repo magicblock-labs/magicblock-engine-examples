@@ -20,9 +20,8 @@ custom-panic = []
 anchor-debug = []
 
 [dependencies]
-anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
-ephemeral-rollups-sdk = { git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git", rev = "d32189fea8b4ae48cbae1645dd26595c66b28edb", features = [
-    "anchor-compat",
-    "backward-compat",
+anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
+ephemeral-rollups-sdk = { version = "0.14.3", features = [
+    "anchor",
     "access-control",
 ] }

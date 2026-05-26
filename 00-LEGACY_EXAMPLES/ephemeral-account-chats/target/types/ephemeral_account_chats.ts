@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/ephemeral_account_chats.json`.
  */
 export type EphemeralAccountChats = {
-  "address": "D781aD7RTUVeAU9SZDdCNciYJe8yDyZJs1JbFtHd8Urj",
+  "address": "6M9jBVFTub33usjBookqZUyfb131madqAXtiySdUDnH3",
   "metadata": {
     "name": "ephemeralAccountChats",
     "version": "0.1.0",
@@ -503,38 +503,38 @@ export type EphemeralAccountChats = {
             "program": {
               "kind": "const",
               "value": [
-                179,
-                221,
-                167,
+                79,
+                115,
+                235,
+                51,
+                90,
+                232,
+                241,
+                238,
+                181,
+                124,
                 112,
-                88,
-                153,
-                236,
-                194,
-                58,
-                233,
-                137,
-                69,
-                163,
-                1,
-                236,
-                13,
-                53,
-                178,
-                228,
-                216,
-                237,
-                231,
-                97,
                 230,
-                92,
-                212,
-                45,
-                221,
-                175,
-                218,
-                67,
-                40
+                53,
+                208,
+                39,
+                181,
+                91,
+                168,
+                65,
+                231,
+                39,
+                69,
+                172,
+                182,
+                190,
+                223,
+                159,
+                62,
+                153,
+                138,
+                87,
+                70
               ]
             }
           }
@@ -637,7 +637,7 @@ export type EphemeralAccountChats = {
         },
         {
           "name": "ownerProgram",
-          "address": "D781aD7RTUVeAU9SZDdCNciYJe8yDyZJs1JbFtHd8Urj"
+          "address": "6M9jBVFTub33usjBookqZUyfb131madqAXtiySdUDnH3"
         },
         {
           "name": "delegationProgram",
