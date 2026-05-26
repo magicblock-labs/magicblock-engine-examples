@@ -9,9 +9,13 @@ const COUNTER_SEED = "counter";
 describe.only("public-counter", () => {
   console.log("public-counter.ts");
 
+  // Base layer URL precedence: PROVIDER_ENDPOINT > anchor's ANCHOR_PROVIDER_URL
+  // (set by `anchor test --provider.cluster localnet`) > devnet fallback.
   const provider = new anchor.AnchorProvider(
     new anchor.web3.Connection(
-      process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
+      process.env.PROVIDER_ENDPOINT ||
+        process.env.ANCHOR_PROVIDER_URL ||
+        "https://api.devnet.solana.com",
       {
         wsEndpoint: process.env.WS_ENDPOINT || undefined,
         commitment: "confirmed",

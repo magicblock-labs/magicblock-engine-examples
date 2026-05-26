@@ -42,17 +42,19 @@ describe("roll-dice-delegated", () => {
   });
 
   it("Delegate Roll Dice!", async () => {
-    const remainingAccounts =
+    // Validator identity for delegation: VALIDATOR env var wins; otherwise default to
+    // local-ER validator iff the ER endpoint is localhost.
+    const isLocal =
       providerEphemeralRollup.connection.rpcEndpoint.includes("localhost") ||
-      providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1")
-        ? [
-            {
-              pubkey: new PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
-              isSigner: false,
-              isWritable: false,
-            },
-          ]
-        : [];
+      providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1");
+    const validatorPubkey = process.env.VALIDATOR
+      ? new PublicKey(process.env.VALIDATOR)
+      : isLocal
+      ? new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev")
+      : null;
+    const remainingAccounts = validatorPubkey
+      ? [{ pubkey: validatorPubkey, isSigner: false, isWritable: false }]
+      : [];
     const tx = await program.methods
       .delegate()
       .accounts({

@@ -46,8 +46,10 @@ pub mod private_counter {
         ctx: Context<DelegateCounterPrivately>,
         members: Option<Vec<Member>>,
     ) -> Result<()> {
-        // Optionally set a specific validator from the accounts struct
-        let validator = ctx.accounts.validator.as_ref();
+        // Optionally set a specific validator from the accounts struct.
+        // `as_deref()` uses UncheckedAccount's Deref<Target = AccountInfo> impl,
+        // giving us Option<&AccountInfo> directly — what the CPI builder expects.
+        let validator = ctx.accounts.validator.as_deref();
         // 1. Create / Update the permission account BEFORE delegating (skip if already exists).
         if ctx.accounts.permission.data_is_empty() {
             CreatePermissionCpiBuilder::new(&ctx.accounts.permission_program)
@@ -226,7 +228,7 @@ pub struct DelegateCounterPrivately<'info> {
     pub permission_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     /// CHECK: Checked by the delegate program
-    pub validator: Option<AccountInfo<'info>>,
+    pub validator: Option<UncheckedAccount<'info>>,
 }
 
 /// Account for the increment instruction.

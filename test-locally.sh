@@ -1,8 +1,11 @@
 #!/bin/bash
-set -o monitor
 
-# Suppress job control messages
+# Suppress job control messages (we don't need monitor mode here, and toggling it
+# was previously corrupting the tty mid-run on macOS).
 set +m
+
+# Restore sane terminal modes in case a previous run left the tty in raw mode.
+stty sane 2>/dev/null || true
 
 SOLANA_PID=""
 EPHEMERAL_PID=""
@@ -59,74 +62,79 @@ run_test() {
   local spinner_idx=0
   local dots_idx=0
   local last_status=""
-  local status_start_time=$SECONDS
+  local last_stage=""
+  local stage_start_time=$SECONDS
   local stage_times=""
-  
+
+  # Map a verbose status to its canonical stage name. Each stage is timed once,
+  # regardless of how many sub-statuses we cycle through inside it.
+  classify_stage() {
+    case "$1" in
+      Building*) echo "Building" ;;
+      Deploying*|Confirming*) echo "Deploying" ;;
+      Resolving*|Dependencies*|Installing*) echo "Installing" ;;
+      Running*|*tests*|*Testing*) echo "Testing" ;;
+      *) echo "Preparing" ;;
+    esac
+  }
+
   # Monitor test progress
   while kill -0 $test_pid 2>/dev/null; do
     # Detect current action by checking log contents
     local current_status=""
-    
+
     # Get the most recent meaningful line from log
     local last_line=$(tail -1 "$test_log" 2>/dev/null)
-    
-    if grep -q "Deploying program" "$test_log"; then
-      local prog_name=$(grep "Deploying program" "$test_log" | tail -1 | sed 's/.*Deploying program "\([^"]*\)".*/\1/')
-      current_status="Deploying $prog_name"
+
+    # Order matters: later stages override earlier ones (since log keeps growing).
+    # Vitest output is wrapped in ANSI escapes (FORCE_COLOR=1), so we grep for
+    # ANSI-resistant fragments: "Test Files" header, "Duration", "Tests  N passed",
+    # and the unicode test-file checkmarks vitest emits.
+    if grep -qE "passing|failing|Test Files|Tests +[0-9]+ +(passed|failed)|Duration +[0-9]" "$test_log" \
+       || grep -qE "RUN +v[0-9]" "$test_log" \
+       || grep -q "Running test suite\|Running.*ts-mocha\|Running.*vitest\|ts-mocha.*tests" "$test_log"; then
+      current_status="Running tests"
     elif grep -q "Waiting for program" "$test_log"; then
       local prog_id=$(grep "Waiting for program" "$test_log" | tail -1 | sed 's/.*for program \([^ ]*\).*/\1/')
       current_status="Confirming $prog_id"
-    elif grep -q "Running test suite\|Running.*ts-mocha\|Running.*vitest\|ts-mocha.*tests" "$test_log"; then
-      current_status="Running tests"
-    elif grep -q " RUN  v" "$test_log"; then
-      current_status="Running tests"
-    elif grep -q "passing\|failing" "$test_log"; then
-      current_status="Running tests"
+    elif grep -q "Deploying program" "$test_log"; then
+      local prog_name=$(grep "Deploying program" "$test_log" | tail -1 | sed 's/.*Deploying program "\([^"]*\)".*/\1/')
+      current_status="Deploying $prog_name"
     elif grep -q "Resolving packages" "$test_log" && ! grep -q "success Already" "$test_log"; then
       current_status="Resolving dependencies"
-    elif grep -q "success Already" "$test_log" && ! grep -q "Running.*tests" "$test_log"; then
+    elif grep -q "success Already" "$test_log"; then
       current_status="Dependencies installed"
-    elif grep -q "Finished.*target" "$test_log"; then
-      current_status="Building"
     elif grep -q "Compiling\|Checking" "$test_log"; then
       local crate=$(echo "$last_line" | sed 's/.*Compiling \([^ ]*\).*/\1/' | sed 's/.*Checking \([^ ]*\).*/\1/')
       current_status="Building $crate"
+    elif grep -q "Finished.*target" "$test_log"; then
+      current_status="Building"
     else
       current_status="Preparing"
     fi
-    
-    # Update status line (carriage return to overwrite)
-    if [ "$current_status" != "$last_status" ]; then
-      # Record time for previous status if it's a main stage
-      if [ -n "$last_status" ]; then
-        case "$last_status" in
-          Building*|*Building)
-            local elapsed=$((SECONDS - status_start_time))
-            stage_times+="Building:$elapsed "
-            ;;
-          Deploying*|*Deploying)
-            local elapsed=$((SECONDS - status_start_time))
-            stage_times+="Deploying:$elapsed "
-            ;;
-          Installing*|*Installing|*Resolving*|*Dependencies*)
-            local elapsed=$((SECONDS - status_start_time))
-            stage_times+="Installing:$elapsed "
-            ;;
-          Running*|*tests*|*Testing*)
-            local elapsed=$((SECONDS - status_start_time))
-            stage_times+="Testing:$elapsed "
-            ;;
-        esac
+
+    local current_stage
+    current_stage=$(classify_stage "$current_status")
+
+    # Stage transition: record elapsed for the stage we're leaving (not Preparing).
+    if [ "$current_stage" != "$last_stage" ]; then
+      if [ -n "$last_stage" ] && [ "$last_stage" != "Preparing" ]; then
+        local elapsed=$((SECONDS - stage_start_time))
+        stage_times+="${last_stage}:${elapsed} "
       fi
-      status_start_time=$SECONDS
+      stage_start_time=$SECONDS
+      last_stage="$current_stage"
+    fi
+
+    # Always redraw the spinner line with current detail + stage elapsed.
+    if [ "$current_status" != "$last_status" ]; then
       echo -ne "\r  ${spinner[$spinner_idx]} $current_status${dots[$dots_idx]}                                    "
       last_status="$current_status"
     else
-      # Update with current elapsed time for the running stage
-      local current_elapsed=$((SECONDS - status_start_time))
+      local current_elapsed=$((SECONDS - stage_start_time))
       echo -ne "\r  ${spinner[$spinner_idx]} $current_status (${current_elapsed}s)${dots[$dots_idx]}                                    "
     fi
-    
+
     spinner_idx=$(( (spinner_idx + 1) % 10 ))
     dots_idx=$(( (dots_idx + 1) % 3 ))
     sleep 0.5
@@ -144,26 +152,10 @@ run_test() {
   # Clear the progress line
   echo -ne "\r                                                                                  \r"
   
-  # Record final status time if it's a main stage
-  if [ -n "$last_status" ]; then
-    case "$last_status" in
-      Building*|*Building)
-        local elapsed=$((SECONDS - status_start_time))
-        stage_times+="Building:$elapsed "
-        ;;
-      Deploying*|*Deploying)
-        local elapsed=$((SECONDS - status_start_time))
-        stage_times+="Deploying:$elapsed "
-        ;;
-      Installing*|*Installing|*Resolving*|*Dependencies*)
-        local elapsed=$((SECONDS - status_start_time))
-        stage_times+="Installing:$elapsed "
-        ;;
-      Running*|*tests*|*Testing*)
-        local elapsed=$((SECONDS - status_start_time))
-        stage_times+="Testing:$elapsed "
-        ;;
-    esac
+  # Record elapsed for the final stage (skip Preparing).
+  if [ -n "$last_stage" ] && [ "$last_stage" != "Preparing" ]; then
+    local elapsed=$((SECONDS - stage_start_time))
+    stage_times+="${last_stage}:${elapsed} "
   fi
   
   # If tests ran but we didn't capture testing time, add it
@@ -342,7 +334,7 @@ solana-test-validator \
   --clone-upgradeable-program ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1 \
   --clone-upgradeable-program SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2 \
   --clone-upgradeable-program Hydra17i1feui9deaxu6d1TzSQMRNHeBRkDR1Awy7zea \
-  --url https://api.devnet.solana.com > ./test-ledger.log 2>&1 &
+  --url https://api.devnet.solana.com > ./test-ledger.log 2>&1 < /dev/null &
 
 SOLANA_PID=$!
 
@@ -359,13 +351,31 @@ echo "Solana validator is ready, waiting for RPC to stabilize..."
 # Start MagicBlock Ephemeral Validator
 echo "Starting MagicBlock Ephemeral Validator..."
 RUST_LOG=info ephemeral-validator \
-  --accounts-lifecycle ephemeral \
-  --remote-cluster development \
-  --remote-url http://localhost:8899 \
-  --remote-ws-url ws://localhost:8900 \
-  --rpc-port 7799 > ./ephemeral-validator.log 2>&1 &
+  --lifecycle ephemeral \
+  --remotes http://localhost:8899 \
+  --listen 127.0.0.1:7799 > ./ephemeral-validator.log 2>&1 < /dev/null &
 
 EPHEMERAL_PID=$!
+
+# Wait for ephemeral-validator RPC to come up — without this, fast tests fire
+# their first ER call before the server is listening and hit "fetch failed".
+# Using bash's /dev/tcp (no external process; doesn't touch tty).
+echo "Waiting for ephemeral-validator..."
+for i in {1..60}; do
+  if (echo > /dev/tcp/127.0.0.1/7799) 2>/dev/null; then
+    sleep 1   # let the RPC handler finish wiring up after the socket binds
+    break
+  fi
+  if ! kill -0 $EPHEMERAL_PID 2>/dev/null; then
+    echo "ephemeral-validator died — see ./ephemeral-validator.log"
+    exit 1
+  fi
+  sleep 1
+done
+echo "Ephemeral validator is ready."
+
+# Re-assert tty modes in case a validator's startup poked them.
+stty sane </dev/tty 2>/dev/null || true
 
 echo "Validators ready. Running tests..."
 echo ""
@@ -406,16 +416,17 @@ run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --
 
 
 
-run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
+# crank-counter: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor would
+# re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
+run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
 
 # dummy-token-transfer and magic-actions have router-based tests (devnet-router) plus
 # local *-local.ts variants that use split base/ER connections. test-locally.sh runs
 # only the *-local.ts variants. The router ones belong in a future test-devnet.sh.
 run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts; cd .."
 
-# ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
-# anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
+# ephemeral-account-chats skipped locally — move to a future test-devnet.sh.
+
 
 run_test "magic-actions" "cd magic-actions && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts; cd .."
 
@@ -425,7 +436,9 @@ run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana 
 
 run_test "pinocchio-secret-counter" "cd pinocchio-secret-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_secret_counter-keypair.json target/deploy/pinocchio_secret_counter.so && yarn install && yarn test; cd .."
 
-run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor build && anchor deploy --provider.cluster localnet && yarn install && anchor test --skip-build --skip-deploy --skip-local-validator; cd .."
+# rewards-delegated-vrf: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor
+# would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
+run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
 
 # roll-dice + roll-dice-delegated skipped locally — move to a future test-devnet.sh.
 

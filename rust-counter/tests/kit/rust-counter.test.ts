@@ -167,15 +167,17 @@ describe("basic-test", async () => {
     async () => {
       const start = Date.now();
 
-      // Add local validator identity to the remaining accounts if running on localnet
-      const remainingAccounts = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1")
-          ? [
-              {
-                address: address(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
-                role: AccountRole.READONLY
-              },
-          ]
-      : [];
+      // Validator identity for delegation: VALIDATOR env var wins; otherwise default to
+      // local-ER validator iff the ER endpoint is localhost.
+      const isLocal = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1");
+      const validatorAddress = process.env.VALIDATOR
+        ? address(process.env.VALIDATOR)
+        : isLocal
+        ? address("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev")
+        : null;
+      const remainingAccounts = validatorAddress
+        ? [{ address: validatorAddress, role: AccountRole.READONLY }]
+        : [];
 
       // Prepare transaction
       const accounts = [

@@ -158,18 +158,19 @@ describe("basic-test", async () => {
     it("Delegate counter to ER", async function () {
         const start = Date.now();
 
-        // Add local validator identity to the remaining accounts if running on localnet
-        const remainingAccounts =
-        connectionEphemeralRollup.rpcEndpoint.includes("localhost") ||
-        connectionEphemeralRollup.rpcEndpoint.includes("127.0.0.1")
-            ? [
-                {
-                pubkey: new PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
-                isSigner: false,
-                isWritable: false,
-                },
-            ]
-        : [];
+        // Validator identity for delegation: VALIDATOR env var wins; otherwise default to
+        // local-ER validator iff the ER endpoint is localhost.
+        const isLocal =
+            connectionEphemeralRollup.rpcEndpoint.includes("localhost") ||
+            connectionEphemeralRollup.rpcEndpoint.includes("127.0.0.1");
+        const validatorPubkey = process.env.VALIDATOR
+            ? new PublicKey(process.env.VALIDATOR)
+            : isLocal
+            ? new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev")
+            : null;
+        const remainingAccounts = validatorPubkey
+            ? [{ pubkey: validatorPubkey, isSigner: false, isWritable: false }]
+            : [];
 
         // 2: Delegate
         // Create, send and confirm transaction
