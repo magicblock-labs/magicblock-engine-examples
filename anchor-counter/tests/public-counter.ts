@@ -95,24 +95,17 @@ describe.only("public-counter", () => {
 
   it("Delegate counter to ER", async () => {
     const start = Date.now();
-    // Add local validator identity to the remaining accounts if running on localnet
-    const remainingAccounts =
+    // Validator identity for delegation: env override wins; otherwise default by network.
+    const isLocal =
       providerEphemeralRollup.connection.rpcEndpoint.includes("localhost") ||
-      providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1")
-        ? [
-            {
-              pubkey: new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
-              isSigner: false,
-              isWritable: false,
-            },
-          ]
-        : [
-            {
-              pubkey: new web3.PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"),
-              isSigner: false,
-              isWritable: false,
-            },
-        ];
+      providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1");
+    const validatorPubkey = new web3.PublicKey(
+      process.env.VALIDATOR ||
+      (isLocal ? "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev" : "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")
+    );
+    const remainingAccounts = [
+      { pubkey: validatorPubkey, isSigner: false, isWritable: false },
+    ];
     let tx = await program.methods
       .delegate()
       .accounts({

@@ -159,7 +159,7 @@ describe("private-counter", () => {
         authority: provider.wallet.publicKey,
         // Pin to the TEE validator identity
         validator: new web3.PublicKey(
-          "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo",
+          process.env.VALIDATOR || "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo",
         ),
       })
       .transaction();

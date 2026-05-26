@@ -17,7 +17,7 @@ describe("magic-router-counter-session", () => {
     const connection = new ConnectionMagicRouter(
         process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app/", 
         {
-          wsEndpoint: process.env.WS_ROUTER_ENDPOINT || "wss://devnet-router.magicblock.app/"
+          wsEndpoint: process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app/"
         }
     )
     const providerMagic = new anchor.AnchorProvider(connection, anchor.Wallet.local());
@@ -34,7 +34,7 @@ describe("magic-router-counter-session", () => {
     // Initialize Session Manager
     const sessionKeypair = initializeSessionSignerKeypair();
     const sessionTokenManager = new SessionTokenManager(providerMagic.wallet, connection);
-    const SESSION_TOKEN_SEED = "session_token";
+    const SESSION_TOKEN_SEED = "session_token_v2";
     const sessionTokenPDA = web3.PublicKey.findProgramAddressSync([
         Buffer.from(SESSION_TOKEN_SEED),
         program.programId.toBytes(),
@@ -62,14 +62,15 @@ describe("magic-router-counter-session", () => {
         const validUntilBN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600); // valid for 1 hour
         const topUpLamportsBN = new anchor.BN(0.0005 * LAMPORTS_PER_SOL);
 
-        const tx = await sessionTokenManager.program.methods.createSession(
-            topUp, 
-            validUntilBN, 
+        const tx = await sessionTokenManager.program.methods.createSessionV2(
+            topUp,
+            validUntilBN,
             topUpLamportsBN
         )
         .accounts({
             targetProgram: program.programId,
             sessionSigner: sessionKeypair.publicKey,
+            feePayer: providerMagic.wallet.publicKey,
             authority: providerMagic.wallet.publicKey,
         })
         .transaction();
@@ -110,7 +111,7 @@ describe("magic-router-counter-session", () => {
             connection.rpcEndpoint.includes("127.0.0.1")
                 ? [
                     {
-                        pubkey: new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+                        pubkey: new web3.PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
                         isSigner: false,
                         isWritable: false,
                     },
@@ -222,7 +223,7 @@ describe("magic-router-counter-session", () => {
         const start = Date.now();
 
         const tx = await sessionTokenManager.program.methods
-            .revokeSession()
+            .revokeSessionV2()
             .accounts({
                 sessionToken: sessionTokenPDA,
             })

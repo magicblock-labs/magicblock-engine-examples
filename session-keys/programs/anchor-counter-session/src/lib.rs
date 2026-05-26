@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{MagicIntentBundleBuilder};
 
-use session_keys::{session_auth_or, Session, SessionError, SessionToken};
+use session_keys::{session_auth_or, Session, SessionError, SessionTokenV2};
 
 declare_id!("6nMudTUrvXh1NGDyJYHPozJRmmHxB3s9Mjp2pSQqZiZ9");
 
@@ -152,7 +152,7 @@ pub struct DelegateInput<'info> {
         signer = payer,
         authority = pda.authority.key() 
     )]
-    pub session_token: Option<Account<'info, SessionToken>>,
+    pub session_token: Option<Account<'info, SessionTokenV2>>,
 }
 
 /// Account for the increment instruction.
@@ -170,7 +170,7 @@ pub struct Increment<'info> {
         signer = payer,
         authority = counter.authority.key() 
     )]
-    pub session_token: Option<Account<'info, SessionToken>>,
+    pub session_token: Option<Account<'info, SessionTokenV2>>,
 }
 
 /// Account for the increment instruction + manual commit.
@@ -185,7 +185,7 @@ pub struct IncrementAndCommit<'info> {
         signer = payer,
         authority = counter.authority.key() 
     )]
-    pub session_token: Option<Account<'info, SessionToken>>,
+    pub session_token: Option<Account<'info, SessionTokenV2>>,
 }
 
 #[account]

@@ -44,7 +44,7 @@ const App: React.FC = () => {
     let ephemeralCounterSubscriptionId = useRef<number | null>(null);
     const sessionTokenManager = useRef<SessionTokenManager | null>(null);
     const sessionTokenPDA = useRef<PublicKey | null>(null);
-    const SESSION_TOKEN_SEED = "session_token";
+    const SESSION_TOKEN_SEED = "session_token_v2";
 
     // Helpers to Dynamically fetch the IDL and initialize the program client
     const getProgramClient = useCallback(async (program: PublicKey): Promise<Program> => {
@@ -365,10 +365,11 @@ const App: React.FC = () => {
         const topUpLamportsBN = new anchor.BN(0.0005 * LAMPORTS_PER_SOL);
 
         let transaction = await sessionTokenManager.current.program.methods
-            .createSession(topUp, validUntilBN, topUpLamportsBN)
+            .createSessionV2(topUp, validUntilBN, topUpLamportsBN)
             .accounts({
                 targetProgram: COUNTER_PROGRAM,
                 sessionSigner: tempKeypair.current.publicKey,
+                feePayer: publicKey,
                 authority: publicKey,
             })
             .transaction();
@@ -588,7 +589,7 @@ const App: React.FC = () => {
         if (!publicKey || !sessionTokenPDA.current || !sessionTokenManager.current) return;
 
         const transaction = await sessionTokenManager.current.program.methods
-            .revokeSession()
+            .revokeSessionV2()
             .accounts({
                 sessionToken: sessionTokenPDA.current,
             })

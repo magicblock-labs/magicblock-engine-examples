@@ -46,7 +46,7 @@ describe("on-curve-delegation-web3js", async () => {
 
   // The validator to delegate to
   const validator = new PublicKey(
-    "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"
+    process.env.VALIDATOR || "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"
   );
   console.log("Validator:", validator.toString());
 

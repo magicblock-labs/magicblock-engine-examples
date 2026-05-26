@@ -1746,7 +1746,7 @@ dependencies = [
 
 [[package]]
 name = "session-keys"
-version = "3.1.0"
+version = "3.1.1"
 dependencies = [
  "anchor-lang",
  "session-keys-macros",
@@ -1755,14 +1755,14 @@ dependencies = [
 
 [[package]]
 name = "session-keys-macros"
-version = "3.1.0"
+version = "3.1.1"
 dependencies = [
  "session-keys-macros-attribute",
 ]
 
 [[package]]
 name = "session-keys-macros-attribute"
-version = "3.1.0"
+version = "3.1.1"
 dependencies = [
  "proc-macro2",
  "quote",

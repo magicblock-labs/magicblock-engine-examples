@@ -1720,7 +1720,9 @@ dependencies = [
 
 [[package]]
 name = "session-keys"
-version = "3.1.0"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c22bb80c43cf7ff13790166c4f2aed099e3707cea31fcf359284fdebc56b6367"
 dependencies = [
  "anchor-lang",
  "session-keys-macros",
@@ -1729,14 +1731,18 @@ dependencies = [
 
 [[package]]
 name = "session-keys-macros"
-version = "3.1.0"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4fb1ba67eabc3cb947145af610d0b3599124333540f6e494812f28db2f3eefe"
 dependencies = [
  "session-keys-macros-attribute",
 ]
 
 [[package]]
 name = "session-keys-macros-attribute"
-version = "3.1.0"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7962ee082ac6ed55be82e97542b2811f26b48b8973aa4a4fc4474b66d3e194a"
 dependencies = [
  "proc-macro2",
  "quote",
