@@ -8,7 +8,7 @@ use ephemeral_rollups_sdk::consts::PERMISSION_PROGRAM_ID;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 
-declare_id!("DvgQwmwEdps3pWP1N9afPJsHyJ8CQHGBCEvxQBibtm3K");
+declare_id!("AbTKLEtTySbfQ6LtkqprA9qUBQdMTP1mGkp84f4VxeWt");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";

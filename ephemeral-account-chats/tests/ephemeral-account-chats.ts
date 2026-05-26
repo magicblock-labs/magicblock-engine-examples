@@ -50,7 +50,9 @@ describe("ephemeral-account-chats", () => {
   );
 
   const erRpcUrl =
-    process.env.MAGICBLOCK_RPC_URL ?? "https://devnet.magicblock.app";
+    process.env.EPHEMERAL_PROVIDER_ENDPOINT ??
+    process.env.MAGICBLOCK_RPC_URL ??
+    "https://devnet.magicblock.app";
   const erConnection = new Connection(
     erRpcUrl,
     "confirmed"

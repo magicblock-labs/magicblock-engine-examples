@@ -13,7 +13,7 @@ use ephemeral_rollups_sdk::{
     ephem::MagicIntentBundleBuilder,
 };
 
-declare_id!("CwhbYN9Pkn8QeVtpV5sEs1jMMmRs64nRus34zCUWNqzh");
+declare_id!("7kzUF4xKsfVyRJzMQaS1wJ51qUzpP4zAsxLBWZeviCAB");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 
@@ -211,10 +211,10 @@ pub struct DelegateCounterPrivately<'info> {
     pub authority: Signer<'info>,
     /// CHECK: The PDA to delegate
     #[account(mut, del, seeds = [COUNTER_SEED, authority.key().as_ref()], bump)]
-    pub counter: AccountInfo<'info>,
+    pub counter: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     /// CHECK: Checked by the delegate program
-    pub validator: Option<AccountInfo<'info>>,
+    pub validator: Option<UncheckedAccount<'info>>,
 }
 
 /// Account for the increment instruction.

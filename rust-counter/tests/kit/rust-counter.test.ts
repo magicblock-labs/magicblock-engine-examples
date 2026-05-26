@@ -171,7 +171,7 @@ describe("basic-test", async () => {
       const remainingAccounts = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1")
           ? [
               {
-                address: address("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+                address: address(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
                 role: AccountRole.READONLY
               },
           ]

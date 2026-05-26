@@ -462,9 +462,9 @@ dependencies = [
 
 [[package]]
 name = "bytemuck"
-version = "1.24.0"
+version = "1.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fbdf580320f38b612e485521afda1ee26d10cc9884efaaa750d383e13e3c5f4"
+checksum = "c8efb64bd706a16a1bdde310ae86b351e4d21550d98d056f22f8a7f7a2183fec"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -726,13 +726,14 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.14.1"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a7ea831c9aa59c144076a2ba45b6963d5ea3fb12e8f67d9dc8d92290ee39cf2"
+checksum = "bce9a6d4849f9f394bd6ba63fb916d61d6d04197fde797030d597b4b06c63cbd"
 dependencies = [
  "anchor-lang",
  "base64ct",
  "bincode",
+ "bytemuck",
  "ephemeral-rollups-sdk-attribute-action",
  "ephemeral-rollups-sdk-attribute-commit",
  "ephemeral-rollups-sdk-attribute-delegate",
@@ -752,9 +753,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-action"
-version = "0.14.1"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc05c84ebdddd61da0b7d8c2997b0f3cbc84f525afe35db74d5fc78c2ad294a8"
+checksum = "4c9dedd8dab5a5705e96984d6d930915b2b19bb929f246523776f5e3bfa83ef4"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -762,19 +763,20 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.14.1"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e81cdb38226293cd6aeaed2e7afa16a94137851a1cb0fc7b3826c672daa920c"
+checksum = "ba975885220357ecde2b8daa8f8d27e580563344857f2dcd935609165937da10"
 dependencies = [
+ "proc-macro2",
  "quote",
  "syn 1.0.109",
 ]
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.14.1"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e8762af53348f7841f5f258dcdd891b277438a1610d76369ae05af63863a213"
+checksum = "1baeb3f22db564e419d6e68d1244184620a2321cb1521da65443d5a065179814"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -783,9 +785,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.14.1"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b83f1f73d13933fa458d51f4c15844f575fc1d0f400a525472156e8741d13a9d"
+checksum = "fcc336479439a54ab12f2dcb2ce37cbd1183caa80fb461ac2b12346a4c707d3f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -794,9 +796,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral-accounts"
-version = "0.14.1"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "480bb72f860df7b19df3e02b9ec384295f32b5475acdc46ec4a1d4e94197a589"
+checksum = "5e6338f039a9feb8569312492336dc929dec5abf7208faa45bb7562c2c319308"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1161,20 +1163,22 @@ dependencies = [
  "solana-system-interface 2.0.0",
  "static_assertions",
  "strum",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "magicblock-magic-program-api"
-version = "0.8.8"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "291f7a68f6cc622741a3fae513bd71640911abefd1fae2b2602b934515ed4b95"
+checksum = "1dc8fba0307c90b91b70c9ed06d4242d6c4159f331b2f05bf8f875c2a94e0e98"
 dependencies = [
  "bincode",
  "const-crypto",
  "serde",
  "solana-program 2.3.0",
- "solana-signature",
+ "solana-program 3.0.0",
+ "solana-signature 2.3.0",
+ "solana-signature 3.4.0",
 ]
 
 [[package]]
@@ -1970,16 +1974,6 @@ dependencies = [
 
 [[package]]
 name = "solana-borsh"
-version = "2.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "718333bcd0a1a7aed6655aa66bef8d7fb047944922b2d3a18f49cbc13e73d004"
-dependencies = [
- "borsh 0.10.4",
- "borsh 1.6.0",
-]
-
-[[package]]
-name = "solana-borsh"
 version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c04abbae16f57178a163125805637b8a076175bb5c0002fb04f4792bea901cf7"
@@ -2227,7 +2221,6 @@ version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5b96e9f0300fa287b545613f007dfe20043d7812bee255f418c1eb649c93b63"
 dependencies = [
- "borsh 1.6.0",
  "bytemuck",
  "bytemuck_derive",
  "five8 0.2.1",
@@ -2272,7 +2265,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bab5682934bd1f65f8d2c16f21cb532526fcc1a09f796e2cacdb091eee5774ad"
 dependencies = [
  "bincode",
- "borsh 1.6.0",
  "getrandom 0.2.16",
  "js-sys",
  "num-traits",
@@ -2596,8 +2588,6 @@ checksum = "98eca145bd3545e2fbb07166e895370576e47a00a7d824e325390d33bf467210"
 dependencies = [
  "bincode",
  "blake3",
- "borsh 0.10.4",
- "borsh 1.6.0",
  "bs58",
  "bytemuck",
  "console_error_panic_hook",
@@ -2619,7 +2609,6 @@ dependencies = [
  "solana-big-mod-exp 2.2.1",
  "solana-bincode",
  "solana-blake3-hasher 2.2.1",
- "solana-borsh 2.2.1",
  "solana-clock 2.2.2",
  "solana-cpi 2.2.1",
  "solana-decode-error",
@@ -2678,7 +2667,7 @@ dependencies = [
  "solana-account-info 3.1.1",
  "solana-big-mod-exp 3.0.0",
  "solana-blake3-hasher 3.1.0",
- "solana-borsh 3.0.2",
+ "solana-borsh",
  "solana-clock 3.0.1",
  "solana-cpi 3.1.0",
  "solana-define-syscall 3.0.0",
@@ -3054,6 +3043,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-signature"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7a73c6e97cc2108be0adf6a6ea326434f8398df9d7eed81da2a4548b69e971c"
+dependencies = [
+ "five8 1.0.0",
+ "serde",
+ "serde-big-array",
+ "serde_derive",
+ "solana-sanitize 3.0.1",
+ "wincode",
+]
+
+[[package]]
 name = "solana-slot-hashes"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3131,8 +3134,6 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5269e89fde216b4d7e1d1739cf5303f8398a1ff372a81232abbee80e554a838c"
 dependencies = [
- "borsh 0.10.4",
- "borsh 1.6.0",
  "num-traits",
  "serde",
  "serde_derive",

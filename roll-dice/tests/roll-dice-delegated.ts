@@ -47,7 +47,7 @@ describe("roll-dice-delegated", () => {
       providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1")
         ? [
             {
-              pubkey: new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+              pubkey: new PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
               isSigner: false,
               isWritable: false,
             },

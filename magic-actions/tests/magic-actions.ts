@@ -104,7 +104,7 @@ describe("magic-actions", () => {
       routerConnection.rpcEndpoint.includes("127.0.0.1")
         ? [
             {
-              pubkey: new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+              pubkey: new web3.PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
               isSigner: false,
               isWritable: false,
             },

@@ -330,10 +330,10 @@ pub struct RevealWinner<'info> {
 pub struct DelegatePda<'info> {
     /// CHECK: The PDA to delegate
     #[account(mut, del)]
-    pub pda: AccountInfo<'info>,
+    pub pda: UncheckedAccount<'info>,
     pub payer: Signer<'info>,
     /// CHECK: Checked by the delegate program
-    pub validator: Option<AccountInfo<'info>>,
+    pub validator: Option<UncheckedAccount<'info>>,
 }
 
 #[derive(Accounts)]
