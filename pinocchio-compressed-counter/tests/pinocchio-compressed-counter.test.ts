@@ -6,6 +6,8 @@ import {
   TransactionInstruction,
   Connection,
   sendAndConfirmTransaction,
+  ComputeBudgetInstruction,
+  ComputeBudgetProgram,
 } from "@solana/web3.js";
 import * as fs from "fs";
 import {
@@ -18,6 +20,8 @@ import {
   convertPackedAddressTreeInfoToBytes,
   convertOutputStateTreeIndexToBytes,
   convertValidityProofToBytes,
+  deriveCda,
+  BATCHED_MERKLE_TREE,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 import { describe, it, expect } from "vitest";
@@ -60,6 +64,7 @@ describe("pinocchio-compressed-counter", async () => {
   console.log("Photon URL: ", photonUrl);
   console.log("Prover URL: ", proverUrl);
   const photonClient = createPhotonClient(baseLayerUrl, photonUrl, proverUrl);
+  const addressTree = await photonClient.getAddressTreeInfoV2();
 
   // Create user keypair and airdrop SOL if needed
   const keypairBytes =
@@ -78,6 +83,10 @@ describe("pinocchio-compressed-counter", async () => {
   );
   console.log("Program ID: ", PROGRAM_ID.toString());
   console.log("Counter PDA: ", counterPda.toString());
+  console.log(
+    "Counter CDA: ",
+    deriveCda(counterPda, addressTree.tree).toString(),
+  );
 
   const validator = await fetch(ephemeralRollupUrl, {
     method: "POST",
@@ -91,6 +100,8 @@ describe("pinocchio-compressed-counter", async () => {
     .then((res) => res.json())
     .then((data: any) => new PublicKey(data.result.identity));
 
+  console.log("Validator: ", validator.toString());
+
   it("Initialize counter on Solana", async () => {
     const {
       validityProof,
@@ -98,43 +109,41 @@ describe("pinocchio-compressed-counter", async () => {
       outputStateTreeIndex,
       remainingAccounts,
     } = await fetchInitializeRecordData(photonClient, counterPda);
-    console.log("validityProof: ", validityProof);
-    console.log("packedAddressTreeInfo: ", packedAddressTreeInfo);
-    console.log("outputStateTreeIndex: ", outputStateTreeIndex);
-    console.log("remainingAccounts: ", remainingAccounts);
     const validityProofBytes = convertValidityProofToBytes(validityProof);
     const packedAddressTreeInfoBytes = convertPackedAddressTreeInfoToBytes(
       packedAddressTreeInfo,
     );
     const outputStateTreeIndexBytes =
       convertOutputStateTreeIndexToBytes(outputStateTreeIndex);
-    const tx = new Transaction().add(
-      new TransactionInstruction({
-        keys: [
-          { pubkey: userKeypair.publicKey, isSigner: true, isWritable: true },
-          { pubkey: counterPda, isSigner: false, isWritable: true },
-          {
-            pubkey: COMPRESSED_DELEGATION_PROGRAM_ID,
-            isSigner: false,
-            isWritable: false,
-          },
-          {
-            pubkey: SystemProgram.programId,
-            isSigner: false,
-            isWritable: false,
-          },
-          ...remainingAccounts,
-        ],
-        programId: PROGRAM_ID,
-        data: Buffer.from([
-          ...[0, 0, 0, 0, 0, 0, 0, 0],
-          ...id.toBytes(),
-          ...validityProofBytes,
-          ...packedAddressTreeInfoBytes,
-          ...outputStateTreeIndexBytes,
-        ]),
-      }),
-    );
+    const tx = new Transaction()
+      .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 250_000 }))
+      .add(
+        new TransactionInstruction({
+          keys: [
+            { pubkey: userKeypair.publicKey, isSigner: true, isWritable: true },
+            { pubkey: counterPda, isSigner: false, isWritable: true },
+            {
+              pubkey: COMPRESSED_DELEGATION_PROGRAM_ID,
+              isSigner: false,
+              isWritable: false,
+            },
+            {
+              pubkey: SystemProgram.programId,
+              isSigner: false,
+              isWritable: false,
+            },
+            ...remainingAccounts,
+          ],
+          programId: PROGRAM_ID,
+          data: Buffer.from([
+            ...[0, 0, 0, 0, 0, 0, 0, 0],
+            ...id.toBytes(),
+            ...validityProofBytes,
+            ...packedAddressTreeInfoBytes,
+            ...outputStateTreeIndexBytes,
+          ]),
+        }),
+      );
 
     const txHash = await sendAndConfirmTransaction(
       connectionBaseLayer,
@@ -150,11 +159,13 @@ describe("pinocchio-compressed-counter", async () => {
   });
 
   it("Increase counter on Solana", async () => {
+    const amount = Buffer.alloc(8);
+    amount.writeBigUInt64LE(1n);
     const tx = new Transaction().add(
       new TransactionInstruction({
         keys: [{ pubkey: counterPda, isSigner: false, isWritable: true }],
         programId: PROGRAM_ID,
-        data: Buffer.from([...[1, 0, 0, 0, 0, 0, 0, 0]]),
+        data: Buffer.from([...[1, 0, 0, 0, 0, 0, 0, 0], ...amount]),
       }),
     );
 
@@ -188,10 +199,9 @@ describe("pinocchio-compressed-counter", async () => {
           },
           ...remainingAccounts,
         ],
-        programId: COMPRESSED_DELEGATION_PROGRAM_ID,
+        programId: PROGRAM_ID,
         data: Buffer.from([
           ...[2, 0, 0, 0, 0, 0, 0, 0],
-          ...id.toBytes(),
           ...validityProofBytes,
           ...accountMetaBytes,
         ]),
@@ -212,11 +222,13 @@ describe("pinocchio-compressed-counter", async () => {
   });
 
   it("Increase counter on ER", async () => {
+    const amount = Buffer.alloc(8);
+    amount.writeBigUInt64LE(1n);
     const tx = new Transaction().add(
       new TransactionInstruction({
         keys: [{ pubkey: counterPda, isSigner: false, isWritable: true }],
         programId: PROGRAM_ID,
-        data: Buffer.from([...[1, 0, 0, 0, 0, 0, 0, 0]]),
+        data: Buffer.from([...[1, 0, 0, 0, 0, 0, 0, 0], ...amount]),
       }),
     );
 

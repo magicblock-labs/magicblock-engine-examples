@@ -17,6 +17,9 @@ use pinocchio::{
 };
 use pinocchio_system::instructions::CreateAccount;
 
+/// Max serialized Magic CPI payload (Solana instruction data limit).
+const INTENT_BUNDLE_DATA_BUF_SIZE: usize = 512;
+
 /// Create and initialize the counter PDA for the initializer.
 pub fn process_initialize_counter(
     accounts: &[AccountView],
@@ -33,7 +36,7 @@ pub fn process_initialize_counter(
 
     let (counter_pda, bump) = Counter::find_pda(&id);
     if counter_pda != *counter_info.address() {
-        return Err(ProgramError::InvalidArgument);
+        return Err(ProgramError::InvalidSeeds);
     }
 
     // Create counter account.
@@ -60,7 +63,8 @@ pub fn process_initialize_counter(
     let borsh_pda_seeds = build_pda_seeds(
         &mut borsh_pda_seeds_buf,
         &[b"counter".as_ref(), id.as_ref()],
-    );
+    )?;
+    let mut data = [0_u8; InitializeCompressedRecord::data_len(&[7, 32])];
     InitializeCompressedRecord {
         payer: payer_info,
         delegated_account: counter_info,
@@ -75,13 +79,14 @@ pub fn process_initialize_counter(
             bump: bump,
         },
     }
-    .invoke_signed(&[signer])?;
+    .invoke_signed_with_data(&mut data, &[signer])?;
 
     // Initialize counter to 0.
     let mut data = counter_info.try_borrow_mut()?;
     let counter_data = Counter::load_mut(&mut data)?;
     counter_data.count = 0;
     counter_data.id = id;
+    counter_data.bump = bump;
 
     Ok(())
 }
@@ -97,7 +102,7 @@ pub fn process_increase_counter(accounts: &[AccountView], increase_by: u64) -> P
 
     let counter_pda = Counter::derive_pda(&counter_data.id, counter_data.bump)?;
     if counter_pda != *counter_account.address() {
-        return Err(ProgramError::InvalidArgument);
+        return Err(ProgramError::InvalidSeeds);
     }
 
     counter_data.count = counter_data
@@ -126,23 +131,27 @@ pub fn process_delegate(
     };
 
     let counter_pda = Counter::derive_pda(&id, bump)?;
-
     if counter_pda != *counter_info.address() {
-        return Err(ProgramError::InvalidArgument);
+        return Err(ProgramError::InvalidSeeds);
     }
 
-    let mut borsh_pda_seeds_buf = [0_u8; 4 + 4 + 7 + 4 + 32 + 4 + 1];
+    // Close counter account
+    payer.set_lamports(payer.lamports() + counter_info.lamports());
+    counter_info.set_lamports(0);
+
     let bump_seed = [bump];
-    let borsh_pda_seeds = build_pda_seeds(
-        &mut borsh_pda_seeds_buf,
-        &[b"counter".as_ref(), id.as_ref(), &bump_seed],
-    );
     let signer_seeds = [
         Seed::from(b"counter"),
         Seed::from(id.as_ref()),
         Seed::from(&bump_seed),
     ];
     let signer = Signer::from(&signer_seeds);
+    let mut borsh_pda_seeds_buf = [0_u8; 4 + 4 + 7 + 4 + 32];
+    let borsh_pda_seeds = build_pda_seeds(
+        &mut borsh_pda_seeds_buf,
+        &[b"counter".as_ref(), id.as_ref()],
+    )?;
+    let mut data = [0_u8; DelegateCompressed::data_len(&[7, 32], core::mem::size_of::<Counter>())];
     DelegateCompressed {
         payer,
         delegated_account: counter_info,
@@ -158,7 +167,7 @@ pub fn process_delegate(
             bump: bump,
         },
     }
-    .invoke_signed(&[signer.clone()])?;
+    .invoke_signed_with_data(&mut data, &[signer])?;
 
     Ok(())
 }
@@ -173,11 +182,11 @@ pub fn process_undelegate(accounts: &[AccountView]) -> ProgramResult {
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let mut data = [0_u8; 1024];
-    MagicIntentBundleBuilder::new(payer.clone(), magic_context.clone(), magic_program.clone())
-        .commit_and_undelegate(&[counter_account.clone()])
+    let mut intent_bundle_data = [0_u8; INTENT_BUNDLE_DATA_BUF_SIZE];
+    MagicIntentBundleBuilder::new(*payer, *magic_context, *magic_program)
+        .commit_and_undelegate(&[*counter_account])
         .compressed()
-        .build_and_invoke(&mut data)?;
+        .build_and_invoke(&mut intent_bundle_data)?;
 
     Ok(())
 }

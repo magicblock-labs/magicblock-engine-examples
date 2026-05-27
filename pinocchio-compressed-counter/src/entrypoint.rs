@@ -68,7 +68,6 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
 }
 
 /// Process an instruction.
-#[inline(always)]
 pub fn process_instruction(accounts: &[AccountView], instruction_data: &[u8]) -> ProgramResult {
     pinocchio_log::log!(
         "Received {} bytes of instruction data",
