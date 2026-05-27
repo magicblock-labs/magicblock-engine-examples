@@ -23,6 +23,7 @@ import {
   deriveCda,
   BATCHED_MERKLE_TREE,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { createBN254 } from "@lightprotocol/stateless.js";
 
 import { describe, it, expect } from "vitest";
 
@@ -77,16 +78,14 @@ describe("pinocchio-compressed-counter", async () => {
   const id = Keypair.generate().publicKey;
 
   // Get pda of counter_account
-  const [counterPda] = PublicKey.findProgramAddressSync(
+  const [counterPda, counterBump] = PublicKey.findProgramAddressSync(
     [Buffer.from("counter"), id.toBuffer()],
     PROGRAM_ID,
   );
+  const counterCda = deriveCda(counterPda, addressTree.tree);
   console.log("Program ID: ", PROGRAM_ID.toString());
   console.log("Counter PDA: ", counterPda.toString());
-  console.log(
-    "Counter CDA: ",
-    deriveCda(counterPda, addressTree.tree).toString(),
-  );
+  console.log("Counter CDA: ", counterCda.toString());
 
   const validator = await fetch(ephemeralRollupUrl, {
     method: "POST",
@@ -101,6 +100,50 @@ describe("pinocchio-compressed-counter", async () => {
     .then((data: any) => new PublicKey(data.result.identity));
 
   console.log("Validator: ", validator.toString());
+
+  const expectEventually = async (assertion: () => Promise<void>) => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        await assertion();
+        return;
+      } catch (error) {
+        lastError = error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+    throw lastError;
+  };
+
+  const assertCounterData = (data: Buffer, expectedCount: bigint) => {
+    expect(data.length).toBe(48);
+    expect(data.readBigUInt64LE(0)).toBe(expectedCount);
+    expect(new PublicKey(data.subarray(8, 40)).toString()).toBe(id.toString());
+    expect(data[40]).toBe(counterBump);
+  };
+
+  const assertCounterAccount = async (
+    connection: Connection,
+    expectedCount: bigint,
+  ) => {
+    const account = await connection.getAccountInfo(counterPda, "confirmed");
+    expect(account).not.toBeNull();
+    assertCounterData(account!.data, expectedCount);
+  };
+
+  const assertCompressedCounterAccount = async (expectedCount: bigint) => {
+    const account = await photonClient.getCompressedAccount(
+      createBN254(counterCda.toBuffer()),
+    );
+    expect(account).not.toBeNull();
+    expect(account!.data).not.toBeNull();
+
+    const wrappedData = Buffer.from(account!.data!.data);
+    assertCounterData(
+      wrappedData.subarray(wrappedData.length - 48),
+      expectedCount,
+    );
+  };
 
   it("Initialize counter on Solana", async () => {
     const {
@@ -156,6 +199,7 @@ describe("pinocchio-compressed-counter", async () => {
     );
     console.log(`(Base Layer) Initialize txHash: ${txHash}`);
     expect(txHash).toBeDefined();
+    await expectEventually(() => assertCounterAccount(connectionBaseLayer, 0n));
   });
 
   it("Increase counter on Solana", async () => {
@@ -180,6 +224,7 @@ describe("pinocchio-compressed-counter", async () => {
     );
     console.log(`(Base Layer) Increment txHash: ${txHash}`);
     expect(txHash).toBeDefined();
+    await expectEventually(() => assertCounterAccount(connectionBaseLayer, 1n));
   });
 
   it("Delegate counter to ER", async function () {
@@ -219,6 +264,7 @@ describe("pinocchio-compressed-counter", async () => {
     );
     console.log(`(Base Layer) Delegate txHash: ${txHash}`);
     expect(txHash).toBeDefined();
+    await expectEventually(() => assertCompressedCounterAccount(1n));
   });
 
   it("Increase counter on ER", async () => {
@@ -243,6 +289,9 @@ describe("pinocchio-compressed-counter", async () => {
     );
     console.log(`(ER) Increment txHash: ${txHash}`);
     expect(txHash).toBeDefined();
+    await expectEventually(() =>
+      assertCounterAccount(connectionEphemeralRollup, 2n),
+    );
   });
 
   it("Undelegate counter on ER", async () => {
@@ -270,5 +319,6 @@ describe("pinocchio-compressed-counter", async () => {
     );
     console.log(`(ER) Undelegate txHash: ${txHash}`);
     expect(txHash).toBeDefined();
+    await expectEventually(() => assertCompressedCounterAccount(2n));
   });
 });
