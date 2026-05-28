@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/ephemeral_account_chats.json`.
  */
 export type EphemeralAccountChats = {
-  "address": "D781aD7RTUVeAU9SZDdCNciYJe8yDyZJs1JbFtHd8Urj",
+  "address": "5kUATzj39y1HfMJbkW9tH3nWoLgq3WJ1scwiFdfDrdVT",
   "metadata": {
     "name": "ephemeralAccountChats",
     "version": "0.1.0",
@@ -474,10 +474,7 @@ export type EphemeralAccountChats = {
         {
           "name": "authority",
           "writable": true,
-          "signer": true,
-          "relations": [
-            "profile"
-          ]
+          "signer": true
         },
         {
           "name": "bufferProfile",
@@ -503,38 +500,38 @@ export type EphemeralAccountChats = {
             "program": {
               "kind": "const",
               "value": [
-                179,
-                221,
-                167,
+                70,
+                145,
+                111,
+                159,
+                11,
+                133,
+                215,
                 112,
-                88,
-                153,
-                236,
-                194,
-                58,
-                233,
-                137,
-                69,
-                163,
-                1,
-                236,
-                13,
-                53,
-                178,
-                228,
-                216,
-                237,
-                231,
-                97,
-                230,
-                92,
-                212,
+                76,
+                174,
+                91,
+                81,
+                150,
+                177,
+                124,
+                224,
+                122,
+                138,
+                64,
+                62,
+                198,
+                210,
+                136,
+                229,
+                55,
+                20,
+                26,
                 45,
-                221,
-                175,
-                218,
-                67,
-                40
+                23,
+                107,
+                40,
+                170
               ]
             }
           }
@@ -612,32 +609,15 @@ export type EphemeralAccountChats = {
         },
         {
           "name": "profile",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  102,
-                  105,
-                  108,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "profile.handle",
-                "account": "profile"
-              }
-            ]
-          }
+          "docs": [
+            "UncheckedAccount avoids Anchor re-serializing stale data after the",
+            "CPI transfers ownership to the delegation program."
+          ],
+          "writable": true
         },
         {
           "name": "ownerProgram",
-          "address": "D781aD7RTUVeAU9SZDdCNciYJe8yDyZJs1JbFtHd8Urj"
+          "address": "5kUATzj39y1HfMJbkW9tH3nWoLgq3WJ1scwiFdfDrdVT"
         },
         {
           "name": "delegationProgram",
