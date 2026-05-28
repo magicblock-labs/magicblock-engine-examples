@@ -16,32 +16,23 @@ import {
     Transaction,
     TransactionInstruction
 } from "@solana/web3.js";
-import {getAuthToken} from "@magicblock-labs/ephemeral-rollups-sdk";
-
-// IDLs are copied into src/idl/ by the `copy-idl` npm script (runs as prebuild/prestart).
+// IDL is copied into src/idl/ by the `copy-idl` npm script (runs as prebuild/prestart).
 import publicCounterIdl from "./idl/public_counter.json";
-import privateCounterIdl from "./idl/private_counter.json";
 
 const COUNTER_PDA_SEED = "counter";
-// Program IDs come from the local IDLs so they stay in sync with declare_id! after redeploys.
-const PUBLIC_COUNTER_PROGRAM = new PublicKey(publicCounterIdl.address);
-const PRIVATE_COUNTER_PROGRAM = new PublicKey(privateCounterIdl.address);
-console.log("Public counter program: ", PUBLIC_COUNTER_PROGRAM.toBase58());
-console.log("Private counter program:", PRIVATE_COUNTER_PROGRAM.toBase58());
-const TEE_VALIDATOR = new PublicKey("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo");
-// Default to a specific ER region (devnet-as) instead of the router (devnet.magicblock.app).
-// The router proxies HTTP per-request but a WS subscription is bound to whichever ER it
-// happened to pick at connect time — txs routed elsewhere wouldn't fire the WS callback,
-// so the UI would stall. Override via REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT for other regions.
+// Program ID comes from the local IDL so it stays in sync with declare_id! after redeploys.
+const COUNTER_PROGRAM = new PublicKey(publicCounterIdl.address);
+console.log("Counter program:", COUNTER_PROGRAM.toBase58());
+// Default to a specific ER region (devnet-as) — see comment in non-legacy app for why
+// not the router (devnet.magicblock.app): WS subscriptions stick to the picked ER but
+// HTTP requests get routed per-call, so updates would never reach the UI.
 const PUBLIC_ER_ENDPOINT = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app";
-const TEE_ENDPOINT = (process.env.REACT_APP_TEE_PROVIDER_ENDPOINT || "https://devnet-tee.magicblock.app").replace(/\/$/, "");
-const TEE_WS_ENDPOINT = TEE_ENDPOINT.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
 
 const App: React.FC = () => {
     const { connection } = useConnection();
     const ephemeralConnection = useRef<Connection | null>(null);
     const provider = useRef<Provider>(new SimpleProvider(connection));
-    const { publicKey, sendTransaction, signMessage } = useWallet();
+    const { publicKey, sendTransaction } = useWallet();
     const tempKeypair = useRef<Keypair | null>(null);
     const [counter, setCounter] = useState<number>(0);
     const [ephemeralCounter, setEphemeralCounter] = useState<number>(0);
@@ -49,40 +40,24 @@ const App: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [transactionError, setTransactionError] = useState<string | null>(null);
     const [transactionSuccess, setTransactionSuccess] = useState<string | null>(null);
-    const [isPrivate, setIsPrivate] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return false;
-        const params = new URLSearchParams(window.location.search);
-        return params.get('mode') === 'private';
-    });
-    const [isInitializingEr, setIsInitializingEr] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const counterProgramClient = useRef<Program | null>(null);
     const counterSubscriptionId = useRef<number | null>(null);
     const ephemeralCounterSubscriptionId = useRef<number | null>(null);
-    // Cache TEE auth tokens per wallet pubkey so toggling between modes doesn't re-prompt.
-    const cachedAuthToken = useRef<{ pubkey: string; token: string } | null>(null);
-    // De-dupe concurrent auth requests so React StrictMode / re-renders don't trigger
-    // a second signMessage prompt while the first is still awaiting the user.
-    const authTokenInFlight = useRef<{ pubkey: string; promise: Promise<string> } | null>(null);
 
-    const COUNTER_PROGRAM = useMemo(
-        () => isPrivate ? PRIVATE_COUNTER_PROGRAM : PUBLIC_COUNTER_PROGRAM,
-        [isPrivate]
-    );
     const counterPda = useMemo(() => {
         const [pda] = PublicKey.findProgramAddressSync(
             [Buffer.from(COUNTER_PDA_SEED)],
             COUNTER_PROGRAM
         );
         return pda;
-    }, [COUNTER_PROGRAM]);
+    }, []);
 
     // Build the program client from the LOCAL IDL (copied into src/idl/ by the copy-idl
     // npm script). Avoids Program.fetchIdl, which can return an on-chain IDL whose
     // `address` field is stale and silently makes the client subscribe to the wrong PDA.
-    const getProgramClient = useCallback(async (program: PublicKey): Promise<Program> => {
-        const idl = program.equals(PRIVATE_COUNTER_PROGRAM) ? privateCounterIdl : publicCounterIdl;
-        return new Program(idl as Idl, provider.current);
+    const getProgramClient = useCallback(async (): Promise<Program> => {
+        return new Program(publicCounterIdl as Idl, provider.current);
     }, []);
 
     // Define callbacks function to handle account changes
@@ -118,48 +93,13 @@ const App: React.FC = () => {
         ephemeralCounterSubscriptionId.current = ephemeralConnection.current.onAccountChange(counterPda, handleEphemeralCounterChange, 'confirmed');
     }, [counterPda, handleEphemeralCounterChange]);
 
-    // Reset state and tear down connections when toggling between public and private mode
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const params = new URLSearchParams(window.location.search);
-        if (isPrivate) {
-            params.set('mode', 'private');
-        } else {
-            params.delete('mode');
-        }
-        const search = params.toString();
-        const newUrl = `${window.location.pathname}${search ? '?' + search : ''}${window.location.hash}`;
-        window.history.replaceState(null, '', newUrl);
-    }, [isPrivate]);
-
-    // Reset state and tear down connections when toggling between public and private mode
-    useEffect(() => {
-        return () => {
-            if (counterSubscriptionId.current !== null) {
-                connection.removeAccountChangeListener(counterSubscriptionId.current).catch(() => {});
-                counterSubscriptionId.current = null;
-            }
-            if (ephemeralCounterSubscriptionId.current !== null && ephemeralConnection.current) {
-                ephemeralConnection.current.removeAccountChangeListener(ephemeralCounterSubscriptionId.current).catch(() => {});
-                ephemeralCounterSubscriptionId.current = null;
-            }
-            ephemeralConnection.current = null;
-            counterProgramClient.current = null;
-            setCounter(0);
-            setEphemeralCounter(0);
-            setIsDelegated(false);
-            setIsLoading(true);
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isPrivate]);
-
-    // Init program client + base layer counter, then ER connection (with TEE auth in private mode)
+    // Init program client + base layer counter, then ER connection
     useEffect(() => {
         let cancelled = false;
         const init = async () => {
             // 1. Program client + base layer counter
             if (!counterProgramClient.current) {
-                const client = await getProgramClient(COUNTER_PROGRAM);
+                const client = await getProgramClient();
                 if (cancelled) return;
                 counterProgramClient.current = client;
                 const accountInfo = await provider.current.connection.getAccountInfo(counterPda);
@@ -180,64 +120,7 @@ const App: React.FC = () => {
             // 2. ER connection (skip if already initialized or program client missing)
             if (ephemeralConnection.current || !counterProgramClient.current) return;
 
-            let cluster: string;
-            let wsEndpoint: string | undefined;
-
-            if (isPrivate) {
-                // Private mode requires a wallet that can sign messages so we can fetch a TEE auth token
-                if (!publicKey || !signMessage) return;
-                setIsInitializingEr(true);
-                try {
-                    let token: string;
-                    const pubkeyStr = publicKey.toBase58();
-                    const cached = cachedAuthToken.current;
-                    if (cached && cached.pubkey === pubkeyStr) {
-                        token = cached.token;
-                    } else {
-                        // Reuse the in-flight promise if another effect run started one
-                        // for the same wallet — prevents a second signMessage prompt.
-                        const inflight = authTokenInFlight.current;
-                        if (inflight && inflight.pubkey === pubkeyStr) {
-                            token = await inflight.promise;
-                        } else {
-                            const promise = getAuthToken(TEE_ENDPOINT, publicKey, signMessage)
-                                .then(r => {
-                                    cachedAuthToken.current = { pubkey: pubkeyStr, token: r.token };
-                                    return r.token;
-                                })
-                                .finally(() => {
-                                    if (authTokenInFlight.current?.pubkey === pubkeyStr) {
-                                        authTokenInFlight.current = null;
-                                    }
-                                });
-                            authTokenInFlight.current = { pubkey: pubkeyStr, promise };
-                            token = await promise;
-                        }
-                        if (cancelled) return;
-                    }
-                    cluster = `${TEE_ENDPOINT}?token=${token}`;
-                    wsEndpoint = `${TEE_WS_ENDPOINT}?token=${token}`;
-                    // Browseable explorer URL that points at the TEE RPC with the auth
-                    // token embedded — paste this into a browser to inspect the ER state.
-                    const explorerUrl = `https://solscan.io/account/${counterPda.toBase58()}?cluster=custom&customUrl=${encodeURIComponent(cluster)}`;
-                    console.log("TEE Solscan URL:", explorerUrl);
-                } catch (err) {
-                    console.error("Failed to fetch TEE auth token:", err);
-                    setTransactionError(`TEE auth failed: ${err}`);
-                    setIsInitializingEr(false);
-                    return;
-                }
-                setIsInitializingEr(false);
-            } else {
-                cluster = PUBLIC_ER_ENDPOINT;
-            }
-
-            ephemeralConnection.current = new Connection(
-                cluster,
-                wsEndpoint
-                    ? { wsEndpoint, commitment: "confirmed" }
-                    : { commitment: "confirmed" }
-            );
+            ephemeralConnection.current = new Connection(PUBLIC_ER_ENDPOINT, { commitment: "confirmed" });
 
             // Airdrop to trigger lazy account reload in the ER
             try {
@@ -257,7 +140,7 @@ const App: React.FC = () => {
         init().catch(console.error);
         return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isPrivate, publicKey, COUNTER_PROGRAM, counterPda, signMessage]);
+    }, [publicKey, counterPda]);
 
     // Detect when publicKey is set/connected and derive a temp keypair
     useEffect(() => {
@@ -296,7 +179,11 @@ const App: React.FC = () => {
         transaction: Transaction,
         useTempKeypair: boolean = false,
         ephemeral: boolean = false,
-        confirmCommitment: Commitment = "processed"
+        confirmCommitment: Commitment = "processed",
+        // Optional: an account expected to change as a result of this tx. When provided,
+        // we refresh its state after confirmation so the UI updates immediately without
+        // waiting for the long-lived subscribe handler to fire.
+        watchAccount?: PublicKey,
     ): Promise<string | null> => {
         if (!tempKeypair.current) return null;
         if (!publicKey) return null;
@@ -305,26 +192,66 @@ const App: React.FC = () => {
         setTransactionError(null);
         setTransactionSuccess(null);
         const targetConnection = ephemeral ? ephemeralConnection.current : provider.current.connection;
+        const layerLabel = ephemeral ? "ER" : "Base";
         try {
             const {
                 context: { slot: minContextSlot },
                 value: { blockhash, lastValidBlockHeight }
             } = await targetConnection.getLatestBlockhashAndContext();
-            console.log("Submitting transaction...");
+            console.log(`Submitting transaction to ${layerLabel}...`);
             if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
             if (!transaction.feePayer) {
                 transaction.feePayer = useTempKeypair ? tempKeypair.current.publicKey : publicKey;
             }
             if (useTempKeypair) transaction.sign(tempKeypair.current);
+
             let signature;
+            const sendStart = performance.now();
             if (!ephemeral && !useTempKeypair) {
                 signature = await sendTransaction(transaction, targetConnection, { minContextSlot });
             } else {
                 signature = await targetConnection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
             }
-            await targetConnection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, confirmCommitment);
-            console.log(`Transaction confirmed: ${signature}`);
-            setTransactionSuccess(`Transaction confirmed`);
+            const sendMs = Math.round(performance.now() - sendStart);
+
+            // Confirm via solana-web3.js's confirmTransaction (signature WS sub at the
+            // requested commitment). On ER at 'processed' this resolves at slot-time
+            // (~30-100ms). Known wart: ~500ms HTTP polling fallback when the WS sub
+            // setup is slow — rare in practice, simpler code wins.
+            const confirmStart = performance.now();
+            const sigConfirm = await targetConnection.confirmTransaction(
+                { signature, blockhash, lastValidBlockHeight },
+                confirmCommitment,
+            );
+            if (sigConfirm.value.err) {
+                throw new Error(`Transaction failed on chain: ${JSON.stringify(sigConfirm.value.err)}`);
+            }
+            const confirmMs = Math.round(performance.now() - confirmStart);
+
+            // Refresh the watched account inline so the UI updates immediately.
+            let refreshMs = 0;
+            if (watchAccount && counterProgramClient.current) {
+                const refreshStart = performance.now();
+                try {
+                    const accountInfo = await targetConnection.getAccountInfo(watchAccount);
+                    if (accountInfo && watchAccount.equals(counterPda)) {
+                        const c = counterProgramClient.current.coder.accounts.decode("counter", accountInfo.data);
+                        const value = Number(c.count.valueOf());
+                        if (ephemeral) setEphemeralCounter(value);
+                        else {
+                            setCounter(value);
+                            setIsDelegated(!accountInfo.owner.equals(counterProgramClient.current.programId));
+                        }
+                    }
+                } catch { /* decode may fail mid-transition (e.g., during delegate ownership flip) */ }
+                refreshMs = Math.round(performance.now() - refreshStart);
+            }
+
+            const totalMs = sendMs + confirmMs + refreshMs;
+            console.log(
+                `[${layerLabel}] ${totalMs}ms total = send ${sendMs}ms + confirmTransaction(${confirmCommitment}) ${confirmMs}ms + refresh ${refreshMs}ms · sig ${signature}`,
+            );
+            setTransactionSuccess(`[${layerLabel}] confirmed in ${totalMs}ms`);
             return signature;
         } catch (error) {
             setTransactionError(`Transaction failed: ${error}`);
@@ -332,7 +259,7 @@ const App: React.FC = () => {
             setIsSubmitting(false);
         }
         return null;
-    }, [publicKey, sendTransaction]);
+    }, [publicKey, sendTransaction, counterPda]);
 
     /**
      * Increment the counter (works for both public and private programs — same instruction shape)
@@ -388,10 +315,10 @@ const App: React.FC = () => {
     };
 
     /**
-     * Delegate PDA — branches on private vs public account schema
+     * Delegate PDA
      */
     const delegatePdaTx = useCallback(async () => {
-        console.log(`Delegate ${isPrivate ? 'private' : 'public'} counter`);
+        console.log("Delegate public counter");
         if (!tempKeypair.current || !counterProgramClient.current) return;
 
         const accountTmpWallet = await connection.getAccountInfo(tempKeypair.current.publicKey);
@@ -399,53 +326,37 @@ const App: React.FC = () => {
             await transferToTempKeypair();
         }
 
-        let transaction: Transaction;
-        if (isPrivate) {
-            // Private counter: pin the TEE validator. Pass `null` for members = open access.
-            transaction = await counterProgramClient.current.methods
-                .delegate(null)
-                .accounts({
-                    payer: tempKeypair.current.publicKey,
-                    validator: TEE_VALIDATOR,
-                })
-                .transaction() as Transaction;
-        } else {
-            // Public counter: optionally pin a local validator on localnet
-            const remainingAccounts =
-                connection.rpcEndpoint.includes("localhost") ||
-                connection.rpcEndpoint.includes("127.0.0.1")
-                    ? [
-                        {
-                            pubkey: new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
-                            isSigner: false,
-                            isWritable: false,
-                        },
-                    ]
-                    : [];
-            transaction = await counterProgramClient.current.methods
-                .delegate()
-                .accounts({
-                    payer: tempKeypair.current.publicKey,
-                    pda: counterPda,
-                })
-                .remainingAccounts(remainingAccounts)
-                .transaction() as Transaction;
-        }
+        // Optionally pin a local validator on localnet
+        const remainingAccounts =
+            connection.rpcEndpoint.includes("localhost") ||
+            connection.rpcEndpoint.includes("127.0.0.1")
+                ? [
+                    {
+                        pubkey: new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+                        isSigner: false,
+                        isWritable: false,
+                    },
+                ]
+                : [];
+        const transaction = await counterProgramClient.current.methods
+            .delegate()
+            .accounts({
+                payer: tempKeypair.current.publicKey,
+                pda: counterPda,
+            })
+            .remainingAccounts(remainingAccounts)
+            .transaction() as Transaction;
 
         setEphemeralCounter(Number(counter));
         await submitTransaction(transaction, true, false, "confirmed");
-    }, [isPrivate, counterPda, connection, counter, submitTransaction, transferToTempKeypair]);
+    }, [counterPda, connection, counter, submitTransaction, transferToTempKeypair]);
 
     /**
      * Undelegate PDA
-     *
-     * For the private counter, the program's `undelegate` instruction now
-     * releases BOTH the permission account and the counter atomically in one
-     * ER transaction, so the client just fires a single call in either mode.
      */
     const undelegatePdaTx = useCallback(async () => {
         if (!tempKeypair.current || !counterProgramClient.current) return;
-        console.log(`Undelegate ${isPrivate ? 'private' : 'public'} counter`);
+        console.log("Undelegate public counter");
 
         const transaction = await counterProgramClient.current.methods
             .undelegate()
@@ -456,7 +367,7 @@ const App: React.FC = () => {
             .transaction() as Transaction;
 
         await submitTransaction(transaction, true, true);
-    }, [isPrivate, counterPda, submitTransaction]);
+    }, [counterPda, submitTransaction]);
 
     const delegateTx = useCallback(async () => {
         await delegatePdaTx();
@@ -466,15 +377,6 @@ const App: React.FC = () => {
         await undelegatePdaTx();
     }, [undelegatePdaTx]);
 
-    const handleSetPrivate = (next: boolean) => {
-        if (next === isPrivate) return;
-        if (next && (!publicKey || !signMessage)) {
-            setTransactionError("Connect a wallet that supports message signing to enable private mode");
-            return;
-        }
-        setIsPrivate(next);
-    };
-
     return (
         <div className="counter-ui">
             <div className="wallet-buttons">
@@ -482,24 +384,6 @@ const App: React.FC = () => {
             </div>
 
             <h1>Ephemeral Counter</h1>
-
-            <div className="mode-toggle">
-                <button
-                    className={!isPrivate ? 'active' : ''}
-                    onClick={() => handleSetPrivate(false)}
-                    disabled={isInitializingEr}
-                >
-                    Public
-                </button>
-                <button
-                    className={isPrivate ? 'active' : ''}
-                    onClick={() => handleSetPrivate(true)}
-                    disabled={!publicKey || !signMessage || isInitializingEr}
-                    title={!publicKey ? 'Connect wallet to enable private mode' : undefined}
-                >
-                    Private
-                </button>
-            </div>
 
             <div className="button-container">
                 <Button title={"Delegate"} resetGame={delegateTx} disabled={isDelegated}/>
@@ -518,18 +402,12 @@ const App: React.FC = () => {
                     key="1"
                     ind={Number(1)}
                     updateSquares={(index: string | number) => updateCounter(Number(index))}
-                    clsName={isDelegated && !isPrivate ? ephemeralCounter.toString() : ''}
-                    placeholder={isDelegated && isPrivate ? (
-                        <>
-                            <div className="placeholder-label">Hidden</div>
-                            <div className="placeholder-hint">click to count</div>
-                        </>
-                    ) : undefined}
+                    clsName={isDelegated ? ephemeralCounter.toString() : ''}
                     loading={isLoading}
                 />
             </div>
 
-            {(isSubmitting || isInitializingEr) && (
+            {isSubmitting && (
                 <div style={{
                     display: 'flex',
                     justifyContent: 'center',
