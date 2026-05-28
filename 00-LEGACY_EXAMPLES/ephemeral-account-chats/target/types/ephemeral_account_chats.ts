@@ -474,10 +474,7 @@ export type EphemeralAccountChats = {
         {
           "name": "authority",
           "writable": true,
-          "signer": true,
-          "relations": [
-            "profile"
-          ]
+          "signer": true
         },
         {
           "name": "bufferProfile",
@@ -612,28 +609,11 @@ export type EphemeralAccountChats = {
         },
         {
           "name": "profile",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  102,
-                  105,
-                  108,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "profile.handle",
-                "account": "profile"
-              }
-            ]
-          }
+          "docs": [
+            "UncheckedAccount avoids Anchor re-serializing stale data after the",
+            "CPI transfers ownership to the delegation program."
+          ],
+          "writable": true
         },
         {
           "name": "ownerProgram",

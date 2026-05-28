@@ -411,22 +411,21 @@ export VALIDATOR=mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
 # Locally we run only public-counter.ts. The other two run from the TEE/devnet block below.
 run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts; cd .."
 
-# anchor-rock-paper-scissor uses TEE (base layer hardcoded to devnet) — can't run
-# against the local validators here. Move to a future test-devnet.sh.
+# anchor-private-counter is TEE-only — runs in the TEE/devnet block below.
 
-
+# anchor-rock-paper-scissor uses TEE (base layer hardcoded to devnet) — move to test-devnet.sh.
 
 # crank-counter: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor would
 # re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
 run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
 
-# dummy-token-transfer and magic-actions have router-based tests (devnet-router) plus
-# local *-local.ts variants that use split base/ER connections. test-locally.sh runs
-# only the *-local.ts variants. The router ones belong in a future test-devnet.sh.
+# dummy-token-transfer + magic-actions: have router-based tests (devnet-router) plus
+# local *-local.ts variants. We run only the local variants here.
 run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts; cd .."
 
-# ephemeral-account-chats skipped locally — move to a future test-devnet.sh.
-
+# ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
+# anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
+run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
 
 run_test "magic-actions" "cd magic-actions && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts; cd .."
 
@@ -440,9 +439,7 @@ run_test "pinocchio-secret-counter" "cd pinocchio-secret-counter && cargo build-
 # would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
 run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
 
-# roll-dice + roll-dice-delegated skipped locally — move to a future test-devnet.sh.
-
-
+# roll-dice + roll-dice-delegated skipped locally — move to test-devnet.sh.
 
 # rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
 run_test "rust-counter" "cd rust-counter && yarn install && npx vitest run ./tests/kit/rust-counter.test.ts; cd .."

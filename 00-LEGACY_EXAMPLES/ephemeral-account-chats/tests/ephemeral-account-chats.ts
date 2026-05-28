@@ -97,6 +97,7 @@ describe("ephemeral-account-chats", () => {
     const data: any = await response.json();
     validator = new PublicKey(data.result.identity);
 
+    console.log("Program ID: ", program.programId.toBase58());
     console.log("Validator: ", validator.toBase58());
     console.log("User A: ", userA.publicKey.toBase58());
     console.log("User B: ", userB.publicKey.toBase58());
@@ -113,7 +114,7 @@ describe("ephemeral-account-chats", () => {
         profile: profileAPda,
         systemProgram: SystemProgram.programId,
       })
-      .rpc();
+      .rpc({skipPreflight: true});
 
     await program.methods
       .createProfile(nameB)
@@ -123,7 +124,7 @@ describe("ephemeral-account-chats", () => {
         systemProgram: SystemProgram.programId,
       })
       .signers([userBKp])
-      .rpc();
+      .rpc({skipPreflight: true});
 
     const profileA = await program.account.profile.fetch(profileAPda);
     const profileB = await program.account.profile.fetch(profileBPda);
@@ -142,7 +143,7 @@ describe("ephemeral-account-chats", () => {
         profile: profileAPda,
         systemProgram: SystemProgram.programId,
       })
-      .rpc();
+      .rpc({skipPreflight: true});
 
     profileA = await connection.getAccountInfo(profileAPda);
     expect(profileA?.lamports).to.equal(0.05 * anchor.web3.LAMPORTS_PER_SOL + profileALamportsBefore);
@@ -155,7 +156,7 @@ describe("ephemeral-account-chats", () => {
         authority: userA.publicKey,
         profile: profileAPda,
       })
-      .rpc();
+      .rpc({skipPreflight: true});
 
     await program.methods
       .delegateProfile(validator)
@@ -186,7 +187,7 @@ describe("ephemeral-account-chats", () => {
         conversation: conversationPda,
         systemProgram: SystemProgram.programId,
       })
-      .rpc();
+      .rpc({skipPreflight: true});
 
     const conversation = await erProgramA.account.conversation.fetch(conversationPda);
     expect(conversation.messages.length).to.equal(0);
@@ -202,7 +203,7 @@ describe("ephemeral-account-chats", () => {
         profileSender: profileAPda,
         profileOther: profileBPda,
       })
-      .rpc();
+      .rpc({skipPreflight: true});
 
     const conversation = await erConnection.getAccountInfo(conversationPda);
     expect(conversation?.data.length).to.equal(conversationSize(MAX_MESSAGE_COUNT));
@@ -226,7 +227,7 @@ describe("ephemeral-account-chats", () => {
               profileOwner: profileAPda,
               profileOther: profileBPda,
             })
-            .rpc();
+            .rpc({skipPreflight: true});
         } else {
           await erProgramB.methods
             .appendMessage("Hello, world from user B!")
@@ -262,7 +263,7 @@ describe("ephemeral-account-chats", () => {
           profileOwner: profileAPda,
           profileOther: profileBPda,
         })
-        .rpc();
+        .rpc({skipPreflight: true});
       assert.fail("The conversation should have been full");
     } catch (error) {
       let programError = error as anchor.ProgramError;
@@ -280,7 +281,7 @@ describe("ephemeral-account-chats", () => {
         profileOther: profileBPda,
         conversation: conversationPda,
       })
-      .rpc();
+      .rpc({skipPreflight: true});
   });
 
   it("undelegates profiles", async () => {
@@ -290,14 +291,14 @@ describe("ephemeral-account-chats", () => {
         authority: userA.publicKey,
         profile: profileAPda,
       })
-      .rpc();
+      .rpc({skipPreflight: true});
     const txHashB = await erProgramB.methods
       .undelegateProfile()
       .accountsPartial({
         authority: userB.publicKey,
         profile: profileBPda,
       })
-      .rpc();
+      .rpc({skipPreflight: true});
 
     const commitmentSignatureA = await GetCommitmentSignature(txHashA, erConnection);
     const commitmentSignatureB = await GetCommitmentSignature(txHashB, erConnection);
@@ -322,7 +323,7 @@ describe("ephemeral-account-chats", () => {
         authority: userA.publicKey,
         profile: profileAPda,
       })
-      .rpc();
+      .rpc({skipPreflight: true});
     await program.methods
       .closeProfile()
       .accounts({
@@ -330,7 +331,7 @@ describe("ephemeral-account-chats", () => {
         profile: profileBPda,
       })
       .signers([userBKp])
-      .rpc();
+      .rpc({skipPreflight: true});
 
     const profileA = await connection.getAccountInfo(profileAPda);
     const profileB = await connection.getAccountInfo(profileBPda);

@@ -229,7 +229,7 @@ describe("ephemeral-account-chats", () => {
               profileOwner: profileAPda,
               profileOther: profileBPda,
             })
-            .rpc();
+            .rpc({skipPreflight: true});
         } else {
           await erProgramB.methods
             .appendMessage("Hello, world from user B!")
@@ -265,7 +265,7 @@ describe("ephemeral-account-chats", () => {
           profileOwner: profileAPda,
           profileOther: profileBPda,
         })
-        .rpc();
+        .rpc({skipPreflight: true});
       assert.fail("The conversation should have been full");
     } catch (error) {
       let programError = error as anchor.ProgramError;
@@ -318,40 +318,40 @@ describe("ephemeral-account-chats", () => {
   /// Base layer
   ///---------------------------------------------------------------------------
 
-  // it("closes profiles and refunds user A", async () => {
-  //   await program.methods
-  //     .closeProfile()
-  //     .accounts({
-  //       authority: userA.publicKey,
-  //       profile: profileAPda,
-  //     })
-  //     .rpc();
-  //   await program.methods
-  //     .closeProfile()
-  //     .accounts({
-  //       authority: userB.publicKey,
-  //       profile: profileBPda,
-  //     })
-  //     .signers([userBKp])
-  //     .rpc({skipPreflight: true});
+  it("closes profiles and refunds user A", async () => {
+    await program.methods
+      .closeProfile()
+      .accounts({
+        authority: userA.publicKey,
+        profile: profileAPda,
+      })
+      .rpc();
+    await program.methods
+      .closeProfile()
+      .accounts({
+        authority: userB.publicKey,
+        profile: profileBPda,
+      })
+      .signers([userBKp])
+      .rpc({skipPreflight: true});
 
-  //   const profileA = await connection.getAccountInfo(profileAPda);
-  //   const profileB = await connection.getAccountInfo(profileBPda);
-  //   expect(profileA?.owner).to.be.undefined;
-  //   expect(profileB?.owner).to.be.undefined;
+    const profileA = await connection.getAccountInfo(profileAPda);
+    const profileB = await connection.getAccountInfo(profileBPda);
+    expect(profileA?.owner).to.be.undefined;
+    expect(profileB?.owner).to.be.undefined;
 
-  //   const userBBalance = await connection.getBalance(userB.publicKey);
-  //   const tx = new Transaction().add(
-  //     SystemProgram.transfer({
-  //       fromPubkey: userB.publicKey,
-  //       toPubkey: userA.publicKey,
-  //       lamports: userBBalance - 5000,
-  //     })
-  //   );
-  //   tx.feePayer = userB.publicKey;
-  //   tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-  //   const signedTx = await userB.signTransaction(tx);
-  //   const txHash = await connection.sendRawTransaction(signedTx.serialize());
-  //   await connection.confirmTransaction(txHash, "confirmed");
-  // });
+    const userBBalance = await connection.getBalance(userB.publicKey);
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: userB.publicKey,
+        toPubkey: userA.publicKey,
+        lamports: userBBalance - 5000,
+      })
+    );
+    tx.feePayer = userB.publicKey;
+    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+    const signedTx = await userB.signTransaction(tx);
+    const txHash = await connection.sendRawTransaction(signedTx.serialize());
+    await connection.confirmTransaction(txHash, "confirmed");
+  });
 });
