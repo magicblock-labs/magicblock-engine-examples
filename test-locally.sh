@@ -389,7 +389,10 @@ for i in {1..60}; do
     break
   fi
   if ! kill -0 $EPHEMERAL_PID 2>/dev/null; then
-    echo "ephemeral-validator died — see ./ephemeral-validator.log"
+    echo "ephemeral-validator died. Last 100 lines of ./ephemeral-validator.log:"
+    echo "----- ephemeral-validator.log -----"
+    tail -100 ./ephemeral-validator.log 2>/dev/null || echo "(log file not found)"
+    echo "----- end of log -----"
     exit 1
   fi
   sleep 1
