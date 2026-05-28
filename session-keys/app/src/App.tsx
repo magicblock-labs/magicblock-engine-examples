@@ -5,7 +5,7 @@ import {useConnection, useWallet} from '@solana/wallet-adapter-react';
 import {WalletMultiButton} from "@solana/wallet-adapter-react-ui";
 import Alert from "./components/Alert";
 import * as anchor from "@coral-xyz/anchor";
-import {Program, Provider} from "@coral-xyz/anchor";
+import {Idl, Program, Provider} from "@coral-xyz/anchor";
 import {SimpleProvider} from "./components/Wallet";
 import {
     AccountInfo,
@@ -18,8 +18,13 @@ import {
 
 import { SessionTokenManager } from "@magicblock-labs/gum-sdk";
 
+// IDL is copied into src/idl/ by the `copy-idl` npm script (runs as prebuild/prestart).
+import counterIdl from "./idl/anchor_counter_session.json";
+
 const COUNTER_PDA_SEED = "counter";
-const COUNTER_PROGRAM = new PublicKey("6nMudTUrvXh1NGDyJYHPozJRmmHxB3s9Mjp2pSQqZiZ9");
+// Read the program ID from the IDL so it stays in sync with `declare_id!` after redeploys.
+const COUNTER_PROGRAM = new PublicKey(counterIdl.address);
+console.log("Counter program:", COUNTER_PROGRAM.toBase58());
 
 const App: React.FC = () => {
     let { connection } = useConnection();
@@ -27,7 +32,7 @@ const App: React.FC = () => {
     const provider = useRef<Provider>(new SimpleProvider(connection));
     const { publicKey, signTransaction: walletSignTransaction } = useWallet();
     const signTransaction = useMemo(() => 
-        walletSignTransaction || (async (tx: Transaction) => { throw new Error('Wallet not connected'); }),
+        walletSignTransaction || (async (_tx: Transaction) => { throw new Error('Wallet not connected'); }),
         [walletSignTransaction]
     );
     const tempKeypair = useRef<Keypair | null>(null);
@@ -47,15 +52,17 @@ const App: React.FC = () => {
     const SESSION_TOKEN_SEED = "session_token_v2";
 
     // Helpers to Dynamically fetch the IDL and initialize the program client
-    const getProgramClient = useCallback(async (program: PublicKey): Promise<Program> => {
-        const idl = await Program.fetchIdl(program, provider.current);
-        if (!idl) throw new Error('IDL not found');
-        return new Program(idl, provider.current);
+    // Build the program client from the LOCAL IDL (copied into src/idl/ by the copy-idl
+    // npm script). Avoids Program.fetchIdl, which requires the IDL to be uploaded
+    // on-chain via `anchor idl init` and silently breaks if that step was skipped.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const getProgramClient = useCallback(async (_program: PublicKey): Promise<Program> => {
+        return new Program(counterIdl as Idl, provider.current);
     }, [provider]);
 
     // Define callbacks function to handle account changes
     const handleCounterChange = useCallback((accountInfo: AccountInfo<Buffer>) => {
-        console.log("Ephemeral counter changed", accountInfo);
+        console.log("Base counter changed", accountInfo);
         if (!counterProgramClient.current) return;
         const decodedData = counterProgramClient.current.coder.accounts.decode('counter', accountInfo.data);
         setIsDelegated(!accountInfo.owner.equals(counterProgramClient.current.programId));
@@ -63,7 +70,7 @@ const App: React.FC = () => {
     }, []);
 
     const handleEphemeralCounterChange = useCallback((accountInfo: AccountInfo<Buffer>) => {
-        console.log("Ephemeral counter changed", accountInfo);
+        console.log("ER counter changed", accountInfo);
         if (!counterProgramClient.current) return;
         const decodedData = counterProgramClient.current.coder.accounts.decode('counter', accountInfo.data);
         setEphemeralCounter(Number(decodedData.count));
@@ -101,23 +108,45 @@ const App: React.FC = () => {
                 setCounter(counterValue);
                 const isDelegatedNow = !accountInfo.owner.equals(COUNTER_PROGRAM);
                 setIsDelegated(isDelegatedNow);
-                
-                await subscribeToCounter();
             }
+            // Subscribe unconditionally — even if the account doesn't exist yet, the
+            // listener will fire when init+increment creates it, so the UI updates
+            // without needing a page refresh.
+            await subscribeToCounter();
         };
         initializeProgramClient().catch(console.error);
     }, [connection, counterPda, getProgramClient, subscribeToCounter]);
 
+    // Derive the temp keypair from (publicKey, nonce). The nonce is stored in
+    // localStorage and bumped each time a session is created — this lets us rotate
+    // the session token PDA without waiting for Solana to garbage-collect a previous
+    // (drained but not yet swept) account, which otherwise produces "Allocate: account
+    // already in use" on recreate.
+    const sessionNonceKey = useCallback(
+        (pk: PublicKey) => `sessionNonce:${pk.toBase58()}`,
+        [],
+    );
+    const deriveTempKeypair = useCallback((pk: PublicKey, nonce: string) => {
+        // 32-byte seed from sha256(publicKey || nonce). Use Web Crypto for portability.
+        const seedBytes = new Uint8Array(32);
+        const src = new TextEncoder().encode(pk.toBase58() + ":" + nonce);
+        // Synchronous-ish: borrow first 32 bytes by hashing manually via subtle isn't sync.
+        // Simpler: pad/truncate the raw bytes ourselves since they don't need to be uniform.
+        const raw = new Uint8Array(pk.toBytes());
+        for (let i = 0; i < 32; i++) seedBytes[i] = raw[i] ^ (src[i % src.length] ?? 0);
+        return Keypair.fromSeed(seedBytes);
+    }, []);
+
     // Detect when publicKey is set/connected
     useEffect( () => {
         if (!publicKey) return;
-        if (!publicKey || Keypair.fromSeed(publicKey.toBytes()).publicKey.equals(tempKeypair.current?.publicKey || PublicKey.default)) return;
+        const nonce = localStorage.getItem(sessionNonceKey(publicKey)) ?? "0";
+        const newTempKeypair = deriveTempKeypair(publicKey, nonce);
+        if (tempKeypair.current?.publicKey.equals(newTempKeypair.publicKey)) return;
         console.log("Wallet connected with publicKey:", publicKey.toBase58());
-        // Derive the temp keypair from the publicKey
-        const newTempKeypair = Keypair.fromSeed(publicKey.toBytes());
         tempKeypair.current = newTempKeypair;
-        console.log("Temp Keypair", newTempKeypair.publicKey.toBase58());
-    }, [connection, publicKey]);
+        console.log("Temp Keypair", newTempKeypair.publicKey.toBase58(), "nonce:", nonce);
+    }, [connection, publicKey, sessionNonceKey, deriveTempKeypair]);
 
     // Derive counterPda with publicKey included in seed
     useEffect(() => {
@@ -146,8 +175,12 @@ const App: React.FC = () => {
             );
             sessionTokenPDA.current = pda;
             console.log("Session Token PDA:", pda.toString());
-            
-            // Check if session token exists
+
+            // UI-level "does the PDA have anything at it" check — any non-null account
+            // means we should show "Revoke Session" (so a user can clean up a stale or
+            // undecodable session). Per-action handlers do their own strict decode check
+            // to avoid passing a broken session_token into the program (which would trip
+            // AccountDiscriminatorMismatch 0xbba).
             const accountInfo = await connection.getAccountInfo(pda);
             setSessionTokenExists(!!accountInfo);
         };
@@ -276,17 +309,18 @@ const App: React.FC = () => {
              .accounts(incrementAccounts)
              .transaction() as Transaction;
 
-        // Check if counter account exists, if not add initialize instruction
+        // Check if counter account exists, if not prepend an initialize instruction.
+        // Must run BEFORE increment, otherwise increment hits AccountNotInitialized (0xbc4).
         const accountInfo = await connection.getAccountInfo(counterPda);
         if (!accountInfo) {
-            console.log("Counter not initialized, adding initialize instruction");
-            const initTx = await counterProgramClient.current?.methods
+            console.log("Counter not initialized, prepending initialize instruction");
+            const initIx = await counterProgramClient.current?.methods
                 .initialize()
                 .accounts({
                     user: payer,
                 })
-                .transaction() as Transaction;
-            transaction.add(...initTx.instructions);
+                .instruction();
+            if (initIx) transaction.instructions.unshift(initIx);
         }
 
         // Add instruction to print to the noop program and make the transaction unique
@@ -362,7 +396,33 @@ const App: React.FC = () => {
         
         const topUp = true;
         const validUntilBN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600); // valid for 1 hour
-        const topUpLamportsBN = new anchor.BN(0.0005 * LAMPORTS_PER_SOL);
+        // Rent-exempt minimum for a 0-byte system account is ~890,880 lamports.
+        // Top up to 0.002 SOL so a brand-new (just-rotated) sessionSigner clears rent
+        // with headroom for tx fees.
+        const topUpLamportsBN = new anchor.BN(0.002 * LAMPORTS_PER_SOL);
+
+        // Always bump the nonce on Create. Detecting whether the previous PDA is "really
+        // free" is unreliable: `getAccountInfo` returns null for zombie accounts (lamports=0
+        // but slot still allocated by System), so we can't tell from the client whether
+        // Allocate will succeed. Always rotating gives a fresh PDA every time.
+        {
+            const key = sessionNonceKey(publicKey);
+            const nextNonce = String((Number(localStorage.getItem(key) ?? "0") + 1) | 0);
+            localStorage.setItem(key, nextNonce);
+            const fresh = deriveTempKeypair(publicKey, nextNonce);
+            tempKeypair.current = fresh;
+            const [pda] = PublicKey.findProgramAddressSync(
+                [
+                    Buffer.from(SESSION_TOKEN_SEED),
+                    COUNTER_PROGRAM.toBytes(),
+                    fresh.publicKey.toBytes(),
+                    publicKey.toBuffer(),
+                ],
+                sessionTokenManager.current.program.programId,
+            );
+            sessionTokenPDA.current = pda;
+            console.log("Rotated tempKeypair, new session PDA:", pda.toBase58(), "nonce:", nextNonce);
+        }
 
         let transaction = await sessionTokenManager.current.program.methods
             .createSessionV2(topUp, validUntilBN, topUpLamportsBN)
@@ -403,16 +463,32 @@ const App: React.FC = () => {
             // Then sign with wallet adapter
             const signedTransaction = await signTransaction(transaction);
             const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
-            await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+            const confirm = await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+            if (confirm.value.err) {
+                throw new Error(`Transaction failed on chain: ${JSON.stringify(confirm.value.err)}`);
+            }
             console.log(`Transaction confirmed: ${signature}`);
-            setTransactionSuccess(`Session created successfully`);
-            setSessionTokenExists(true);
+            // Confirm the new session token account landed. Use the same loose check
+            // as the init useEffect (getAccountInfo, not program.account.X.fetch) — the
+            // SDK's decoder schema can mismatch the on-chain layout and falsely report
+            // "not found" even when the account is allocated and the create tx confirmed.
+            if (sessionTokenPDA.current) {
+                const accountInfo = await connection.getAccountInfo(sessionTokenPDA.current);
+                if (!accountInfo) {
+                    throw new Error("Session token account not found after create");
+                }
+                setSessionTokenExists(true);
+                setTransactionSuccess(`Session created successfully`);
+            } else {
+                setSessionTokenExists(true);
+                setTransactionSuccess(`Session created successfully`);
+            }
             } catch (error) {
             setTransactionError(`Transaction failed: ${error}`);
             } finally {
             setIsSubmitting(false);
             }
-            }, [publicKey, connection, signTransaction, counterPda]);
+            }, [publicKey, connection, signTransaction, counterPda, deriveTempKeypair, sessionNonceKey]);
 
     /**
      * Delegate PDA transaction
@@ -421,7 +497,21 @@ const App: React.FC = () => {
         console.log("Delegate PDA transaction");
         if (!counterPda) return;
 
-        if (sessionTokenExists) {
+        // Local decision only — do NOT side-effect setSessionTokenExists from here.
+        // The decoder check is too strict (returns false when SDK schema and on-chain
+        // layout differ even on a valid token), and flipping the UI state mid-handler
+        // makes the button snap back to "Create Session" while the tx is in flight.
+        let hasValidSession = false;
+        if (sessionTokenPDA.current && sessionTokenManager.current) {
+            try {
+                await sessionTokenManager.current.program.account.sessionTokenV2.fetch(sessionTokenPDA.current);
+                hasValidSession = true;
+            } catch {
+                hasValidSession = false;
+            }
+        }
+
+        if (hasValidSession) {
             if (!tempKeypair.current) {
                 console.error("tempKeypair not available");
                 return;
@@ -437,15 +527,15 @@ const App: React.FC = () => {
             }
         }
 
-        const payer = sessionTokenExists ? tempKeypair.current!.publicKey : publicKey!;
-        
+        const payer = hasValidSession ? tempKeypair.current!.publicKey : publicKey!;
+
         const delegateAccounts: any = {
             payer: payer,
             pda: counterPda,
         };
-        
+
         // Use sessionToken if session exists, otherwise use program ID as placeholder
-        if (sessionTokenExists) {
+        if (hasValidSession) {
             if (!sessionTokenPDA.current) {
                 console.error("sessionTokenPDA not available");
                 return;
@@ -485,7 +575,7 @@ const App: React.FC = () => {
                 if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
                 if (!transaction.feePayer) transaction.feePayer = payer;
                 
-                if (sessionTokenExists && tempKeypair.current) {
+                if (hasValidSession && tempKeypair.current) {
                     // Sign with temp keypair when session token exists
                     transaction.sign(tempKeypair.current);
                     const signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
@@ -504,7 +594,7 @@ const App: React.FC = () => {
                 } finally {
                 setIsSubmitting(false);
                 }
-                }, [counterPda, sessionTokenPDA, connection, counter, transferToTempKeypair, publicKey, sessionTokenExists, signTransaction, tempKeypair]);
+                }, [counterPda, sessionTokenPDA, connection, counter, transferToTempKeypair, publicKey, signTransaction, tempKeypair]);
 
     /**
      * Undelegate PDA transaction

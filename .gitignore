@@ -1,7 +1,7 @@
 *.DS_Store
 .idea
 **/*.rs.bk
-**/target/*
+**/target
 **/node_modules
 **/test-ledger*
 **/.anchor
@@ -10,21 +10,13 @@
 **/.next/
 **/.env
 **/tsconfig.tsbuildinfo
-/anchor-counter/target/deploy/*
-!/bolt-counter/target/deploy/counter-keypair.json
-!/bolt-counter/target/deploy/increase-keypair.json
 **/*test-storage
 
-# But don't ignore the target/idl/ directory
-!**/anchor-minter/target/idl/
-!**/anchor-counter/target/idl/
-!**/anchor-minter/target/deploy/
-!**/ephemeral-account-chats/target/idl/
-!**/ephemeral-account-chats/target/types/
-!**/ephemeral-account-chats/target/deploy/*.json
+# Bolt's predeployed program keypairs — kept in tree so anchor can deploy stable IDs.
+!/bolt-counter/target/deploy/counter-keypair.json
+!/bolt-counter/target/deploy/increase-keypair.json
 
-# 
 **/tests-kit
 
 # Logs
-**/**/**.log
+**/**.log

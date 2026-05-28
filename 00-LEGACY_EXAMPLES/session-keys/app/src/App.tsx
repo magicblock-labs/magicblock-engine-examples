@@ -5,7 +5,7 @@ import {useConnection, useWallet} from '@solana/wallet-adapter-react';
 import {WalletMultiButton} from "@solana/wallet-adapter-react-ui";
 import Alert from "./components/Alert";
 import * as anchor from "@coral-xyz/anchor";
-import {Program, Provider} from "@coral-xyz/anchor";
+import {Idl, Program, Provider} from "@coral-xyz/anchor";
 import {SimpleProvider} from "./components/Wallet";
 import {
     AccountInfo,
@@ -18,8 +18,13 @@ import {
 
 import { SessionTokenManager } from "@magicblock-labs/gum-sdk";
 
+// IDL is copied into src/idl/ by the `copy-idl` npm script (runs as prebuild/prestart).
+import counterIdl from "./idl/anchor_counter_session.json";
+
 const COUNTER_PDA_SEED = "counter";
-const COUNTER_PROGRAM = new PublicKey("6nMudTUrvXh1NGDyJYHPozJRmmHxB3s9Mjp2pSQqZiZ9");
+// Read the program ID from the IDL so it stays in sync with `declare_id!` after redeploys.
+const COUNTER_PROGRAM = new PublicKey(counterIdl.address);
+console.log("Counter program:", COUNTER_PROGRAM.toBase58());
 
 const App: React.FC = () => {
     let { connection } = useConnection();
@@ -46,16 +51,17 @@ const App: React.FC = () => {
     const sessionTokenPDA = useRef<PublicKey | null>(null);
     const SESSION_TOKEN_SEED = "session_token";
 
-    // Helpers to Dynamically fetch the IDL and initialize the program client
-    const getProgramClient = useCallback(async (program: PublicKey): Promise<Program> => {
-        const idl = await Program.fetchIdl(program, provider.current);
-        if (!idl) throw new Error('IDL not found');
-        return new Program(idl, provider.current);
+    // Build the program client from the LOCAL IDL (copied into src/idl/ by the copy-idl
+    // npm script). Avoids Program.fetchIdl, which requires the IDL to be uploaded
+    // on-chain via `anchor idl init` and silently breaks if that step was skipped.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const getProgramClient = useCallback(async (_program: PublicKey): Promise<Program> => {
+        return new Program(counterIdl as Idl, provider.current);
     }, [provider]);
 
     // Define callbacks function to handle account changes
     const handleCounterChange = useCallback((accountInfo: AccountInfo<Buffer>) => {
-        console.log("Ephemeral counter changed", accountInfo);
+        console.log("Base counter changed", accountInfo);
         if (!counterProgramClient.current) return;
         const decodedData = counterProgramClient.current.coder.accounts.decode('counter', accountInfo.data);
         setIsDelegated(!accountInfo.owner.equals(counterProgramClient.current.programId));
@@ -63,7 +69,7 @@ const App: React.FC = () => {
     }, []);
 
     const handleEphemeralCounterChange = useCallback((accountInfo: AccountInfo<Buffer>) => {
-        console.log("Ephemeral counter changed", accountInfo);
+        console.log("ER counter changed", accountInfo);
         if (!counterProgramClient.current) return;
         const decodedData = counterProgramClient.current.coder.accounts.decode('counter', accountInfo.data);
         setEphemeralCounter(Number(decodedData.count));
@@ -101,9 +107,11 @@ const App: React.FC = () => {
                 setCounter(counterValue);
                 const isDelegatedNow = !accountInfo.owner.equals(COUNTER_PROGRAM);
                 setIsDelegated(isDelegatedNow);
-                
-                await subscribeToCounter();
             }
+            // Subscribe unconditionally — even if the account doesn't exist yet, the
+            // listener will fire when init+increment creates it, so the UI updates
+            // without needing a page refresh.
+            await subscribeToCounter();
         };
         initializeProgramClient().catch(console.error);
     }, [connection, counterPda, getProgramClient, subscribeToCounter]);
@@ -236,6 +244,10 @@ const App: React.FC = () => {
             console.error("counterPda not available");
             return;
         }
+        if (!counterProgramClient.current) {
+            console.error("counterProgramClient not initialized yet");
+            return;
+        }
 
         if (sessionTokenExists) {
             if (!tempKeypair.current) {
@@ -271,22 +283,23 @@ const App: React.FC = () => {
              incrementAccounts.sessionToken = COUNTER_PROGRAM;
          }
 
-         let transaction = await counterProgramClient.current?.methods
+         let transaction = await counterProgramClient.current.methods
              .increment()
              .accounts(incrementAccounts)
              .transaction() as Transaction;
 
-        // Check if counter account exists, if not add initialize instruction
+        // Check if counter account exists, if not PREPEND an initialize instruction.
+        // Must run BEFORE increment, otherwise increment hits AccountNotInitialized (0xbc4).
         const accountInfo = await connection.getAccountInfo(counterPda);
         if (!accountInfo) {
-            console.log("Counter not initialized, adding initialize instruction");
-            const initTx = await counterProgramClient.current?.methods
+            console.log("Counter not initialized, prepending initialize instruction");
+            const initIx = await counterProgramClient.current.methods
                 .initialize()
                 .accounts({
                     user: payer,
                 })
-                .transaction() as Transaction;
-            transaction.add(...initTx.instructions);
+                .instruction();
+            transaction.instructions.unshift(initIx);
         }
 
         // Add instruction to print to the noop program and make the transaction unique
@@ -362,7 +375,9 @@ const App: React.FC = () => {
         
         const topUp = true;
         const validUntilBN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600); // valid for 1 hour
-        const topUpLamportsBN = new anchor.BN(0.0005 * LAMPORTS_PER_SOL);
+        // Rent-exempt minimum for a 0-byte system account is ~890,880 lamports;
+        // top up to 0.002 SOL so a fresh sessionSigner clears rent with headroom.
+        const topUpLamportsBN = new anchor.BN(0.002 * LAMPORTS_PER_SOL);
 
         let transaction = await sessionTokenManager.current.program.methods
             .createSession(topUp, validUntilBN, topUpLamportsBN)
@@ -402,7 +417,10 @@ const App: React.FC = () => {
             // Then sign with wallet adapter
             const signedTransaction = await signTransaction(transaction);
             const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
-            await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+            const confirm = await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+            if (confirm.value.err) {
+                throw new Error(`Transaction failed on chain: ${JSON.stringify(confirm.value.err)}`);
+            }
             console.log(`Transaction confirmed: ${signature}`);
             setTransactionSuccess(`Session created successfully`);
             setSessionTokenExists(true);

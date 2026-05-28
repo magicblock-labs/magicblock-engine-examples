@@ -5,7 +5,7 @@ use ephemeral_rollups_sdk::ephem::{MagicIntentBundleBuilder};
 
 use session_keys::{session_auth_or, Session, SessionError, SessionToken};
 
-declare_id!("6nMudTUrvXh1NGDyJYHPozJRmmHxB3s9Mjp2pSQqZiZ9");
+declare_id!("4WNRfs5Q3FYDiM8td6TeKe96jH2PDBPi78KT6b11Vwby");
 
 const COUNTER_SEED: &[u8] = b"counter";
 
@@ -38,16 +38,30 @@ pub mod anchor_counter_session {
         Ok(())
     }
 
-    /// Delegate the account to the delegation program
+    /// Delegate the account to the delegation program.
     /// Set specific validator based on ER, see https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup
-    #[session_auth_or(
-        ctx.accounts.pda.authority.key() == ctx.accounts.payer.key(),
-        SessionError::InvalidToken
-    )]
     pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
+        // Read authority out of the raw account data before the CPI — we use
+        // UncheckedAccount on `pda` to avoid Anchor re-serializing stale data
+        // after the delegate CPI transfers ownership to the delegation program.
+        let authority = {
+            let data = ctx.accounts.pda.try_borrow_data()?;
+            Counter::try_deserialize(&mut &data[..])?.authority
+        };
+
+        // Manual session-or-owner auth check (was previously `#[session_auth_or(...)]`,
+        // moved here because UncheckedAccount can't reach `.authority` at constraint time).
+        let session_ok = ctx.accounts.session_token.as_ref()
+            .map(|t| t.authority == authority)
+            .unwrap_or(false);
+        require!(
+            authority == ctx.accounts.payer.key() || session_ok,
+            SessionError::InvalidToken
+        );
+
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
-            &[COUNTER_SEED, ctx.accounts.pda.authority.key().as_ref()],
+            &[COUNTER_SEED, authority.as_ref()],
             DelegateConfig {
                 // Optionally set a specific validator from the first remaining account
                 validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
@@ -142,16 +156,15 @@ pub struct Initialize<'info> {
 
 /// Add delegate function to the context
 #[delegate]
-#[derive(Accounts, Session)]
+#[derive(Accounts)]
 pub struct DelegateInput<'info> {
     pub payer: Signer<'info>,
-    /// CHECK The pda to delegate
+    /// CHECK: deserialized manually in the handler and verified via PDA seeds
+    /// in the delegate CPI; UncheckedAccount avoids Anchor re-serializing stale
+    /// data after ownership transfers to the delegation program.
     #[account(mut, del)]
-    pub pda: Account<'info, Counter>,
-    #[session(
-        signer = payer,
-        authority = pda.authority.key() 
-    )]
+    pub pda: UncheckedAccount<'info>,
+    /// CHECK: validated in the handler against the counter's authority field.
     pub session_token: Option<Account<'info, SessionToken>>,
 }
 

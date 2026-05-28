@@ -9,6 +9,7 @@ stty sane 2>/dev/null || true
 
 SOLANA_PID=""
 EPHEMERAL_PID=""
+VRF_PID=""
 PASSED_TESTS=()
 FAILED_TESTS=()
 FAILED_TESTS_NAMES=()
@@ -288,33 +289,32 @@ cleanup() {
   printf 'Stopping validators... '
   
   # Kill by PID if available
-  if [ -n "$SOLANA_PID" ]; then
-    kill -TERM $SOLANA_PID 2>/dev/null || true
-  fi
-  if [ -n "$EPHEMERAL_PID" ]; then
-    kill -TERM $EPHEMERAL_PID 2>/dev/null || true
-  fi
-  
+  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID; do
+    [ -n "$pid" ] && kill -TERM $pid 2>/dev/null || true
+  done
+
   # Give them a moment to gracefully shutdown
   sleep 1
-  
+
   # Force kill any remaining processes
-  if [ -n "$SOLANA_PID" ]; then
-    kill -9 $SOLANA_PID 2>/dev/null || true
-  fi
-  if [ -n "$EPHEMERAL_PID" ]; then
-    kill -9 $EPHEMERAL_PID 2>/dev/null || true
-  fi
-  
-  # Also kill by process name as fallback
+  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID; do
+    [ -n "$pid" ] && kill -9 $pid 2>/dev/null || true
+  done
+
+  # Also kill by process name as fallback (mb-test-validator wraps solana-test-validator).
   pkill -f "solana-test-validator" 2>/dev/null || true
+  pkill -f "mb-test-validator" 2>/dev/null || true
   pkill -f "ephemeral-validator" 2>/dev/null || true
+  pkill -f "vrf-oracle" 2>/dev/null || true
   
   # Wait for background jobs silently
   { wait 2>/dev/null || true; } 2>/dev/null
   
   # Check if validators are actually stopped
-  if ! pgrep -f "solana-test-validator" >/dev/null 2>&1 && ! pgrep -f "ephemeral-validator" >/dev/null 2>&1; then
+  if ! pgrep -f "solana-test-validator" >/dev/null 2>&1 \
+     && ! pgrep -f "mb-test-validator" >/dev/null 2>&1 \
+     && ! pgrep -f "ephemeral-validator" >/dev/null 2>&1 \
+     && ! pgrep -f "vrf-oracle" >/dev/null 2>&1; then
     echo "✓ Stopped"
   else
     echo "✗ Failed to stop"
@@ -336,27 +336,9 @@ if [ ! -f ~/.config/solana/id.json ]; then
   solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
 fi
 
-# Start Solana Test Validator
-echo "Starting Solana Test Validator..."
-solana-test-validator \
-  --ledger ./test-ledger \
-  --reset \
-  --clone-upgradeable-program DmnRGfyyftzacFb1XadYhWF6vWqXwtQk5tbr6XgR3BA1 \
-  --clone mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev \
-  --clone EpJnX7ueXk7fKojBymqmVuCuwyhDQsYcLVL1XMsBbvDX \
-  --clone 7JrkjmZPprHwtuvtuGTXp9hwfGYFAQLnLeFM52kqAgXg \
-  --clone noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV \
-  --clone-upgradeable-program DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh \
-  --clone Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh \
-  --clone 5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc \
-  --clone F72HqCR8nwYsVyeVd38pgKkjXmXFzVAM8rjZZsXWbdE \
-  --clone vrfkfM4uoisXZQPrFiS2brY4oMkU9EWjyvmvqaFd5AS \
-  --clone-upgradeable-program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz \
-  --clone-upgradeable-program BTWAqWNBmF2TboMh3fxMJfgR16xGHYD7Kgr2dPwbRPBi \
-  --clone-upgradeable-program ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1 \
-  --clone-upgradeable-program SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2 \
-  --clone-upgradeable-program Hydra17i1feui9deaxu6d1TzSQMRNHeBRkDR1Awy7zea \
-  --url https://api.devnet.solana.com > ./test-ledger.log 2>&1 < /dev/null &
+# Start MagicBlock Test Validator (wraps solana-test-validator and pre-clones MB programs).
+echo "Starting MagicBlock Test Validator..."
+mb-test-validator --reset > ./test-ledger.log 2>&1 < /dev/null &
 
 SOLANA_PID=$!
 
@@ -372,7 +354,15 @@ echo "Solana validator is ready, waiting for RPC to stabilize..."
 
 # Start MagicBlock Ephemeral Validator
 echo "Starting MagicBlock Ephemeral Validator..."
-RUST_LOG=info ephemeral-validator \
+EPHEMERAL_VALIDATOR_BIN=$(command -v ephemeral-validator 2>/dev/null)
+if [ -z "$EPHEMERAL_VALIDATOR_BIN" ]; then
+  echo "ERROR: 'ephemeral-validator' not on PATH. Install with:"
+  echo "  npm install -g @magicblock-labs/ephemeral-validator"
+  exit 1
+fi
+echo "  Binary: $EPHEMERAL_VALIDATOR_BIN"
+echo "  Version: $("$EPHEMERAL_VALIDATOR_BIN" --version 2>&1 | head -1 || echo unknown)"
+RUST_LOG=info "$EPHEMERAL_VALIDATOR_BIN" \
   --lifecycle ephemeral \
   --remotes http://localhost:8899 \
   --listen 127.0.0.1:7799 > ./ephemeral-validator.log 2>&1 < /dev/null &
@@ -398,6 +388,30 @@ for i in {1..60}; do
   sleep 1
 done
 echo "Ephemeral validator is ready."
+
+# Start the VRF oracle (needed by rewards-delegated-vrf).
+echo "Starting VRF oracle..."
+VRF_ORACLE_BIN=$(command -v vrf-oracle 2>/dev/null)
+if [ -z "$VRF_ORACLE_BIN" ]; then
+  echo "WARN: 'vrf-oracle' not on PATH — VRF-dependent tests will fail. Install it and re-run."
+else
+  echo "  Binary: $VRF_ORACLE_BIN"
+  VRF_ORACLE_SKIP_PREFLIGHT="true" \
+  RPC_URL="http://localhost:8899" \
+  WEBSOCKET_URL="ws://localhost:8999" \
+  RUST_LOG=info \
+    "$VRF_ORACLE_BIN" > ./vrf-oracle.log 2>&1 < /dev/null &
+  VRF_PID=$!
+  # Brief readiness wait — the oracle subscribes to events; no port to probe,
+  # so we just confirm the process is still alive after a moment.
+  sleep 2
+  if ! kill -0 $VRF_PID 2>/dev/null; then
+    echo "VRF oracle died. Last 50 lines of ./vrf-oracle.log:"
+    tail -50 ./vrf-oracle.log 2>/dev/null || true
+  else
+    echo "VRF oracle is running (PID $VRF_PID)."
+  fi
+fi
 
 # Re-assert tty modes in case a validator's startup poked them.
 stty sane </dev/tty 2>/dev/null || true

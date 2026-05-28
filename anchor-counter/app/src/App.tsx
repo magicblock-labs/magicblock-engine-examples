@@ -4,7 +4,7 @@ import Square from "./components/Square";
 import {useConnection, useWallet} from '@solana/wallet-adapter-react';
 import {WalletMultiButton} from "@solana/wallet-adapter-react-ui";
 import Alert from "./components/Alert";
-import {Program, Provider} from "@coral-xyz/anchor";
+import {Idl, Program, Provider} from "@coral-xyz/anchor";
 import {SimpleProvider} from "./components/Wallet";
 import {
     AccountInfo,
@@ -18,9 +18,16 @@ import {
 } from "@solana/web3.js";
 import {getAuthToken} from "@magicblock-labs/ephemeral-rollups-sdk";
 
+// IDLs are copied into src/idl/ by the `copy-idl` npm script (runs as prebuild/prestart).
+import publicCounterIdl from "./idl/public_counter.json";
+import privateCounterIdl from "./idl/private_counter.json";
+
 const COUNTER_PDA_SEED = "counter";
-const PUBLIC_COUNTER_PROGRAM = new PublicKey("9RPwaXayVZHna1BYuRS4cLPJZuNGU1uS5V3heXB7v6Qi");
-const PRIVATE_COUNTER_PROGRAM = new PublicKey("91L33vBqfNaNfieqNCoqpxGZ2xVyJ29N3VcErR6LoepZ");
+// Program IDs come from the local IDLs so they stay in sync with declare_id! after redeploys.
+const PUBLIC_COUNTER_PROGRAM = new PublicKey(publicCounterIdl.address);
+const PRIVATE_COUNTER_PROGRAM = new PublicKey(privateCounterIdl.address);
+console.log("Public counter program: ", PUBLIC_COUNTER_PROGRAM.toBase58());
+console.log("Private counter program:", PRIVATE_COUNTER_PROGRAM.toBase58());
 const TEE_VALIDATOR = new PublicKey("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo");
 const PUBLIC_ER_ENDPOINT = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet.magicblock.app";
 const TEE_ENDPOINT = (process.env.REACT_APP_TEE_PROVIDER_ENDPOINT || "https://devnet-tee.magicblock.app").replace(/\/$/, "");
@@ -63,11 +70,12 @@ const App: React.FC = () => {
         return pda;
     }, [COUNTER_PROGRAM]);
 
-    // Helpers to dynamically fetch the IDL and initialize the program client
+    // Build the program client from the LOCAL IDL (copied into src/idl/ by the copy-idl
+    // npm script). Avoids Program.fetchIdl, which can return an on-chain IDL whose
+    // `address` field is stale and silently makes the client subscribe to the wrong PDA.
     const getProgramClient = useCallback(async (program: PublicKey): Promise<Program> => {
-        const idl = await Program.fetchIdl(program, provider.current);
-        if (!idl) throw new Error('IDL not found');
-        return new Program(idl, provider.current);
+        const idl = program.equals(PRIVATE_COUNTER_PROGRAM) ? privateCounterIdl : publicCounterIdl;
+        return new Program(idl as Idl, provider.current);
     }, []);
 
     // Define callbacks function to handle account changes
