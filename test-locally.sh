@@ -15,6 +15,16 @@ FAILED_TESTS_NAMES=()
 FAILED_TESTS_ERRORS=()
 TEST_COUNT=0
 
+# Optional first arg: substring filter for test names.
+#   bash test-locally.sh                       # runs everything
+#   bash test-locally.sh ephemeral-account-chats   # only that one
+#   bash test-locally.sh pinocchio             # matches both pinocchio-* examples
+TEST_FILTER="${1:-}"
+if [ -n "$TEST_FILTER" ]; then
+  echo "Filter: only running tests matching '$TEST_FILTER'"
+  echo ""
+fi
+
 # Portable line reverser: GNU has tac, macOS has tail -r.
 if command -v tac >/dev/null 2>&1; then
   reverse_lines() { tac "$@"; }
@@ -27,6 +37,11 @@ run_test() {
   local test_name=$1
   local test_command=$2
   local test_log="/tmp/test_${test_name}.log"
+
+  # Honor the script's TEST_FILTER substring (first CLI arg).
+  if [ -n "$TEST_FILTER" ] && [[ "$test_name" != *"$TEST_FILTER"* ]]; then
+    return
+  fi
 
   ((TEST_COUNT++))
 
@@ -43,9 +58,15 @@ run_test() {
   if [ -n "$keypair" ] && command -v solana-keygen >/dev/null 2>&1; then
     program_id=$(solana-keygen pubkey "$keypair" 2>/dev/null || echo "(unreadable)")
   fi
-  echo "Base Layer Endpoint: ${PROVIDER_ENDPOINT:-?}"
-  echo "ER Endpoint:         ${EPHEMERAL_PROVIDER_ENDPOINT:-${TEE_PROVIDER_ENDPOINT:-?}}"
-  echo "ER Validator:        ${VALIDATOR:-?}"
+  # Wallet: read pubkey from ~/.config/solana/id.json (the script ensures it exists at startup).
+  local wallet="(unknown)"
+  if [ -f "$HOME/.config/solana/id.json" ] && command -v solana-keygen >/dev/null 2>&1; then
+    wallet=$(solana-keygen pubkey "$HOME/.config/solana/id.json" 2>/dev/null || echo "(unreadable)")
+  fi
+  echo "Base Layer Endpoint: ${PROVIDER_ENDPOINT:-http://localhost:8899}"
+  echo "ER Endpoint:         ${EPHEMERAL_PROVIDER_ENDPOINT:-${TEE_PROVIDER_ENDPOINT:-http://localhost:7799}}"
+  echo "ER Validator:        ${VALIDATOR:-mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev}"
+  echo "Wallet:              $wallet"
   echo "Program ID:          $program_id"
   echo ""
 
@@ -127,12 +148,14 @@ run_test() {
     fi
 
     # Always redraw the spinner line with current detail + stage elapsed.
+    # \033[2K clears the entire current line, \r returns cursor to col 0.
+    # More robust than \r + trailing spaces on terminals that drop CR processing.
     if [ "$current_status" != "$last_status" ]; then
-      echo -ne "\r  ${spinner[$spinner_idx]} $current_status${dots[$dots_idx]}                                    "
+      printf '\033[2K\r  %s %s%s' "${spinner[$spinner_idx]}" "$current_status" "${dots[$dots_idx]}"
       last_status="$current_status"
     else
       local current_elapsed=$((SECONDS - stage_start_time))
-      echo -ne "\r  ${spinner[$spinner_idx]} $current_status (${current_elapsed}s)${dots[$dots_idx]}                                    "
+      printf '\033[2K\r  %s %s (%ss)%s' "${spinner[$spinner_idx]}" "$current_status" "$current_elapsed" "${dots[$dots_idx]}"
     fi
 
     spinner_idx=$(( (spinner_idx + 1) % 10 ))
@@ -149,9 +172,9 @@ run_test() {
     test_failed=true
   fi
   
-  # Clear the progress line
-  echo -ne "\r                                                                                  \r"
-  
+  # Clear the progress line.
+  printf '\033[2K\r'
+
   # Record elapsed for the final stage (skip Preparing).
   if [ -n "$last_stage" ] && [ "$last_stage" != "Preparing" ]; then
     local elapsed=$((SECONDS - stage_start_time))
@@ -260,10 +283,9 @@ cleanup() {
   # Disable trap to prevent recursion
   trap - EXIT INT TERM
   
-  # Clear current line
-  echo -ne "\r                                                                                  \r"
-  echo ""
-  echo -n "Stopping validators... "
+  # Clear current line.
+  printf '\033[2K\r\n'
+  printf 'Stopping validators... '
   
   # Kill by PID if available
   if [ -n "$SOLANA_PID" ]; then
@@ -457,8 +479,13 @@ run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider
 # devnet TEE (validator MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo).
 # Requires: solana CLI default keypair funded with devnet SOL for the program deploy.
 # Set SKIP_TEE_TESTS=1 to skip this block.
+# Override the base-layer devnet RPC via DEVNET_RPC_URL (e.g. a private Helius/QuickNode
+# endpoint) to avoid public devnet rate limits. The WS URL is derived from it.
 if [ "${SKIP_TEE_TESTS:-0}" != "1" ]; then
-  TEE_ENV="PROVIDER_ENDPOINT=https://api.devnet.solana.com WS_ENDPOINT=wss://api.devnet.solana.com TEE_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app TEE_WS_ENDPOINT=wss://devnet-tee.magicblock.app ROUTER_ENDPOINT=https://devnet-router.magicblock.app ROUTER_WS_ENDPOINT=wss://devnet-router.magicblock.app VALIDATOR=MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
+  DEVNET_RPC="${DEVNET_RPC_URL:-https://api.devnet.solana.com}"
+  DEVNET_WS=$(echo "$DEVNET_RPC" | sed -e 's|^http:|ws:|' -e 's|^https:|wss:|')
+
+  TEE_ENV="PROVIDER_ENDPOINT=$DEVNET_RPC WS_ENDPOINT=$DEVNET_WS TEE_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app TEE_WS_ENDPOINT=wss://devnet-tee.magicblock.app ROUTER_ENDPOINT=https://devnet-router.magicblock.app ROUTER_WS_ENDPOINT=wss://devnet-router.magicblock.app VALIDATOR=MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
 
   run_test "anchor-private-counter (devnet TEE)" "cd anchor-private-counter && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet; cd .."
 

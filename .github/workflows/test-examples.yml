@@ -11,6 +11,12 @@ jobs:
   test-examples:
     runs-on: ubuntu-latest
 
+    env:
+      # Set DEVNET_KEYPAIR_JSON secret to enable TEE tests against devnet
+      # (anchor-private-counter + anchor-counter's private-counter.ts).
+      # Without the secret, TEE tests are skipped.
+      SKIP_TEE_TESTS: ${{ secrets.DEVNET_KEYPAIR_JSON == '' && '1' || '0' }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -25,7 +31,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.94.0"
+          toolchain: "1.89.0"
 
       - name: Install native dependencies
         run: |
@@ -34,116 +40,49 @@ jobs:
 
       - name: Install Solana
         run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.7/install)"
+          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.9/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
       - name: Install Anchor
         run: |
-          cargo install --git https://github.com/solana-foundation/anchor --tag v0.32.1 anchor-cli
+          cargo install --git https://github.com/solana-foundation/anchor --tag v1.0.2 anchor-cli
 
       - name: Install MagicBlock Ephemeral Validator
         run: |
           npm install -g @magicblock-labs/ephemeral-validator@latest
 
       - name: Configure Solana
+        env:
+          DEVNET_KEYPAIR_JSON: ${{ secrets.DEVNET_KEYPAIR_JSON }}
         run: |
           solana config set --url localhost
-          solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
+          mkdir -p ~/.config/solana
+          if [ -n "$DEVNET_KEYPAIR_JSON" ]; then
+            # Use the funded devnet keypair for both local and TEE/devnet runs.
+            printf '%s' "$DEVNET_KEYPAIR_JSON" > ~/.config/solana/id.json
+            chmod 600 ~/.config/solana/id.json
+            echo "::notice title=CI test wallet::This run uses wallet mbtN3ztb3qDeuLYv951EmyfxLbLsitwVjBTiHmnLSNv. TEE/devnet tests deploy from it — top up with: solana airdrop 5 mbtN3ztb3qDeuLYv951EmyfxLbLsitwVjBTiHmnLSNv --url devnet"
+          else
+            # No secret → fresh ephemeral keypair. Best-effort devnet airdrop so the
+            # wallet has a little SOL for any devnet-touching ops (faucet rate-limits
+            # may reject; that's fine since TEE tests are also skipped in this branch).
+            solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
+            solana airdrop 2 \
+              "$(solana-keygen pubkey ~/.config/solana/id.json)" \
+              --url devnet || echo "Airdrop failed (faucet rate-limited or down) — continuing."
+          fi
 
-      - name: Configure Validator Limits
+      - name: Configure validator limits
         run: |
           sudo sysctl fs.inotify.max_user_instances=1280
           sudo sysctl fs.inotify.max_user_watches=655360
-
-      - name: Test anchor-counter
-        env:
-          PROVIDER_ENDPOINT: http://127.0.0.1:8899
-          WS_ENDPOINT: ws://127.0.0.1:8900
-          EPHEMERAL_PROVIDER_ENDPOINT: http://127.0.0.1:7799
-          EPHEMERAL_WS_ENDPOINT: ws://127.0.0.1:7800
-        run: |
           sudo prlimit --pid $$ --nofile=1048576:1048576
-          cd anchor-counter
-          yarn install
-          anchor test --provider.cluster localnet
 
-      # - name: Test anchor-minter
-      #   run: |
-      #     cd anchor-minter
-      #     anchor build && anchor deploy --provider.cluster localnet
-      #     yarn install
-      #     anchor test \
-      #     --skip-deploy
-
-      # - name: Test anchor-rock-paper-scissor
-      #   run: |
-      #     cd anchor-rock-paper-scissor
-      #     anchor build
-      #     yarn install
-      #     anchor test \
-      #     --skip-deploy
-
-      #   - name: Test bolt-counter
-      #     run: |
-      #         cd bolt-counter
-      #         yarn install
-      #         EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-      #         EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-      #         PROVIDER_ENDPOINT=http://localhost:8899 \
-      #         WS_ENDPOINT=http://localhost:8900 \
-      #         yarn test
-
-      # - name: Test dummy-token-transfer
-      #   run: |
-      #     cd dummy-token-transfer
-      #     yarn install
-      #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-      #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-      #     PROVIDER_ENDPOINT=http://localhost:8899 \
-      #     WS_ENDPOINT=http://localhost:8900 \
-      #     anchor test
-
-      # - name: Test magic-actions
-      #   run: |
-      #     cd magic-actions
-      #     yarn install
-      #     anchor build
-      #     yarn install
-      #     anchor test \
-      #     --skip-deploy
-
-      # - name: Test oncurve-delegation
-      #   run: |
-      #     cd oncurve-delegation
-      #     yarn install
-      #     yarn test
-      #     yarn test-web3js
-
-      # - name: Test roll-dice
-      #   run: |
-      #     cd roll-dice
-      #     yarn install
-      #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-      #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-      #     PROVIDER_ENDPOINT=http://localhost:8899 \
-      #     WS_ENDPOINT=http://localhost:8900 \
-      #     anchor test
-
-      # - name: Test rust-counter
-      #   run: |
-      #     cd rust-counter
-      #     yarn install
-      #     EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
-      #     EPHEMERAL_WS_ENDPOINT=ws://localhost:7800 \
-      #     PROVIDER_ENDPOINT=http://localhost:8899 \
-      #     WS_ENDPOINT=http://localhost:8900 \
-      #     yarn test
-
-      # - name: Test session-keys
-      #   run: |
-      #     cd session-keys
-      #     yarn install
-      #     anchor build
-      #     yarn install
-      #     anchor test \
-      #     --skip-deploy
+      - name: Run test-locally.sh
+        env:
+          # Optional override for the base-layer devnet RPC (TEE block only).
+          # Useful to point at a private endpoint with higher rate limits than
+          # api.devnet.solana.com. The WS URL is auto-derived from this.
+          # If unset, the script falls back to the public RPC.
+          DEVNET_RPC_URL: ${{ secrets.DEVNET_RPC_URL }}
+        run: bash test-locally.sh

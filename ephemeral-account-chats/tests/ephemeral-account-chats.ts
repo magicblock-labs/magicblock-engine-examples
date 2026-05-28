@@ -221,25 +221,28 @@ describe("ephemeral-account-chats", () => {
     const nMessages = MAX_MESSAGE_COUNT;
     try {
       for (let i = 0; i < nMessages; i++) {
+        // Include i in the message so each tx has unique bytes (different signature).
+        // maxRetries: 0 prevents web3.js from auto-resending the same tx if confirmation
+        // is slow — the resend would hit "already processed" against the ER.
         if (i % 2 === 0) {
           await erProgramA.methods
-            .appendMessage("Hello, world from user A!")
+            .appendMessage(`Hello ${i} from user A!`)
             .accountsPartial({
               authority: userA.publicKey,
               profileOwner: profileAPda,
               profileOther: profileBPda,
             })
-            .rpc({skipPreflight: true});
+            .rpc({ skipPreflight: true, maxRetries: 0 });
         } else {
           await erProgramB.methods
-            .appendMessage("Hello, world from user B!")
+            .appendMessage(`Hello ${i} from user B!`)
             .accountsPartial({
               authority: userB.publicKey,
               profileOwner: profileAPda,
               profileOther: profileBPda,
             })
             .signers([userBKp])
-      .rpc({skipPreflight: true});
+            .rpc({ skipPreflight: true, maxRetries: 0 });
         }
       }
 
@@ -256,16 +259,15 @@ describe("ephemeral-account-chats", () => {
 
     expect(receivedMessages).to.equal(nMessages);
 
-    // Fails when the conversation is full
     try {
       await erProgramA.methods
-        .appendMessage("Hello, world from user A!")
+        .appendMessage("Hello world, appending another message, this should be failed!")
         .accountsPartial({
           authority: userA.publicKey,
           profileOwner: profileAPda,
           profileOther: profileBPda,
         })
-        .rpc({skipPreflight: true});
+        .rpc();
       assert.fail("The conversation should have been full");
     } catch (error) {
       let programError = error as anchor.ProgramError;
