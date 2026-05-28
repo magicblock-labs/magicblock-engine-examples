@@ -538,7 +538,9 @@ const App: React.FC = () => {
     // Initialize ephemeral connection
     useEffect(() => {
         if (ephemeralConnection.current) return;
-        const endpoint = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet.magicblock.app";
+        // Default to a specific ER region (devnet-as) — see anchor-counter/app/src/App.tsx
+        // about why the router URL (devnet.magicblock.app) breaks WS subscriptions.
+        const endpoint = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app";
 
         const conn = new Connection(endpoint);
         ephemeralConnection.current = conn;

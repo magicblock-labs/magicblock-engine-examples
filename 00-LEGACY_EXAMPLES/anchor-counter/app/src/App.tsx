@@ -4,7 +4,7 @@ import Square from "./components/Square";
 import {useConnection, useWallet} from '@solana/wallet-adapter-react';
 import {WalletMultiButton} from "@solana/wallet-adapter-react-ui";
 import Alert from "./components/Alert";
-import {Program, Provider} from "@coral-xyz/anchor";
+import {Idl, Program, Provider} from "@coral-xyz/anchor";
 import {SimpleProvider} from "./components/Wallet";
 import {
     AccountInfo,
@@ -18,11 +18,22 @@ import {
 } from "@solana/web3.js";
 import {getAuthToken} from "@magicblock-labs/ephemeral-rollups-sdk";
 
+// IDLs are copied into src/idl/ by the `copy-idl` npm script (runs as prebuild/prestart).
+import publicCounterIdl from "./idl/public_counter.json";
+import privateCounterIdl from "./idl/private_counter.json";
+
 const COUNTER_PDA_SEED = "counter";
-const PUBLIC_COUNTER_PROGRAM = new PublicKey("9RPwaXayVZHna1BYuRS4cLPJZuNGU1uS5V3heXB7v6Qi");
-const PRIVATE_COUNTER_PROGRAM = new PublicKey("91L33vBqfNaNfieqNCoqpxGZ2xVyJ29N3VcErR6LoepZ");
+// Program IDs come from the local IDLs so they stay in sync with declare_id! after redeploys.
+const PUBLIC_COUNTER_PROGRAM = new PublicKey(publicCounterIdl.address);
+const PRIVATE_COUNTER_PROGRAM = new PublicKey(privateCounterIdl.address);
+console.log("Public counter program: ", PUBLIC_COUNTER_PROGRAM.toBase58());
+console.log("Private counter program:", PRIVATE_COUNTER_PROGRAM.toBase58());
 const TEE_VALIDATOR = new PublicKey("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo");
-const PUBLIC_ER_ENDPOINT = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet.magicblock.app";
+// Default to a specific ER region (devnet-as) instead of the router (devnet.magicblock.app).
+// The router proxies HTTP per-request but a WS subscription is bound to whichever ER it
+// happened to pick at connect time — txs routed elsewhere wouldn't fire the WS callback,
+// so the UI would stall. Override via REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT for other regions.
+const PUBLIC_ER_ENDPOINT = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app";
 const TEE_ENDPOINT = (process.env.REACT_APP_TEE_PROVIDER_ENDPOINT || "https://devnet-tee.magicblock.app").replace(/\/$/, "");
 const TEE_WS_ENDPOINT = TEE_ENDPOINT.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
 
@@ -48,8 +59,11 @@ const App: React.FC = () => {
     const counterProgramClient = useRef<Program | null>(null);
     const counterSubscriptionId = useRef<number | null>(null);
     const ephemeralCounterSubscriptionId = useRef<number | null>(null);
-    // Cache TEE auth tokens per wallet pubkey so toggling between modes doesn't re-prompt
+    // Cache TEE auth tokens per wallet pubkey so toggling between modes doesn't re-prompt.
     const cachedAuthToken = useRef<{ pubkey: string; token: string } | null>(null);
+    // De-dupe concurrent auth requests so React StrictMode / re-renders don't trigger
+    // a second signMessage prompt while the first is still awaiting the user.
+    const authTokenInFlight = useRef<{ pubkey: string; promise: Promise<string> } | null>(null);
 
     const COUNTER_PROGRAM = useMemo(
         () => isPrivate ? PRIVATE_COUNTER_PROGRAM : PUBLIC_COUNTER_PROGRAM,
@@ -63,11 +77,12 @@ const App: React.FC = () => {
         return pda;
     }, [COUNTER_PROGRAM]);
 
-    // Helpers to dynamically fetch the IDL and initialize the program client
+    // Build the program client from the LOCAL IDL (copied into src/idl/ by the copy-idl
+    // npm script). Avoids Program.fetchIdl, which can return an on-chain IDL whose
+    // `address` field is stale and silently makes the client subscribe to the wrong PDA.
     const getProgramClient = useCallback(async (program: PublicKey): Promise<Program> => {
-        const idl = await Program.fetchIdl(program, provider.current);
-        if (!idl) throw new Error('IDL not found');
-        return new Program(idl, provider.current);
+        const idl = program.equals(PRIVATE_COUNTER_PROGRAM) ? privateCounterIdl : publicCounterIdl;
+        return new Program(idl as Idl, provider.current);
     }, []);
 
     // Define callbacks function to handle account changes
@@ -154,8 +169,11 @@ const App: React.FC = () => {
                     const c = await client.account.counter.fetch(counterPda);
                     setCounter(Number(c.count.valueOf()));
                     setIsDelegated(!accountInfo.owner.equals(COUNTER_PROGRAM));
-                    await subscribeToCounter();
                 }
+                // Subscribe unconditionally — even if the account doesn't exist yet, the
+                // listener will fire when init+increment creates it, so the UI updates
+                // without needing a page refresh.
+                await subscribeToCounter();
                 setIsLoading(false);
             }
 
@@ -171,17 +189,38 @@ const App: React.FC = () => {
                 setIsInitializingEr(true);
                 try {
                     let token: string;
+                    const pubkeyStr = publicKey.toBase58();
                     const cached = cachedAuthToken.current;
-                    if (cached && cached.pubkey === publicKey.toBase58()) {
+                    if (cached && cached.pubkey === pubkeyStr) {
                         token = cached.token;
                     } else {
-                        const result = await getAuthToken(TEE_ENDPOINT, publicKey, signMessage);
+                        // Reuse the in-flight promise if another effect run started one
+                        // for the same wallet — prevents a second signMessage prompt.
+                        const inflight = authTokenInFlight.current;
+                        if (inflight && inflight.pubkey === pubkeyStr) {
+                            token = await inflight.promise;
+                        } else {
+                            const promise = getAuthToken(TEE_ENDPOINT, publicKey, signMessage)
+                                .then(r => {
+                                    cachedAuthToken.current = { pubkey: pubkeyStr, token: r.token };
+                                    return r.token;
+                                })
+                                .finally(() => {
+                                    if (authTokenInFlight.current?.pubkey === pubkeyStr) {
+                                        authTokenInFlight.current = null;
+                                    }
+                                });
+                            authTokenInFlight.current = { pubkey: pubkeyStr, promise };
+                            token = await promise;
+                        }
                         if (cancelled) return;
-                        token = result.token;
-                        cachedAuthToken.current = { pubkey: publicKey.toBase58(), token };
                     }
                     cluster = `${TEE_ENDPOINT}?token=${token}`;
                     wsEndpoint = `${TEE_WS_ENDPOINT}?token=${token}`;
+                    // Browseable explorer URL that points at the TEE RPC with the auth
+                    // token embedded — paste this into a browser to inspect the ER state.
+                    const explorerUrl = `https://solscan.io/account/${counterPda.toBase58()}?cluster=custom&customUrl=${encodeURIComponent(cluster)}`;
+                    console.log("TEE Solscan URL:", explorerUrl);
                 } catch (err) {
                     console.error("Failed to fetch TEE auth token:", err);
                     setTransactionError(`TEE auth failed: ${err}`);
@@ -307,11 +346,31 @@ const App: React.FC = () => {
             }
         }
 
-        const transaction = await counterProgramClient.current?.methods
+        if (!counterProgramClient.current) return;
+
+        const transaction = await counterProgramClient.current.methods
             .increment()
             .accounts({
                 counter: counterPda,
             }).transaction() as Transaction;
+
+        // If counter PDA doesn't exist yet, prepend an initialize ix.
+        // Must run BEFORE increment, otherwise increment hits AccountNotInitialized (0xbc4).
+        // Use tempKeypair as user/payer so the tx only needs the tempKeypair signature
+        // (matches how submitTransaction signs when useTempKeypair=true). The counter
+        // PDA seed is just [COUNTER_SEED] — global, not per-user — so any signer works.
+        // Skip when delegated — counter is on the ER then, not the base layer.
+        if (!isDelegated) {
+            const accountInfo = await connection.getAccountInfo(counterPda);
+            if (!accountInfo) {
+                console.log("Counter not initialized, prepending initialize instruction");
+                const initIx = await counterProgramClient.current.methods
+                    .initialize()
+                    .accounts({ user: tempKeypair.current.publicKey })
+                    .instruction();
+                transaction.instructions.unshift(initIx);
+            }
+        }
 
         // Add a noop to make the transaction unique
         const noopInstruction = new TransactionInstruction({
