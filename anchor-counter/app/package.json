@@ -20,6 +20,10 @@
         "web-vitals": "^2.1.4"
     },
     "scripts": {
+        "copy-idl": "mkdir -p src/idl && cp ../target/idl/public_counter.json ../target/idl/private_counter.json src/idl/",
+        "prestart": "npm run copy-idl",
+        "predev": "npm run copy-idl",
+        "prebuild": "npm run copy-idl",
         "start": "craco start",
         "dev": "craco start",
         "build": "craco build",
