@@ -11,7 +11,7 @@ pub use errors::*;
 pub use instructions::*;
 pub use state::{Conversation, ConversationMessage, Profile};
 
-declare_id!("D781aD7RTUVeAU9SZDdCNciYJe8yDyZJs1JbFtHd8Urj");
+declare_id!("5kUATzj39y1HfMJbkW9tH3nWoLgq3WJ1scwiFdfDrdVT");
 
 #[ephemeral]
 #[program]
