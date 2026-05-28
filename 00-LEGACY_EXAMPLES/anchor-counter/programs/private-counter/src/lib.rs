@@ -9,7 +9,7 @@ use ephemeral_rollups_sdk::consts::PERMISSION_PROGRAM_ID;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
-declare_id!("7Y2rYVGqRY31m7ogMHjmtdRMUjeWakoJ6iVx12i6voCY");
+declare_id!("6vXB5hSaTXemfYCz5ro3D8ZZVoi4ZYZsPPs7G5c8iPwg");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 

@@ -178,7 +178,8 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const initializeEphemeralConnection = async () => {
-            const cluster = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet.magicblock.app"
+            // Default to a specific ER region (devnet-as) — the router URL would break WS subscriptions.
+            const cluster = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app"
             if(ephemeralConnection.current || counterProgramClient.current == null || !counterPda) {
                 return;
             }

@@ -29,7 +29,11 @@ const PRIVATE_COUNTER_PROGRAM = new PublicKey(privateCounterIdl.address);
 console.log("Public counter program: ", PUBLIC_COUNTER_PROGRAM.toBase58());
 console.log("Private counter program:", PRIVATE_COUNTER_PROGRAM.toBase58());
 const TEE_VALIDATOR = new PublicKey("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo");
-const PUBLIC_ER_ENDPOINT = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet.magicblock.app";
+// Default to a specific ER region (devnet-as) instead of the router (devnet.magicblock.app).
+// The router proxies HTTP per-request but a WS subscription is bound to whichever ER it
+// happened to pick at connect time — txs routed elsewhere wouldn't fire the WS callback,
+// so the UI would stall. Override via REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT for other regions.
+const PUBLIC_ER_ENDPOINT = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app";
 const TEE_ENDPOINT = (process.env.REACT_APP_TEE_PROVIDER_ENDPOINT || "https://devnet-tee.magicblock.app").replace(/\/$/, "");
 const TEE_WS_ENDPOINT = TEE_ENDPOINT.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
 
