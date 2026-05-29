@@ -33,6 +33,9 @@ export type WizardCtx = {
     lastTxSignature?: {sig: string; isEr: boolean} | null;
     lastTxContext?: string | null;
     walletConnectedBalance?: number | null; // lamports
+    useToken2022: boolean;
+    setUseToken2022: (enabled: boolean) => void;
+    activeUseToken2022: boolean;
 
     // step ui state
     srcIndex: number;
@@ -1071,11 +1074,34 @@ export const WizardView: React.FC<{ctx: WizardCtx}> = ({ctx}) => {
                         }}>
                         {mintReady ? "Mint ready" : "Setup mint"}
                     </button>
+                    <label
+                        title={mintReady ? "Reset the mint to choose a different token program" : "Create the mint with the Token-2022 program"}
+                        style={{
+                            minHeight: 40,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            color: "#94a3b8",
+                            fontSize: 12,
+                            cursor: (mintReady || ctx.isSubmitting) ? "not-allowed" : "pointer",
+                            opacity: (mintReady || ctx.isSubmitting) ? 0.55 : 1,
+                            userSelect: "none",
+                        }}>
+                        <input
+                            type="checkbox"
+                            checked={ctx.useToken2022}
+                            onChange={e => ctx.setUseToken2022(e.target.checked)}
+                            disabled={mintReady || ctx.isSubmitting}
+                            style={{width: 16, height: 16, margin: 0}}
+                        />
+                        Use Token-2022
+                    </label>
                     {mintReady && ctx.mint && (
                         <div style={{fontSize: 12, color: "#94a3b8", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap"}}>
                             <span>Mint:</span>
                             <CopyableAddress text={ctx.mint.toBase58()} display={shortPk(ctx.mint)} fontSize={12}/>
                             <span>· {ctx.decimals} decimals</span>
+                            <span>· {ctx.activeUseToken2022 ? "Token-2022" : "SPL Token"}</span>
                         </div>
                     )}
                 </div>

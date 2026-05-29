@@ -26,6 +26,7 @@ import {
     initTransferQueueIx,
     lamportsDelegatedTransferIx,
     magicFeeVaultPdaFromValidator,
+    TOKEN_2022_PROGRAM_ID,
     transferSpl,
     withdrawSpl,
     delegateSpl,
@@ -40,6 +41,12 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
     "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
 );
 const MINT_SIZE = 82;
+
+const knownTokenProgramFromOwner = (owner: PublicKey): PublicKey | null => {
+    if (owner.equals(TOKEN_PROGRAM_ID)) return TOKEN_PROGRAM_ID;
+    if (owner.equals(TOKEN_2022_PROGRAM_ID)) return TOKEN_2022_PROGRAM_ID;
+    return null;
+};
 
 function getAssociatedTokenAddressSync(
     mint: PublicKey,
@@ -195,7 +202,7 @@ type StoredAccounts = { version: 1; keys: string[] };
 
 // Persist a randomly created mint
 const LS_MINT_KEY = 'tempMintV1';
-type StoredMint = { version: 1; secret: string; pubkey: string; decimals: number };
+type StoredMint = { version: 1; secret: string; pubkey: string; decimals: number; tokenProgram?: string };
 
 const SETUP_MINT_ENV = (process.env.SETUP_MINT || process.env.REACT_APP_SETUP_MINT || '').trim();
 const CONFIGURED_SETUP_MINT = (() => {
@@ -425,6 +432,24 @@ const App: React.FC = () => {
         const stored = safeLocalStorage.get<StoredMint | null>(LS_MINT_KEY, null);
         return stored?.version === 1 && typeof stored.decimals === 'number' ? stored.decimals : 6;
     });
+    const [useToken2022, setUseToken2022] = useState<boolean>(() => {
+        if (CONFIGURED_SETUP_MINT) return false;
+        const stored = safeLocalStorage.get<StoredMint | null>(LS_MINT_KEY, null);
+        return stored?.version === 1 && stored.tokenProgram === TOKEN_2022_PROGRAM_ID.toBase58();
+    });
+    const [activeUseToken2022, setActiveUseToken2022] = useState<boolean>(() => {
+        if (CONFIGURED_SETUP_MINT) return false;
+        const stored = safeLocalStorage.get<StoredMint | null>(LS_MINT_KEY, null);
+        return stored?.version === 1 && stored.tokenProgram === TOKEN_2022_PROGRAM_ID.toBase58();
+    });
+    const selectedTokenProgram = useMemo(
+        () => activeUseToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+        [activeUseToken2022],
+    );
+    const setupTokenProgram = useMemo(
+        () => useToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+        [useToken2022],
+    );
 
     // Per-card delegate/undelegate input values (by index)
     const [delegateAmounts, setDelegateAmounts] = useState<string[]>(() => Array(4).fill("1"));
@@ -564,14 +589,19 @@ const App: React.FC = () => {
         let cancelled = false;
         (async () => {
             try {
-                const mintInfo = await getMint(connection, mint, 'processed');
+                const accountInfo = await connection.getAccountInfo(mint, 'processed');
+                const tokenProgram = knownTokenProgramFromOwner(accountInfo?.owner ?? selectedTokenProgram) ?? selectedTokenProgram;
+                if (!cancelled && !tokenProgram.equals(selectedTokenProgram)) {
+                    setActiveUseToken2022(tokenProgram.equals(TOKEN_2022_PROGRAM_ID));
+                }
+                const mintInfo = await getMint(connection, mint, 'processed', tokenProgram);
                 if (!cancelled) setDecimals(mintInfo.decimals);
             } catch (_) {
                 // ignore, keep default 6
             }
         })();
         return () => { cancelled = true };
-    }, [connection, mint]);
+    }, [connection, mint, selectedTokenProgram]);
 
     useEffect(() => {
         setQueueMintAddress(mint?.toBase58() ?? '');
@@ -719,6 +749,7 @@ const App: React.FC = () => {
             const shuttleId = crypto.getRandomValues(new Uint32Array(1))[0];
             const ixs = await delegateSpl(a.keypair.publicKey, mint, amountBn, {
                 validator: validator.current,
+                tokenProgram: selectedTokenProgram,
                 initIfMissing: true,
                 initAtasIfMissing: true,
                 initVaultIfMissing: true,
@@ -746,7 +777,7 @@ const App: React.FC = () => {
             setIsSubmitting(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [accounts, connection, decimals, mint, confirmOrThrow]);
+    }, [accounts, connection, decimals, mint, confirmOrThrow, selectedTokenProgram]);
 
     // Undelegate + withdraw `amountStr` tokens of account `i`
     const handleUndelegateAt = useCallback(async (i: number, amountStr: string) => {
@@ -772,6 +803,7 @@ const App: React.FC = () => {
             const ixsW = await withdrawSpl(a.keypair.publicKey, mint, amountBn, {
                 idempotent: true,
                 validator: validator.current,
+                tokenProgram: selectedTokenProgram,
                 shuttleId,
             });
             const txW = new Transaction().add(...ixsW);
@@ -794,7 +826,7 @@ const App: React.FC = () => {
             setIsSubmitting(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [accounts, connection, decimals, mint, confirmOrThrow]);
+    }, [accounts, connection, decimals, mint, confirmOrThrow, selectedTokenProgram]);
 
     // Track connected-wallet SOL balance for the wizard header
     useEffect(() => {
@@ -820,7 +852,7 @@ const App: React.FC = () => {
         console.log("[refresh] start, mint:", mint.toBase58().slice(0, 6) + "...", "accounts:", accountsRef.current.length);
 
         const updated = await Promise.all(accountsRef.current.map(async (acc, idx) => {
-            const ata = getAssociatedTokenAddressSync(mint, acc.keypair.publicKey, false, TOKEN_PROGRAM_ID);
+            const ata = getAssociatedTokenAddressSync(mint, acc.keypair.publicKey, false, selectedTokenProgram);
             const [eAta] = deriveEphemeralAta(acc.keypair.publicKey, mint);
 
             let balance = 0n;
@@ -870,7 +902,7 @@ const App: React.FC = () => {
 
         setAccounts(updated);
         console.log("[refresh] done");
-    }, [connection, mint]);
+    }, [connection, mint, selectedTokenProgram]);
 
     // Refresh on mount and whenever the key set or connections change
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1097,6 +1129,7 @@ const App: React.FC = () => {
                     toBalance,
                     payer: src.keypair.publicKey,
                     validator: validator.current,
+                    tokenProgram: selectedTokenProgram,
                     initIfMissing: true,
                     initAtasIfMissing: true,
                     initVaultIfMissing: false,
@@ -1113,15 +1146,20 @@ const App: React.FC = () => {
             const shuttleWalletAta = deriveShuttleWalletAta(
                 mint,
                 shuttleEphemeralAta,
+                selectedTokenProgram,
             );
             // User ATAslog pu
             const srcAta = getAssociatedTokenAddressSync(
                 mint,
-                src.keypair.publicKey
+                src.keypair.publicKey,
+                false,
+                selectedTokenProgram,
             );
             const dstAta = getAssociatedTokenAddressSync(
                 mint,
-                dst.keypair.publicKey
+                dst.keypair.publicKey,
+                false,
+                selectedTokenProgram,
             );
             console.log("Shuttle wallet ata: ", shuttleWalletAta.toBase58());
             console.log("Shuttle eata: ", shuttleEphemeralAta.toBase58());
@@ -1167,7 +1205,7 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, confirmOrThrow, decimals, fromBalance, getCachedEphemeralBlockhash, mint, privateMaxDelayMs, privateMinDelayMs, privateSplitCount, refreshBalances, toBalance, transferVisibility]);
+    }, [accounts, connection, confirmOrThrow, decimals, fromBalance, getCachedEphemeralBlockhash, mint, privateMaxDelayMs, privateMinDelayMs, privateSplitCount, refreshBalances, selectedTokenProgram, toBalance, transferVisibility]);
 
     const handleTransfer = useCallback(async () => {
         await performTransfer(srcIndex, dstIndex, amountStr);
@@ -1182,6 +1220,7 @@ const App: React.FC = () => {
             accountsCount: accounts.length,
             firstAccountPubkey: accounts[0]?.keypair?.publicKey?.toBase58(),
             baseLayerEndpoint: connection.rpcEndpoint,
+            tokenProgram: setupTokenProgram.toBase58(),
         });
         const eConn = ephemeralConnection.current;
         if (!eConn) {
@@ -1235,12 +1274,13 @@ const App: React.FC = () => {
             const setupOn = async (conn: Connection) => {
                 console.log("[setup]   setupOn() starting against", conn.rpcEndpoint);
                 const mint = mintKp.publicKey;
-                const ataPubkeys = accounts.map(a => getAssociatedTokenAddressSync(mintKp.publicKey, a.keypair.publicKey));
+                const tokenProgram = setupTokenProgram;
+                const ataPubkeys = accounts.map(a => getAssociatedTokenAddressSync(mintKp.publicKey, a.keypair.publicKey, false, tokenProgram));
                 const [transferQueue] = deriveTransferQueue(mintKp.publicKey, queueValidator);
                 const magicFeeVault = magicFeeVaultPdaFromValidator(queueValidator);
                 const [vault] = deriveVault(mint);
                 const [vaultEphemeralAta] = deriveEphemeralAta(vault, mint);
-                const vaultAta = deriveVaultAta(mint, vault);
+                const vaultAta = deriveVaultAta(mint, vault, tokenProgram);
 
                 const [rentPda] = deriveRentPda();
                 console.log("Rent sponsor PDA: ", rentPda.toBase58());
@@ -1251,13 +1291,14 @@ const App: React.FC = () => {
                         newAccountPubkey: mintKp.publicKey,
                         space: MINT_SIZE,
                         lamports: await getMinimumBalanceForRentExemptMint(conn),
-                        programId: TOKEN_PROGRAM_ID,
+                        programId: tokenProgram,
                     }),
                     createInitializeMintInstruction(
                         mintKp.publicKey,
                         mintDecimals,
                         payer.publicKey,
-                        null
+                        null,
+                        tokenProgram,
                     ),
                     // create ATAs for all accounts
                     ...accounts.map((a, idx) =>
@@ -1265,7 +1306,8 @@ const App: React.FC = () => {
                             payer.publicKey,
                             ataPubkeys[idx],
                             a.keypair.publicKey,
-                            mintKp.publicKey
+                            mintKp.publicKey,
+                            tokenProgram,
                         )
                     ),
                     // mint tokens to each
@@ -1274,7 +1316,9 @@ const App: React.FC = () => {
                             mintKp.publicKey,
                             ata,
                             payer.publicKey,
-                            Number(amountBase)
+                            Number(amountBase),
+                            [],
+                            tokenProgram,
                         )
                     ),
                     initTransferQueueIx(
@@ -1300,8 +1344,8 @@ const App: React.FC = () => {
                 );
                 mintTx.feePayer = payer.publicKey;
                 const setupVaultTx = new Transaction().add(
-                    initVaultIx(vault, mint, payer.publicKey),
-                    initVaultAtaIx(payer.publicKey, vaultAta, vault, mint),
+                    initVaultIx(vault, mint, payer.publicKey, tokenProgram),
+                    initVaultAtaIx(payer.publicKey, vaultAta, vault, mint, tokenProgram),
                     delegateEphemeralAtaIx(payer.publicKey, vaultEphemeralAta, validator.current),
 
                 );
@@ -1363,10 +1407,12 @@ const App: React.FC = () => {
                 secret: toBase64(mintKp.secretKey),
                 pubkey: mintKp.publicKey.toBase58(),
                 decimals: mintDecimals,
+                tokenProgram: setupTokenProgram.toBase58(),
             });
 
             // Update state and refresh
             setMint(mintKp.publicKey);
+            setActiveUseToken2022(useToken2022);
             setDecimals(mintDecimals);
             setLastTxSignature({sig: capturedSetupSig, isEr: false});
             setTransactionSuccess('Mint created, ATAs initialized, tokens minted, queue initialized, and crank started');
@@ -1386,7 +1432,7 @@ const App: React.FC = () => {
             if (e?.signature) setLastTxSignature({sig: e.signature, isEr: false});
             setTransactionError(await formatTransactionError(e, connection));
         }
-    }, [accounts, connection, ensureAirdropLamports, refreshBalances]);
+    }, [accounts, connection, ensureAirdropLamports, refreshBalances, setupTokenProgram, useToken2022]);
 
     // Auto-run setup once on start if no mint is set
     useEffect(() => {
@@ -1417,7 +1463,7 @@ const App: React.FC = () => {
         setMint(CONFIGURED_SETUP_MINT);
         if (CONFIGURED_SETUP_MINT) {
             try {
-                const mintInfo = await getMint(connection, CONFIGURED_SETUP_MINT, 'processed');
+                const mintInfo = await getMint(connection, CONFIGURED_SETUP_MINT, 'processed', selectedTokenProgram);
                 setDecimals(mintInfo.decimals);
             } catch (_) {
                 setDecimals(6);
@@ -1431,7 +1477,7 @@ const App: React.FC = () => {
                 : 'Mint reset. Run Setup to create a new mint.',
         );
         await refreshBalances();
-    }, [connection, refreshBalances]);
+    }, [connection, refreshBalances, selectedTokenProgram]);
 
     const handleMintToAddress = useCallback(async () => {
         setTransactionError(null);
@@ -1459,7 +1505,7 @@ const App: React.FC = () => {
             await ensureAirdropLamports(connection, payer.publicKey);
 
             const recipient = new PublicKey(recipientText);
-            const recipientAta = getAssociatedTokenAddressSync(mint, recipient, false, TOKEN_PROGRAM_ID);
+            const recipientAta = getAssociatedTokenAddressSync(mint, recipient, false, selectedTokenProgram);
             const recipientAtaInfo = await connection.getAccountInfo(recipientAta, 'processed');
             const amountBase = BigInt(1000) * BigInt(10) ** BigInt(decimals);
 
@@ -1471,6 +1517,7 @@ const App: React.FC = () => {
                         recipientAta,
                         recipient,
                         mint,
+                        selectedTokenProgram,
                     ),
                 );
             }
@@ -1481,6 +1528,8 @@ const App: React.FC = () => {
                     recipientAta,
                     payer.publicKey,
                     amountBase,
+                    [],
+                    selectedTokenProgram,
                 ),
             );
             tx.feePayer = payer.publicKey;
@@ -1507,7 +1556,7 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, decimals, ensureAirdropLamports, mint, mintRecipient, refreshBalances]);
+    }, [accounts, connection, decimals, ensureAirdropLamports, mint, mintRecipient, refreshBalances, selectedTokenProgram]);
 
     const handleSetupQueue = useCallback(async () => {
         setTransactionError(null);
@@ -1746,6 +1795,9 @@ const App: React.FC = () => {
         isSubmitting, transactionError, transactionSuccess,
         lastTxSignature,
         walletConnectedBalance: walletBalanceLamports,
+        useToken2022,
+        setUseToken2022,
+        activeUseToken2022,
         srcIndex, setSrcIndex,
         dstIndex, setDstIndex,
         amountStr, setAmountStr,
@@ -2004,6 +2056,7 @@ const App: React.FC = () => {
                                             amountBn,
                                             {
                                                 validator: validator.current,
+                                                tokenProgram: selectedTokenProgram,
                                                 initIfMissing: true,
                                                 initAtasIfMissing: true,
                                                 initVaultIfMissing: true,
@@ -2031,6 +2084,7 @@ const App: React.FC = () => {
                                         const shuttleWalletAta = deriveShuttleWalletAta(
                                             mint,
                                             shuttleEphemeralAta,
+                                            selectedTokenProgram,
                                         );
                                         await eConn.getAccountInfo(shuttleWalletAta);
 
@@ -2106,6 +2160,7 @@ const App: React.FC = () => {
                                         const ixsW = await withdrawSpl(a.keypair.publicKey, mint, amountBn, {
                                             idempotent: true,
                                             validator: validator.current,
+                                            tokenProgram: selectedTokenProgram,
                                             shuttleId
                                         });
                                         const txW = new Transaction().add(...ixsW);
@@ -2127,6 +2182,7 @@ const App: React.FC = () => {
                                         const shuttleWalletAta = deriveShuttleWalletAta(
                                             mint,
                                             shuttleEphemeralAta,
+                                            selectedTokenProgram,
                                         );
                                         const [shuttleAta] = deriveShuttleAta(shuttleEphemeralAta, mint);
                                         // await eConn.getAccountInfo(shuttleAta);
@@ -2336,6 +2392,28 @@ const App: React.FC = () => {
                                     title="Reset mint"
                                     style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#fecaca', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', margin: 0, width: 'auto', whiteSpace: 'nowrap' }}
                                 >Reset</button>
+                                <label
+                                    title="Choose the token program for the next setup after reset"
+                                    style={{
+                                        minHeight: 32,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        color: '#9ca3af',
+                                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                                        opacity: isSubmitting ? 0.6 : 1,
+                                    }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={useToken2022}
+                                        onChange={e => setUseToken2022(e.target.checked)}
+                                        disabled={isSubmitting}
+                                        style={{ width: 14, height: 14, margin: 0 }}
+                                    />
+                                    Use Token-2022
+                                </label>
+                                <span>Current: {activeUseToken2022 ? 'Token-2022' : 'SPL Token'}</span>
                             </div>
                             <div className="mint-panel-row">
                                 <div className="mint-panel-actions">
@@ -2393,13 +2471,37 @@ const App: React.FC = () => {
                         </div>
                     )}
                     {!mint && (
-                        <button
-                            onClick={() => setupAll()}
-                            disabled={isSubmitting}
-                            style={{ ...BUTTON_STYLE, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
-                        >
-                            Setup
-                        </button>
+                        <>
+                            <label
+                                title="Create the mint with the Token-2022 program"
+                                style={{
+                                    minHeight: 40,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    color: '#9ca3af',
+                                    fontSize: 12,
+                                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                                    opacity: isSubmitting ? 0.6 : 1,
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={useToken2022}
+                                    onChange={e => setUseToken2022(e.target.checked)}
+                                    disabled={isSubmitting}
+                                    style={{ width: 16, height: 16, margin: 0 }}
+                                />
+                                Use Token-2022
+                            </label>
+                            <button
+                                onClick={() => setupAll()}
+                                disabled={isSubmitting}
+                                style={{ ...BUTTON_STYLE, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1 }}
+                            >
+                                Setup
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
