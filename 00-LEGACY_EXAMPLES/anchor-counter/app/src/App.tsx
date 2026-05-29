@@ -23,10 +23,9 @@ const COUNTER_PDA_SEED = "counter";
 // Program ID comes from the local IDL so it stays in sync with declare_id! after redeploys.
 const COUNTER_PROGRAM = new PublicKey(publicCounterIdl.address);
 console.log("Counter program:", COUNTER_PROGRAM.toBase58());
-// Default to a specific ER region (devnet-as) instead of the router (devnet.magicblock.app).
-// The router proxies HTTP per-request but a WS subscription is bound to whichever ER it
-// happened to pick at connect time — txs routed elsewhere wouldn't fire the WS callback,
-// so the UI would stall. Override via REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT for other regions.
+// Default to a specific ER region (devnet-as) — see comment in non-legacy app for why
+// not the router (devnet.magicblock.app): WS subscriptions stick to the picked ER but
+// HTTP requests get routed per-call, so updates would never reach the UI.
 const PUBLIC_ER_ENDPOINT = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app";
 
 const App: React.FC = () => {
@@ -91,9 +90,7 @@ const App: React.FC = () => {
             try { await ephemeralConnection.current.removeAccountChangeListener(ephemeralCounterSubscriptionId.current); } catch {}
         }
         console.log("Subscribing to ephemeral counter", counterPda.toBase58());
-        // Use 'processed' — ER doesn't reliably emit 'confirmed' WS notifications,
-        // and 'processed' fires at slot-time which is what we want for UI latency.
-        ephemeralCounterSubscriptionId.current = ephemeralConnection.current.onAccountChange(counterPda, handleEphemeralCounterChange, 'processed');
+        ephemeralCounterSubscriptionId.current = ephemeralConnection.current.onAccountChange(counterPda, handleEphemeralCounterChange, 'confirmed');
     }, [counterPda, handleEphemeralCounterChange]);
 
     // Init program client + base layer counter, then ER connection
@@ -113,7 +110,9 @@ const App: React.FC = () => {
                     setCounter(Number(c.count.valueOf()));
                     setIsDelegated(!accountInfo.owner.equals(COUNTER_PROGRAM));
                 }
-                // Subscribe unconditionally — listener fires when init+increment creates the account.
+                // Subscribe unconditionally — even if the account doesn't exist yet, the
+                // listener will fire when init+increment creates it, so the UI updates
+                // without needing a page refresh.
                 await subscribeToCounter();
                 setIsLoading(false);
             }
@@ -181,9 +180,9 @@ const App: React.FC = () => {
         useTempKeypair: boolean = false,
         ephemeral: boolean = false,
         confirmCommitment: Commitment = "processed",
-        // Optional: an account that's expected to change as a result of this tx.
-        // If provided, we resolve confirmation via onAccountChange (push, ~slot-time)
-        // instead of HTTP polling. Otherwise we fall back to getSignatureStatuses polling.
+        // Optional: an account expected to change as a result of this tx. When provided,
+        // we refresh its state after confirmation so the UI updates immediately without
+        // waiting for the long-lived subscribe handler to fire.
         watchAccount?: PublicKey,
     ): Promise<string | null> => {
         if (!tempKeypair.current) return null;
@@ -205,6 +204,7 @@ const App: React.FC = () => {
                 transaction.feePayer = useTempKeypair ? tempKeypair.current.publicKey : publicKey;
             }
             if (useTempKeypair) transaction.sign(tempKeypair.current);
+
             let signature;
             const sendStart = performance.now();
             if (!ephemeral && !useTempKeypair) {
@@ -216,8 +216,8 @@ const App: React.FC = () => {
 
             // Confirm via solana-web3.js's confirmTransaction (signature WS sub at the
             // requested commitment). On ER at 'processed' this resolves at slot-time
-            // (~30-100ms). Known wart: ~500ms HTTP polling fallback when the WS sub setup
-            // is slow — rare in practice, simpler code wins.
+            // (~30-100ms). Known wart: ~500ms HTTP polling fallback when the WS sub
+            // setup is slow — rare in practice, simpler code wins.
             const confirmStart = performance.now();
             const sigConfirm = await targetConnection.confirmTransaction(
                 { signature, blockhash, lastValidBlockHeight },
@@ -228,9 +228,7 @@ const App: React.FC = () => {
             }
             const confirmMs = Math.round(performance.now() - confirmStart);
 
-            // Refresh the watched account inline so the UI updates immediately without
-            // waiting for the long-lived subscribeToCounter/subscribeToEphemeralCounter
-            // handler to fire on its own.
+            // Refresh the watched account inline so the UI updates immediately.
             let refreshMs = 0;
             if (watchAccount && counterProgramClient.current) {
                 const refreshStart = performance.now();
@@ -268,16 +266,14 @@ const App: React.FC = () => {
      */
     const increaseCounterTx = useCallback(async () => {
         if (!tempKeypair.current) return;
-        if (!counterProgramClient.current) {
-            console.error("counterProgramClient not initialized yet");
-            return;
-        }
         if (!isDelegated) {
             const accountTmpWallet = await connection.getAccountInfo(tempKeypair.current.publicKey);
             if (!accountTmpWallet || accountTmpWallet.lamports <= 0.01 * LAMPORTS_PER_SOL) {
                 await transferToTempKeypair();
             }
         }
+
+        if (!counterProgramClient.current) return;
 
         const transaction = await counterProgramClient.current.methods
             .increment()
@@ -311,10 +307,7 @@ const App: React.FC = () => {
         });
         transaction.add(noopInstruction);
 
-        // Base-layer txs use 'confirmed' (devnet has reorgs at 'processed'); ER uses
-        // 'processed' since it's a single sequencer and no slot can orphan.
-        const commitment = isDelegated ? "processed" : "confirmed";
-        await submitTransaction(transaction, true, isDelegated, commitment, counterPda);
+        await submitTransaction(transaction, true, isDelegated);
     }, [isDelegated, counterPda, submitTransaction, connection, transferToTempKeypair]);
 
     const updateCounter = async (_: number): Promise<void> => {
@@ -355,7 +348,7 @@ const App: React.FC = () => {
             .transaction() as Transaction;
 
         setEphemeralCounter(Number(counter));
-        await submitTransaction(transaction, true, false, "confirmed", counterPda);
+        await submitTransaction(transaction, true, false, "confirmed");
     }, [counterPda, connection, counter, submitTransaction, transferToTempKeypair]);
 
     /**
@@ -373,7 +366,7 @@ const App: React.FC = () => {
             })
             .transaction() as Transaction;
 
-        await submitTransaction(transaction, true, true, "processed", counterPda);
+        await submitTransaction(transaction, true, true);
     }, [counterPda, submitTransaction]);
 
     const delegateTx = useCallback(async () => {
