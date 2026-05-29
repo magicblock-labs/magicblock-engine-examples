@@ -168,7 +168,7 @@ dependencies = [
  "solana-define-syscall 3.0.0",
  "solana-feature-gate-interface 3.1.0",
  "solana-instruction 3.4.0",
- "solana-instructions-sysvar 3.0.1",
+ "solana-instructions-sysvar 3.0.0",
  "solana-invoke",
  "solana-loader-v3-interface 6.1.1",
  "solana-msg 3.1.0",
@@ -623,9 +623,9 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.23.0"
+version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d"
+checksum = "9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0"
 dependencies = [
  "darling_core",
  "darling_macro",
@@ -633,10 +633,11 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.23.0"
+version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9865a50f7c335f53564bb694ef660825eb8610e0a53d3e11bf1b0d3df31e03b0"
+checksum = "1247195ecd7e3c85f83c8d2a366e4210d588e802133e1e355180a9870b517ea4"
 dependencies = [
+ "fnv",
  "ident_case",
  "proc-macro2",
  "quote",
@@ -646,9 +647,9 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.23.0"
+version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac3984ec7bd6cfa798e62b4a642426a5be0e68f9401cfc2a01e3fa9ea2fcdb8d"
+checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
 dependencies = [
  "darling_core",
  "quote",
@@ -721,9 +722,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.14.4"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "838564736408ada011e9986c819b26cf0195bb2dd238e10be258731979213d75"
+checksum = "bce9a6d4849f9f394bd6ba63fb916d61d6d04197fde797030d597b4b06c63cbd"
 dependencies = [
  "anchor-lang",
  "base64ct",
@@ -748,9 +749,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-action"
-version = "0.14.4"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a29f33b94edcdfcf1b9b7a61aa0ac00e8efdc66f89c8b4b573f7ea965a42c60a"
+checksum = "4c9dedd8dab5a5705e96984d6d930915b2b19bb929f246523776f5e3bfa83ef4"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -758,9 +759,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.14.4"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da9ed3ea8b850013f6bf768e5f0f2e1f22f1861b46908764536795bf67bb5c67"
+checksum = "ba975885220357ecde2b8daa8f8d27e580563344857f2dcd935609165937da10"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -769,9 +770,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.14.4"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f0d8ab90b4ecc7ac802bbd2115681f9fd42bc5a9018be79ba7aff1fe971aa36"
+checksum = "1baeb3f22db564e419d6e68d1244184620a2321cb1521da65443d5a065179814"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -780,9 +781,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.14.4"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ea166c57ee55b329be4eae730561fe02aad5620a35b4d89439d8d0c9e07c3a6"
+checksum = "fcc336479439a54ab12f2dcb2ce37cbd1183caa80fb461ac2b12346a4c707d3f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -791,9 +792,9 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral-accounts"
-version = "0.14.4"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa3efae094f5c288746d479fd605b67bcd56d29ddcf1238046ac07eeec130c45"
+checksum = "5e6338f039a9feb8569312492336dc929dec5abf7208faa45bb7562c2c319308"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -893,6 +894,12 @@ name = "five8_core"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2551bf44bc5f776c15044b9b94153a00198be06743e262afaaa61f11ac7523a5"
+
+[[package]]
+name = "fnv"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "funty"
@@ -1157,7 +1164,7 @@ dependencies = [
  "solana-system-interface 2.0.0",
  "static_assertions",
  "strum",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1286,9 +1293,9 @@ dependencies = [
 
 [[package]]
 name = "pastey"
-version = "0.2.3"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
+checksum = "c5a797f0e07bdf071d15742978fc3128ec6c22891c31a3a931513263904c982a"
 
 [[package]]
 name = "pinocchio"
@@ -1384,7 +1391,7 @@ version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e67ba7e9b2b56446f1d419b1d807906278ffa1a658a8a5d8a39dcb1f5a78614f"
 dependencies = [
- "toml_edit 0.25.12+spec-1.1.0",
+ "toml_edit 0.25.11+spec-1.1.0",
 ]
 
 [[package]]
@@ -2350,15 +2357,16 @@ dependencies = [
 
 [[package]]
 name = "solana-instructions-sysvar"
-version = "3.0.1"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e0732294560e88ecdb2bbc656e67383e9f88c78ec09469cef172f0d28cd1bcd"
+checksum = "7ddf67876c541aa1e21ee1acae35c95c6fbc61119814bfef70579317a5e26955"
 dependencies = [
  "bitflags",
  "solana-account-info 3.1.1",
  "solana-instruction 3.4.0",
  "solana-instruction-error",
  "solana-program-error 3.0.1",
+ "solana-pubkey 3.0.0",
  "solana-sanitize 3.0.1",
  "solana-sdk-ids 3.1.0",
  "solana-serialize-utils 3.1.2",
@@ -2682,7 +2690,7 @@ dependencies = [
  "solana-hash 3.1.0",
  "solana-instruction 3.4.0",
  "solana-instruction-error",
- "solana-instructions-sysvar 3.0.1",
+ "solana-instructions-sysvar 3.0.0",
  "solana-keccak-hasher 3.1.0",
  "solana-last-restart-slot 3.0.1",
  "solana-msg 3.1.0",
@@ -3524,9 +3532,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.25.12+spec-1.1.0"
+version = "0.25.11+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2153edc6955a6c354fad8f5efd38b6a8769bdccf9fe50f8e1329f81b0baa5d7"
+checksum = "0b59c4d22ed448339746c59b905d24568fcbb3ab65a500494f7b8c3e97739f2b"
 dependencies = [
  "indexmap",
  "toml_datetime 1.1.1+spec-1.1.0",
@@ -3665,9 +3673,9 @@ dependencies = [
 
 [[package]]
 name = "wincode"
-version = "0.5.5"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66d967db7705dc29120bb6e8ce5b5a2e27734ed5976d1c904e95bd238d1c3c5a"
+checksum = "37095eb18dd6254c66217edc61a29d83d51f8818de8a2ffe88e4584ad73fb5f9"
 dependencies = [
  "pastey",
  "proc-macro2",
@@ -3678,9 +3686,9 @@ dependencies = [
 
 [[package]]
 name = "wincode-derive"
-version = "0.4.6"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15ab90b719560d0fda79c74550ad1c948d17b118765942838055ebaf34d67071"
+checksum = "e262d55d1261f31e2cfe49cc6385a421d14d99faa0526bbe3cc1bda0d3005c62"
 dependencies = [
  "darling",
  "proc-macro2",

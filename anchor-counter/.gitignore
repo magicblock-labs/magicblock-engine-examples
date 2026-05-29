@@ -10,9 +10,6 @@
 **/.next/
 **/.env
 **/magicblock-test-storage
-!target/deploy/
-target/deploy/*
-!target/deploy/*-keypair.json
 !/bolt-counter/target/deploy/counter-keypair.json
 !/bolt-counter/target/deploy/increase-keypair.json
 
