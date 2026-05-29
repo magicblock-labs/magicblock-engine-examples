@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
 import { PrivateCounter } from "../target/types/private_counter";
-import { Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
   GetCommitmentSignature,
   getAuthToken,
@@ -150,16 +150,16 @@ describe("private-counter", () => {
     );
   });
 
-  it("Delegate counter to ER with permission", async () => {
+  it("Delegate counter to ER", async () => {
     const start = Date.now();
-    // Passing null for members means no access restriction (open to all)
     const tx = await program.methods
       .delegate()
-      .accounts({
+      .accountsPartial({
         authority: provider.wallet.publicKey,
+        counter: counterPDA,
         // Pin to the TEE validator identity
         validator: new web3.PublicKey(
-          "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo",
+          process.env.VALIDATOR || "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo",
         ),
       })
       .transaction();
@@ -170,37 +170,34 @@ describe("private-counter", () => {
     console.log(
       `${Date.now() - start}ms (Base Layer) Delegate txHash: ${txHash}`,
     );
+    // Wait for delegation to propagate to the ER
+    await new Promise((resolve) => setTimeout(resolve, 3000));
   });
 
-  it("Initialize permission on ER", async () => {
-    const account = await providerEphemeralRollup.connection.getAccountInfo(permissionPDA);
-    if (account) {
-      console.log("Permission account already exists");
-      return;
-    }
-
+  it("Initialize ephemeral permission on ER", async () => {
     const start = Date.now();
-    // Passing null for members means no access restriction (open to all)
-    const tx = await program.methods
-      .initializePermission()
+    let tx = await program.methods
+      .initPermission()
       .accountsPartial({
+        authority: providerEphemeralRollup.wallet.publicKey,
         counter: counterPDA,
-        authority: provider.wallet.publicKey,
         permission: permissionPDA,
         magicProgram: MAGIC_PROGRAM_ID,
         permissionProgram: PERMISSION_PROGRAM_ID,
         ephemeralVault: VAULT_ID,
       })
       .transaction();
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx, [providerEphemeralRollup.wallet.payer], {
+    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
+    tx.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
+    const txHash = await providerEphemeralRollup.sendAndConfirm(tx, [], {
       skipPreflight: true,
-      commitment: "confirmed",
     });
     console.log(
-      `${Date.now() - start}ms (Base Layer) Initialize permission txHash: ${txHash}`,
+      `${Date.now() - start}ms (ER) init_permission txHash: ${txHash}`,
     );
-    // Wait for delegation to propagate to the ER
-    await new Promise((resolve) => setTimeout(resolve, 3000));
   });
 
   it("Increase counter on ER", async () => {
@@ -220,28 +217,32 @@ describe("private-counter", () => {
     console.log(`${Date.now() - start}ms (ER) Increment txHash: ${txHash}`);
   });
 
-  it("Update permission on ER", async () => {
-    const start = Date.now();
-    let tx = await program.methods
-      .updatePermission(Keypair.generate().publicKey)
-      .accountsPartial({
-        counter: counterPDA,
-        authority: provider.wallet.publicKey,
-        permission: permissionPDA,
-        magicProgram: MAGIC_PROGRAM_ID,
-        permissionProgram: PERMISSION_PROGRAM_ID,
-        ephemeralVault: VAULT_ID,
-      })
-      .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-    console.log(
-      `${Date.now() - start}ms (ER) Update permission txHash: ${txHash}`,
-    );
+  it("Toggle privacy on ER (private -> public)", async () => {
+    // Flip the permission's is_private flag. The authority is always re-added as
+    // the sole member with full read flags so we never lock ourselves out.
+    for (const isPrivate of [true, false]) {
+      const start = Date.now();
+      let tx = await program.methods
+        .setPrivacy(isPrivate)
+        .accountsPartial({
+          counter: counterPDA,
+          authority: provider.wallet.publicKey,
+          permission: permissionPDA,
+          magicProgram: MAGIC_PROGRAM_ID,
+          permissionProgram: PERMISSION_PROGRAM_ID,
+          ephemeralVault: VAULT_ID,
+        })
+        .transaction();
+      tx.feePayer = providerEphemeralRollup.wallet.publicKey;
+      tx.recentBlockhash = (
+        await providerEphemeralRollup.connection.getLatestBlockhash()
+      ).blockhash;
+      tx = await providerEphemeralRollup.wallet.signTransaction(tx);
+      const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
+      console.log(
+        `${Date.now() - start}ms (ER) set_privacy(${isPrivate}) txHash: ${txHash}`,
+      );
+    }
   });
 
   it("Close permission on ER", async () => {

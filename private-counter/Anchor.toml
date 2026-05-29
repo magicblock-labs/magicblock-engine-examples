@@ -5,12 +5,6 @@ anchor_version = "1.0.2"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-private_counter = "7kzUF4xKsfVyRJzMQaS1wJ51qUzpP4zAsxLBWZeviCAB"
-
-[programs.devnet]
-private_counter = "7kzUF4xKsfVyRJzMQaS1wJ51qUzpP4zAsxLBWZeviCAB"
-
 [registry]
 url = "https://api.apr.dev"
 
