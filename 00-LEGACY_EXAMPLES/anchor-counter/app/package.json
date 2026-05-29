@@ -20,7 +20,7 @@
         "web-vitals": "^2.1.4"
     },
     "scripts": {
-        "copy-idl": "mkdir -p src/idl && cp ../target/idl/public_counter.json src/idl/",
+        "copy-idl": "mkdir -p src/idl && (cp ../target/idl/public_counter.json src/idl/ 2>/dev/null || echo '[copy-idl] ../target/idl/public_counter.json not found — using committed src/idl/public_counter.json')",
         "prestart": "npm run copy-idl",
         "predev": "npm run copy-idl",
         "prebuild": "npm run copy-idl",
