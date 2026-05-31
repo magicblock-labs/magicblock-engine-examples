@@ -1,14 +1,17 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program::{transfer, Transfer};
 use ephemeral_rollups_sdk::access_control::instructions::{
-    CreatePermissionCpiBuilder, UpdatePermissionCpiBuilder,
+    CreateEphemeralPermissionCpi, UpdateEphemeralPermissionCpi,
 };
-use ephemeral_rollups_sdk::access_control::structs::{Member, MembersArgs};
+use ephemeral_rollups_sdk::access_control::structs::{
+    EphemeralMembersArgs, EphemeralPermission, Member,
+};
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
-use ephemeral_rollups_sdk::consts::PERMISSION_PROGRAM_ID;
+use ephemeral_rollups_sdk::consts::{EPHEMERAL_VAULT_ID, MAGIC_PROGRAM_ID, PERMISSION_PROGRAM_ID};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
+use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
-declare_id!("AbTKLEtTySbfQ6LtkqprA9qUBQdMTP1mGkp84f4VxeWt");
+declare_id!("EeTWmbgvrmffRHT67ooSSnfyZ8qrdi9fkrsosUUZzXf7");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";
@@ -19,8 +22,36 @@ pub mod anchor_rock_paper_scissor {
 
     use super::*;
 
-    // 1️⃣ Create and auto-join as Player 1
+    // 1️⃣ Create and auto-join as Player 1.
+    // Pre-funds the Game PDA with enough rent for its ephemeral permission (room
+    // for [p1, p2] members) and the PlayerChoice PDA with rent for its own (1
+    // member). After delegation those lamports flow with the PDAs onto the ER,
+    // where each PDA PDA-signs its CreateEphemeralPermission CPI and pays its
+    // own rent — no external account needs lamports on the ER.
     pub fn create_game(ctx: Context<CreateGame>, game_id: u64) -> Result<()> {
+        // Rent for the game's ephemeral permission (2 members: p1 + p2)
+        transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.player1.to_account_info(),
+                    to: ctx.accounts.game.to_account_info(),
+                },
+            ),
+            ephemeral_rollups_sdk::ephemeral_accounts::rent(EphemeralPermission::size_of(2) as u32),
+        )?;
+        // Rent for player1's PlayerChoice ephemeral permission (1 member: p1)
+        transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.player1.to_account_info(),
+                    to: ctx.accounts.player_choice.to_account_info(),
+                },
+            ),
+            ephemeral_rollups_sdk::ephemeral_accounts::rent(EphemeralPermission::size_of(1) as u32),
+        )?;
+
         let game = &mut ctx.accounts.game;
         let player1 = ctx.accounts.player1.key();
 
@@ -43,8 +74,20 @@ pub mod anchor_rock_paper_scissor {
         Ok(())
     }
 
-    // 2️⃣ Player 2 joins the game
+    // 2️⃣ Player 2 joins the game.
+    // Pre-funds player2's PlayerChoice PDA with rent for its ephemeral permission.
     pub fn join_game(ctx: Context<JoinGame>, game_id: u64) -> Result<()> {
+        transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.player.to_account_info(),
+                    to: ctx.accounts.player_choice.to_account_info(),
+                },
+            ),
+            ephemeral_rollups_sdk::ephemeral_accounts::rent(EphemeralPermission::size_of(1) as u32),
+        )?;
+
         let game = &mut ctx.accounts.game;
         let player = ctx.accounts.player.key();
 
@@ -78,17 +121,19 @@ pub mod anchor_rock_paper_scissor {
         Ok(())
     }
 
-    // 4️⃣ Reveal and record the winner
+    // 4️⃣ Reveal and record the winner. Flips all three ephemeral permissions to
+    // public (members = []) so anyone can read the committed state, then commits
+    // and undelegates the game so the result lives on the base layer.
     pub fn reveal_winner(ctx: Context<RevealWinner>) -> Result<()> {
         let game = &mut ctx.accounts.game;
         let player1_choice = &ctx.accounts.player1_choice;
         let player2_choice = &ctx.accounts.player2_choice;
-        let permission_program = &ctx.accounts.permission_program.to_account_info();
-        let permission_game = &ctx.accounts.permission_game.to_account_info();
-        let permission1 = &ctx.accounts.permission1.to_account_info();
-        let permission2 = &ctx.accounts.permission2.to_account_info();
-        let magic_program = &ctx.accounts.magic_program.to_account_info();
-        let magic_context = &ctx.accounts.magic_context.to_account_info();
+        let permission_program = ctx.accounts.permission_program.to_account_info();
+        let permission_game = ctx.accounts.permission_game.to_account_info();
+        let permission1 = ctx.accounts.permission1.to_account_info();
+        let permission2 = ctx.accounts.permission2.to_account_info();
+        let ephemeral_vault = ctx.accounts.ephemeral_vault.to_account_info();
+        let magic_program = ctx.accounts.magic_program.to_account_info();
 
         // 1️⃣ Clone choices into game
         game.player1_choice = player1_choice.choice.clone().into();
@@ -121,49 +166,93 @@ pub mod anchor_rock_paper_scissor {
             _ => GameResult::Tie,
         };
 
-        UpdatePermissionCpiBuilder::new(&permission_program)
-            .permissioned_account(&game.to_account_info(), true)
-            .authority(&game.to_account_info(), false)
-            .permission(&permission_game.to_account_info())
-            .args(MembersArgs { members: None })
-            .invoke_signed(&[&[GAME_SEED, &game.game_id.to_le_bytes(), &[ctx.bumps.game]]])?;
+        // 5️⃣ Make game + both player_choice permissions public via UpdateEphemeralPermission.
+        // is_private=false with empty members ⇒ anyone with a valid TEE auth token can read.
+        let public_args = || EphemeralMembersArgs {
+            is_private: false,
+            members: vec![],
+        };
 
-        UpdatePermissionCpiBuilder::new(&permission_program)
-            .permissioned_account(&player1_choice.to_account_info(), true)
-            .authority(&player1_choice.to_account_info(), false)
-            .permission(&permission1.to_account_info())
-            .args(MembersArgs { members: None })
-            .invoke_signed(&[&[
-                PLAYER_CHOICE_SEED,
-                &player1_choice.game_id.to_le_bytes(),
-                &player1_choice.player.as_ref(),
-                &[ctx.bumps.player1_choice],
-            ]])?;
+        // Each PDA pays for its own rent delta (private → public shrinks the account,
+        // refund flows back to the PDA), and PDA-signs its CPI via its own seeds.
+        UpdateEphemeralPermissionCpi {
+            payer: game.to_account_info(),
+            permissioned_account: game.to_account_info(),
+            permission: permission_game,
+            vault: ephemeral_vault.clone(),
+            magic_program: magic_program.clone(),
+            permission_program: permission_program.clone(),
+            authority: game.to_account_info(),
+            authority_is_signer: false,
+            args: public_args(),
+        }
+        .invoke_signed(&[&[
+            GAME_SEED,
+            &game.game_id.to_le_bytes(),
+            &[ctx.bumps.game],
+        ]])?;
 
-        UpdatePermissionCpiBuilder::new(&permission_program)
-            .permissioned_account(&player2_choice.to_account_info(), true)
-            .authority(&player2_choice.to_account_info(), false)
-            .permission(&permission2.to_account_info())
-            .args(MembersArgs { members: None })
-            .invoke_signed(&[&[
-                PLAYER_CHOICE_SEED,
-                &player2_choice.game_id.to_le_bytes(),
-                &player2_choice.player.as_ref(),
-                &[ctx.bumps.player2_choice],
-            ]])?;
+        UpdateEphemeralPermissionCpi {
+            payer: player1_choice.to_account_info(),
+            permissioned_account: player1_choice.to_account_info(),
+            permission: permission1,
+            vault: ephemeral_vault.clone(),
+            magic_program: magic_program.clone(),
+            permission_program: permission_program.clone(),
+            authority: player1_choice.to_account_info(),
+            authority_is_signer: false,
+            args: public_args(),
+        }
+        .invoke_signed(&[&[
+            PLAYER_CHOICE_SEED,
+            &player1_choice.game_id.to_le_bytes(),
+            player1_choice.player.as_ref(),
+            &[ctx.bumps.player1_choice],
+        ]])?;
+
+        UpdateEphemeralPermissionCpi {
+            payer: player2_choice.to_account_info(),
+            permissioned_account: player2_choice.to_account_info(),
+            permission: permission2,
+            vault: ephemeral_vault.clone(),
+            magic_program: magic_program.clone(),
+            permission_program: permission_program.clone(),
+            authority: player2_choice.to_account_info(),
+            authority_is_signer: false,
+            args: public_args(),
+        }
+        .invoke_signed(&[&[
+            PLAYER_CHOICE_SEED,
+            &player2_choice.game_id.to_le_bytes(),
+            player2_choice.player.as_ref(),
+            &[ctx.bumps.player2_choice],
+        ]])?;
 
         msg!("Result: {:?}", &game.result);
 
         game.exit(&crate::ID)?;
 
-        commit_and_undelegate_accounts(
-            &ctx.accounts.payer,
-            vec![&game.to_account_info()],
-            magic_context,
-            magic_program,
-            None,
-        )?;
+        // Note: undelegation is intentionally NOT done here. Call `undelegate_all`
+        // afterwards to commit + undelegate game + both player_choices in one ix.
 
+        Ok(())
+    }
+
+    /// Commit + undelegate game + both player_choices in a single magic-intent
+    /// bundle. Bring the whole game state back to the base layer at once and
+    /// release all three PDAs from the ER.
+    pub fn undelegate_all(ctx: Context<UndelegateAll>) -> Result<()> {
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit_and_undelegate(&[
+            ctx.accounts.game.to_account_info(),
+            ctx.accounts.player1_choice.to_account_info(),
+            ctx.accounts.player2_choice.to_account_info(),
+        ])
+        .build_and_invoke()?;
         Ok(())
     }
 
@@ -185,39 +274,49 @@ pub mod anchor_rock_paper_scissor {
         Ok(())
     }
 
-    /// Creates a permission based on account type input.
-    /// Derives the bump from the account type and seeds, then calls the permission program.
-    pub fn create_permission(
-        ctx: Context<CreatePermission>,
+    /// Create an ephemeral permission for a delegated account directly on the ER.
+    /// The `permissioned_account` PDA is both `payer` and `permissioned_account` —
+    /// it covers its own rent from the lamports pre-funded at `create_game` /
+    /// `join_game` time, and signs the CPI via its seeds derived from `account_type`.
+    /// Idempotent: skips if the permission already exists. `members = Some(vec)` →
+    /// private with that member list; `members = None` → public.
+    pub fn init_permission(
+        ctx: Context<PermissionContextRps>,
         account_type: AccountType,
         members: Option<Vec<Member>>,
     ) -> Result<()> {
-        let CreatePermission {
-            permissioned_account,
-            permission,
-            payer,
-            permission_program,
-            system_program,
-        } = ctx.accounts;
+        if ctx.accounts.permission.lamports() > 0 {
+            msg!("Permission already exists, skipping creation");
+            return Ok(());
+        }
 
         let seed_data = derive_seeds_from_account_type(&account_type);
-
         let (_, bump) = Pubkey::find_program_address(
             &seed_data.iter().map(|s| s.as_slice()).collect::<Vec<_>>(),
             &crate::ID,
         );
-
         let mut seeds = seed_data.clone();
         seeds.push(vec![bump]);
         let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
 
-        CreatePermissionCpiBuilder::new(&permission_program)
-            .permissioned_account(&permissioned_account.to_account_info())
-            .permission(&permission)
-            .payer(&payer)
-            .system_program(&system_program)
-            .args(MembersArgs { members })
-            .invoke_signed(&[seed_refs.as_slice()])?;
+        let (is_private, member_list) = match members {
+            Some(m) => (true, m),
+            None => (false, vec![]),
+        };
+
+        CreateEphemeralPermissionCpi {
+            payer: ctx.accounts.permissioned_account.to_account_info(),
+            permissioned_account: ctx.accounts.permissioned_account.to_account_info(),
+            permission: ctx.accounts.permission.to_account_info(),
+            vault: ctx.accounts.ephemeral_vault.to_account_info(),
+            magic_program: ctx.accounts.magic_program.to_account_info(),
+            permission_program: ctx.accounts.permission_program.to_account_info(),
+            args: EphemeralMembersArgs {
+                is_private,
+                members: member_list,
+            },
+        }
+        .invoke_signed(&[seed_refs.as_slice()])?;
         Ok(())
     }
 }
@@ -286,7 +385,6 @@ pub struct MakeChoice<'info> {
     pub player: Signer<'info>,
 }
 
-#[commit]
 #[derive(Accounts)]
 pub struct RevealWinner<'info> {
     #[account(mut, seeds = [GAME_SEED, &game.game_id.to_le_bytes()], bump)]
@@ -322,6 +420,36 @@ pub struct RevealWinner<'info> {
     /// CHECK: PERMISSION PROGRAM
     #[account(address = PERMISSION_PROGRAM_ID)]
     pub permission_program: UncheckedAccount<'info>,
+    /// CHECK: verified by magic program
+    #[account(mut, address = EPHEMERAL_VAULT_ID)]
+    pub ephemeral_vault: UncheckedAccount<'info>,
+    /// CHECK: Magic Program
+    #[account(address = MAGIC_PROGRAM_ID)]
+    pub magic_program: UncheckedAccount<'info>,
+}
+
+/// Context for `undelegate_all` — commits + undelegates game + both player_choice
+/// PDAs in a single magic-intent bundle. `#[commit]` auto-adds `magic_context` and
+/// `magic_program`. Player addresses are derived from the game's stored state.
+#[commit]
+#[derive(Accounts)]
+pub struct UndelegateAll<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut, seeds = [GAME_SEED, &game.game_id.to_le_bytes()], bump)]
+    pub game: Account<'info, Game>,
+    #[account(
+        mut,
+        seeds = [PLAYER_CHOICE_SEED, &game.game_id.to_le_bytes(), game.player1.unwrap().as_ref()],
+        bump,
+    )]
+    pub player1_choice: Account<'info, PlayerChoice>,
+    #[account(
+        mut,
+        seeds = [PLAYER_CHOICE_SEED, &game.game_id.to_le_bytes(), game.player2.unwrap().as_ref()],
+        bump,
+    )]
+    pub player2_choice: Account<'info, PlayerChoice>,
 }
 
 /// Unified delegate PDA context
@@ -336,19 +464,30 @@ pub struct DelegatePda<'info> {
     pub validator: Option<AccountInfo<'info>>,
 }
 
+/// Context for `init_permission` — runs on the ER, creates an ephemeral permission
+/// for the delegated `permissioned_account`. The PDA itself is the rent payer and
+/// signs the CPI via seeds (so it must be `mut`); the `authority` Signer just covers
+/// the outer tx fee on the ER.
 #[derive(Accounts)]
-pub struct CreatePermission<'info> {
-    /// CHECK: Validated via permission program CPI
+pub struct PermissionContextRps<'info> {
+    /// CHECK: The delegated PDA whose access is being gated; pays its own permission
+    /// rent and signs the CPI via the seeds derived from `account_type`.
+    #[account(mut)]
     pub permissioned_account: UncheckedAccount<'info>,
-    /// CHECK: Checked by the permission program
+    /// CHECK: verified by permission program
     #[account(mut)]
     pub permission: UncheckedAccount<'info>,
     #[account(mut)]
-    pub payer: Signer<'info>,
+    pub authority: Signer<'info>,
     /// CHECK: PERMISSION PROGRAM
     #[account(address = PERMISSION_PROGRAM_ID)]
     pub permission_program: UncheckedAccount<'info>,
-    pub system_program: Program<'info, System>,
+    /// CHECK: verified by magic program
+    #[account(mut, address = EPHEMERAL_VAULT_ID)]
+    pub ephemeral_vault: UncheckedAccount<'info>,
+    /// CHECK: Magic Program
+    #[account(address = MAGIC_PROGRAM_ID)]
+    pub magic_program: UncheckedAccount<'info>,
 }
 
 #[account]

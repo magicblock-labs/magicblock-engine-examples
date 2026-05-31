@@ -1,11 +1,9 @@
 use anchor_lang::prelude::*;
-use ephemeral_rollups_sdk::anchor::delegate;
-use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-declare_id!("8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP");
+declare_id!("HmSqeP8YiP7AYXwhKBPnfguAwKRuSkUSyeQeuJkg1nmK");
 
 pub const PLAYER: &[u8] = b"playerd";
 
@@ -52,21 +50,6 @@ pub mod random_dice {
         player.last_result = rnd_u8; // Update the player's last result
         Ok(())
     }
-
-    /// Delegate the account to the delegation program
-    /// Set specific validator based on ER, see https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup
-    pub fn delegate(ctx: Context<DelegateInput>) -> Result<()> {
-        ctx.accounts.delegate_pda(
-            &ctx.accounts.payer,
-            &[PLAYER, &ctx.accounts.payer.key().to_bytes().as_slice()],
-            DelegateConfig {
-                // Optionally set a specific validator from the first remaining account
-                validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
-                ..Default::default()
-            },
-        )?;
-        Ok(())
-    }
 }
 
 #[derive(Accounts)]
@@ -98,16 +81,6 @@ pub struct CallbackRollDiceCtx<'info> {
     pub vrf_program_identity: Signer<'info>,
     #[account(mut)]
     pub player: Account<'info, Player>,
-}
-
-/// Add delegate function to the context
-#[delegate]
-#[derive(Accounts)]
-pub struct DelegateInput<'info> {
-    pub payer: Signer<'info>,
-    /// CHECK The pda to delegate
-    #[account(mut, del, seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
-    pub pda: UncheckedAccount<'info>,
 }
 
 #[account]

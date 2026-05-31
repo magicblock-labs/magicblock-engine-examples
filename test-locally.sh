@@ -64,9 +64,14 @@ run_test() {
   if [ -f "$HOME/.config/solana/id.json" ] && command -v solana-keygen >/dev/null 2>&1; then
     wallet=$(solana-keygen pubkey "$HOME/.config/solana/id.json" 2>/dev/null || echo "(unreadable)")
   fi
-  echo "Base Layer Endpoint: ${PROVIDER_ENDPOINT:-http://localhost:8899}"
-  echo "ER Endpoint:         ${EPHEMERAL_PROVIDER_ENDPOINT:-${TEE_PROVIDER_ENDPOINT:-http://localhost:7799}}"
-  echo "ER Validator:        ${VALIDATOR:-mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev}"
+  # Pick env values out of the test_command's inline prefix (TEE_ENV) — those
+  # override the globally exported localnet defaults for this specific run.
+  local cmd_base="$(echo "$test_command" | grep -oE 'PROVIDER_ENDPOINT=[^ ]+' | head -1 | cut -d= -f2-)"
+  local cmd_er="$(echo "$test_command" | grep -oE 'EPHEMERAL_PROVIDER_ENDPOINT=[^ ]+' | head -1 | cut -d= -f2-)"
+  local cmd_validator="$(echo "$test_command" | grep -oE 'VALIDATOR=[A-Za-z0-9]+' | head -1 | cut -d= -f2-)"
+  echo "Base Layer Endpoint: ${cmd_base:-${PROVIDER_ENDPOINT:-http://localhost:8899}}"
+  echo "ER Endpoint:         ${cmd_er:-${EPHEMERAL_PROVIDER_ENDPOINT:-${TEE_PROVIDER_ENDPOINT:-http://localhost:7799}}}"
+  echo "ER Validator:        ${cmd_validator:-${VALIDATOR:-mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev}}"
   echo "Wallet:              $wallet"
   echo "Program ID:          $program_id"
   echo ""
@@ -164,12 +169,17 @@ run_test() {
     sleep 0.5
   done
   
-  # Wait for completion
+  # Wait for completion and capture exit code as the primary failure signal.
+  # Log-grep checks (X failing / error[ / could not compile) catch the common
+  # mocha+rustc messages, but plenty of failures (anchor deploy errors, yarn
+  # install crashes, errors before mocha's summary, etc.) only show via $?.
   wait $test_pid
-  
-  # Check if test failed
+  local test_exit_code=$?
+
   local test_failed=false
-  if grep -q "[0-9] failing" "$test_log" || grep -q "error\[" "$test_log" || grep -q "could not compile" "$test_log"; then
+  if [ $test_exit_code -ne 0 ]; then
+    test_failed=true
+  elif grep -q "[0-9] failing" "$test_log" || grep -q "error\[" "$test_log" || grep -q "could not compile" "$test_log"; then
     test_failed=true
   fi
   
@@ -236,32 +246,30 @@ run_test() {
     fi
   fi
   
-  # Check if test actually failed by looking for failure indicators
-  # Check for mocha test failures (X failing)
-  if grep -q "[0-9] failing" "$test_log"; then
+  # Classify based on `test_failed` (computed from exit code + log grep above).
+  if [ "$test_failed" = true ]; then
     FAILED_TESTS+=("$test_name")
-    
-    # Extract test failures section - find last occurrence of test suite and get failures from there
-    # Get the last test suite block (after the last blank line followed by test name pattern)
-    local error_details=$(reverse_lines "$test_log" | sed -n '/^  [0-9]\+)/,/^[[:space:]]*$/p' | reverse_lines)
-    
-    if [ -z "$error_details" ]; then
-      # Fallback: get from "failing" keyword to end
-      error_details=$(tail -500 "$test_log" | sed -n '/failing/,$p' | head -400)
-    fi
-    
-    FAILED_TESTS_NAMES+=("$test_name")
-    FAILED_TESTS_ERRORS+=("$error_details")
-  # Check for compile errors
-  elif grep -q "error\[" "$test_log" || grep -q "could not compile" "$test_log"; then
-    FAILED_TESTS+=("$test_name")
-    
-    # Extract compilation error details
-    local error_details=$(grep -B 2 -A 8 "error\[" "$test_log" | head -60)
-    if [ -z "$error_details" ]; then
+
+    # Extract details from the most informative source available.
+    local error_details=""
+    if grep -q "[0-9] failing" "$test_log"; then
+      error_details=$(reverse_lines "$test_log" | sed -n '/^  [0-9]\+)/,/^[[:space:]]*$/p' | reverse_lines)
+      if [ -z "$error_details" ]; then
+        error_details=$(tail -500 "$test_log" | sed -n '/failing/,$p' | head -400)
+      fi
+    elif grep -q "error\[" "$test_log"; then
+      error_details=$(grep -B 2 -A 8 "error\[" "$test_log" | head -60)
+    elif grep -q "could not compile" "$test_log"; then
       error_details=$(grep -B 3 -A 5 "could not compile" "$test_log" | head -60)
     fi
-    
+    if [ -z "$error_details" ]; then
+      # Last-resort: surface anything that looks like an error in the tail.
+      error_details=$(tail -200 "$test_log" | grep -E -i "^error|Error:|failed|cannot|✗" | head -40)
+    fi
+    if [ -z "$error_details" ]; then
+      error_details="(exit code $test_exit_code — see $test_log for full output)"
+    fi
+
     FAILED_TESTS_NAMES+=("$test_name")
     FAILED_TESTS_ERRORS+=("$error_details")
   else
@@ -450,9 +458,7 @@ export VALIDATOR=mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
 # Locally we run only public-counter.ts. The other two run from the TEE/devnet block below.
 run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts; cd .."
 
-# anchor-private-counter is TEE-only — runs in the TEE/devnet block below.
-
-# anchor-rock-paper-scissor uses TEE (base layer hardcoded to devnet) — move to test-devnet.sh.
+# private-counter is TEE-only — runs in the TEE/devnet block below.
 
 # crank-counter: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor would
 # re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
@@ -478,7 +484,10 @@ run_test "pinocchio-secret-counter" "cd pinocchio-secret-counter && cargo build-
 # would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
 run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
 
-# roll-dice + roll-dice-delegated skipped locally — move to test-devnet.sh.
+# roll-dice + roll-dice-delegated: VRF integration. roll-dice-delegated reads
+# VALIDATOR env var → defaults to the local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT
+# is localhost. Same Anchor.toml glob picks up both test files.
+run_test "roll-dice" "cd roll-dice && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
 
 # rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
 run_test "rust-counter" "cd rust-counter && yarn install && npx vitest run ./tests/kit/rust-counter.test.ts; cd .."
@@ -502,11 +511,11 @@ if [ "${SKIP_TEE_TESTS:-0}" != "1" ]; then
   DEVNET_RPC="${DEVNET_RPC_URL:-https://api.devnet.solana.com}"
   DEVNET_WS=$(echo "$DEVNET_RPC" | sed -e 's|^http:|ws:|' -e 's|^https:|wss:|')
 
-  TEE_ENV="PROVIDER_ENDPOINT=$DEVNET_RPC WS_ENDPOINT=$DEVNET_WS TEE_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app TEE_WS_ENDPOINT=wss://devnet-tee.magicblock.app ROUTER_ENDPOINT=https://devnet-router.magicblock.app ROUTER_WS_ENDPOINT=wss://devnet-router.magicblock.app VALIDATOR=MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
+  TEE_ENV="PROVIDER_ENDPOINT=$DEVNET_RPC WS_ENDPOINT=$DEVNET_WS EPHEMERAL_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app EPHEMERAL_WS_ENDPOINT=wss://devnet-tee.magicblock.app TEE_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app TEE_WS_ENDPOINT=wss://devnet-tee.magicblock.app ROUTER_ENDPOINT=https://devnet-router.magicblock.app ROUTER_WS_ENDPOINT=wss://devnet-router.magicblock.app VALIDATOR=MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
 
-  run_test "anchor-private-counter (devnet TEE)" "cd anchor-private-counter && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet; cd .."
+  run_test "private-counter (devnet TEE)" "cd private-counter && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet; cd .."
 
-  run_test "anchor-counter private-counter (devnet TEE)" "cd anchor-counter && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV npx ts-mocha -p ./tsconfig.json -t 1000000 tests/private-counter.ts; cd .."
+  run_test "rock-paper-scissor (devnet TEE)" "cd rock-paper-scissor && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet; cd .."
 fi
 
 # Print summary report

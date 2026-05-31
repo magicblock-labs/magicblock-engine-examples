@@ -6,7 +6,7 @@ use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-declare_id!("D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM");
+declare_id!("987QBJc2qrL6be9VJKSTtkSMBZCqzT8ACLshiw9JaSpe");
 
 pub const PLAYER_SEED: &[u8] = b"playerd2";
 
@@ -82,8 +82,8 @@ pub mod random_dice_delegated {
     pub fn undelegate(ctx: Context<Undelegate>) -> Result<()> {
         MagicIntentBundleBuilder::new(
             ctx.accounts.payer.to_account_info(),
-            ctx.accounts.magic_program.to_account_info(),
             ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
         )
         .commit_and_undelegate(&[ctx.accounts.user.to_account_info()])
         .build_and_invoke()?;

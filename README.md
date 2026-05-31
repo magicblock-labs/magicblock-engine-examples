@@ -21,8 +21,8 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 ## Backward Compatibility
 
 Older pre-Anchor 1.0 versions of the migrated programs are kept in
-[zz-legacy-anchor-0.32](./zz-legacy-anchor-0.32/README.md). The `zz-` prefix
-keeps these compatibility references listed after the active examples in
+[00-LEGACY_EXAMPLES](./00-LEGACY_EXAMPLES/README.md). The `00-` prefix keeps
+these compatibility references listed before the active examples in
 alphabetical folder views. These examples are for users who still need the
 previous Anchor 0.32.1 implementations while upgrading to the current Anchor 1.0
 programs.

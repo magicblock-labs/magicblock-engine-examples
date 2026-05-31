@@ -56,14 +56,14 @@ solana config set --url devnet
 ## Project Structure
 
 ```
-anchor-rock-paper-scissor/
+rock-paper-scissor/
 ├── programs/
 │   └── anchor-rock-paper-scissor/
 │       ├── src/
 │       │   └── lib.rs                 # Program logic
 │       └── Cargo.toml
 ├── tests/
-│   └── anchor-rock-paper-scissor.ts   # Test suite
+│   └── rock-paper-scissor.ts          # Test suite
 ├── Anchor.toml                        # Anchor configuration
 ├── Cargo.toml                         # Workspace configuration
 └── package.json                       # Node dependencies

@@ -16,7 +16,7 @@ are the current versions of the programs after the Anchor 1.0 upgrade.
 ## Included Examples
 
 - [Anchor Counter](./anchor-counter/README.md)
-- [Anchor Rock Paper Scissor](./anchor-rock-paper-scissor/README.md)
+- [Anchor Rock Paper Scissor](./rock-paper-scissor/README.md)
 - [Crank Counter](./crank-counter/README.md)
 - [Ephemeral Account Chats](./ephemeral-account-chats/README.md)
 - [Magic Actions](./magic-actions/README.md)

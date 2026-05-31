@@ -12,14 +12,15 @@ describe("roll-dice-delegated", () => {
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
       new anchor.web3.Connection(
-          process.env.PROVIDER_ENDPOINT || "https://devnet.magicblock.app/",
+          process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet.magicblock.app/",
           {
-            wsEndpoint: process.env.WS_ENDPOINT || "wss://devnet.magicblock.app/",
+            wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet.magicblock.app/",
+            commitment: "confirmed",
           }
       ),
       anchor.Wallet.local()
   );
-  const ephemeralProgram = new Program(program.idl, providerEphemeralRollup);
+  const ephemeralProgram = new Program<RandomDiceDelegated>(program.idl, providerEphemeralRollup);
 
   const playerPda = PublicKey.findProgramAddressSync(
     [Buffer.from("playerd2"), anchor.Wallet.local().publicKey.toBytes()],
@@ -37,7 +38,9 @@ describe("roll-dice-delegated", () => {
   })
 
   it("Initialized player!", async () => {
-    const tx = await program.methods.initialize().rpc({ skipPreflight: true });
+    const tx = await program.methods
+      .initialize()
+      .rpc({ skipPreflight: true, commitment: "confirmed" });
     console.log("Your transaction signature", tx);
   });
 
@@ -61,17 +64,34 @@ describe("roll-dice-delegated", () => {
         user: anchor.Wallet.local().publicKey,
       })
       .remainingAccounts(remainingAccounts)
-      .rpc();
+      .rpc({ commitment: "confirmed" });
     console.log("Your transaction signature", tx);
   });
 
   it("Do Roll Dice Delegated!", async () => {
-    const tx = await ephemeralProgram.methods.rollDiceDelegated(0).rpc({ skipPreflight: true });
-    console.log("Your transaction signature", tx);
+    const before = await ephemeralProgram.account.player
+      .fetchNullable(playerPda)
+      .catch(() => null);
+    const tx = await ephemeralProgram.methods
+      .rollDiceDelegated(0)
+      .rpc({ skipPreflight: true, commitment: "confirmed" });
+    console.log("rollDiceDelegated tx:", tx);
+
+    // Wait for the VRF callback to land on the ER and rewrite the player state.
+    const start = Date.now();
+    let player = await ephemeralProgram.account.player.fetch(playerPda, "processed");
+    while (Date.now() - start < 10_000) {
+      player = await ephemeralProgram.account.player.fetch(playerPda, "processed");
+      if (!before || JSON.stringify(player) !== JSON.stringify(before)) break;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    console.log(`player (ER, after ${Date.now() - start}ms):`, player);
   });
 
   it("Undelegate Roll Dice!", async () => {
-    const tx = await ephemeralProgram.methods.undelegate().rpc({ skipPreflight: true });
+    const tx = await ephemeralProgram.methods
+      .undelegate()
+      .rpc({ skipPreflight: true, commitment: "confirmed" });
     console.log("Your transaction signature", tx);
   });
 

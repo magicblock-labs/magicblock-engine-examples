@@ -13,8 +13,7 @@ jobs:
 
     env:
       # Set DEVNET_KEYPAIR_JSON secret to enable TEE tests against devnet
-      # (anchor-private-counter + anchor-counter's private-counter.ts).
-      # Without the secret, TEE tests are skipped.
+      # (private-counter). Without the secret, TEE tests are skipped.
       SKIP_TEE_TESTS: ${{ secrets.DEVNET_KEYPAIR_JSON == '' && '1' || '0' }}
 
     steps:
