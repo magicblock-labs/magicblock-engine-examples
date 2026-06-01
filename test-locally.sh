@@ -509,7 +509,7 @@ if [ "${SKIP_TEE_TESTS:-0}" != "1" ]; then
   TEE_ENV="PROVIDER_ENDPOINT=$DEVNET_RPC WS_ENDPOINT=$DEVNET_WS EPHEMERAL_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app EPHEMERAL_WS_ENDPOINT=wss://devnet-tee.magicblock.app TEE_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app TEE_WS_ENDPOINT=wss://devnet-tee.magicblock.app ROUTER_ENDPOINT=https://devnet-router.magicblock.app ROUTER_WS_ENDPOINT=wss://devnet-router.magicblock.app VALIDATOR=MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
 
   run_test "private-counter.anchor (devnet TEE)" "cd private-counter/anchor && anchor keys sync && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet; cd ../.."
-  run_test "private-counter.pinocchio (devnet TEE)" "cd private-counter/pinocchio && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_secret_counter-keypair.json target/deploy/pinocchio_secret_counter.so && yarn install && yarn test; cd ../.."
+  run_test "private-counter.pinocchio (devnet TEE)" "cd private-counter/pinocchio && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_secret_counter-keypair.json target/deploy/pinocchio_secret_counter.so && yarn install && $TEE_ENV yarn test; cd ../.."
 
   run_test "rock-paper-scissor (devnet TEE)" "cd rock-paper-scissor && anchor keys sync && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet; cd .."
 fi
