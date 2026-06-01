@@ -1,0 +1,13 @@
+/target
+**/*.rs.bk
+.DS_Store
+Cargo.lock
+.env
+node_modules/
+dist/
+build/
+*.log
+.vscode
+.idea
+.pnp.cjs
+.pnp.loader.mjs
