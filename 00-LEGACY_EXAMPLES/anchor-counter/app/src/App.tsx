@@ -23,9 +23,10 @@ const COUNTER_PDA_SEED = "counter";
 // Program ID comes from the local IDL so it stays in sync with declare_id! after redeploys.
 const COUNTER_PROGRAM = new PublicKey(publicCounterIdl.address);
 console.log("Counter program:", COUNTER_PROGRAM.toBase58());
-// Default to a specific ER region (devnet-as) — see comment in non-legacy app for why
-// not the router (devnet.magicblock.app): WS subscriptions stick to the picked ER but
-// HTTP requests get routed per-call, so updates would never reach the UI.
+// Default to a specific ER region (devnet-as) instead of the router (devnet.magicblock.app).
+// The router proxies HTTP per-request but a WS subscription is bound to whichever ER it
+// happened to pick at connect time — txs routed elsewhere wouldn't fire the WS callback,
+// so the UI would stall. Override via REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT for other regions.
 const PUBLIC_ER_ENDPOINT = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app";
 
 const App: React.FC = () => {
@@ -38,8 +39,8 @@ const App: React.FC = () => {
     const [ephemeralCounter, setEphemeralCounter] = useState<number>(0);
     const [isDelegated, setIsDelegated] = useState<boolean>(false);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [transactionError, setTransactionError] = useState<string | null>(null);
-    const [transactionSuccess, setTransactionSuccess] = useState<string | null>(null);
+    const [transactionError, setTransactionError] = useState<{ message: string; explorerUrl?: string } | null>(null);
+    const [transactionSuccess, setTransactionSuccess] = useState<{ message: string; explorerUrl?: string } | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const counterProgramClient = useRef<Program | null>(null);
     const counterSubscriptionId = useRef<number | null>(null);
@@ -90,7 +91,9 @@ const App: React.FC = () => {
             try { await ephemeralConnection.current.removeAccountChangeListener(ephemeralCounterSubscriptionId.current); } catch {}
         }
         console.log("Subscribing to ephemeral counter", counterPda.toBase58());
-        ephemeralCounterSubscriptionId.current = ephemeralConnection.current.onAccountChange(counterPda, handleEphemeralCounterChange, 'confirmed');
+        // Use 'processed' — ER doesn't reliably emit 'confirmed' WS notifications,
+        // and 'processed' fires at slot-time which is what we want for UI latency.
+        ephemeralCounterSubscriptionId.current = ephemeralConnection.current.onAccountChange(counterPda, handleEphemeralCounterChange, 'processed');
     }, [counterPda, handleEphemeralCounterChange]);
 
     // Init program client + base layer counter, then ER connection
@@ -110,9 +113,7 @@ const App: React.FC = () => {
                     setCounter(Number(c.count.valueOf()));
                     setIsDelegated(!accountInfo.owner.equals(COUNTER_PROGRAM));
                 }
-                // Subscribe unconditionally — even if the account doesn't exist yet, the
-                // listener will fire when init+increment creates it, so the UI updates
-                // without needing a page refresh.
+                // Subscribe unconditionally — listener fires when init+increment creates the account.
                 await subscribeToCounter();
                 setIsLoading(false);
             }
@@ -180,9 +181,9 @@ const App: React.FC = () => {
         useTempKeypair: boolean = false,
         ephemeral: boolean = false,
         confirmCommitment: Commitment = "processed",
-        // Optional: an account expected to change as a result of this tx. When provided,
-        // we refresh its state after confirmation so the UI updates immediately without
-        // waiting for the long-lived subscribe handler to fire.
+        // Optional: an account that's expected to change as a result of this tx.
+        // If provided, we resolve confirmation via onAccountChange (push, ~slot-time)
+        // instead of HTTP polling. Otherwise we fall back to getSignatureStatuses polling.
         watchAccount?: PublicKey,
     ): Promise<string | null> => {
         if (!tempKeypair.current) return null;
@@ -193,6 +194,7 @@ const App: React.FC = () => {
         setTransactionSuccess(null);
         const targetConnection = ephemeral ? ephemeralConnection.current : provider.current.connection;
         const layerLabel = ephemeral ? "ER" : "Base";
+        let signature: string | null = null;
         try {
             const {
                 context: { slot: minContextSlot },
@@ -204,8 +206,6 @@ const App: React.FC = () => {
                 transaction.feePayer = useTempKeypair ? tempKeypair.current.publicKey : publicKey;
             }
             if (useTempKeypair) transaction.sign(tempKeypair.current);
-
-            let signature;
             const sendStart = performance.now();
             if (!ephemeral && !useTempKeypair) {
                 signature = await sendTransaction(transaction, targetConnection, { minContextSlot });
@@ -216,8 +216,8 @@ const App: React.FC = () => {
 
             // Confirm via solana-web3.js's confirmTransaction (signature WS sub at the
             // requested commitment). On ER at 'processed' this resolves at slot-time
-            // (~30-100ms). Known wart: ~500ms HTTP polling fallback when the WS sub
-            // setup is slow — rare in practice, simpler code wins.
+            // (~30-100ms). Known wart: ~500ms HTTP polling fallback when the WS sub setup
+            // is slow — rare in practice, simpler code wins.
             const confirmStart = performance.now();
             const sigConfirm = await targetConnection.confirmTransaction(
                 { signature, blockhash, lastValidBlockHeight },
@@ -228,7 +228,9 @@ const App: React.FC = () => {
             }
             const confirmMs = Math.round(performance.now() - confirmStart);
 
-            // Refresh the watched account inline so the UI updates immediately.
+            // Refresh the watched account inline so the UI updates immediately without
+            // waiting for the long-lived subscribeToCounter/subscribeToEphemeralCounter
+            // handler to fire on its own.
             let refreshMs = 0;
             if (watchAccount && counterProgramClient.current) {
                 const refreshStart = performance.now();
@@ -251,10 +253,27 @@ const App: React.FC = () => {
             console.log(
                 `[${layerLabel}] ${totalMs}ms total = send ${sendMs}ms + confirmTransaction(${confirmCommitment}) ${confirmMs}ms + refresh ${refreshMs}ms · sig ${signature}`,
             );
-            setTransactionSuccess(`[${layerLabel}] confirmed in ${totalMs}ms`);
+
+            // Build an explorer URL so the success Alert links to tx details.
+            const explorerUrl = ephemeral
+                ? `https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=${encodeURIComponent(PUBLIC_ER_ENDPOINT)}`
+                : `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
+
+            setTransactionSuccess({
+                message: `[${layerLabel}] confirmed in ${totalMs}ms`,
+                explorerUrl,
+            });
             return signature;
         } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
+            const explorerUrl = signature
+                ? (ephemeral
+                    ? `https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=${encodeURIComponent(PUBLIC_ER_ENDPOINT)}`
+                    : `https://explorer.solana.com/tx/${signature}?cluster=devnet`)
+                : undefined;
+            setTransactionError({
+                message: `Transaction failed: ${error}`,
+                explorerUrl,
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -266,14 +285,16 @@ const App: React.FC = () => {
      */
     const increaseCounterTx = useCallback(async () => {
         if (!tempKeypair.current) return;
+        if (!counterProgramClient.current) {
+            console.error("counterProgramClient not initialized yet");
+            return;
+        }
         if (!isDelegated) {
             const accountTmpWallet = await connection.getAccountInfo(tempKeypair.current.publicKey);
             if (!accountTmpWallet || accountTmpWallet.lamports <= 0.01 * LAMPORTS_PER_SOL) {
                 await transferToTempKeypair();
             }
         }
-
-        if (!counterProgramClient.current) return;
 
         const transaction = await counterProgramClient.current.methods
             .increment()
@@ -307,7 +328,10 @@ const App: React.FC = () => {
         });
         transaction.add(noopInstruction);
 
-        await submitTransaction(transaction, true, isDelegated);
+        // Base-layer txs use 'confirmed' (devnet has reorgs at 'processed'); ER uses
+        // 'processed' since it's a single sequencer and no slot can orphan.
+        const commitment = isDelegated ? "processed" : "confirmed";
+        await submitTransaction(transaction, true, isDelegated, commitment, counterPda);
     }, [isDelegated, counterPda, submitTransaction, connection, transferToTempKeypair]);
 
     const updateCounter = async (_: number): Promise<void> => {
@@ -348,7 +372,7 @@ const App: React.FC = () => {
             .transaction() as Transaction;
 
         setEphemeralCounter(Number(counter));
-        await submitTransaction(transaction, true, false, "confirmed");
+        await submitTransaction(transaction, true, false, "confirmed", counterPda);
     }, [counterPda, connection, counter, submitTransaction, transferToTempKeypair]);
 
     /**
@@ -366,7 +390,7 @@ const App: React.FC = () => {
             })
             .transaction() as Transaction;
 
-        await submitTransaction(transaction, true, true);
+        await submitTransaction(transaction, true, true, "processed", counterPda);
     }, [counterPda, submitTransaction]);
 
     const delegateTx = useCallback(async () => {
@@ -423,10 +447,20 @@ const App: React.FC = () => {
             )}
 
             {transactionError &&
-                <Alert type="error" message={transactionError} onClose={() => setTransactionError(null)}/>}
+                <Alert
+                    type="error"
+                    message={transactionError.message}
+                    href={transactionError.explorerUrl}
+                    onClose={() => setTransactionError(null)}
+                />}
 
             {transactionSuccess &&
-                <Alert type="success" message={transactionSuccess} onClose={() => setTransactionSuccess(null)}/>}
+                <Alert
+                    type="success"
+                    message={transactionSuccess.message}
+                    href={transactionSuccess.explorerUrl}
+                    onClose={() => setTransactionSuccess(null)}
+                />}
 
             <img src={`${process.env.PUBLIC_URL}/magicblock_white.png`} alt="Magic Block Logo"
                  className="magicblock-logo"/>

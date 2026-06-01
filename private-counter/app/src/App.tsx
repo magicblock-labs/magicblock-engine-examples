@@ -56,7 +56,7 @@ const App: React.FC = () => {
     // gesture, and the resulting token is baked into the URL below.
     const [explorerToken, setExplorerToken] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [transactionError, setTransactionError] = useState<string | null>(null);
+    const [transactionError, setTransactionError] = useState<{ message: string; explorerUrl?: string } | null>(null);
     const [transactionSuccess, setTransactionSuccess] = useState<{ message: string; explorerUrl?: string } | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const counterProgramClient = useRef<Program | null>(null);
@@ -317,7 +317,7 @@ const App: React.FC = () => {
     ): Promise<string | null> => {
         if (!tempKeypair) return null;
         if (ephemeral && !ephemeralConnection.current) {
-            setTransactionError("TEE ER connection not ready — auth token missing");
+            setTransactionError({ message: "TEE ER connection not ready — auth token missing" });
             return null;
         }
         setIsSubmitting(true);
@@ -325,6 +325,9 @@ const App: React.FC = () => {
         setTransactionSuccess(null);
         const targetConnection = ephemeral ? ephemeralConnection.current! : provider.current.connection;
         const layerLabel = ephemeral ? "ER" : "Base";
+        // Hoist signature so the catch handler can include the explorer link for
+        // failed-on-chain txs (much easier to debug with a clickable link).
+        let signature: string | null = null;
         try {
             const { value: { blockhash, lastValidBlockHeight } } = await targetConnection.getLatestBlockhashAndContext();
             if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
@@ -332,7 +335,7 @@ const App: React.FC = () => {
             transaction.sign(tempKeypair);
 
             const sendStart = performance.now();
-            const signature = await targetConnection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
+            signature = await targetConnection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
             const sendMs = Math.round(performance.now() - sendStart);
 
             const confirmStart = performance.now();
@@ -388,7 +391,23 @@ const App: React.FC = () => {
             });
             return signature;
         } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
+            // If the tx made it on-chain (signature was returned by sendRawTransaction),
+            // attach an explorer link so the user can inspect the failure logs.
+            let explorerUrl: string | undefined;
+            if (signature) {
+                if (ephemeral) {
+                    const token = await ensureAuthToken();
+                    if (token) {
+                        explorerUrl = `https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=${encodeURIComponent(PRIVATE_ER_ENDPOINT + '?token=' + token)}`;
+                    }
+                } else {
+                    explorerUrl = `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
+                }
+            }
+            setTransactionError({
+                message: `Transaction failed: ${error}`,
+                explorerUrl,
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -485,7 +504,7 @@ const App: React.FC = () => {
     const togglePrivacyTx = useCallback(async () => {
         if (!tempKeypair || !counterPda || !permissionPda || !counterProgramClient.current) return;
         if (!ephemeralConnection.current) {
-            setTransactionError("ER connection not ready");
+            setTransactionError({ message: "ER connection not ready" });
             return;
         }
         const next = !isPrivate;
@@ -545,7 +564,7 @@ const App: React.FC = () => {
         if (!token) {
             const fresh = await ensureWalletAuthToken();
             if (!fresh) {
-                setTransactionError("Wallet declined the auth token");
+                setTransactionError({ message: "Wallet declined the auth token" });
                 return;
             }
             token = fresh;
@@ -660,7 +679,12 @@ const App: React.FC = () => {
             )}
 
             {transactionError &&
-                <Alert type="error" message={transactionError} onClose={() => setTransactionError(null)}/>}
+                <Alert
+                    type="error"
+                    message={transactionError.message}
+                    href={transactionError.explorerUrl}
+                    onClose={() => setTransactionError(null)}
+                />}
 
             {transactionSuccess &&
                 <Alert

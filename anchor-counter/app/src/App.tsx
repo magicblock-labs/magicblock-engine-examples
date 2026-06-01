@@ -39,8 +39,8 @@ const App: React.FC = () => {
     const [ephemeralCounter, setEphemeralCounter] = useState<number>(0);
     const [isDelegated, setIsDelegated] = useState<boolean>(false);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [transactionError, setTransactionError] = useState<string | null>(null);
-    const [transactionSuccess, setTransactionSuccess] = useState<string | null>(null);
+    const [transactionError, setTransactionError] = useState<{ message: string; explorerUrl?: string } | null>(null);
+    const [transactionSuccess, setTransactionSuccess] = useState<{ message: string; explorerUrl?: string } | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const counterProgramClient = useRef<Program | null>(null);
     const counterSubscriptionId = useRef<number | null>(null);
@@ -194,6 +194,7 @@ const App: React.FC = () => {
         setTransactionSuccess(null);
         const targetConnection = ephemeral ? ephemeralConnection.current : provider.current.connection;
         const layerLabel = ephemeral ? "ER" : "Base";
+        let signature: string | null = null;
         try {
             const {
                 context: { slot: minContextSlot },
@@ -205,7 +206,6 @@ const App: React.FC = () => {
                 transaction.feePayer = useTempKeypair ? tempKeypair.current.publicKey : publicKey;
             }
             if (useTempKeypair) transaction.sign(tempKeypair.current);
-            let signature;
             const sendStart = performance.now();
             if (!ephemeral && !useTempKeypair) {
                 signature = await sendTransaction(transaction, targetConnection, { minContextSlot });
@@ -253,10 +253,27 @@ const App: React.FC = () => {
             console.log(
                 `[${layerLabel}] ${totalMs}ms total = send ${sendMs}ms + confirmTransaction(${confirmCommitment}) ${confirmMs}ms + refresh ${refreshMs}ms · sig ${signature}`,
             );
-            setTransactionSuccess(`[${layerLabel}] confirmed in ${totalMs}ms`);
+
+            // Build an explorer URL so the success Alert links to tx details.
+            const explorerUrl = ephemeral
+                ? `https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=${encodeURIComponent(PUBLIC_ER_ENDPOINT)}`
+                : `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
+
+            setTransactionSuccess({
+                message: `[${layerLabel}] confirmed in ${totalMs}ms`,
+                explorerUrl,
+            });
             return signature;
         } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
+            const explorerUrl = signature
+                ? (ephemeral
+                    ? `https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=${encodeURIComponent(PUBLIC_ER_ENDPOINT)}`
+                    : `https://explorer.solana.com/tx/${signature}?cluster=devnet`)
+                : undefined;
+            setTransactionError({
+                message: `Transaction failed: ${error}`,
+                explorerUrl,
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -430,10 +447,20 @@ const App: React.FC = () => {
             )}
 
             {transactionError &&
-                <Alert type="error" message={transactionError} onClose={() => setTransactionError(null)}/>}
+                <Alert
+                    type="error"
+                    message={transactionError.message}
+                    href={transactionError.explorerUrl}
+                    onClose={() => setTransactionError(null)}
+                />}
 
             {transactionSuccess &&
-                <Alert type="success" message={transactionSuccess} onClose={() => setTransactionSuccess(null)}/>}
+                <Alert
+                    type="success"
+                    message={transactionSuccess.message}
+                    href={transactionSuccess.explorerUrl}
+                    onClose={() => setTransactionSuccess(null)}
+                />}
 
             <img src={`${process.env.PUBLIC_URL}/magicblock_white.png`} alt="Magic Block Logo"
                  className="magicblock-logo"/>

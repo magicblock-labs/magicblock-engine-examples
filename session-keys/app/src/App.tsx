@@ -26,6 +26,14 @@ const COUNTER_PDA_SEED = "counter";
 const COUNTER_PROGRAM = new PublicKey(counterIdl.address);
 console.log("Counter program:", COUNTER_PROGRAM.toBase58());
 
+// Default to a specific ER region (devnet-as) — the router URL would break WS subscriptions.
+const PUBLIC_ER_ENDPOINT = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app";
+
+// Helpers for building the Solana Explorer tx URL embedded in the success Alert.
+const baseExplorerUrl = (sig: string) => `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
+const erExplorerUrl = (sig: string) =>
+    `https://explorer.solana.com/tx/${sig}?cluster=custom&customUrl=${encodeURIComponent(PUBLIC_ER_ENDPOINT)}`;
+
 const App: React.FC = () => {
     let { connection } = useConnection();
     const ephemeralConnection  = useRef<Connection | null>(null);
@@ -40,8 +48,8 @@ const App: React.FC = () => {
     const [ephemeralCounter, setEphemeralCounter] = useState<number>(0);
     const [isDelegated, setIsDelegated] = useState<boolean>(false);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [transactionError, setTransactionError] = useState<string | null>(null);
-    const [transactionSuccess, setTransactionSuccess] = useState<string | null>(null);
+    const [transactionError, setTransactionError] = useState<{ message: string; explorerUrl?: string } | null>(null);
+    const [transactionSuccess, setTransactionSuccess] = useState<{ message: string; explorerUrl?: string } | null>(null);
     const [sessionTokenExists, setSessionTokenExists] = useState<boolean>(false);
     const counterProgramClient = useRef<Program | null>(null);
     const [counterPda, setCounterPda] = useState<PublicKey | null>(null);
@@ -203,12 +211,10 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const initializeEphemeralConnection = async () => {
-            // Default to a specific ER region (devnet-as) — the router URL would break WS subscriptions.
-            const cluster = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app"
             if(ephemeralConnection.current || counterProgramClient.current == null || !counterPda) {
                 return;
             }
-            ephemeralConnection.current = new Connection(cluster);
+            ephemeralConnection.current = new Connection(PUBLIC_ER_ENDPOINT);
             
             // Retry logic to wait for account to sync to ephemeral rollups
             let retries = 0;
@@ -335,33 +341,38 @@ const App: React.FC = () => {
         setIsSubmitting(true);
          setTransactionError(null);
          setTransactionSuccess(null);
+         const txStart = performance.now();
+         let signature: string | null = null;
          try {
              if (sessionTokenExists && tempKeypair.current) {
                  // Sign with temp keypair when session token exists
                  let connectionToUse = isDelegated ? ephemeralConnection.current : connection;
                  if (!connectionToUse) return;
-                 
+
                  const {
                      value: { blockhash, lastValidBlockHeight }
                  } = await connectionToUse.getLatestBlockhashAndContext();
                  if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
                  if (!transaction.feePayer) transaction.feePayer = payer;
-                 
+
                  transaction.sign(tempKeypair.current);
-                 const signature = await connectionToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
-                 await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 signature = await connectionToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
+                 {
+                     const c = await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                     if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
+                 }
                  console.log(`Transaction confirmed: ${signature}`);
              } else {
                  // Sign with wallet when no session token
                  let connectionToUse = isDelegated ? ephemeralConnection.current : connection;
                  if (!connectionToUse) return;
-                 
+
                  const {
                      value: { blockhash, lastValidBlockHeight }
                  } = await connectionToUse.getLatestBlockhashAndContext();
                  if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
                  if (!transaction.feePayer) transaction.feePayer = payer;
-                 
+
                  try {
                      console.log("Attempting wallet signature with:", {
                          instructions: transaction.instructions.length,
@@ -369,8 +380,11 @@ const App: React.FC = () => {
                          recentBlockhash: transaction.recentBlockhash
                      });
                      const signedTransaction = await signTransaction(transaction);
-                     const signature = await connectionToUse.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
-                     await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                     signature = await connectionToUse.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+                     {
+                         const c = await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                         if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
+                     }
                      console.log(`Transaction confirmed: ${signature}`);
                  } catch (walletErr: any) {
                      console.error("Wallet error details:", {
@@ -381,9 +395,19 @@ const App: React.FC = () => {
                      throw walletErr;
                  }
              }
-             setTransactionSuccess(`Counter incremented`);
+             const totalMs = Math.round(performance.now() - txStart);
+             setTransactionSuccess({
+                 message: `[${isDelegated ? "ER" : "Base"}] Counter incremented in ${totalMs}ms`,
+                 explorerUrl: signature ? (isDelegated ? erExplorerUrl(signature) : baseExplorerUrl(signature)) : undefined,
+             });
         } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
+            const explorerUrl = signature
+                ? (isDelegated ? erExplorerUrl(signature) : baseExplorerUrl(signature))
+                : undefined;
+            setTransactionError({
+                message: `Transaction failed: ${error}`,
+                explorerUrl,
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -451,19 +475,21 @@ const App: React.FC = () => {
         setIsSubmitting(true);
         setTransactionError(null);
         setTransactionSuccess(null);
+        const txStart = performance.now();
+        let signature: string | null = null;
         try {
             const {
                 value: { blockhash, lastValidBlockHeight }
             } = await connection.getLatestBlockhashAndContext();
             if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
             if (!transaction.feePayer) transaction.feePayer = publicKey;
-            
+
             // Sign with tempKeypair first
             transaction.sign(tempKeypair.current);
-            
+
             // Then sign with wallet adapter
             const signedTransaction = await signTransaction(transaction);
-            const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+            signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
             const confirm = await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
             if (confirm.value.err) {
                 throw new Error(`Transaction failed on chain: ${JSON.stringify(confirm.value.err)}`);
@@ -479,13 +505,24 @@ const App: React.FC = () => {
                     throw new Error("Session token account not found after create");
                 }
                 setSessionTokenExists(true);
-                setTransactionSuccess(`Session created successfully`);
+                const totalMs = Math.round(performance.now() - txStart);
+                setTransactionSuccess({
+                    message: `[Base] Session created in ${totalMs}ms`,
+                    explorerUrl: baseExplorerUrl(signature),
+                });
             } else {
                 setSessionTokenExists(true);
-                setTransactionSuccess(`Session created successfully`);
+                const totalMs = Math.round(performance.now() - txStart);
+                setTransactionSuccess({
+                    message: `[Base] Session created in ${totalMs}ms`,
+                    explorerUrl: baseExplorerUrl(signature),
+                });
             }
             } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
+            setTransactionError({
+                message: `Transaction failed: ${error}`,
+                explorerUrl: signature ? baseExplorerUrl(signature) : undefined,
+            });
             } finally {
             setIsSubmitting(false);
             }
@@ -569,29 +606,40 @@ const App: React.FC = () => {
                 setIsSubmitting(true);
                 setTransactionError(null);
                 setTransactionSuccess(null);
+                const txStart = performance.now();
+                let signature: string | null = null;
                 try {
                 const {
                 value: { blockhash, lastValidBlockHeight }
                 } = await connection.getLatestBlockhashAndContext();
                 if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
                 if (!transaction.feePayer) transaction.feePayer = payer;
-                
+
                 if (hasValidSession && tempKeypair.current) {
                     // Sign with temp keypair when session token exists
                     transaction.sign(tempKeypair.current);
-                    const signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
-                    await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                    signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
+                    const c = await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                    if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
                 } else {
                     // Sign with wallet when no session token
                     const signedTransaction = await signTransaction(transaction);
-                    const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
-                    await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                    signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+                    const c = await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                    if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
                 }
                 setEphemeralCounter(Number(counter));
                 console.log(`Transaction confirmed`);
-                setTransactionSuccess(`Delegation successful`);
+                const totalMs = Math.round(performance.now() - txStart);
+                setTransactionSuccess({
+                    message: `[Base] Delegation successful in ${totalMs}ms`,
+                    explorerUrl: signature ? baseExplorerUrl(signature) : undefined,
+                });
                 } catch (error) {
-                setTransactionError(`Transaction failed: ${error}`);
+                setTransactionError({
+                    message: `Transaction failed: ${error}`,
+                    explorerUrl: signature ? baseExplorerUrl(signature) : undefined,
+                });
                 } finally {
                 setIsSubmitting(false);
                 }
@@ -646,28 +694,39 @@ const App: React.FC = () => {
         setIsSubmitting(true);
          setTransactionError(null);
          setTransactionSuccess(null);
+         const txStart = performance.now();
+         let signature: string | null = null;
          try {
              const {
                  value: { blockhash, lastValidBlockHeight }
              } = await connToUse.getLatestBlockhashAndContext();
              if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
              if (!transaction.feePayer) transaction.feePayer = payer;
-             
+
              if (sessionTokenExists && tempKeypair.current) {
                  // Sign with temp keypair when session token exists
                  transaction.sign(tempKeypair.current);
-                 const signature = await connToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
-                 await connToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 signature = await connToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
+                 const c = await connToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
              } else {
                  // Sign with wallet when no session token
                  const signedTransaction = await signTransaction(transaction);
-                 const signature = await connToUse.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: true });
-                 await connToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 signature = await connToUse.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: true });
+                 const c = await connToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
              }
              console.log(`Transaction confirmed`);
-             setTransactionSuccess(`Undelegation successful`);
+             const totalMs = Math.round(performance.now() - txStart);
+             setTransactionSuccess({
+                 message: `[ER] Undelegation successful in ${totalMs}ms`,
+                 explorerUrl: signature ? erExplorerUrl(signature) : undefined,
+             });
          } catch (error) {
-             setTransactionError(`Transaction failed: ${error}`);
+             setTransactionError({
+                 message: `Transaction failed: ${error}`,
+                 explorerUrl: signature ? erExplorerUrl(signature) : undefined,
+             });
          } finally {
              setIsSubmitting(false);
          }
@@ -689,6 +748,8 @@ const App: React.FC = () => {
         setIsSubmitting(true);
          setTransactionError(null);
          setTransactionSuccess(null);
+         const txStart = performance.now();
+         let signature: string | null = null;
          try {
              const {
                  value: { blockhash, lastValidBlockHeight }
@@ -698,13 +759,21 @@ const App: React.FC = () => {
 
              // Sign with wallet adapter
              const signedTransaction = await signTransaction(transaction);
-             const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
-             await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+             signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+             const c = await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+             if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
              console.log(`Transaction confirmed: ${signature}`);
-             setTransactionSuccess(`Session revoked successfully`);
+             const totalMs = Math.round(performance.now() - txStart);
+             setTransactionSuccess({
+                 message: `[Base] Session revoked in ${totalMs}ms`,
+                 explorerUrl: baseExplorerUrl(signature),
+             });
              setSessionTokenExists(false);
              } catch (error) {
-             setTransactionError(`Transaction failed: ${error}`);
+             setTransactionError({
+                 message: `Transaction failed: ${error}`,
+                 explorerUrl: signature ? baseExplorerUrl(signature) : undefined,
+             });
              } finally {
              setIsSubmitting(false);
              }
@@ -772,10 +841,20 @@ const App: React.FC = () => {
             )}
 
             {transactionError &&
-                <Alert type="error" message={transactionError} onClose={() => setTransactionError(null)}/>}
+                <Alert
+                    type="error"
+                    message={transactionError.message}
+                    href={transactionError.explorerUrl}
+                    onClose={() => setTransactionError(null)}
+                />}
 
             {transactionSuccess &&
-                <Alert type="success" message={transactionSuccess} onClose={() => setTransactionSuccess(null)}/>}
+                <Alert
+                    type="success"
+                    message={transactionSuccess.message}
+                    href={transactionSuccess.explorerUrl}
+                    onClose={() => setTransactionSuccess(null)}
+                />}
 
             <img src={`${process.env.PUBLIC_URL}/magicblock_white.png`} alt="Magic Block Logo"
                  className="magicblock-logo"/>

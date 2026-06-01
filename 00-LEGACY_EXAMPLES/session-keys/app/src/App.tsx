@@ -26,13 +26,21 @@ const COUNTER_PDA_SEED = "counter";
 const COUNTER_PROGRAM = new PublicKey(counterIdl.address);
 console.log("Counter program:", COUNTER_PROGRAM.toBase58());
 
+// Default to a specific ER region (devnet-as) — the router URL would break WS subscriptions.
+const PUBLIC_ER_ENDPOINT = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app";
+
+// Helpers for building the Solana Explorer tx URL embedded in the success Alert.
+const baseExplorerUrl = (sig: string) => `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
+const erExplorerUrl = (sig: string) =>
+    `https://explorer.solana.com/tx/${sig}?cluster=custom&customUrl=${encodeURIComponent(PUBLIC_ER_ENDPOINT)}`;
+
 const App: React.FC = () => {
     let { connection } = useConnection();
     const ephemeralConnection  = useRef<Connection | null>(null);
     const provider = useRef<Provider>(new SimpleProvider(connection));
     const { publicKey, signTransaction: walletSignTransaction } = useWallet();
     const signTransaction = useMemo(() => 
-        walletSignTransaction || (async (tx: Transaction) => { throw new Error('Wallet not connected'); }),
+        walletSignTransaction || (async (_tx: Transaction) => { throw new Error('Wallet not connected'); }),
         [walletSignTransaction]
     );
     const tempKeypair = useRef<Keypair | null>(null);
@@ -40,8 +48,8 @@ const App: React.FC = () => {
     const [ephemeralCounter, setEphemeralCounter] = useState<number>(0);
     const [isDelegated, setIsDelegated] = useState<boolean>(false);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [transactionError, setTransactionError] = useState<string | null>(null);
-    const [transactionSuccess, setTransactionSuccess] = useState<string | null>(null);
+    const [transactionError, setTransactionError] = useState<{ message: string; explorerUrl?: string } | null>(null);
+    const [transactionSuccess, setTransactionSuccess] = useState<{ message: string; explorerUrl?: string } | null>(null);
     const [sessionTokenExists, setSessionTokenExists] = useState<boolean>(false);
     const counterProgramClient = useRef<Program | null>(null);
     const [counterPda, setCounterPda] = useState<PublicKey | null>(null);
@@ -49,8 +57,9 @@ const App: React.FC = () => {
     let ephemeralCounterSubscriptionId = useRef<number | null>(null);
     const sessionTokenManager = useRef<SessionTokenManager | null>(null);
     const sessionTokenPDA = useRef<PublicKey | null>(null);
-    const SESSION_TOKEN_SEED = "session_token";
+    const SESSION_TOKEN_SEED = "session_token_v2";
 
+    // Helpers to Dynamically fetch the IDL and initialize the program client
     // Build the program client from the LOCAL IDL (copied into src/idl/ by the copy-idl
     // npm script). Avoids Program.fetchIdl, which requires the IDL to be uploaded
     // on-chain via `anchor idl init` and silently breaks if that step was skipped.
@@ -116,16 +125,36 @@ const App: React.FC = () => {
         initializeProgramClient().catch(console.error);
     }, [connection, counterPda, getProgramClient, subscribeToCounter]);
 
+    // Derive the temp keypair from (publicKey, nonce). The nonce is stored in
+    // localStorage and bumped each time a session is created — this lets us rotate
+    // the session token PDA without waiting for Solana to garbage-collect a previous
+    // (drained but not yet swept) account, which otherwise produces "Allocate: account
+    // already in use" on recreate.
+    const sessionNonceKey = useCallback(
+        (pk: PublicKey) => `sessionNonce:${pk.toBase58()}`,
+        [],
+    );
+    const deriveTempKeypair = useCallback((pk: PublicKey, nonce: string) => {
+        // 32-byte seed from sha256(publicKey || nonce). Use Web Crypto for portability.
+        const seedBytes = new Uint8Array(32);
+        const src = new TextEncoder().encode(pk.toBase58() + ":" + nonce);
+        // Synchronous-ish: borrow first 32 bytes by hashing manually via subtle isn't sync.
+        // Simpler: pad/truncate the raw bytes ourselves since they don't need to be uniform.
+        const raw = new Uint8Array(pk.toBytes());
+        for (let i = 0; i < 32; i++) seedBytes[i] = raw[i] ^ (src[i % src.length] ?? 0);
+        return Keypair.fromSeed(seedBytes);
+    }, []);
+
     // Detect when publicKey is set/connected
     useEffect( () => {
         if (!publicKey) return;
-        if (!publicKey || Keypair.fromSeed(publicKey.toBytes()).publicKey.equals(tempKeypair.current?.publicKey || PublicKey.default)) return;
+        const nonce = localStorage.getItem(sessionNonceKey(publicKey)) ?? "0";
+        const newTempKeypair = deriveTempKeypair(publicKey, nonce);
+        if (tempKeypair.current?.publicKey.equals(newTempKeypair.publicKey)) return;
         console.log("Wallet connected with publicKey:", publicKey.toBase58());
-        // Derive the temp keypair from the publicKey
-        const newTempKeypair = Keypair.fromSeed(publicKey.toBytes());
         tempKeypair.current = newTempKeypair;
-        console.log("Temp Keypair", newTempKeypair.publicKey.toBase58());
-    }, [connection, publicKey]);
+        console.log("Temp Keypair", newTempKeypair.publicKey.toBase58(), "nonce:", nonce);
+    }, [connection, publicKey, sessionNonceKey, deriveTempKeypair]);
 
     // Derive counterPda with publicKey included in seed
     useEffect(() => {
@@ -154,8 +183,12 @@ const App: React.FC = () => {
             );
             sessionTokenPDA.current = pda;
             console.log("Session Token PDA:", pda.toString());
-            
-            // Check if session token exists
+
+            // UI-level "does the PDA have anything at it" check — any non-null account
+            // means we should show "Revoke Session" (so a user can clean up a stale or
+            // undecodable session). Per-action handlers do their own strict decode check
+            // to avoid passing a broken session_token into the program (which would trip
+            // AccountDiscriminatorMismatch 0xbba).
             const accountInfo = await connection.getAccountInfo(pda);
             setSessionTokenExists(!!accountInfo);
         };
@@ -178,12 +211,10 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const initializeEphemeralConnection = async () => {
-            // Default to a specific ER region (devnet-as) — the router URL would break WS subscriptions.
-            const cluster = process.env.REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app"
             if(ephemeralConnection.current || counterProgramClient.current == null || !counterPda) {
                 return;
             }
-            ephemeralConnection.current = new Connection(cluster);
+            ephemeralConnection.current = new Connection(PUBLIC_ER_ENDPOINT);
             
             // Retry logic to wait for account to sync to ephemeral rollups
             let retries = 0;
@@ -245,10 +276,6 @@ const App: React.FC = () => {
             console.error("counterPda not available");
             return;
         }
-        if (!counterProgramClient.current) {
-            console.error("counterProgramClient not initialized yet");
-            return;
-        }
 
         if (sessionTokenExists) {
             if (!tempKeypair.current) {
@@ -284,23 +311,23 @@ const App: React.FC = () => {
              incrementAccounts.sessionToken = COUNTER_PROGRAM;
          }
 
-         let transaction = await counterProgramClient.current.methods
+         let transaction = await counterProgramClient.current?.methods
              .increment()
              .accounts(incrementAccounts)
              .transaction() as Transaction;
 
-        // Check if counter account exists, if not PREPEND an initialize instruction.
+        // Check if counter account exists, if not prepend an initialize instruction.
         // Must run BEFORE increment, otherwise increment hits AccountNotInitialized (0xbc4).
         const accountInfo = await connection.getAccountInfo(counterPda);
         if (!accountInfo) {
             console.log("Counter not initialized, prepending initialize instruction");
-            const initIx = await counterProgramClient.current.methods
+            const initIx = await counterProgramClient.current?.methods
                 .initialize()
                 .accounts({
                     user: payer,
                 })
                 .instruction();
-            transaction.instructions.unshift(initIx);
+            if (initIx) transaction.instructions.unshift(initIx);
         }
 
         // Add instruction to print to the noop program and make the transaction unique
@@ -314,33 +341,38 @@ const App: React.FC = () => {
         setIsSubmitting(true);
          setTransactionError(null);
          setTransactionSuccess(null);
+         const txStart = performance.now();
+         let signature: string | null = null;
          try {
              if (sessionTokenExists && tempKeypair.current) {
                  // Sign with temp keypair when session token exists
                  let connectionToUse = isDelegated ? ephemeralConnection.current : connection;
                  if (!connectionToUse) return;
-                 
+
                  const {
                      value: { blockhash, lastValidBlockHeight }
                  } = await connectionToUse.getLatestBlockhashAndContext();
                  if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
                  if (!transaction.feePayer) transaction.feePayer = payer;
-                 
+
                  transaction.sign(tempKeypair.current);
-                 const signature = await connectionToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
-                 await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 signature = await connectionToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
+                 {
+                     const c = await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                     if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
+                 }
                  console.log(`Transaction confirmed: ${signature}`);
              } else {
                  // Sign with wallet when no session token
                  let connectionToUse = isDelegated ? ephemeralConnection.current : connection;
                  if (!connectionToUse) return;
-                 
+
                  const {
                      value: { blockhash, lastValidBlockHeight }
                  } = await connectionToUse.getLatestBlockhashAndContext();
                  if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
                  if (!transaction.feePayer) transaction.feePayer = payer;
-                 
+
                  try {
                      console.log("Attempting wallet signature with:", {
                          instructions: transaction.instructions.length,
@@ -348,8 +380,11 @@ const App: React.FC = () => {
                          recentBlockhash: transaction.recentBlockhash
                      });
                      const signedTransaction = await signTransaction(transaction);
-                     const signature = await connectionToUse.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
-                     await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                     signature = await connectionToUse.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+                     {
+                         const c = await connectionToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                         if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
+                     }
                      console.log(`Transaction confirmed: ${signature}`);
                  } catch (walletErr: any) {
                      console.error("Wallet error details:", {
@@ -360,9 +395,19 @@ const App: React.FC = () => {
                      throw walletErr;
                  }
              }
-             setTransactionSuccess(`Counter incremented`);
+             const totalMs = Math.round(performance.now() - txStart);
+             setTransactionSuccess({
+                 message: `[${isDelegated ? "ER" : "Base"}] Counter incremented in ${totalMs}ms`,
+                 explorerUrl: signature ? (isDelegated ? erExplorerUrl(signature) : baseExplorerUrl(signature)) : undefined,
+             });
         } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
+            const explorerUrl = signature
+                ? (isDelegated ? erExplorerUrl(signature) : baseExplorerUrl(signature))
+                : undefined;
+            setTransactionError({
+                message: `Transaction failed: ${error}`,
+                explorerUrl,
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -376,15 +421,40 @@ const App: React.FC = () => {
         
         const topUp = true;
         const validUntilBN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600); // valid for 1 hour
-        // Rent-exempt minimum for a 0-byte system account is ~890,880 lamports;
-        // top up to 0.002 SOL so a fresh sessionSigner clears rent with headroom.
+        // Rent-exempt minimum for a 0-byte system account is ~890,880 lamports.
+        // Top up to 0.002 SOL so a brand-new (just-rotated) sessionSigner clears rent
+        // with headroom for tx fees.
         const topUpLamportsBN = new anchor.BN(0.002 * LAMPORTS_PER_SOL);
 
+        // Always bump the nonce on Create. Detecting whether the previous PDA is "really
+        // free" is unreliable: `getAccountInfo` returns null for zombie accounts (lamports=0
+        // but slot still allocated by System), so we can't tell from the client whether
+        // Allocate will succeed. Always rotating gives a fresh PDA every time.
+        {
+            const key = sessionNonceKey(publicKey);
+            const nextNonce = String((Number(localStorage.getItem(key) ?? "0") + 1) | 0);
+            localStorage.setItem(key, nextNonce);
+            const fresh = deriveTempKeypair(publicKey, nextNonce);
+            tempKeypair.current = fresh;
+            const [pda] = PublicKey.findProgramAddressSync(
+                [
+                    Buffer.from(SESSION_TOKEN_SEED),
+                    COUNTER_PROGRAM.toBytes(),
+                    fresh.publicKey.toBytes(),
+                    publicKey.toBuffer(),
+                ],
+                sessionTokenManager.current.program.programId,
+            );
+            sessionTokenPDA.current = pda;
+            console.log("Rotated tempKeypair, new session PDA:", pda.toBase58(), "nonce:", nextNonce);
+        }
+
         let transaction = await sessionTokenManager.current.program.methods
-            .createSession(topUp, validUntilBN, topUpLamportsBN)
+            .createSessionV2(topUp, validUntilBN, topUpLamportsBN)
             .accounts({
                 targetProgram: COUNTER_PROGRAM,
                 sessionSigner: tempKeypair.current.publicKey,
+                feePayer: publicKey,
                 authority: publicKey,
             })
             .transaction();
@@ -405,32 +475,58 @@ const App: React.FC = () => {
         setIsSubmitting(true);
         setTransactionError(null);
         setTransactionSuccess(null);
+        const txStart = performance.now();
+        let signature: string | null = null;
         try {
             const {
                 value: { blockhash, lastValidBlockHeight }
             } = await connection.getLatestBlockhashAndContext();
             if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
             if (!transaction.feePayer) transaction.feePayer = publicKey;
-            
+
             // Sign with tempKeypair first
             transaction.sign(tempKeypair.current);
-            
+
             // Then sign with wallet adapter
             const signedTransaction = await signTransaction(transaction);
-            const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+            signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
             const confirm = await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
             if (confirm.value.err) {
                 throw new Error(`Transaction failed on chain: ${JSON.stringify(confirm.value.err)}`);
             }
             console.log(`Transaction confirmed: ${signature}`);
-            setTransactionSuccess(`Session created successfully`);
-            setSessionTokenExists(true);
+            // Confirm the new session token account landed. Use the same loose check
+            // as the init useEffect (getAccountInfo, not program.account.X.fetch) — the
+            // SDK's decoder schema can mismatch the on-chain layout and falsely report
+            // "not found" even when the account is allocated and the create tx confirmed.
+            if (sessionTokenPDA.current) {
+                const accountInfo = await connection.getAccountInfo(sessionTokenPDA.current);
+                if (!accountInfo) {
+                    throw new Error("Session token account not found after create");
+                }
+                setSessionTokenExists(true);
+                const totalMs = Math.round(performance.now() - txStart);
+                setTransactionSuccess({
+                    message: `[Base] Session created in ${totalMs}ms`,
+                    explorerUrl: baseExplorerUrl(signature),
+                });
+            } else {
+                setSessionTokenExists(true);
+                const totalMs = Math.round(performance.now() - txStart);
+                setTransactionSuccess({
+                    message: `[Base] Session created in ${totalMs}ms`,
+                    explorerUrl: baseExplorerUrl(signature),
+                });
+            }
             } catch (error) {
-            setTransactionError(`Transaction failed: ${error}`);
+            setTransactionError({
+                message: `Transaction failed: ${error}`,
+                explorerUrl: signature ? baseExplorerUrl(signature) : undefined,
+            });
             } finally {
             setIsSubmitting(false);
             }
-            }, [publicKey, connection, signTransaction, counterPda]);
+            }, [publicKey, connection, signTransaction, counterPda, deriveTempKeypair, sessionNonceKey]);
 
     /**
      * Delegate PDA transaction
@@ -439,7 +535,21 @@ const App: React.FC = () => {
         console.log("Delegate PDA transaction");
         if (!counterPda) return;
 
-        if (sessionTokenExists) {
+        // Local decision only — do NOT side-effect setSessionTokenExists from here.
+        // The decoder check is too strict (returns false when SDK schema and on-chain
+        // layout differ even on a valid token), and flipping the UI state mid-handler
+        // makes the button snap back to "Create Session" while the tx is in flight.
+        let hasValidSession = false;
+        if (sessionTokenPDA.current && sessionTokenManager.current) {
+            try {
+                await sessionTokenManager.current.program.account.sessionTokenV2.fetch(sessionTokenPDA.current);
+                hasValidSession = true;
+            } catch {
+                hasValidSession = false;
+            }
+        }
+
+        if (hasValidSession) {
             if (!tempKeypair.current) {
                 console.error("tempKeypair not available");
                 return;
@@ -455,15 +565,15 @@ const App: React.FC = () => {
             }
         }
 
-        const payer = sessionTokenExists ? tempKeypair.current!.publicKey : publicKey!;
-        
+        const payer = hasValidSession ? tempKeypair.current!.publicKey : publicKey!;
+
         const delegateAccounts: any = {
             payer: payer,
             pda: counterPda,
         };
-        
+
         // Use sessionToken if session exists, otherwise use program ID as placeholder
-        if (sessionTokenExists) {
+        if (hasValidSession) {
             if (!sessionTokenPDA.current) {
                 console.error("sessionTokenPDA not available");
                 return;
@@ -496,33 +606,44 @@ const App: React.FC = () => {
                 setIsSubmitting(true);
                 setTransactionError(null);
                 setTransactionSuccess(null);
+                const txStart = performance.now();
+                let signature: string | null = null;
                 try {
                 const {
                 value: { blockhash, lastValidBlockHeight }
                 } = await connection.getLatestBlockhashAndContext();
                 if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
                 if (!transaction.feePayer) transaction.feePayer = payer;
-                
-                if (sessionTokenExists && tempKeypair.current) {
+
+                if (hasValidSession && tempKeypair.current) {
                     // Sign with temp keypair when session token exists
                     transaction.sign(tempKeypair.current);
-                    const signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
-                    await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                    signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: false });
+                    const c = await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                    if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
                 } else {
                     // Sign with wallet when no session token
                     const signedTransaction = await signTransaction(transaction);
-                    const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
-                    await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                    signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+                    const c = await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                    if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
                 }
                 setEphemeralCounter(Number(counter));
                 console.log(`Transaction confirmed`);
-                setTransactionSuccess(`Delegation successful`);
+                const totalMs = Math.round(performance.now() - txStart);
+                setTransactionSuccess({
+                    message: `[Base] Delegation successful in ${totalMs}ms`,
+                    explorerUrl: signature ? baseExplorerUrl(signature) : undefined,
+                });
                 } catch (error) {
-                setTransactionError(`Transaction failed: ${error}`);
+                setTransactionError({
+                    message: `Transaction failed: ${error}`,
+                    explorerUrl: signature ? baseExplorerUrl(signature) : undefined,
+                });
                 } finally {
                 setIsSubmitting(false);
                 }
-                }, [counterPda, sessionTokenPDA, connection, counter, transferToTempKeypair, publicKey, sessionTokenExists, signTransaction, tempKeypair]);
+                }, [counterPda, sessionTokenPDA, connection, counter, transferToTempKeypair, publicKey, signTransaction, tempKeypair]);
 
     /**
      * Undelegate PDA transaction
@@ -573,28 +694,39 @@ const App: React.FC = () => {
         setIsSubmitting(true);
          setTransactionError(null);
          setTransactionSuccess(null);
+         const txStart = performance.now();
+         let signature: string | null = null;
          try {
              const {
                  value: { blockhash, lastValidBlockHeight }
              } = await connToUse.getLatestBlockhashAndContext();
              if (!transaction.recentBlockhash) transaction.recentBlockhash = blockhash;
              if (!transaction.feePayer) transaction.feePayer = payer;
-             
+
              if (sessionTokenExists && tempKeypair.current) {
                  // Sign with temp keypair when session token exists
                  transaction.sign(tempKeypair.current);
-                 const signature = await connToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
-                 await connToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 signature = await connToUse.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
+                 const c = await connToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
              } else {
                  // Sign with wallet when no session token
                  const signedTransaction = await signTransaction(transaction);
-                 const signature = await connToUse.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: true });
-                 await connToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 signature = await connToUse.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: true });
+                 const c = await connToUse.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+                 if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
              }
              console.log(`Transaction confirmed`);
-             setTransactionSuccess(`Undelegation successful`);
+             const totalMs = Math.round(performance.now() - txStart);
+             setTransactionSuccess({
+                 message: `[ER] Undelegation successful in ${totalMs}ms`,
+                 explorerUrl: signature ? erExplorerUrl(signature) : undefined,
+             });
          } catch (error) {
-             setTransactionError(`Transaction failed: ${error}`);
+             setTransactionError({
+                 message: `Transaction failed: ${error}`,
+                 explorerUrl: signature ? erExplorerUrl(signature) : undefined,
+             });
          } finally {
              setIsSubmitting(false);
          }
@@ -607,7 +739,7 @@ const App: React.FC = () => {
         if (!publicKey || !sessionTokenPDA.current || !sessionTokenManager.current) return;
 
         const transaction = await sessionTokenManager.current.program.methods
-            .revokeSession()
+            .revokeSessionV2()
             .accounts({
                 sessionToken: sessionTokenPDA.current,
             })
@@ -616,6 +748,8 @@ const App: React.FC = () => {
         setIsSubmitting(true);
          setTransactionError(null);
          setTransactionSuccess(null);
+         const txStart = performance.now();
+         let signature: string | null = null;
          try {
              const {
                  value: { blockhash, lastValidBlockHeight }
@@ -625,13 +759,21 @@ const App: React.FC = () => {
 
              // Sign with wallet adapter
              const signedTransaction = await signTransaction(transaction);
-             const signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
-             await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+             signature = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: false });
+             const c = await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature }, "confirmed");
+             if (c.value.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(c.value.err)}`);
              console.log(`Transaction confirmed: ${signature}`);
-             setTransactionSuccess(`Session revoked successfully`);
+             const totalMs = Math.round(performance.now() - txStart);
+             setTransactionSuccess({
+                 message: `[Base] Session revoked in ${totalMs}ms`,
+                 explorerUrl: baseExplorerUrl(signature),
+             });
              setSessionTokenExists(false);
              } catch (error) {
-             setTransactionError(`Transaction failed: ${error}`);
+             setTransactionError({
+                 message: `Transaction failed: ${error}`,
+                 explorerUrl: signature ? baseExplorerUrl(signature) : undefined,
+             });
              } finally {
              setIsSubmitting(false);
              }
@@ -699,10 +841,20 @@ const App: React.FC = () => {
             )}
 
             {transactionError &&
-                <Alert type="error" message={transactionError} onClose={() => setTransactionError(null)}/>}
+                <Alert
+                    type="error"
+                    message={transactionError.message}
+                    href={transactionError.explorerUrl}
+                    onClose={() => setTransactionError(null)}
+                />}
 
             {transactionSuccess &&
-                <Alert type="success" message={transactionSuccess} onClose={() => setTransactionSuccess(null)}/>}
+                <Alert
+                    type="success"
+                    message={transactionSuccess.message}
+                    href={transactionSuccess.explorerUrl}
+                    onClose={() => setTransactionSuccess(null)}
+                />}
 
             <img src={`${process.env.PUBLIC_URL}/magicblock_white.png`} alt="Magic Block Logo"
                  className="magicblock-logo"/>
