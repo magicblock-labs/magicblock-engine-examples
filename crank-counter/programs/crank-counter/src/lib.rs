@@ -10,7 +10,7 @@ use anchor_lang::solana_program::{
 use ephemeral_rollups_sdk::consts::MAGIC_PROGRAM_ID;
 use magicblock_magic_program_api::{args::ScheduleTaskArgs, instruction::MagicBlockInstruction};
 
-declare_id!("E91p5Drj4deMEe1RVLWMLWUfTCwDfronioJe6NRYkbxZ");
+declare_id!("HetkBSVTbemvzJzcmnTS6Ge6LP9KVVXkbtdL6qguG2g9");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 

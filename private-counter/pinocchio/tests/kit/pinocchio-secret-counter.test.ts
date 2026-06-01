@@ -9,8 +9,8 @@ import {
   CounterInstruction,
   IncreaseCounterPayload,
 } from "./schema";
-import { 
-  Connection, 
+import {
+  Connection,
   DELEGATION_PROGRAM_ID,
   delegationRecordPdaFromDelegatedAccount,
   delegationMetadataPdaFromDelegatedAccount,
@@ -20,18 +20,18 @@ import {
   PERMISSION_PROGRAM_ID,
   getAuthToken
 } from "@magicblock-labs/ephemeral-rollups-kit";
-import { 
+import {
   Instruction,
   getAddressEncoder,
-  getProgramDerivedAddress, 
-  AccountRole, 
-  createKeyPairFromBytes, 
-  getAddressFromPublicKey, 
-  address, 
+  getProgramDerivedAddress,
+  AccountRole,
+  createKeyPairFromBytes,
+  getAddressFromPublicKey,
+  address,
   createTransactionMessage,
-  appendTransactionMessageInstructions, 
-  pipe, 
-  setTransactionMessageFeePayer 
+  appendTransactionMessageInstructions,
+  pipe,
+  setTransactionMessageFeePayer
 } from '@solana/kit';
 import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system"
 import * as nacl from 'tweetnacl';
@@ -61,7 +61,7 @@ describe("basic-test", async () => {
   const teeUrl = process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://tee.magicblock.app";
   const teeWsUrl = process.env.EPHEMERAL_WS_ENDPOINT || "wss://tee.magicblock.app";
   const authToken = teeUrl.startsWith("https://tee") ? (await getAuthToken(teeUrl, userPubkey, (message: Uint8Array) => Promise.resolve(nacl.sign.detached(message, new Uint8Array(
-  (JSON.parse(process.env.PRIVATE_KEY ?? "[]") as number[])))))).token : "";
+    (JSON.parse(process.env.PRIVATE_KEY ?? "[]") as number[])))))).token : "";
   const teeUserUrl = `${teeUrl}?token=${authToken}`;
   const teeUserWsUrl = `${teeWsUrl}?token=${authToken}`;
   console.log("User Explorer URL:", `https://solscan.io/?cluster=custom&customUrl=${teeUserUrl}`);
@@ -76,21 +76,17 @@ describe("basic-test", async () => {
     process.env.EPHEMERAL_WS_ENDPOINT || teeUserWsUrl
   )
 
-
-
-  console.log("Base Layer RPC:", connection.clusterUrlHttp, "| Websocket:",  connection.clusterUrlWs);
+  console.log("Base Layer RPC:", connection.clusterUrlHttp, "| Websocket:", connection.clusterUrlWs);
   console.log("ER RPC:", ephemeralConnection.clusterUrlHttp, "| Websocket:", ephemeralConnection.clusterUrlWs);
-  
-
 
   // Get Counter PDA
   const addressEncoder = getAddressEncoder();
   const [counterPda, bump] = await getProgramDerivedAddress({
-      programAddress: PROGRAM_ID,
-      seeds: [
-          Buffer.from("counter"),
-          addressEncoder.encode(userPubkey)
-      ],
+    programAddress: PROGRAM_ID,
+    seeds: [
+      Buffer.from("counter"),
+      addressEncoder.encode(userPubkey)
+    ],
   });
   // Get permission PDA
   const [permissionPda] = await getProgramDerivedAddress({
@@ -107,19 +103,19 @@ describe("basic-test", async () => {
   // Add local validator identity to the remaining accounts if running on localnet
   const remainingAccounts = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1") || process.env.VALIDATOR
     ? [
-        {
-          address: address(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
-          role: AccountRole.READONLY
-        }
+      {
+        address: address(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
+        role: AccountRole.READONLY
+      }
     ]
     : [
-        {
-          address: address("FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySXA"),
-          role: AccountRole.READONLY
-        }
+      {
+        address: address("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"),
+        role: AccountRole.READONLY
+      }
     ];
   console.log("PER Validator: ", remainingAccounts[0].address);
-  
+
   // Ensure test wallet has SOL
   beforeAll(async () => {
     await airdropSolIfNeeded(
@@ -137,8 +133,8 @@ describe("basic-test", async () => {
 
       // Prepare transaction
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE  },
+        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+        { address: counterPda, role: AccountRole.WRITABLE },
         { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
         { address: PERMISSION_PROGRAM_ID, role: AccountRole.READONLY },
         { address: permissionPda, role: AccountRole.WRITABLE },
@@ -153,7 +149,7 @@ describe("basic-test", async () => {
         Buffer.from(CounterInstruction.InitializeCounter, "hex"),
         Buffer.from([bump]),
       ]);
-      const initializeIx : Instruction = {
+      const initializeIx: Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
         data: serializedInstructionData,
@@ -165,7 +161,7 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await connection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
+      const txHash = await connection.sendAndConfirmTransaction(transactionMessage, [userKeypair], { commitment: "confirmed", skipPreflight: true })
 
       console.log(`${Date.now() - start}ms (Base Layer) Initialize txHash: ${txHash}`);
 
@@ -181,8 +177,8 @@ describe("basic-test", async () => {
 
       // Prepare transaction
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE  },
+        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+        { address: counterPda, role: AccountRole.WRITABLE },
       ];
       const serializedInstructionData = Buffer.concat([
         Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
@@ -192,7 +188,7 @@ describe("basic-test", async () => {
           new IncreaseCounterPayload(1)
         ),
       ]);
-      const increaseCounterIx : Instruction = {
+      const increaseCounterIx: Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
         data: serializedInstructionData,
@@ -204,7 +200,7 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await connection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
+      const txHash = await connection.sendAndConfirmTransaction(transactionMessage, [userKeypair], { commitment: "confirmed", skipPreflight: true })
 
       console.log(`${Date.now() - start}ms (Base Layer) Increment txHash: ${txHash}`);
       expect(txHash).toBeDefined();
@@ -219,8 +215,8 @@ describe("basic-test", async () => {
 
       // Prepare transaction
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE  },
+        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+        { address: counterPda, role: AccountRole.WRITABLE },
         { address: PROGRAM_ID, role: AccountRole.READONLY },
         {
           address: await delegateBufferPdaFromDelegatedAccountAndOwnerProgram(counterPda, PROGRAM_ID),
@@ -247,7 +243,7 @@ describe("basic-test", async () => {
         Buffer.from(CounterInstruction.Delegate, "hex"),
         Buffer.from([bump]),
       ]);
-      const delegateIx : Instruction = {
+      const delegateIx: Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
         data: serializedInstructionData,
@@ -259,7 +255,7 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await connection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
+      const txHash = await connection.sendAndConfirmTransaction(transactionMessage, [userKeypair], { commitment: "confirmed", skipPreflight: true })
 
       console.log(`${Date.now() - start}ms (Base Layer) Delegate txHash: ${txHash}`);
       expect(txHash).toBeDefined();
@@ -272,7 +268,7 @@ describe("basic-test", async () => {
     async () => {
       const start = Date.now();
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
+        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
         { address: counterPda, role: AccountRole.WRITABLE },
       ];
       const serializedInstructionData = Buffer.concat([
@@ -283,7 +279,7 @@ describe("basic-test", async () => {
           new IncreaseCounterPayload(1)
         ),
       ]);
-      const increaseCounterIx : Instruction = {
+      const increaseCounterIx: Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
         data: serializedInstructionData,
@@ -295,13 +291,14 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
+      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair], { skipPreflight: true })
 
       console.log(`${Date.now() - start}ms (ER) Increment txHash: ${txHash}`);
       expect(txHash).toBeDefined();
     },
     TEST_TIMEOUT
   );
+
   it(
     "Commit changes from PER back to Solana",
     async () => {
@@ -309,16 +306,16 @@ describe("basic-test", async () => {
 
       // Prepare transaction
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE  },
-        { address: address(MAGIC_PROGRAM_ID.toString()), role: AccountRole.READONLY},
-        { address: address(MAGIC_CONTEXT_ID.toString()), role: AccountRole.WRITABLE}
+        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+        { address: counterPda, role: AccountRole.WRITABLE },
+        { address: address(MAGIC_PROGRAM_ID.toString()), role: AccountRole.READONLY },
+        { address: address(MAGIC_CONTEXT_ID.toString()), role: AccountRole.WRITABLE }
       ];
       const serializedInstructionData = Buffer.from(
         CounterInstruction.Commit,
         "hex"
       );
-      const commitIx : Instruction = {
+      const commitIx: Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
         data: serializedInstructionData,
@@ -330,7 +327,7 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
+      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair], { skipPreflight: true })
 
 
       const duration = Date.now() - start;
@@ -340,12 +337,13 @@ describe("basic-test", async () => {
     },
     TEST_TIMEOUT
   );
+
   it(
     "Increase counter on PER (2)",
     async () => {
       const start = Date.now();
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
+        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
         { address: counterPda, role: AccountRole.WRITABLE },
       ];
       const serializedInstructionData = Buffer.concat([
@@ -356,7 +354,7 @@ describe("basic-test", async () => {
           new IncreaseCounterPayload(1)
         ),
       ]);
-      const increaseCounterIx : Instruction = {
+      const increaseCounterIx: Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
         data: serializedInstructionData,
@@ -368,7 +366,7 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
+      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair], { skipPreflight: true })
 
       console.log(`${Date.now() - start}ms (ER) Increment txHash: ${txHash}`);
 
@@ -376,6 +374,7 @@ describe("basic-test", async () => {
     },
     TEST_TIMEOUT
   );
+
   it(
     "Undelegate counter from PER",
     async () => {
@@ -383,18 +382,18 @@ describe("basic-test", async () => {
 
       // Prepare transaction
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE  },
+        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+        { address: counterPda, role: AccountRole.WRITABLE },
         { address: PERMISSION_PROGRAM_ID, role: AccountRole.READONLY },
         { address: permissionPda, role: AccountRole.WRITABLE },
-        { address: address(MAGIC_PROGRAM_ID.toString()), role: AccountRole.READONLY},
-        { address: address(MAGIC_CONTEXT_ID.toString()), role: AccountRole.WRITABLE}
+        { address: address(MAGIC_PROGRAM_ID.toString()), role: AccountRole.READONLY },
+        { address: address(MAGIC_CONTEXT_ID.toString()), role: AccountRole.WRITABLE }
       ];
       const serializedInstructionData = Buffer.from(
         CounterInstruction.CommitAndUndelegate,
         "hex"
       );
-      const undelegateIx : Instruction = {
+      const undelegateIx: Instruction = {
         accounts,
         programAddress: PROGRAM_ID,
         data: serializedInstructionData,
@@ -406,7 +405,7 @@ describe("basic-test", async () => {
       );
 
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { skipPreflight: true })
+      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair], { skipPreflight: true })
 
       const duration = Date.now() - start;
       console.log(`${duration}ms (ER) Undelegate txHash: ${txHash}`);

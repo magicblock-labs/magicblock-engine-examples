@@ -17,7 +17,7 @@ use ephemeral_rollups_sdk::{
     ephem::MagicIntentBundleBuilder,
 };
 
-declare_id!("2WJiwbdnwo7qVC3zesZjFWEPUcU2NZbBXf8arMUJ6p89");
+declare_id!("8bc6ZyJAVcf4LS4xrHehetXUdp1ZX4jnEfoBdePRErfb");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 
