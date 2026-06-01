@@ -1,8 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import * as anchor from "@coral-xyz/anchor";
-import {useConnection, useWallet} from '@solana/wallet-adapter-react';
+import {useConnection} from '@solana/wallet-adapter-react';
 import Alert from "./components/Alert";
-import {WizardView, WizardCtx} from "./components/Wizard";
 import {
     Connection,
     Keypair,
@@ -403,9 +402,6 @@ const COMPACT_BUTTON_STYLE = {
 
 const App: React.FC = () => {
     const { connection } = useConnection();
-    const wallet = useWallet();
-    const [viewMode, setViewMode] = useState<'wizard' | 'advanced'>('wizard');
-    const [walletBalanceLamports, setWalletBalanceLamports] = useState<number | null>(null);
     const ephemeralConnection = useRef<Connection | null>(null);
     const validator = useRef<PublicKey | undefined>(undefined);
     const accountsRef = useRef<TempAccount[]>([]);
@@ -488,10 +484,6 @@ const App: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [transactionError, setTransactionError] = useState<string | null>(null);
     const [transactionSuccess, setTransactionSuccess] = useState<string | null>(null);
-    const [lastTxSignature, setLastTxSignature] = useState<{sig: string; isEr: boolean} | null>(null);
-    // Which UI section triggered the latest tx (so banners render inline near that action).
-    // Convention: 'fund' | 'setup' | 'transfer' | 'setup-queue' | 'start-crank' | `delegate-${i}` | `undelegate-${i}`
-    const [lastTxContext, setLastTxContext] = useState<string | null>(null);
     const [setupQueueKeypairPublicKey, setSetupQueueKeypairPublicKey] = useState<PublicKey | null>(
         () => CONFIGURED_SETUP_QUEUE_KEYPAIR?.publicKey ?? null,
     );
@@ -679,172 +671,6 @@ const App: React.FC = () => {
             console.warn("[airdrop] failed for", short, "on", conn.rpcEndpoint, "-", e?.message ?? e);
         }
     }, []);
-
-    // Fund local demo accounts from connected wallet (one popup, batched transfer)
-    const handleFundFromWallet = useCallback(async () => {
-        setTransactionError(null);
-        setTransactionSuccess(null);
-        setLastTxSignature(null);
-        setLastTxContext('fund');
-        if (!wallet.connected || !wallet.publicKey || !wallet.sendTransaction) {
-            setTransactionError("Connect a wallet first.");
-            return;
-        }
-        try {
-            setIsSubmitting(true);
-            const tx = new Transaction();
-            const lamportsPerAccount = LAMPORTS_PER_SOL / 10; // 0.1 SOL each
-            for (const a of accounts) {
-                tx.add(SystemProgram.transfer({
-                    fromPubkey: wallet.publicKey,
-                    toPubkey: a.keypair.publicKey,
-                    lamports: lamportsPerAccount,
-                }));
-            }
-            const {blockhash, lastValidBlockHeight} = await connection.getLatestBlockhash('confirmed');
-            tx.recentBlockhash = blockhash;
-            tx.feePayer = wallet.publicKey;
-            const sig = await wallet.sendTransaction(tx, connection);
-            const result = await connection.confirmTransaction({signature: sig, blockhash, lastValidBlockHeight}, 'confirmed');
-            if (result?.value?.err) {
-                const err: any = new Error(`Transaction failed on-chain: ${JSON.stringify(result.value.err)}`);
-                err.signature = sig;
-                throw err;
-            }
-            console.log("[fund] funded", accounts.length, "accounts. sig:", sig);
-            setLastTxSignature({sig, isEr: false});
-            setTransactionSuccess(`Funded ${accounts.length} accounts with 0.1 SOL each.`);
-            await refreshBalances();
-        } catch (e: any) {
-            console.error("[fund] failed:", e);
-            setTransactionSuccess(null);
-            if (e?.signature) setLastTxSignature({sig: e.signature, isEr: false});
-            setTransactionError(await formatTransactionError(e, connection));
-        } finally {
-            setIsSubmitting(false);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [wallet, accounts, connection]);
-
-    // Delegate `amountStr` tokens of account `i` to the ER
-    const handleDelegateAt = useCallback(async (i: number, amountStr: string) => {
-        setTransactionError(null);
-        setTransactionSuccess(null);
-        setLastTxSignature(null);
-        setLastTxContext(`delegate-${i}`);
-        const eConn = ephemeralConnection.current;
-        if (!eConn || !mint) {
-            setTransactionError("Mint not initialized. Run Setup first.");
-            return;
-        }
-        const a = accounts[i];
-        if (!a) return;
-        try {
-            setIsSubmitting(true);
-            const raw = (amountStr ?? "").trim();
-            if (!raw) throw new Error("Enter amount to delegate");
-            const amountBn = parseAmount(raw, decimals);
-            if (amountBn <= 0n) throw new Error("Invalid amount");
-            console.log(`[delegate] account #${i + 1} (${a.keypair.publicKey.toBase58().slice(0,6)}…) — raw="${raw}", decimals=${decimals}, amountBn=${amountBn.toString()}, displayedBase=${(a.balance ?? 0n).toString()}, displayedEr=${(a.eBalance ?? 0n).toString()}`);
-            const shuttleId = crypto.getRandomValues(new Uint32Array(1))[0];
-            const ixs = await delegateSpl(a.keypair.publicKey, mint, amountBn, {
-                validator: validator.current,
-                tokenProgram: selectedTokenProgram,
-                initIfMissing: true,
-                initAtasIfMissing: true,
-                initVaultIfMissing: true,
-                idempotent: true,
-                shuttleId,
-            });
-            const tx = new Transaction();
-            ixs.forEach(ix => tx.add(ix));
-            tx.feePayer = a.keypair.publicKey;
-            const {blockhash} = await connection.getLatestBlockhash();
-            tx.recentBlockhash = blockhash;
-            tx.sign(a.keypair);
-            const sig = await connection.sendRawTransaction(tx.serialize());
-            await confirmOrThrow(connection, sig);
-            setLastTxSignature({sig, isEr: false});
-            setTransactionSuccess(`Delegated for account #${i + 1}`);
-            console.log("[delegate]", sig);
-            await refreshBalances();
-        } catch (e: any) {
-            console.error("[delegate] failed:", e);
-            setTransactionSuccess(null);
-            if (e?.signature) setLastTxSignature({sig: e.signature, isEr: false});
-            setTransactionError(await formatTransactionError(e, connection));
-        } finally {
-            setIsSubmitting(false);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [accounts, connection, decimals, mint, confirmOrThrow, selectedTokenProgram]);
-
-    // Undelegate + withdraw `amountStr` tokens of account `i`
-    const handleUndelegateAt = useCallback(async (i: number, amountStr: string) => {
-        setTransactionError(null);
-        setTransactionSuccess(null);
-        setLastTxSignature(null);
-        setLastTxContext(`undelegate-${i}`);
-        const eConn = ephemeralConnection.current;
-        if (!eConn || !mint) {
-            setTransactionError("Mint not initialized. Run Setup first.");
-            return;
-        }
-        const a = accounts[i];
-        if (!a) return;
-        try {
-            setIsSubmitting(true);
-            const raw = (amountStr ?? "").trim();
-            if (!raw) throw new Error("Enter amount to undelegate & withdraw");
-            const amountBn = parseAmount(raw, decimals);
-            if (amountBn <= 0n) throw new Error("Invalid amount");
-            console.log(`[undelegate] account #${i + 1} (${a.keypair.publicKey.toBase58().slice(0,6)}…) — raw="${raw}", decimals=${decimals}, amountBn=${amountBn.toString()}, displayedBase=${(a.balance ?? 0n).toString()}, displayedEr=${(a.eBalance ?? 0n).toString()}`);
-            const shuttleId = crypto.getRandomValues(new Uint32Array(1))[0];
-            const ixsW = await withdrawSpl(a.keypair.publicKey, mint, amountBn, {
-                idempotent: true,
-                validator: validator.current,
-                tokenProgram: selectedTokenProgram,
-                shuttleId,
-            });
-            const txW = new Transaction().add(...ixsW);
-            txW.feePayer = a.keypair.publicKey;
-            const {blockhash: bhW} = await connection.getLatestBlockhash({commitment: "finalized"});
-            txW.recentBlockhash = bhW;
-            txW.sign(a.keypair);
-            const sigW = await connection.sendRawTransaction(txW.serialize(), {skipPreflight: true});
-            await confirmOrThrow(connection, sigW);
-            setLastTxSignature({sig: sigW, isEr: false});
-            setTransactionSuccess(`Undelegated & withdrew for account #${i + 1}`);
-            console.log("[undelegate]", sigW);
-            await refreshBalances();
-        } catch (e: any) {
-            console.error("[undelegate] failed:", e);
-            setTransactionSuccess(null);
-            if (e?.signature) setLastTxSignature({sig: e.signature, isEr: false});
-            setTransactionError(await formatTransactionError(e, connection));
-        } finally {
-            setIsSubmitting(false);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [accounts, connection, decimals, mint, confirmOrThrow, selectedTokenProgram]);
-
-    // Track connected-wallet SOL balance for the wizard header
-    useEffect(() => {
-        if (!wallet.connected || !wallet.publicKey) {
-            setWalletBalanceLamports(null);
-            return;
-        }
-        let cancelled = false;
-        const tick = async () => {
-            try {
-                const bal = await connection.getBalance(wallet.publicKey!, 'confirmed');
-                if (!cancelled) setWalletBalanceLamports(bal);
-            } catch {}
-        };
-        tick();
-        const id = setInterval(tick, 8000);
-        return () => { cancelled = true; clearInterval(id); };
-    }, [wallet.connected, wallet.publicKey, connection]);
 
     const refreshBalances = useCallback(async () => {
         const eConn = ephemeralConnection.current;
@@ -1064,8 +890,6 @@ const App: React.FC = () => {
 
     // Unified transfer logic used by both normal and quick transfers
     const performTransfer = useCallback(async (fromIdx: number, toIdx: number, amountUi: string) => {
-        setLastTxSignature(null);
-        setLastTxContext('transfer');
         setTransactionError(null);
         setTransactionSuccess(null);
         const eConn = ephemeralConnection.current;
@@ -1189,7 +1013,6 @@ const App: React.FC = () => {
                 sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
                 await confirmOrThrow(conn, sig);
             }
-            setLastTxSignature({sig, isEr: usesEphemeralConnection || usesQueuedPrivateTransfer});
             setTransactionSuccess(`${usesQueuedPrivateTransfer ? 'Private transfer queued' : 'Transfer confirmed'}`);
             console.log(
                 "Transfer: ",
@@ -1200,7 +1023,6 @@ const App: React.FC = () => {
             await refreshBalances();
         } catch (e: any) {
             setTransactionSuccess(null);
-            if (e?.signature) setLastTxSignature({sig: e.signature, isEr: usesEphemeralConnection || usesQueuedPrivateTransfer});
             setTransactionError(await formatTransactionError(e, conn));
         } finally {
             setIsSubmitting(false);
@@ -1230,7 +1052,6 @@ const App: React.FC = () => {
         }
         setTransactionError(null);
         setTransactionSuccess(null);
-        setLastTxContext('setup');
         const payer = accounts[0].keypair;
         const queueValidator = validator.current;
         if (!queueValidator) {
@@ -1248,7 +1069,6 @@ const App: React.FC = () => {
             return;
         }
         console.log("[setup] preconditions ok, starting setupAll. validator:", queueValidator.toBase58());
-        let capturedSetupSig = "";
         try {
             // Airdrop a small amount of SOL to each local wallet to cover fees (parallel; tolerates faucet-less RPCs)
             console.log("[setup] step 1/3: airdropping to", accounts.length, "accounts (in parallel)");
@@ -1373,7 +1193,6 @@ const App: React.FC = () => {
                     },
                 );
                 console.log("Mint and queue setup tx: ", mintSig);
-                capturedSetupSig = mintSig;
 
                 console.log("Transfer queue: ", transferQueue.toBase58());
 
@@ -1414,7 +1233,6 @@ const App: React.FC = () => {
             setMint(mintKp.publicKey);
             setActiveUseToken2022(useToken2022);
             setDecimals(mintDecimals);
-            setLastTxSignature({sig: capturedSetupSig, isEr: false});
             setTransactionSuccess('Mint created, ATAs initialized, tokens minted, queue initialized, and crank started');
 
             await refreshBalances();
@@ -1429,7 +1247,6 @@ const App: React.FC = () => {
                     console.error("[setup] getLogs() itself threw:", logErr);
                 }
             }
-            if (e?.signature) setLastTxSignature({sig: e.signature, isEr: false});
             setTransactionError(await formatTransactionError(e, connection));
         }
     }, [accounts, connection, ensureAirdropLamports, refreshBalances, setupTokenProgram, useToken2022]);
@@ -1787,59 +1604,8 @@ const App: React.FC = () => {
 
     const lamportsTransferSender = setupQueueKeypairPublicKey ?? accounts[0]?.keypair.publicKey ?? null;
 
-    const wizardCtx: WizardCtx = {
-        accounts, mint, decimals, connection,
-        ephemeralEndpoint: ephemeralConnection.current?.rpcEndpoint,
-        baseEndpoint: connection.rpcEndpoint,
-        validator: validator.current,
-        isSubmitting, transactionError, transactionSuccess,
-        lastTxSignature,
-        walletConnectedBalance: walletBalanceLamports,
-        useToken2022,
-        setUseToken2022,
-        activeUseToken2022,
-        srcIndex, setSrcIndex,
-        dstIndex, setDstIndex,
-        amountStr, setAmountStr,
-        transferVisibility, setTransferVisibility,
-        fromBalance, setFromBalance,
-        toBalance, setToBalance,
-        delegateAmounts, setDelegateAmounts,
-        undelegateAmounts, setUndelegateAmounts,
-        handleFundFromWallet,
-        setupAll,
-        // Wrap legacy handlers so they stamp the context (banner localizes correctly)
-        handleSetupQueue: async () => { setLastTxContext('setup-queue'); await handleSetupQueue(); },
-        handleStartQueueCrank: async () => { setLastTxContext('start-crank'); await handleStartQueueCrank(); },
-        lastTxContext,
-        handleTransfer,
-        handleDelegateAt,
-        handleUndelegateAt,
-        refreshBalances,
-        onSwitchToAdvanced: () => setViewMode('advanced'),
-    };
-
-    if (viewMode === 'wizard') {
-        return <WizardView ctx={wizardCtx}/>;
-    }
-
     return (
         <>
-            <div style={{maxWidth: 1100, margin: "12px auto 0", padding: "0 24px", textAlign: "right"}}>
-                <button
-                    onClick={() => setViewMode('wizard')}
-                    style={{
-                        background: "transparent",
-                        border: "1px solid rgba(255,255,255,0.2)",
-                        color: "#e5e7eb",
-                        borderRadius: 6,
-                        padding: "6px 12px",
-                        fontSize: 12,
-                        cursor: "pointer",
-                    }}>
-                    ← Back to wizard
-                </button>
-            </div>
             <style>{`
               @media (max-width: 640px) {
                 .counter-ui {
