@@ -45,6 +45,22 @@ body {
     margin-bottom: 20px;
 }
 
+/* Delegate / Undelegate row: same width + gap as the counter squares below,
+   so each button sits directly above its matching square. */
+.counter-ui .delegate-buttons {
+    display: flex;
+    justify-content: space-around;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.counter-ui .delegate-buttons button {
+    width: 100px;
+    min-width: 100px;
+    margin: 25px 0;
+    padding: 8px 0;
+}
+
 .counter-ui .privacy-buttons {
     display: flex;
     flex-direction: column;
@@ -55,6 +71,66 @@ body {
 
 .counter-ui .privacy-buttons button {
     margin: 0;
+}
+
+/* iOS-style toggle for the Set Public ↔ Set Private state. The hidden
+   <input type="checkbox"> drives the visual via :checked. */
+.counter-ui .privacy-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #eee;
+    font-size: 0.8rem;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.counter-ui .privacy-toggle.is-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.counter-ui .privacy-toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.counter-ui .privacy-toggle-label {
+    letter-spacing: 0.04em;
+}
+
+.counter-ui .privacy-toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 18px;
+    background: #444;
+    border-radius: 18px;
+    transition: background 0.2s;
+}
+
+.counter-ui .privacy-toggle-slider::before {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    left: 2px;
+    top: 2px;
+    background: #eee;
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+
+.counter-ui .privacy-toggle input:checked ~ .privacy-toggle-slider {
+    background: #62fffc;
+}
+
+.counter-ui .privacy-toggle input:checked ~ .privacy-toggle-slider::before {
+    transform: translateX(18px);
 }
 
 .counter-ui .counter-cell {
@@ -69,6 +145,37 @@ body {
     line-height: 1;
     -webkit-user-select: none;
     user-select: none;
+}
+
+.counter-ui .privacy-toggle.counter-cell-toggle {
+    margin-top: 28px;
+}
+
+/* Small Explorer button under the toggle — capped at the 100px square width so
+   it never overflows the cell. */
+.counter-ui .counter-cell button {
+    margin: 10px 0 0;
+    width: 100px;
+    min-width: 0;
+    max-width: 100px;
+    padding: 5px 8px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+/* Blur the ER counter square when permission is private — the toggle below
+   stays sharp so it remains interactive. Hover unblurs as a small affordance
+   that the data is still readable to the authority. */
+.counter-ui .counter-cell.is-private .square {
+    filter: blur(8px);
+    transition: filter 0.25s ease;
+}
+
+/* Hover scoped to the square itself — hovering the toggle below shouldn't
+   reveal the value. */
+.counter-ui .counter-cell.is-private .square:hover {
+    filter: blur(0);
 }
 
 .counter-ui .mode-toggle {
