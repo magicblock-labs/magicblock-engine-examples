@@ -51,6 +51,19 @@ const App: React.FC = () => {
     const [transactionError, setTransactionError] = useState<{ message: string; explorerUrl?: string } | null>(null);
     const [transactionSuccess, setTransactionSuccess] = useState<{ message: string; explorerUrl?: string } | null>(null);
     const [sessionTokenExists, setSessionTokenExists] = useState<boolean>(false);
+    // Epoch seconds — set from on-chain `valid_until` after fetch / create. Null
+    // when no session, or when we couldn't decode the token (treated as "alive"
+    // so we don't silently push users into Renew when the decoder is just out of
+    // sync with the on-chain layout).
+    const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
+    // Ticking clock so `isSessionExpired` recomputes without manual refresh.
+    // 15s is fine — session validity is at minute granularity.
+    const [nowEpoch, setNowEpoch] = useState<number>(() => Math.floor(Date.now() / 1000));
+    useEffect(() => {
+        const id = setInterval(() => setNowEpoch(Math.floor(Date.now() / 1000)), 15_000);
+        return () => clearInterval(id);
+    }, []);
+    const isSessionExpired = sessionExpiresAt !== null && nowEpoch >= sessionExpiresAt;
     const counterProgramClient = useRef<Program | null>(null);
     const [counterPda, setCounterPda] = useState<PublicKey | null>(null);
     let counterSubscriptionId = useRef<number | null>(null);
@@ -191,6 +204,19 @@ const App: React.FC = () => {
             // AccountDiscriminatorMismatch 0xbba).
             const accountInfo = await connection.getAccountInfo(pda);
             setSessionTokenExists(!!accountInfo);
+            if (accountInfo && sessionTokenManager.current) {
+                try {
+                    const tok = await sessionTokenManager.current.program.account.sessionTokenV2.fetch(pda);
+                    // BN | number — both safely fit i64 dates within ~year 2106.
+                    const v = (tok as any).validUntil;
+                    setSessionExpiresAt(typeof v?.toNumber === "function" ? v.toNumber() : Number(v));
+                } catch {
+                    // Schema mismatch — leave null so the UI doesn't lie about expiry.
+                    setSessionExpiresAt(null);
+                }
+            } else {
+                setSessionExpiresAt(null);
+            }
         };
         
         initSessionManager().catch(console.error);
@@ -274,6 +300,11 @@ const App: React.FC = () => {
     const increaseCounterTx = useCallback(async () => {
         if (!counterPda) {
             console.error("counterPda not available");
+            return;
+        }
+
+        if (sessionTokenExists && isSessionExpired) {
+            setTransactionError({ message: "Session expired — click Renew Session to continue." });
             return;
         }
 
@@ -411,7 +442,7 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [isDelegated, counterPda, sessionTokenPDA, connection, transferToTempKeypair, publicKey, sessionTokenExists, signTransaction]);
+    }, [isDelegated, counterPda, sessionTokenPDA, connection, transferToTempKeypair, publicKey, sessionTokenExists, isSessionExpired, signTransaction]);
 
     /**
      * Create session transaction
@@ -505,6 +536,7 @@ const App: React.FC = () => {
                     throw new Error("Session token account not found after create");
                 }
                 setSessionTokenExists(true);
+                setSessionExpiresAt(validUntilBN.toNumber());
                 const totalMs = Math.round(performance.now() - txStart);
                 setTransactionSuccess({
                     message: `[Base] Session created in ${totalMs}ms`,
@@ -512,6 +544,7 @@ const App: React.FC = () => {
                 });
             } else {
                 setSessionTokenExists(true);
+                setSessionExpiresAt(validUntilBN.toNumber());
                 const totalMs = Math.round(performance.now() - txStart);
                 setTransactionSuccess({
                     message: `[Base] Session created in ${totalMs}ms`,
@@ -534,6 +567,11 @@ const App: React.FC = () => {
     const delegatePdaTx = useCallback(async () => {
         console.log("Delegate PDA transaction");
         if (!counterPda) return;
+
+        if (sessionTokenExists && isSessionExpired) {
+            setTransactionError({ message: "Session expired — click Renew Session to continue." });
+            return;
+        }
 
         // Local decision only — do NOT side-effect setSessionTokenExists from here.
         // The decoder check is too strict (returns false when SDK schema and on-chain
@@ -643,7 +681,7 @@ const App: React.FC = () => {
                 } finally {
                 setIsSubmitting(false);
                 }
-                }, [counterPda, sessionTokenPDA, connection, counter, transferToTempKeypair, publicKey, signTransaction, tempKeypair]);
+                }, [counterPda, sessionTokenPDA, connection, counter, transferToTempKeypair, publicKey, signTransaction, tempKeypair, sessionTokenExists, isSessionExpired]);
 
     /**
      * Undelegate PDA transaction
@@ -651,6 +689,11 @@ const App: React.FC = () => {
     const undelegatePdaTx = useCallback(async () => {
         if (!counterPda) return;
         console.log("Undelegate PDA transaction");
+
+        if (sessionTokenExists && isSessionExpired) {
+            setTransactionError({ message: "Session expired — click Renew Session to continue." });
+            return;
+        }
 
         if (sessionTokenExists) {
             if (!tempKeypair.current) {
@@ -730,7 +773,7 @@ const App: React.FC = () => {
          } finally {
              setIsSubmitting(false);
          }
-    }, [counterPda, sessionTokenPDA, publicKey, sessionTokenExists, signTransaction, ephemeralConnection]);
+    }, [counterPda, sessionTokenPDA, publicKey, sessionTokenExists, isSessionExpired, signTransaction, ephemeralConnection]);
 
     /**
      * Revoke session transaction
@@ -769,6 +812,7 @@ const App: React.FC = () => {
                  explorerUrl: baseExplorerUrl(signature),
              });
              setSessionTokenExists(false);
+             setSessionExpiresAt(null);
              } catch (error) {
              setTransactionError({
                  message: `Transaction failed: ${error}`,
@@ -822,6 +866,10 @@ const App: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '20px' }}>
                 {!sessionTokenExists ? (
                     <button onClick={createSessionTx} style={{ padding: '8px 12px', margin: '0px', background: 'transparent', border: '2px solid #eee', color: '#eee', width: '150px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>Create Session</button>
+                ) : isSessionExpired ? (
+                    // createSessionTx always bumps the nonce → fresh PDA, so it
+                    // doubles as Renew (the previous, expired PDA is left to lapse).
+                    <button onClick={createSessionTx} style={{ padding: '8px 12px', margin: '0px', background: 'transparent', border: '2px solid #eee', color: '#eee', width: '150px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>Renew Session</button>
                 ) : (
                     <button onClick={revokeSessionTx} style={{ padding: '8px 12px', margin: '0px', background: 'transparent', border: '2px solid #eee', color: '#eee', width: '150px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>Revoke Session</button>
                 )}
