@@ -9,14 +9,34 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 
 > To view integrated demos for specific usecases, please look at [MagicBlock Starter Kits](https://github.com/magicblock-labs/starter-kits).
 
-## 👷Examples
+## 👷 Examples
 
-- [Anchor Counter](./anchor-counter/README.md) - A simple counter that can be incremented. Tests use the ts sdk to delegate/undelegate accounts and run transactions.
-- [Rust Counter](./rust-counter/README.md) - A simple counter that can be incremented. Tests natively to delegate/undelegate accounts and run transactions.
-- [Bolt Counter](./bolt-counter/README.md) - A simple counter that can be incremented. Tests use the bolt sdk to delegate/undelegate accounts and run transactions.
-- [Crank Counter](./crank-counter/README.md) - A counter program with scheduled cranks for automatic execution using MagicBlock's crank system.
-- [Dummy Token Transfer](./dummy-token-transfer/README.md) - A token transferer that can delegate and execute both on-chain and in the ephemeral rollup.
-- [Magic Actions](./magic-actions/README.md) - Demonstrates using Magic Actions to execute base chain actions from an ephemeral rollup.
+### Counter programs
+
+- [Anchor Counter](./anchor-counter/README.md) — Counter program in Anchor. Tests delegate/undelegate via the TypeScript SDK.
+- [Rust Counter](./rust-counter/README.md) — Counter program in native Rust. Tests delegate/undelegate natively.
+- [Pinocchio Counter](./pinocchio-counter/README.md) — Counter program built with Pinocchio (no heap, no Borsh `Vec`s).
+- [Pinocchio Secret Counter](./pinocchio-secret-counter/README.md) — Pinocchio counter variant exercising secret state on the ER.
+- [Private Counter](./private-counter/README.md) — Anchor counter gated by an on-rollup ephemeral permission account.
+- [Session Keys](./session-keys/README.md) — Counter using gpl-session keys for delegated-signer auth on both base chain and ER.
+- [Crank Counter](./crank-counter/README.md) — Counter driven by MagicBlock's scheduled crank system.
+- [Ephemeral Account Chats](./ephemeral-account-chats/README.md) — Chat program using Anchor "ephemeral accounts" (state lives only on the ER).
+
+### Tokens & payments
+
+- [Dummy Token Transfer](./dummy-token-transfer/README.md) — Token transferer that can delegate and execute on both the base chain and the ER.
+- [SPL Tokens](./spl-tokens/) — SPL token delegation example.
+
+### VRF & games
+
+- [Roll Dice](./roll-dice/README.md) — Dice roll using a verifiable random function (VRF) on the ER.
+- [Rewards (Delegated VRF)](./rewards-delegated-vrf/README.md) — Rewards distribution program using delegated VRF.
+- [Rock Paper Scissor](./rock-paper-scissor/README.md) — Two-player RPS with hidden moves on the ER until reveal.
+
+### Other patterns
+
+- [Magic Actions](./magic-actions/README.md) — Execute base-chain actions from inside an Ephemeral Rollup.
+- [On-Curve Delegation](./oncurve-delegation/README.md) — Delegate on-curve (non-PDA) accounts to the ER and manage their lifecycle.
 
 ## Backward Compatibility
 
