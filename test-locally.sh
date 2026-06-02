@@ -334,6 +334,9 @@ cleanup() {
 # Set up trap to catch INT (Ctrl+C), TERM, and EXIT
 trap cleanup EXIT INT TERM
 
+echo "Installing dependencies..."
+cd test-utils && yarn install && cd ..
+
 echo "Starting validators..."
 
 # Configure Solana
@@ -464,9 +467,10 @@ run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --
 # re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
 run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
 
-# dummy-token-transfer + magic-actions: have router-based tests (devnet-router) plus
-# local *-local.ts variants. We run only the local variants here.
-run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts; cd .."
+# dummy-token-transfer uses MagicSVM in-process rather than the local validators.
+# Its package script builds the program and runs the current tests with
+# --skip-local-validator/--skip-deploy.
+run_test "dummy-token-transfer" "cd dummy-token-transfer && yarn install && yarn test; cd .."
 
 # ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
 # anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
