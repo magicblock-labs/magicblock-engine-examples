@@ -108,7 +108,7 @@ describe("basic-test", async () => {
       },
     );
     if (res instanceof FailedTransactionMetadata) {
-      throw new Error(`Initialize failed: ${res.meta()}`);
+      throw new Error(`Initialize failed: ${res}`);
     }
   });
 
@@ -154,7 +154,7 @@ describe("basic-test", async () => {
       },
     );
     if (res instanceof FailedTransactionMetadata) {
-      throw new Error(`Increase counter failed: ${res.meta().prettyLogs()}`);
+      throw new Error(`Increase counter failed: ${res}`);
     }
   });
 
@@ -242,7 +242,7 @@ describe("basic-test", async () => {
       },
     );
     if (res instanceof FailedTransactionMetadata) {
-      throw new Error(`Delegate failed: ${res.meta().logs()}`);
+      throw new Error(`Delegate failed: ${res}`);
     }
   });
 
@@ -342,7 +342,7 @@ describe("basic-test", async () => {
       },
     );
     if (res instanceof FailedTransactionMetadata) {
-      throw new Error(`Commit failed: ${res.err().toString()}`);
+      throw new Error(`Commit failed: ${res}`);
     }
   });
 
