@@ -2,9 +2,9 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN, Program, web3 } from "@coral-xyz/anchor";
 import { DummyTransfer } from "../target/types/dummy_transfer";
 import {
-  keypairToMagicSigner,
-  publicKeyToMagicAddress,
-  transactionToMagicTransaction,
+  signerFromWeb3Keypair,
+  addressFromWeb3PublicKey,
+  transactionFromWeb3Transaction,
 } from "test-utils";
 import {
   FailedTransactionMetadata,
@@ -18,9 +18,9 @@ import * as path from "path";
 
 const program = anchor.workspace.DummyTransfer as Program<DummyTransfer>;
 const programBytes = fs.readFileSync(
-  path.join(__dirname, "../target/deploy/dummy_transfer.so")
+  path.join(__dirname, "../target/deploy/dummy_transfer.so"),
 );
-const programId = publicKeyToMagicAddress(program.programId);
+const programId = addressFromWeb3PublicKey(program.programId);
 
 type ExpectedBalances = { andy: string | null; bob: string | null };
 
@@ -40,19 +40,22 @@ function expectSuccess(meta: TransactionMetadata | FailedTransactionMetadata) {
 function getBalance(
   svm: MagicSVM,
   balancePda: web3.PublicKey,
-  layer: TransactionTarget
+  layer: TransactionTarget,
 ): string | null {
   try {
-    const accountData = svm.getAccountFor(publicKeyToMagicAddress(balancePda), {
-      target: layer,
-    });
+    const accountData = svm.getAccountFor(
+      addressFromWeb3PublicKey(balancePda),
+      {
+        target: layer,
+      },
+    );
     if (!accountData.exists) {
       return null;
     }
 
     const account = program.coder.accounts.decode(
       "balance",
-      Buffer.from(accountData.data)
+      Buffer.from(accountData.data),
     );
     return account.balance.toString();
   } catch (e) {
@@ -64,7 +67,7 @@ function getBalances(
   svm: MagicSVM,
   andyBalancePda: web3.PublicKey,
   bobBalancePda: web3.PublicKey,
-  layer: TransactionTarget
+  layer: TransactionTarget,
 ): ExpectedBalances {
   return {
     andy: getBalance(svm, andyBalancePda, layer),
@@ -76,22 +79,24 @@ function printBalances(
   svm: MagicSVM,
   andyBalancePda: web3.PublicKey,
   bobBalancePda: web3.PublicKey,
-  layer: TransactionTarget
+  layer: TransactionTarget,
 ) {
   const balances = getBalances(svm, andyBalancePda, bobBalancePda, layer);
 
   if (balances.andy !== null) {
     console.log(
-      `${layer === "ephemeral" ? "Ephemeral" : "Base"} Andy Balance: ${balances.andy
-      }`
+      `${layer === "ephemeral" ? "Ephemeral" : "Base"} Andy Balance: ${
+        balances.andy
+      }`,
     );
   } else {
     console.log("Andy Balance PDA not initialized");
   }
   if (balances.bob !== null) {
     console.log(
-      `${layer === "ephemeral" ? "Ephemeral" : "Base"} Bob Balance: ${balances.bob
-      }`
+      `${layer === "ephemeral" ? "Ephemeral" : "Base"} Bob Balance: ${
+        balances.bob
+      }`,
     );
   } else {
     console.log("Bob Balance PDA not initialized");
@@ -103,7 +108,7 @@ function expectBalances(
   andyBalancePda: web3.PublicKey,
   bobBalancePda: web3.PublicKey,
   layer: TransactionTarget,
-  expected: ExpectedBalances
+  expected: ExpectedBalances,
 ) {
   const balances = getBalances(svm, andyBalancePda, bobBalancePda, layer);
   expect(balances).to.deep.equal(expected);
@@ -114,16 +119,16 @@ describe("dummy-transfer", () => {
 
   const andy = web3.Keypair.generate();
   const bob = web3.Keypair.generate();
-  const andySigner = keypairToMagicSigner(andy);
-  const bobSigner = keypairToMagicSigner(bob);
+  const andySigner = signerFromWeb3Keypair(andy);
+  const bobSigner = signerFromWeb3Keypair(bob);
 
   const andyBalancePda = web3.PublicKey.findProgramAddressSync(
     [andy.publicKey.toBuffer()],
-    program.programId
+    program.programId,
   )[0];
   const bobBalancePda = web3.PublicKey.findProgramAddressSync(
     [bob.publicKey.toBuffer()],
-    program.programId
+    program.programId,
   )[0];
 
   console.log("Program ID: ", program.programId.toBase58());
@@ -137,19 +142,19 @@ describe("dummy-transfer", () => {
 
     // Airdrop to keypairs
     const andyAirdropSignature = svm.airdrop(
-      publicKeyToMagicAddress(andy.publicKey),
-      BigInt(2 * web3.LAMPORTS_PER_SOL)
+      addressFromWeb3PublicKey(andy.publicKey),
+      BigInt(2 * web3.LAMPORTS_PER_SOL),
     );
     expectSuccess(andyAirdropSignature);
     const bobAirdropSignature = svm.airdrop(
-      publicKeyToMagicAddress(bob.publicKey),
-      BigInt(2 * web3.LAMPORTS_PER_SOL)
+      addressFromWeb3PublicKey(bob.publicKey),
+      BigInt(2 * web3.LAMPORTS_PER_SOL),
     );
     expectSuccess(bobAirdropSignature);
   });
 
   it("Initialize balances", async () => {
-    const andyInitializeTx = await transactionToMagicTransaction(
+    const andyInitializeTx = await transactionFromWeb3Transaction(
       await program.methods
         .initialize()
         .accountsPartial({
@@ -159,13 +164,13 @@ describe("dummy-transfer", () => {
       {
         recentBlockhash: svm.latestBlockhash(),
         payer: andySigner,
-      }
+      },
     );
     const andyInitializeSignature = svm.sendTransaction(andyInitializeTx);
     expectSuccess(andyInitializeSignature);
     console.log("✅ Initialized Andy Balance PDA!");
 
-    const bobInitializeTx = await transactionToMagicTransaction(
+    const bobInitializeTx = await transactionFromWeb3Transaction(
       await program.methods
         .initialize()
         .accounts({
@@ -175,7 +180,7 @@ describe("dummy-transfer", () => {
       {
         recentBlockhash: svm.latestBlockhash(),
         payer: bobSigner,
-      }
+      },
     );
     const bobInitializeSignature = svm.sendTransaction(bobInitializeTx);
     expectSuccess(bobInitializeSignature);
@@ -194,7 +199,7 @@ describe("dummy-transfer", () => {
   });
 
   it("Transfer on base chain from Andy to Bob", async () => {
-    const tx = await transactionToMagicTransaction(
+    const tx = await transactionFromWeb3Transaction(
       await program.methods
         .transfer(new BN(5))
         .accounts({
@@ -205,7 +210,7 @@ describe("dummy-transfer", () => {
       {
         recentBlockhash: svm.latestBlockhash(),
         payer: andySigner,
-      }
+      },
     );
     const signature = svm.sendTransaction(tx);
     expectSuccess(signature);
@@ -225,7 +230,7 @@ describe("dummy-transfer", () => {
 
   it("Delegate Balances of Andy and Bob", async () => {
     const validator = new web3.PublicKey(svm.validatorIdentity().toString());
-    const tx = await transactionToMagicTransaction(
+    const tx = await transactionFromWeb3Transaction(
       await program.methods
         .delegate({
           commitFrequencyMs: 30000,
@@ -250,7 +255,7 @@ describe("dummy-transfer", () => {
         recentBlockhash: svm.latestBlockhash(),
         payer: andySigner,
         signers: [bobSigner],
-      }
+      },
     );
     const signature = svm.sendTransaction(tx);
     expectSuccess(signature);
@@ -268,7 +273,7 @@ describe("dummy-transfer", () => {
   });
 
   it("Perform transfers in the ephemeral rollup", async () => {
-    const tx1 = await transactionToMagicTransaction(
+    const tx1 = await transactionFromWeb3Transaction(
       await program.methods
         .transfer(new BN(5))
         .accounts({
@@ -279,13 +284,13 @@ describe("dummy-transfer", () => {
       {
         recentBlockhash: svm.latestBlockhash(),
         payer: andySigner,
-      }
+      },
     );
     const signature1 = svm.sendTransaction(tx1, { target: "ephemeral" });
     expectSuccess(signature1);
     console.log("✅ Transfered 5 from Andy to Bob in the ephemeral rollup");
 
-    const tx2 = await transactionToMagicTransaction(
+    const tx2 = await transactionFromWeb3Transaction(
       await program.methods
         .transfer(new BN(15))
         .accounts({
@@ -296,7 +301,7 @@ describe("dummy-transfer", () => {
       {
         recentBlockhash: svm.latestBlockhash(),
         payer: bobSigner,
-      }
+      },
     );
     const signature2 = svm.sendTransaction(tx2, { target: "ephemeral" });
     expectSuccess(signature2);
@@ -315,7 +320,7 @@ describe("dummy-transfer", () => {
   });
 
   it("Undelegate Balances of Andy and Bob", async () => {
-    const tx1 = await transactionToMagicTransaction(
+    const tx1 = await transactionFromWeb3Transaction(
       await program.methods
         .undelegate()
         .accounts({
@@ -325,12 +330,12 @@ describe("dummy-transfer", () => {
       {
         recentBlockhash: svm.latestBlockhash(),
         payer: andySigner,
-      }
+      },
     );
     const signature1 = svm.sendTransaction(tx1, { target: "ephemeral" });
     expectSuccess(signature1);
 
-    const tx2 = await transactionToMagicTransaction(
+    const tx2 = await transactionFromWeb3Transaction(
       await program.methods
         .undelegate()
         .accounts({
@@ -340,7 +345,7 @@ describe("dummy-transfer", () => {
       {
         recentBlockhash: svm.latestBlockhash(),
         payer: bobSigner,
-      }
+      },
     );
     const signature2 = svm.sendTransaction(tx2, { target: "ephemeral" });
     expectSuccess(signature2);

@@ -1,7 +1,7 @@
 import type { web3 } from "@coral-xyz/anchor";
 import {
   AccountMeta,
-  Address as Web3Address,
+  Address,
   Blockhash,
   Signer,
   Transaction,
@@ -9,14 +9,7 @@ import {
 } from "@solana/web3.js";
 import { type SignatureBytes } from "@solana/keys";
 import nacl from "tweetnacl";
-
-export type AnchorPublicKey = Pick<web3.PublicKey, "toBuffer">;
-export type AnchorAccountMeta = web3.AccountMeta;
-export type AnchorInstruction = web3.TransactionInstruction;
-export type AnchorTransaction = Pick<web3.Transaction, "instructions">;
-
-export type AnchorKeypair = Pick<web3.Keypair, "publicKey" | "secretKey">;
-export type MagicSvmAddress = Signer["address"];
+import { AccountRole, TransactionMessage } from "@solana/kit";
 
 export type MagicSvmTransactionOptions = {
   recentBlockhash: Blockhash;
@@ -24,59 +17,95 @@ export type MagicSvmTransactionOptions = {
   signers?: Signer[];
 };
 
-export function publicKeyToMagicAddress(
-  publicKey: AnchorPublicKey
-): MagicSvmAddress {
-  return new Web3Address(publicKey.toBuffer()).toBase58() as MagicSvmAddress;
+export function addressFromWeb3PublicKey(publicKey: web3.PublicKey): Address {
+  return new Address(publicKey.toBuffer());
 }
 
-export function keypairToMagicSigner(keypair: AnchorKeypair): Signer {
-  const signerAddress = publicKeyToMagicAddress(keypair.publicKey);
+export function signerFromWeb3Keypair(keypair: web3.Keypair): Signer {
+  const signerAddress = addressFromWeb3PublicKey(keypair.publicKey);
 
   return {
-    address: signerAddress,
+    address: signerAddress.toBase58(),
     signTransactions: async (transactions) => {
       return transactions.map((tx) => ({
-        [signerAddress as string]: nacl.sign.detached(
+        [signerAddress.toBase58() as string]: nacl.sign.detached(
           new Uint8Array(tx.messageBytes),
-          keypair.secretKey
+          keypair.secretKey,
         ) as SignatureBytes,
       }));
     },
   };
 }
 
-export function accountMetaToMagicAccountMeta(
-  account: AnchorAccountMeta
+export function accountMetaFromWeb3AccountMeta(
+  account: web3.AccountMeta,
 ): AccountMeta {
   return {
-    pubkey: new Web3Address(account.pubkey.toBuffer()),
+    pubkey: new Address(account.pubkey.toBuffer()),
     isSigner: account.isSigner,
     isWritable: account.isWritable,
   };
 }
 
-export function instructionToMagicInstruction(
-  instruction: AnchorInstruction
+export function instructionFromWeb3Instruction(
+  instruction: web3.TransactionInstruction,
 ): TransactionInstruction {
   return new TransactionInstruction({
-    programId: new Web3Address(instruction.programId.toBuffer()),
-    keys: instruction.keys.map(accountMetaToMagicAccountMeta),
+    programId: new Address(instruction.programId.toBuffer()),
+    keys: instruction.keys.map(accountMetaFromWeb3AccountMeta),
     data: instruction.data,
   });
 }
 
-export async function transactionToMagicTransaction(
-  anchorTransaction: AnchorTransaction,
-  options: MagicSvmTransactionOptions
+export async function transactionFromWeb3Transaction(
+  tx: web3.Transaction,
+  options: MagicSvmTransactionOptions,
 ): Promise<Transaction> {
   const transaction = new Transaction();
 
-  for (const instruction of anchorTransaction.instructions) {
-    transaction.add(instructionToMagicInstruction(instruction));
+  for (const instruction of tx.instructions) {
+    transaction.add(instructionFromWeb3Instruction(instruction));
   }
 
-  transaction.feePayer = new Web3Address(options.payer.address);
+  transaction.feePayer = new Address(options.payer.address);
+  transaction.recentBlockhash = options.recentBlockhash;
+  transaction.lastValidBlockHeight = 0n;
+
+  for (const signer of options.signers ?? []) {
+    await transaction.partialSign(signer);
+  }
+  await transaction.partialSign(options.payer);
+
+  console.log(transaction);
+  console.log(transaction.signatures);
+  console.log(transaction.signature);
+
+  return transaction;
+}
+
+export async function transactionFromKitTransactionMessage(
+  msg: TransactionMessage,
+  options: MagicSvmTransactionOptions,
+): Promise<Transaction> {
+  const transaction = new Transaction();
+
+  for (const instruction of msg.instructions) {
+    transaction.add({
+      programId: new Address(instruction.programAddress),
+      keys: [...instruction.accounts].map((account) => ({
+        pubkey: new Address(account.address),
+        isSigner:
+          account.role === AccountRole.READONLY_SIGNER ||
+          account.role === AccountRole.WRITABLE_SIGNER,
+        isWritable:
+          account.role === AccountRole.WRITABLE ||
+          account.role === AccountRole.WRITABLE_SIGNER,
+      })),
+      data: new Uint8Array(instruction.data),
+    });
+  }
+
+  transaction.feePayer = new Address(options.payer.address);
   transaction.recentBlockhash = options.recentBlockhash;
   transaction.lastValidBlockHeight = 0n;
 

@@ -1,372 +1,368 @@
-import {
-  initializeSolSignerKeypair,
-  airdropSolIfNeeded,
-} from "./initializeKeypair";
 import * as borsh from "borsh";
 import * as fs from "fs";
 import dotenv from "dotenv";
+import { CounterInstruction, IncreaseCounterPayload } from "./schema";
 import {
-  CounterInstruction,
-  IncreaseCounterPayload,
-} from "./schema";
-import { 
-  Connection, 
   DELEGATION_PROGRAM_ID,
   delegationRecordPdaFromDelegatedAccount,
   delegationMetadataPdaFromDelegatedAccount,
   delegateBufferPdaFromDelegatedAccountAndOwnerProgram,
   MAGIC_CONTEXT_ID,
-  MAGIC_PROGRAM_ID 
+  MAGIC_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-kit";
-import { 
+import {
   Instruction,
   getAddressEncoder,
-  getProgramDerivedAddress, 
-  AccountRole, 
-  createKeyPairFromBytes, 
-  getAddressFromPublicKey, 
-  address, 
+  getProgramDerivedAddress,
+  AccountRole,
+  createKeyPairFromBytes,
+  getAddressFromPublicKey,
+  address,
   createTransactionMessage,
-  appendTransactionMessageInstructions, 
-  pipe, 
-  setTransactionMessageFeePayer 
-} from '@solana/kit';
-import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system"
-import { describe, it, beforeAll, expect } from "vitest";
+  appendTransactionMessageInstructions,
+  pipe,
+  createKeyPairSignerFromPrivateKeyBytes,
+} from "@solana/kit";
+import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system";
+import { describe, it, beforeAll } from "vitest";
+import { FailedTransactionMetadata, MagicSVM } from "@magicblock-labs/magicsvm";
+import { transactionFromKitTransactionMessage } from "test-utils";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 dotenv.config();
 
 describe("basic-test", async () => {
-  const TEST_TIMEOUT = 60_000;
-
-  console.log("🧪 Running pinocchio-counter.ts test suite...");
+  const svm = new MagicSVM();
 
   // Load the deployed program keypair and get Proram ID
   const keypairPath = "target/deploy/pinocchio_counter-keypair.json";
   const secretKeyArray = Uint8Array.from(
-    JSON.parse(fs.readFileSync(keypairPath, "utf8"))
+    JSON.parse(fs.readFileSync(keypairPath, "utf8")),
   );
   const keypair = await createKeyPairFromBytes(secretKeyArray);
-  const PROGRAM_ID = await getAddressFromPublicKey(keypair.publicKey)
+  const PROGRAM_ID = await getAddressFromPublicKey(keypair.publicKey);
+  svm.addProgram(
+    PROGRAM_ID,
+    fs.readFileSync("target/deploy/pinocchio_counter.so"),
+  );
 
-  // Connections
-  const connection = await Connection.create(
-    process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
-    process.env.WS_ENDPOINT || "wss://api.devnet.solana.com"
-  )
-  const ephemeralConnection = await Connection.create(
-    process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app",
-    process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app"
-  )
-
-  console.log("Base Layer RPC:", connection.clusterUrlHttp, "| Websocket:",  connection.clusterUrlWs);
-  console.log("ER RPC:", ephemeralConnection.clusterUrlHttp, "| Websocket:", ephemeralConnection.clusterUrlWs);
-  
   // Prepare user
-  const userKeypair = await initializeSolSignerKeypair();
-  const userPubkey = await getAddressFromPublicKey(userKeypair.publicKey)
+  const userSigner = await createKeyPairSignerFromPrivateKeyBytes(
+    Uint8Array.from(
+      new Array(32).fill(0).map((_) => Math.floor(Math.random() * 256)),
+    ),
+  );
+  const userPubkey = userSigner.address;
 
   // Get PDA
   const addressEncoder = getAddressEncoder();
   const [counterPda, bump] = await getProgramDerivedAddress({
-      programAddress: PROGRAM_ID,
-      seeds: [
-          Buffer.from("counter"),
-          addressEncoder.encode(userPubkey)
-      ],
+    programAddress: PROGRAM_ID,
+    seeds: [Buffer.from("counter"), addressEncoder.encode(userPubkey)],
   });
   const bumpBytes = Buffer.from([bump]);
   console.log("Progam ID:", PROGRAM_ID);
   console.log("Counter PDA:", counterPda);
 
   // Ensure test wallet has SOL
-  beforeAll(async () => {
-    await airdropSolIfNeeded(
-      connection.clusterUrlHttp,
-      connection.clusterUrlWs,
-      userPubkey,
-      2
+  beforeAll(() => {
+    svm.airdrop(userPubkey, BigInt(2 * LAMPORTS_PER_SOL));
+  });
+
+  it("Initialize counter on Solana", async () => {
+    // Prepare transaction
+    const accounts = [
+      { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+      { address: counterPda, role: AccountRole.WRITABLE },
+      { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
+    ];
+    const serializedInstructionData = Buffer.concat([
+      Buffer.from(CounterInstruction.InitializeCounter, "hex"),
+      bumpBytes,
+    ]);
+    const initializeIx: Instruction = {
+      accounts,
+      programAddress: PROGRAM_ID,
+      data: serializedInstructionData,
+    };
+    const transactionMessage = pipe(
+      createTransactionMessage({ version: 0 }),
+      (tx) => appendTransactionMessageInstructions([initializeIx], tx),
     );
-  }, TEST_TIMEOUT);
 
-  it(
-    "Initialize counter on Solana",
-    async () => {
-      const start = Date.now();
+    // Send and confirm transaction
+    const res = svm.sendTransaction(
+      await transactionFromKitTransactionMessage(transactionMessage, {
+        payer: userSigner,
+        recentBlockhash: svm.latestBlockhash(),
+      }),
+      {
+        target: "base",
+      },
+    );
+    if (res instanceof FailedTransactionMetadata) {
+      throw new Error(`Initialize failed: ${res}`);
+    }
+  });
 
-      // Prepare transaction
-      const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE  },
-        { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
-      ];
-      const serializedInstructionData = Buffer.concat([
-        Buffer.from(CounterInstruction.InitializeCounter, "hex"),
-        bumpBytes,
-      ]);
-      const initializeIx : Instruction = {
-        accounts,
-        programAddress: PROGRAM_ID,
-        data: serializedInstructionData,
-      };
-      let transactionMessage = pipe(
-        createTransactionMessage({ version: 0 }),
-        tx => setTransactionMessageFeePayer(userPubkey, tx),
-        tx => appendTransactionMessageInstructions([initializeIx], tx)
-      );
+  it("Increase counter on Solana", async () => {
+    // Prepare transaction
+    const accounts = [
+      { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+      { address: counterPda, role: AccountRole.WRITABLE },
+    ];
+    const serializedInstructionData = Buffer.concat([
+      Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
+      bumpBytes,
+      borsh.serialize(
+        IncreaseCounterPayload.schema,
+        new IncreaseCounterPayload(1),
+      ),
+    ]);
+    const increaseCounterIx: Instruction = {
+      accounts,
+      programAddress: PROGRAM_ID,
+      data: serializedInstructionData,
+    };
+    const transactionMessage = pipe(
+      createTransactionMessage({ version: 0 }),
+      (tx) => appendTransactionMessageInstructions([increaseCounterIx], tx),
+    );
 
-      // Send and confirm transaction
-      const txHash = await connection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
+    // Send and confirm transaction
+    const res = svm.sendTransaction(
+      await transactionFromKitTransactionMessage(transactionMessage, {
+        payer: userSigner,
+        recentBlockhash: svm.latestBlockhash(),
+      }),
+      {
+        target: "base",
+      },
+    );
+    if (res instanceof FailedTransactionMetadata) {
+      throw new Error(`Increase counter failed: ${res}`);
+    }
+  });
 
-      console.log(`${Date.now() - start}ms (Base Layer) Initialize txHash: ${txHash}`);
+  it("Delegate counter to ER", async () => {
+    const validatorAddress = address(svm.validatorIdentity().toString());
+    const remainingAccounts = [
+      { address: validatorAddress, role: AccountRole.READONLY },
+    ];
 
-      expect(txHash).toBeDefined();
-    },
-    TEST_TIMEOUT
-  );
-
-  it(
-    "Increase counter on Solana",
-    async () => {
-      const start = Date.now();
-
-      // Prepare transaction
-      const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE  },
-      ];
-      const serializedInstructionData = Buffer.concat([
-        Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
-        bumpBytes,
-        borsh.serialize(
-          IncreaseCounterPayload.schema,
-          new IncreaseCounterPayload(1)
+    // Prepare transaction
+    const accounts = [
+      { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+      { address: counterPda, role: AccountRole.WRITABLE },
+      { address: PROGRAM_ID, role: AccountRole.READONLY },
+      {
+        address: await delegateBufferPdaFromDelegatedAccountAndOwnerProgram(
+          counterPda,
+          PROGRAM_ID,
         ),
-      ]);
-      const increaseCounterIx : Instruction = {
-        accounts,
-        programAddress: PROGRAM_ID,
-        data: serializedInstructionData,
-      };
-      const transactionMessage = pipe(
-        createTransactionMessage({ version: 0 }),
-        tx => setTransactionMessageFeePayer(userPubkey, tx),
-        tx => appendTransactionMessageInstructions([increaseCounterIx], tx)
-      );
+        role: AccountRole.WRITABLE,
+      },
+      {
+        address: await delegationRecordPdaFromDelegatedAccount(counterPda),
+        role: AccountRole.WRITABLE,
+      },
+      {
+        address: await delegationMetadataPdaFromDelegatedAccount(counterPda),
+        role: AccountRole.WRITABLE,
+      },
+      { address: DELEGATION_PROGRAM_ID, role: AccountRole.READONLY },
+      { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
+      ...remainingAccounts,
+    ];
+    const serializedInstructionData = Buffer.concat([
+      Buffer.from(CounterInstruction.Delegate, "hex"),
+      bumpBytes,
+    ]);
+    const delegateIx: Instruction = {
+      accounts,
+      programAddress: PROGRAM_ID,
+      data: serializedInstructionData,
+    };
+    const transactionMessage = pipe(
+      createTransactionMessage({ version: 0 }),
+      (tx) => appendTransactionMessageInstructions([delegateIx], tx),
+    );
 
-      // Send and confirm transaction
-      const txHash = await connection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
+    // Send and confirm transaction
+    const res = svm.sendTransaction(
+      await transactionFromKitTransactionMessage(transactionMessage, {
+        payer: userSigner,
+        recentBlockhash: svm.latestBlockhash(),
+      }),
+      {
+        target: "base",
+      },
+    );
+    if (res instanceof FailedTransactionMetadata) {
+      throw new Error(`Delegate failed: ${res}`);
+    }
+  });
 
-      console.log(`${Date.now() - start}ms (Base Layer) Increment txHash: ${txHash}`);
-      expect(txHash).toBeDefined();
-    },
-    TEST_TIMEOUT
-  );
+  it("Increase counter on ER", async () => {
+    const accounts = [
+      { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+      { address: counterPda, role: AccountRole.WRITABLE },
+    ];
+    const serializedInstructionData = Buffer.concat([
+      Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
+      bumpBytes,
+      borsh.serialize(
+        IncreaseCounterPayload.schema,
+        new IncreaseCounterPayload(1),
+      ),
+    ]);
+    const increaseCounterIx: Instruction = {
+      accounts,
+      programAddress: PROGRAM_ID,
+      data: serializedInstructionData,
+    };
+    const transactionMessage = pipe(
+      createTransactionMessage({ version: 0 }),
+      (tx) => appendTransactionMessageInstructions([increaseCounterIx], tx),
+    );
 
-  it(
-    "Delegate counter to ER",
-    async () => {
-      const start = Date.now();
+    // Send and confirm transaction
+    const res = svm.sendTransaction(
+      await transactionFromKitTransactionMessage(transactionMessage, {
+        payer: userSigner,
+        recentBlockhash: svm.latestBlockhashFor({ target: "ephemeral" }),
+      }),
+      {
+        target: "ephemeral",
+      },
+    );
+    if (res instanceof FailedTransactionMetadata) {
+      throw new Error(`Increase counter failed: ${res}`);
+    }
+  });
 
-      // Validator identity for delegation: env override wins; otherwise default by network.
-      const isLocal = connection.clusterUrlHttp.includes("localhost") || connection.clusterUrlHttp.includes("127.0.0.1");
-      const validatorAddress = address(
-        process.env.VALIDATOR ||
-        (isLocal ? "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev" : "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")
-      );
-      const remainingAccounts = [
-        { address: validatorAddress, role: AccountRole.READONLY }
-      ];
+  it("Commit changes from ER back to Solana", async () => {
+    // Prepare transaction
+    const accounts = [
+      { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+      { address: counterPda, role: AccountRole.WRITABLE },
+      {
+        address: address(MAGIC_PROGRAM_ID.toString()),
+        role: AccountRole.READONLY,
+      },
+      {
+        address: address(MAGIC_CONTEXT_ID.toString()),
+        role: AccountRole.WRITABLE,
+      },
+    ];
+    const serializedInstructionData = Buffer.from(
+      CounterInstruction.Commit,
+      "hex",
+    );
+    const commitIx: Instruction = {
+      accounts,
+      programAddress: PROGRAM_ID,
+      data: serializedInstructionData,
+    };
+    const transactionMessage = pipe(
+      createTransactionMessage({ version: 0 }),
+      (tx) => appendTransactionMessageInstructions([commitIx], tx),
+    );
 
-      // Prepare transaction
-      const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE  },
-        { address: PROGRAM_ID, role: AccountRole.READONLY },
-        {
-          address: await delegateBufferPdaFromDelegatedAccountAndOwnerProgram(counterPda, PROGRAM_ID),
-          role: AccountRole.WRITABLE
-        },
-        {
-          address: await delegationRecordPdaFromDelegatedAccount(counterPda),
-          role: AccountRole.WRITABLE
-        },
-        {
-          address: await delegationMetadataPdaFromDelegatedAccount(counterPda),
-          role: AccountRole.WRITABLE
-        },
-        { address: DELEGATION_PROGRAM_ID, role: AccountRole.READONLY },
-        { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
-        ...remainingAccounts,
-      ];
-      const serializedInstructionData = Buffer.concat([
-        Buffer.from(CounterInstruction.Delegate, "hex"),
-        bumpBytes,
-      ]);
-      const delegateIx : Instruction = {
-        accounts,
-        programAddress: PROGRAM_ID,
-        data: serializedInstructionData,
-      };
-      const transactionMessage = pipe(
-        createTransactionMessage({ version: 0 }),
-        tx => setTransactionMessageFeePayer(userPubkey, tx),
-        tx => appendTransactionMessageInstructions([delegateIx], tx)
-      );
+    // Send and confirm transaction
+    const res = svm.sendTransaction(
+      await transactionFromKitTransactionMessage(transactionMessage, {
+        payer: userSigner,
+        recentBlockhash: svm.latestBlockhashFor({ target: "ephemeral" }),
+      }),
+      {
+        target: "ephemeral",
+      },
+    );
+    if (res instanceof FailedTransactionMetadata) {
+      throw new Error(`Commit failed: ${res}`);
+    }
+  });
 
-      // Send and confirm transaction
-      const txHash = await connection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
+  it("Increase counter on ER (2)", async () => {
+    const accounts = [
+      { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+      { address: counterPda, role: AccountRole.WRITABLE },
+    ];
+    const serializedInstructionData = Buffer.concat([
+      Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
+      bumpBytes,
+      borsh.serialize(
+        IncreaseCounterPayload.schema,
+        new IncreaseCounterPayload(1),
+      ),
+    ]);
+    const increaseCounterIx: Instruction = {
+      accounts,
+      programAddress: PROGRAM_ID,
+      data: serializedInstructionData,
+    };
+    const transactionMessage = pipe(
+      createTransactionMessage({ version: 0 }),
+      (tx) => appendTransactionMessageInstructions([increaseCounterIx], tx),
+    );
 
-      console.log(`${Date.now() - start}ms (Base Layer) Delegate txHash: ${txHash}`);
-      expect(txHash).toBeDefined();
-    },
-    TEST_TIMEOUT
-  );
+    // Send and confirm transaction
+    svm.expireBlockhashFor({ target: "ephemeral" });
+    const res = svm.sendTransaction(
+      await transactionFromKitTransactionMessage(transactionMessage, {
+        payer: userSigner,
+        recentBlockhash: svm.latestBlockhashFor({ target: "ephemeral" }),
+      }),
+      {
+        target: "ephemeral",
+      },
+    );
+    if (res instanceof FailedTransactionMetadata) {
+      throw new Error(`Increase counter failed: ${res}`);
+    }
+  });
 
-  it(
-    "Increase counter on ER",
-    async () => {
-      const start = Date.now();
-      const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE },
-      ];
-      const serializedInstructionData = Buffer.concat([
-        Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
-        bumpBytes,
-        borsh.serialize(
-          IncreaseCounterPayload.schema,
-          new IncreaseCounterPayload(1)
-        ),
-      ]);
-      const increaseCounterIx : Instruction = {
-        accounts,
-        programAddress: PROGRAM_ID,
-        data: serializedInstructionData,
-      };
-      const transactionMessage = pipe(
-        createTransactionMessage({ version: 0 }),
-        tx => setTransactionMessageFeePayer(userPubkey, tx),
-        tx => appendTransactionMessageInstructions([increaseCounterIx], tx)
-      );
+  it("Undelegate counter from ER", async () => {
+    // Prepare transaction
+    const accounts = [
+      { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+      { address: counterPda, role: AccountRole.WRITABLE },
+      {
+        address: address(MAGIC_PROGRAM_ID.toString()),
+        role: AccountRole.READONLY,
+      },
+      {
+        address: address(MAGIC_CONTEXT_ID.toString()),
+        role: AccountRole.WRITABLE,
+      },
+    ];
+    const serializedInstructionData = Buffer.from(
+      CounterInstruction.CommitAndUndelegate,
+      "hex",
+    );
+    const undelegateIx: Instruction = {
+      accounts,
+      programAddress: PROGRAM_ID,
+      data: serializedInstructionData,
+    };
+    const transactionMessage = pipe(
+      createTransactionMessage({ version: 0 }),
+      (tx) => appendTransactionMessageInstructions([undelegateIx], tx),
+    );
 
-      // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
-
-      console.log(`${Date.now() - start}ms (ER) Increment txHash: ${txHash}`);
-      expect(txHash).toBeDefined();
-    },
-    TEST_TIMEOUT
-  );
-  it(
-    "Commit changes from ER back to Solana",
-    async () => {
-      const start = Date.now();
-
-      // Prepare transaction
-      const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE  },
-        { address: address(MAGIC_PROGRAM_ID.toString()), role: AccountRole.READONLY},
-        { address: address(MAGIC_CONTEXT_ID.toString()), role: AccountRole.WRITABLE}
-      ];
-      const serializedInstructionData = Buffer.from(
-        CounterInstruction.Commit,
-        "hex"
-      );
-      const commitIx : Instruction = {
-        accounts,
-        programAddress: PROGRAM_ID,
-        data: serializedInstructionData,
-      };
-      const transactionMessage = pipe(
-        createTransactionMessage({ version: 0 }),
-        tx => setTransactionMessageFeePayer(userPubkey, tx),
-        tx => appendTransactionMessageInstructions([commitIx], tx)
-      );
-
-      // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
-
-
-      const duration = Date.now() - start;
-      console.log(`${duration}ms (ER) Commit txHash: ${txHash}`);
-
-      expect(txHash).toBeDefined();
-    },
-    TEST_TIMEOUT
-  );
-  it(
-    "Increase counter on ER (2)",
-    async () => {
-      const start = Date.now();
-      const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE },
-      ];
-      const serializedInstructionData = Buffer.concat([
-        Buffer.from(CounterInstruction.IncreaseCounter, "hex"),
-        bumpBytes,
-        borsh.serialize(
-          IncreaseCounterPayload.schema,
-          new IncreaseCounterPayload(1)
-        ),
-      ]);
-      const increaseCounterIx : Instruction = {
-        accounts,
-        programAddress: PROGRAM_ID,
-        data: serializedInstructionData,
-      };
-      const transactionMessage = pipe(
-        createTransactionMessage({ version: 0 }),
-        tx => setTransactionMessageFeePayer(userPubkey, tx),
-        tx => appendTransactionMessageInstructions([increaseCounterIx], tx)
-      );
-
-      // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
-
-      console.log(`${Date.now() - start}ms (ER) Increment txHash: ${txHash}`);
-
-      expect(txHash).toBeDefined();
-    },
-    TEST_TIMEOUT
-  );
-  it(
-    "Undelegate counter from ER",
-    async () => {
-      const start = Date.now();
-
-      // Prepare transaction
-      const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER},
-        { address: counterPda, role: AccountRole.WRITABLE  },
-        { address: address(MAGIC_PROGRAM_ID.toString()), role: AccountRole.READONLY},
-        { address: address(MAGIC_CONTEXT_ID.toString()), role: AccountRole.WRITABLE}
-      ];
-      const serializedInstructionData = Buffer.from(
-        CounterInstruction.CommitAndUndelegate,
-        "hex"
-      );
-      const undelegateIx : Instruction = {
-        accounts,
-        programAddress: PROGRAM_ID,
-        data: serializedInstructionData,
-      };
-      const transactionMessage = pipe(
-        createTransactionMessage({ version: 0 }),
-        tx => setTransactionMessageFeePayer(userPubkey, tx),
-        tx => appendTransactionMessageInstructions([undelegateIx], tx)
-      );
-
-      // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(transactionMessage, [userKeypair],  { commitment: "confirmed", skipPreflight: true })
-
-      const duration = Date.now() - start;
-      console.log(`${duration}ms (ER) Undelegate txHash: ${txHash}`);
-
-      expect(txHash).toBeDefined();
-    },
-    TEST_TIMEOUT
-  );
+    // Send and confirm transaction
+    const res = svm.sendTransaction(
+      await transactionFromKitTransactionMessage(transactionMessage, {
+        payer: userSigner,
+        recentBlockhash: svm.latestBlockhashFor({ target: "ephemeral" }),
+      }),
+      {
+        target: "ephemeral",
+      },
+    );
+    if (res instanceof FailedTransactionMetadata) {
+      throw new Error(`Undelegate failed: ${res}`);
+    }
+  });
 });

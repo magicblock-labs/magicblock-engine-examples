@@ -61,6 +61,77 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@magicblock-labs/magicsvm-darwin-arm64@npm:0.1.1":
+  version: 0.1.1
+  resolution: "@magicblock-labs/magicsvm-darwin-arm64@npm:0.1.1"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@magicblock-labs/magicsvm-darwin-x64@npm:0.1.1":
+  version: 0.1.1
+  resolution: "@magicblock-labs/magicsvm-darwin-x64@npm:0.1.1"
+  conditions: os=darwin & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@magicblock-labs/magicsvm-linux-arm64-gnu@npm:0.1.1":
+  version: 0.1.1
+  resolution: "@magicblock-labs/magicsvm-linux-arm64-gnu@npm:0.1.1"
+  conditions: os=linux & cpu=arm64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@magicblock-labs/magicsvm-linux-arm64-musl@npm:0.1.1":
+  version: 0.1.1
+  resolution: "@magicblock-labs/magicsvm-linux-arm64-musl@npm:0.1.1"
+  conditions: os=linux & cpu=arm64 & libc=musl
+  languageName: node
+  linkType: hard
+
+"@magicblock-labs/magicsvm-linux-x64-gnu@npm:0.1.1":
+  version: 0.1.1
+  resolution: "@magicblock-labs/magicsvm-linux-x64-gnu@npm:0.1.1"
+  conditions: os=linux & cpu=x64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@magicblock-labs/magicsvm-linux-x64-musl@npm:0.1.1":
+  version: 0.1.1
+  resolution: "@magicblock-labs/magicsvm-linux-x64-musl@npm:0.1.1"
+  conditions: os=linux & cpu=x64 & libc=musl
+  languageName: node
+  linkType: hard
+
+"@magicblock-labs/magicsvm@npm:^0.1.1":
+  version: 0.1.1
+  resolution: "@magicblock-labs/magicsvm@npm:0.1.1"
+  dependencies:
+    "@magicblock-labs/magicsvm-darwin-arm64": "npm:0.1.1"
+    "@magicblock-labs/magicsvm-darwin-x64": "npm:0.1.1"
+    "@magicblock-labs/magicsvm-linux-arm64-gnu": "npm:0.1.1"
+    "@magicblock-labs/magicsvm-linux-arm64-musl": "npm:0.1.1"
+    "@magicblock-labs/magicsvm-linux-x64-gnu": "npm:0.1.1"
+    "@magicblock-labs/magicsvm-linux-x64-musl": "npm:0.1.1"
+    "@solana/web3.js": "npm:3.0.0-rc.1"
+    litesvm: "npm:1.1.0"
+  dependenciesMeta:
+    "@magicblock-labs/magicsvm-darwin-arm64":
+      optional: true
+    "@magicblock-labs/magicsvm-darwin-x64":
+      optional: true
+    "@magicblock-labs/magicsvm-linux-arm64-gnu":
+      optional: true
+    "@magicblock-labs/magicsvm-linux-arm64-musl":
+      optional: true
+    "@magicblock-labs/magicsvm-linux-x64-gnu":
+      optional: true
+    "@magicblock-labs/magicsvm-linux-x64-musl":
+      optional: true
+  checksum: 10c0/2d0f3ed640882cbe7f44a8fc29662cacbe11563b921831a8d875d68df784b52702932ead17bf099464b81d46a6f138fd160e80d8fa73986ebb4aa3b570a5b519
+  languageName: node
+  linkType: hard
+
 "@noble/curves@npm:^1.4.2":
   version: 1.9.7
   resolution: "@noble/curves@npm:1.9.7"
@@ -110,6 +181,17 @@ __metadata:
   peerDependencies:
     "@solana/kit": ^6.4.0
   checksum: 10c0/cb57baf73d2b6c56ed5c43cf08839afbd37e1bbeef1df2c7af33d0d6e413db62e5bb825db749ca3ef4486a3f60195b3ae3e9298232774fea4fd5514374bff292
+  languageName: node
+  linkType: hard
+
+"@solana-program/token@npm:^0.13.0":
+  version: 0.13.0
+  resolution: "@solana-program/token@npm:0.13.0"
+  dependencies:
+    "@solana-program/system": "npm:^0.12.0"
+  peerDependencies:
+    "@solana/kit": ^6.5.0
+  checksum: 10c0/8b95921bf60b11002d1e22714017d41db25afc88be1fd700d18f8a8bec7fee6488c48d0c7102ca07fe71509adaf5d3bdebb25aa885596dbab7e9512d02353e56
   languageName: node
   linkType: hard
 
@@ -402,7 +484,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@solana/kit@npm:^6.8.0":
+"@solana/kit@npm:^6.8.0, @solana/kit@npm:^6.9.0":
   version: 6.9.0
   resolution: "@solana/kit@npm:6.9.0"
   dependencies:
@@ -916,6 +998,25 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@solana/web3.js@npm:3.0.0-rc.1, @solana/web3.js@npm:^3.0.0-rc.1":
+  version: 3.0.0-rc.1
+  resolution: "@solana/web3.js@npm:3.0.0-rc.1"
+  dependencies:
+    "@noble/curves": "npm:^1.4.2"
+    "@noble/hashes": "npm:^1.4.0"
+    "@solana-program/address-lookup-table": "npm:^0.11.0"
+    "@solana-program/compute-budget": "npm:^0.15.0"
+    "@solana-program/stake": "npm:^0.6.1"
+    "@solana-program/system": "npm:^0.12.0"
+    "@solana/assertions": "npm:^6.8.0"
+    "@solana/fast-stable-stringify": "npm:^6.8.0"
+    "@solana/kit": "npm:^6.8.0"
+    "@solana/rpc-spec-types": "npm:^6.8.0"
+    "@solana/signers": "npm:^6.8.0"
+  checksum: 10c0/a504adca1feca5b321e2d3f15bfb727a8f444e892792c692950d09e66a94e97dc203f85105d69b4b6b51727a04e61c8c5410512d099c254fa32d33ea9642eaac
+  languageName: node
+  linkType: hard
+
 "@solana/web3.js@npm:^1.69.0":
   version: 1.98.4
   resolution: "@solana/web3.js@npm:1.98.4"
@@ -936,25 +1037,6 @@ __metadata:
     rpc-websockets: "npm:^9.0.2"
     superstruct: "npm:^2.0.2"
   checksum: 10c0/73bf7b6b5b65c7f264587182bbfd65327775b4f3e4831750de6356f58858e57d49213098eec671650940bb7a9bbaa1f352e0710c4075f126d903d72ddddcbdbc
-  languageName: node
-  linkType: hard
-
-"@solana/web3.js@npm:^3.0.0-rc.1":
-  version: 3.0.0-rc.1
-  resolution: "@solana/web3.js@npm:3.0.0-rc.1"
-  dependencies:
-    "@noble/curves": "npm:^1.4.2"
-    "@noble/hashes": "npm:^1.4.0"
-    "@solana-program/address-lookup-table": "npm:^0.11.0"
-    "@solana-program/compute-budget": "npm:^0.15.0"
-    "@solana-program/stake": "npm:^0.6.1"
-    "@solana-program/system": "npm:^0.12.0"
-    "@solana/assertions": "npm:^6.8.0"
-    "@solana/fast-stable-stringify": "npm:^6.8.0"
-    "@solana/kit": "npm:^6.8.0"
-    "@solana/rpc-spec-types": "npm:^6.8.0"
-    "@solana/signers": "npm:^6.8.0"
-  checksum: 10c0/a504adca1feca5b321e2d3f15bfb727a8f444e892792c692950d09e66a94e97dc203f85105d69b4b6b51727a04e61c8c5410512d099c254fa32d33ea9642eaac
   languageName: node
   linkType: hard
 
@@ -1292,6 +1374,78 @@ __metadata:
   languageName: node
   linkType: hard
 
+"litesvm-darwin-arm64@npm:1.1.0":
+  version: 1.1.0
+  resolution: "litesvm-darwin-arm64@npm:1.1.0"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"litesvm-darwin-x64@npm:1.1.0":
+  version: 1.1.0
+  resolution: "litesvm-darwin-x64@npm:1.1.0"
+  conditions: os=darwin & cpu=x64
+  languageName: node
+  linkType: hard
+
+"litesvm-linux-arm64-gnu@npm:1.1.0":
+  version: 1.1.0
+  resolution: "litesvm-linux-arm64-gnu@npm:1.1.0"
+  conditions: os=linux & cpu=arm64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"litesvm-linux-arm64-musl@npm:1.1.0":
+  version: 1.1.0
+  resolution: "litesvm-linux-arm64-musl@npm:1.1.0"
+  conditions: os=linux & cpu=arm64 & libc=musl
+  languageName: node
+  linkType: hard
+
+"litesvm-linux-x64-gnu@npm:1.1.0":
+  version: 1.1.0
+  resolution: "litesvm-linux-x64-gnu@npm:1.1.0"
+  conditions: os=linux & cpu=x64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"litesvm-linux-x64-musl@npm:1.1.0":
+  version: 1.1.0
+  resolution: "litesvm-linux-x64-musl@npm:1.1.0"
+  conditions: os=linux & cpu=x64 & libc=musl
+  languageName: node
+  linkType: hard
+
+"litesvm@npm:1.1.0":
+  version: 1.1.0
+  resolution: "litesvm@npm:1.1.0"
+  dependencies:
+    "@solana-program/system": "npm:^0.12.0"
+    "@solana-program/token": "npm:^0.13.0"
+    "@solana/kit": "npm:^6.9.0"
+    litesvm-darwin-arm64: "npm:1.1.0"
+    litesvm-darwin-x64: "npm:1.1.0"
+    litesvm-linux-arm64-gnu: "npm:1.1.0"
+    litesvm-linux-arm64-musl: "npm:1.1.0"
+    litesvm-linux-x64-gnu: "npm:1.1.0"
+    litesvm-linux-x64-musl: "npm:1.1.0"
+  dependenciesMeta:
+    litesvm-darwin-arm64:
+      optional: true
+    litesvm-darwin-x64:
+      optional: true
+    litesvm-linux-arm64-gnu:
+      optional: true
+    litesvm-linux-arm64-musl:
+      optional: true
+    litesvm-linux-x64-gnu:
+      optional: true
+    litesvm-linux-x64-musl:
+      optional: true
+  checksum: 10c0/94052d9c7439e920486d0a90b82113793ce6f3c2b65ddf2dbc6ebc53e5e542aa9f1377b6302bc25bb29c918055e5e93b5a9353d508d562ebd7fafceb9e06775e
+  languageName: node
+  linkType: hard
+
 "minipass@npm:^7.0.4, minipass@npm:^7.1.2":
   version: 7.1.3
   resolution: "minipass@npm:7.1.3"
@@ -1478,7 +1632,9 @@ __metadata:
   resolution: "test-utils@workspace:."
   dependencies:
     "@coral-xyz/anchor": "npm:0.32.1"
+    "@magicblock-labs/magicsvm": "npm:^0.1.1"
     "@solana/keys": "npm:^6.9.0"
+    "@solana/kit": "npm:^6.9.0"
     "@solana/web3.js": "npm:^3.0.0-rc.1"
     tweetnacl: "npm:^1.0.3"
   languageName: unknown

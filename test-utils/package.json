@@ -5,7 +5,9 @@
   "types": "src/index.ts",
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",
+    "@magicblock-labs/magicsvm": "^0.1.1",
     "@solana/keys": "^6.9.0",
+    "@solana/kit": "^6.9.0",
     "@solana/web3.js": "^3.0.0-rc.1",
     "tweetnacl": "^1.0.3"
   },
