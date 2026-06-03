@@ -76,10 +76,6 @@ export async function transactionFromWeb3Transaction(
   }
   await transaction.partialSign(options.payer);
 
-  console.log(transaction);
-  console.log(transaction.signatures);
-  console.log(transaction.signature);
-
   return transaction;
 }
 
@@ -92,7 +88,7 @@ export async function transactionFromKitTransactionMessage(
   for (const instruction of msg.instructions) {
     transaction.add({
       programId: new Address(instruction.programAddress),
-      keys: [...instruction.accounts].map((account) => ({
+      keys: (instruction.accounts || []).map((account) => ({
         pubkey: new Address(account.address),
         isSigner:
           account.role === AccountRole.READONLY_SIGNER ||
@@ -101,7 +97,7 @@ export async function transactionFromKitTransactionMessage(
           account.role === AccountRole.WRITABLE ||
           account.role === AccountRole.WRITABLE_SIGNER,
       })),
-      data: new Uint8Array(instruction.data),
+      data: new Uint8Array(instruction.data || []),
     });
   }
 
