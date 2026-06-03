@@ -260,6 +260,7 @@ const CONFIGURED_SETUP_QUEUE_KEYPAIR = (() => {
 })();
 
 export const BLOCKHASH_CACHE_MAX_AGE_MS = 30000
+const BALANCE_FALLBACK_REFRESH_DELAY_MS = 2500
 
 const toBase64 = (u8: Uint8Array): string => {
     if (typeof Buffer !== 'undefined') return Buffer.from(u8).toString('base64');
@@ -730,6 +731,12 @@ const App: React.FC = () => {
         console.log("[refresh] done");
     }, [connection, mint, selectedTokenProgram]);
 
+    const scheduleBalanceFallbackRefresh = useCallback(() => {
+        setTimeout(() => {
+            refreshBalances().catch(console.error);
+        }, BALANCE_FALLBACK_REFRESH_DELAY_MS);
+    }, [refreshBalances]);
+
     // Refresh on mount and whenever the key set or connections change
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { refreshBalances().catch(console.error); }, [connection, mint]);
@@ -1020,14 +1027,14 @@ const App: React.FC = () => {
                 `(from ${src.keypair.publicKey.toBase58()} (sender ata: ${srcAta.toBase58()}), to ${dst.keypair.publicKey.toBase58()} (destination ata: ${dstAta.toBase58()}))`
             );
             await ephemeralConnection!.current!.getAccountInfo(shuttleWalletAta);
-            await refreshBalances();
+            scheduleBalanceFallbackRefresh();
         } catch (e: any) {
             setTransactionSuccess(null);
             setTransactionError(await formatTransactionError(e, conn));
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, confirmOrThrow, decimals, fromBalance, getCachedEphemeralBlockhash, mint, privateMaxDelayMs, privateMinDelayMs, privateSplitCount, refreshBalances, selectedTokenProgram, toBalance, transferVisibility]);
+    }, [accounts, connection, confirmOrThrow, decimals, fromBalance, getCachedEphemeralBlockhash, mint, privateMaxDelayMs, privateMinDelayMs, privateSplitCount, scheduleBalanceFallbackRefresh, selectedTokenProgram, toBalance, transferVisibility]);
 
     const handleTransfer = useCallback(async () => {
         await performTransfer(srcIndex, dstIndex, amountStr);
@@ -1857,7 +1864,7 @@ const App: React.FC = () => {
                                         console.log("Shuttle wallet ata: ", shuttleWalletAta.toBase58());
                                         console.log("Shuttle eata: ", shuttleEphemeralAta.toBase58());
 
-                                        await refreshBalances();
+                                        scheduleBalanceFallbackRefresh();
                                     } catch (e: any) {
                                         setTransactionError(await formatTransactionError(e, connection));
                                     } finally {
@@ -1957,7 +1964,7 @@ const App: React.FC = () => {
                                         console.log("Shuttle wallet ata: ", shuttleWalletAta.toBase58());
                                         console.log("Shuttle eata: ", shuttleEphemeralAta.toBase58());
                                         console.log("Shuttle ata: ", shuttleAta.toBase58());
-                                        await refreshBalances();
+                                        scheduleBalanceFallbackRefresh();
                                     } catch (e: any) {
                                         setTransactionError(await formatTransactionError(e, connection));
                                     } finally {
