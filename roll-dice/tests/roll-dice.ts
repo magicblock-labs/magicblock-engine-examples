@@ -5,13 +5,18 @@ import { RandomDice } from "../target/types/random_dice";
 describe("roll-dice", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
 
   const program = anchor.workspace.RandomDice as Program<RandomDice>;
 
   const playerPda = web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("playerd"), anchor.getProvider().publicKey!.toBytes()],
+    [Buffer.from("playerd"), provider.publicKey!.toBytes()],
     program.programId,
   )[0];
+
+  console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
+  console.log(`Current SOL Public Key: ${provider.publicKey}`);
+  console.log("Player PDA: ", playerPda.toString());
 
   it("Initialized player!", async () => {
     const tx = await program.methods
@@ -21,24 +26,53 @@ describe("roll-dice", () => {
   });
 
   it("Do Roll Dice!", async () => {
-    const before = await program.account.player.fetchNullable(playerPda).catch(() => null);
-    const tx = await program.methods
-      .rollDice(0)
-      .rpc({ skipPreflight: true, commitment: "confirmed" });
-    console.log("rollDice tx:", tx);
+    // Generate the seed BEFORE subscribing so the handler closes over it.
+    // The program logs "client_seed=N" inside callback_roll_dice — we match
+    // on that exact substring to pin the callback to our specific request.
+    const clientSeed = Math.floor(Math.random() * 256);
+    const seedTag = `client_seed=${clientSeed}`;
+    // Pre-arm a one-shot promise that the onLogs handler resolves with the
+    // matching signature. No polling — we just await it, racing a timeout.
+    let resolveSig!: (sig: string) => void;
+    const sigPromise = new Promise<string>((r) => { resolveSig = r; });
+    const callbackSubId = provider.connection.onLogs(
+      program.programId,
+      (info) => {
+        if (
+          !info.err &&
+          info.logs.some((l) => l.includes("CallbackRollDice")) &&
+          info.logs.some((l) => l.includes(seedTag))
+        ) {
+          resolveSig(info.signature);
+        }
+      },
+      "confirmed",
+    );
 
-    // VRF is asynchronous — the rollDice ix requests randomness; the oracle
-    // callback writes the result back to the player PDA in a separate tx. Poll
-    // up to ~10s until the player state actually changes.
-    const start = Date.now();
-    let player = await program.account.player.fetch(playerPda, "processed");
-    while (Date.now() - start < 10_000) {
-      player = await program.account.player.fetch(playerPda, "processed");
-      if (!before || JSON.stringify(player) !== JSON.stringify(before)) break;
-      await new Promise((r) => setTimeout(r, 500));
+    try {
+      const tx = await program.methods
+        .rollDice(clientSeed)
+        .rpc({ skipPreflight: true, commitment: "confirmed" });
+      console.log(`client_seed: ${clientSeed}`);
+      console.log("rollDice tx:", tx);
+
+      // Base-chain VRF response is slower than ER (~1-5s typical) so 10s timeout.
+      const start = Date.now();
+      const sig = await Promise.race([
+        sigPromise,
+        new Promise<null>((r) => setTimeout(() => r(null), 10_000)),
+      ]);
+      if (sig) {
+        console.log(`callbackRollDice tx: ${sig} (after ${Date.now() - start}ms)`);
+      } else {
+        console.warn(`callbackRollDice not observed within 10s.`);
+      }
+
+      const player = await program.account.player.fetch(playerPda, "processed");
+      console.log("player:", player);
+    } finally {
+      await provider.connection.removeOnLogsListener(callbackSubId);
     }
-    console.log(`Player PDA: ${playerPda.toBase58()} (after ${Date.now() - start}ms)`);
-    console.log("player:", player);
   });
 
 });

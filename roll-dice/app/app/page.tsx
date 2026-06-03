@@ -8,12 +8,16 @@ import * as anchor from "@coral-xyz/anchor"
 // @ts-ignore
 import {Connection, Keypair, PublicKey, Transaction, VersionedTransaction} from "@solana/web3.js"
 import { useToast } from "@/hooks/use-toast"
+// Bundled IDL — `loadIdl` tries this first, falls back to on-chain fetchIdl.
+import randomDiceIdl from "@/lib/idl/random_dice.json"
+import { loadIdl } from "@/lib/solana-utils"
 
 // Program ID for the dice game
-const PROGRAM_ID = new anchor.web3.PublicKey("8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP")
+const PROGRAM_ID = new anchor.web3.PublicKey("3iSNV84a4hp2AiZpczjeuJEy4PTVCSzZZyU533MR6tEU")
 
 export default function DiceRoller() {
   const [diceValue, setDiceValue] = useState(1)
+  const [rollnum, setRollnum] = useState(0)
   const [isRolling, setIsRolling] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
   const [key, setKey] = useState(0) // Used to force re-render the component
@@ -70,11 +74,9 @@ export default function DiceRoller() {
       // User
       console.log("User: ", keypair.publicKey.toBase58())
 
-      // Fetch the IDL
-      const idl = await anchor.Program.fetchIdl(PROGRAM_ID, provider)
-      if (!idl) throw new Error("IDL not found")
-
-      // Create the program instance
+      // Local IDL first, fall back to on-chain fetch if the bundled one is
+      // out of sync with the current PROGRAM_ID.
+      const idl = await loadIdl(PROGRAM_ID, provider, randomDiceIdl)
       const program = new anchor.Program(idl, provider)
       programRef.current = program
 
@@ -90,8 +92,9 @@ export default function DiceRoller() {
         console.log("User initialized with tx:", tx)
       }else{
         const ply = program.coder.accounts.decode("player", account.data)
-        console.log("Player account:", playerPk.toBase58(), "lastResult:", ply.lastResult)
+        console.log("Player account:", playerPk.toBase58(), "lastResult:", ply.lastResult, "rollnum:", ply.rollnum)
         setDiceValue(ply.lastResult)
+        setRollnum(Number(ply.rollnum))
       }
 
       // Subscribe to account changes
@@ -106,6 +109,7 @@ export default function DiceRoller() {
             const player = program.coder.accounts.decode("player", accountInfo.data)
             console.log("Player account changed:", player)
             setDiceValue(player.lastResult)
+            setRollnum(Number(player.rollnum))
             setIsRolling(false)
             clearRollInterval()
           },
@@ -237,6 +241,9 @@ export default function DiceRoller() {
           >
             {isRolling ? "Rolling..." : !isInitialized ? "Initializing..." : "Roll Dice"}
           </button>
+          <div className="mt-6 text-sm text-muted-foreground">
+            Roll Count: <span className="font-semibold text-foreground">{rollnum}</span>
+          </div>
         </div>
       </div>
   )
