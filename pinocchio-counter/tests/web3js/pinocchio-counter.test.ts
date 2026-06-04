@@ -29,7 +29,7 @@ import {
 } from "test-utils";
 dotenv.config();
 
-describe("basic-test", async () => {
+describe("basic-test", () => {
   const svm = new MagicSVM();
 
   // Get programId from target folder
@@ -38,29 +38,36 @@ describe("basic-test", async () => {
     JSON.parse(fs.readFileSync(keypairPath, "utf8")),
   );
   const keypair = Keypair.fromSecretKey(secretKeyArray);
-  const PROGRAM_ID = keypair.publicKey;
-  svm.addProgram(
-    addressFromWeb3PublicKey(PROGRAM_ID),
-    fs.readFileSync("target/deploy/pinocchio_counter.so"),
-  );
+  let PROGRAM_ID: PublicKey;
 
   // Create user keypair and airdrop SOL if needed
   const userKeypair = Keypair.generate();
   const userSigner = signerFromWeb3Keypair(userKeypair);
 
+  let counterPda: PublicKey;
+  let bump: number;
+  let bumpBytes: Buffer;
+
   // Run this once before all tests
   beforeAll(async () => {
+    PROGRAM_ID = keypair.publicKey;
+
+    // Get pda of counter_account
+    [counterPda, bump] = PublicKey.findProgramAddressSync(
+      [Buffer.from("counter"), userKeypair.publicKey.toBuffer()],
+      PROGRAM_ID,
+    );
+    bumpBytes = Buffer.from([bump]);
+    console.log("Program ID: ", PROGRAM_ID.toString());
+    console.log("Counter PDA: ", counterPda.toString());
+
+    svm.addProgram(
+      addressFromWeb3PublicKey(PROGRAM_ID),
+      fs.readFileSync("target/deploy/pinocchio_counter.so"),
+    );
+
     svm.airdrop(userSigner.address, BigInt(2 * LAMPORTS_PER_SOL));
   });
-
-  // Get pda of counter_account
-  const [counterPda, bump] = PublicKey.findProgramAddressSync(
-    [Buffer.from("counter"), userKeypair.publicKey.toBuffer()],
-    PROGRAM_ID,
-  );
-  const bumpBytes = Buffer.from([bump]);
-  console.log("Program ID: ", PROGRAM_ID.toString());
-  console.log("Counter PDA: ", counterPda.toString());
 
   it("Initialize counter on Solana", async () => {
     // 1: InitializeCounter

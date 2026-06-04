@@ -22,6 +22,8 @@ import {
   appendTransactionMessageInstructions,
   pipe,
   createKeyPairSignerFromPrivateKeyBytes,
+  Address,
+  KeyPairSigner,
 } from "@solana/kit";
 import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system";
 import { describe, it, beforeAll } from "vitest";
@@ -31,7 +33,7 @@ import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 dotenv.config();
 
-describe("basic-test", async () => {
+describe("basic-test", () => {
   const svm = new MagicSVM();
 
   // Load the deployed program keypair and get Proram ID
@@ -39,33 +41,44 @@ describe("basic-test", async () => {
   const secretKeyArray = Uint8Array.from(
     JSON.parse(fs.readFileSync(keypairPath, "utf8")),
   );
-  const keypair = await createKeyPairFromBytes(secretKeyArray);
-  const PROGRAM_ID = await getAddressFromPublicKey(keypair.publicKey);
-  svm.addProgram(
-    PROGRAM_ID,
-    fs.readFileSync("target/deploy/pinocchio_counter.so"),
-  );
+  let keypair;
+  let PROGRAM_ID: Address;
 
   // Prepare user
-  const userSigner = await createKeyPairSignerFromPrivateKeyBytes(
-    Uint8Array.from(
-      new Array(32).fill(0).map((_) => Math.floor(Math.random() * 256)),
-    ),
-  );
-  const userPubkey = userSigner.address;
+  let userSigner: KeyPairSigner;
+  let userPubkey: Address;
 
   // Get PDA
   const addressEncoder = getAddressEncoder();
-  const [counterPda, bump] = await getProgramDerivedAddress({
-    programAddress: PROGRAM_ID,
-    seeds: [Buffer.from("counter"), addressEncoder.encode(userPubkey)],
-  });
-  const bumpBytes = Buffer.from([bump]);
-  console.log("Progam ID:", PROGRAM_ID);
-  console.log("Counter PDA:", counterPda);
+  let counterPda: Address;
+  let bump: number;
+  let bumpBytes: Buffer;
 
   // Ensure test wallet has SOL
-  beforeAll(() => {
+  beforeAll(async () => {
+    keypair = await createKeyPairFromBytes(secretKeyArray);
+    PROGRAM_ID = await getAddressFromPublicKey(keypair.publicKey);
+    svm.addProgram(
+      PROGRAM_ID,
+      fs.readFileSync("target/deploy/pinocchio_counter.so"),
+    );
+
+    userSigner = await createKeyPairSignerFromPrivateKeyBytes(
+      Uint8Array.from(
+        new Array(32).fill(0).map((_) => Math.floor(Math.random() * 256)),
+      ),
+    );
+    userPubkey = userSigner.address;
+
+    [counterPda, bump] = await getProgramDerivedAddress({
+      programAddress: PROGRAM_ID,
+      seeds: [Buffer.from("counter"), addressEncoder.encode(userPubkey)],
+    });
+    bumpBytes = Buffer.from([bump]);
+
+    console.log("Progam ID:", PROGRAM_ID);
+    console.log("Counter PDA:", counterPda);
+
     svm.airdrop(userPubkey, BigInt(2 * LAMPORTS_PER_SOL));
   });
 
