@@ -461,9 +461,10 @@ const App: React.FC = () => {
         const delegateSig = await submitTransaction(delegateTx, false, "confirmed", counterPda);
         if (!delegateSig) return;
 
-        // Lazily build the ER connection so subsequent ER ops (Hide Counter / Inspect)
-        // have a destination. The permission isn't created here — Hide Counter handles
-        // that, prepending an init_permission ix into the set_privacy tx if missing.
+        // Lazily build the ER connection so subsequent ER ops (Set Private / Check
+        // Explorer) have a destination. The permission isn't created here — Set
+        // Private handles that, prepending an init_permission ix into the
+        // set_privacy tx if missing.
         if (!ephemeralConnection.current) {
             const token = await ensureAuthToken();
             if (!token) return;
@@ -522,7 +523,7 @@ const App: React.FC = () => {
         }
 
         // tempKeypair signs and submits to the TEE. The wallet is NOT touched here —
-        // wallet auth is handled by the separate "Inspect Counter" button.
+        // wallet auth is handled by the separate "Check Explorer" button.
         console.log(`tempKeypair signs set_privacy(${next})${!permInfo ? " + init_permission" : ""} → TEE`);
         const sig = await submitTransaction(tx, true, "processed");
         if (!sig) return;
@@ -597,7 +598,7 @@ const App: React.FC = () => {
 
             <h1>Private Counter (TEE)</h1>
 
-            <div className="button-container">
+            <div className="delegate-buttons">
                 <Button title={"Delegate"} resetGame={delegateTx} disabled={isDelegated || !publicKey}/>
                 <Button title={"Undelegate"} resetGame={undelegateTx} disabled={!isDelegated || !publicKey}/>
             </div>
@@ -612,7 +613,7 @@ const App: React.FC = () => {
                         loading={isLoading}
                     />
                 </div>
-                <div className="counter-cell">
+                <div className={`counter-cell ${isDelegated && isPrivate ? "is-private" : ""}`}>
                     <Square
                         key="1"
                         ind={Number(1)}
@@ -621,24 +622,26 @@ const App: React.FC = () => {
                         loading={isLoading}
                     />
                     {isDelegated && (
-                        <div className="counter-cell-icon" aria-label={isPrivate ? "private" : "public"}>
-                            {isPrivate ? '🔒' : '🌐'}
-                        </div>
+                        <>
+                            <label className={`privacy-toggle counter-cell-toggle ${(!publicKey || isSubmitting) ? "is-disabled" : ""}`}>
+                                <span className="privacy-toggle-label" aria-label="public">🌐</span>
+                                <input
+                                    type="checkbox"
+                                    checked={isPrivate}
+                                    onChange={() => togglePrivacy()}
+                                    disabled={!publicKey || isSubmitting}
+                                />
+                                <span className="privacy-toggle-slider" aria-hidden="true"></span>
+                                <span className="privacy-toggle-label" aria-label="private">🔒</span>
+                            </label>
+                            <Button
+                                title={"Explorer ↗"}
+                                resetGame={openAsTester}
+                                disabled={!publicKey || isSubmitting}
+                            />
+                        </>
                     )}
                 </div>
-            </div>
-
-            <div className="privacy-buttons">
-                <Button
-                    title={isPrivate ? "Reveal Counter" : "Hide Counter"}
-                    resetGame={togglePrivacy}
-                    disabled={!isDelegated || !publicKey || isSubmitting}
-                />
-                <Button
-                    title={"Inspect Counter"}
-                    resetGame={openAsTester}
-                    disabled={!isDelegated || !publicKey || isSubmitting}
-                />
             </div>
 
             {isSubmitting && (
