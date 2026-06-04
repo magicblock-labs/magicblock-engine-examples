@@ -435,10 +435,20 @@ if [ -z "$EPHEMERAL_VALIDATOR_BIN" ]; then
 fi
 echo "  Binary: $EPHEMERAL_VALIDATOR_BIN"
 echo "  Version: $("$EPHEMERAL_VALIDATOR_BIN" --version 2>&1 | head -1 || echo unknown)"
-RUST_LOG=info "$EPHEMERAL_VALIDATOR_BIN" \
-  --lifecycle ephemeral \
-  --remotes http://localhost:8899 \
-  --listen 127.0.0.1:7799 > ./ephemeral-validator.log 2>&1 < /dev/null &
+RUST_LOG=info EPHEMERAL_VALIDATOR_BIN="$EPHEMERAL_VALIDATOR_BIN" python3 -c '
+import os
+import pty
+import sys
+
+binary = os.environ["EPHEMERAL_VALIDATOR_BIN"]
+status = pty.spawn([
+    binary,
+    "--lifecycle", "ephemeral",
+    "--remotes", "http://localhost:8899",
+    "--listen", "127.0.0.1:7799",
+])
+sys.exit(os.WEXITSTATUS(status) if os.WIFEXITED(status) else 128 + os.WTERMSIG(status))
+' > ./ephemeral-validator.log 2>&1 < /dev/null &
 
 EPHEMERAL_PID=$!
 
