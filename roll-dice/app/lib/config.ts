@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js"
 
-export const PROGRAM_ID = new PublicKey("D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM")
-export const PROGRAM_ID_STANDARD = new PublicKey("8xgZ1hY7TnVZ4Bbh7v552Rs3BZMSq3LisyWckkBsNLP")
+export const PROGRAM_ID = new PublicKey("nkPMzRtKV4feTsDfst5P6sH8Rzf4VNe3p9Y1MzMiAme")
+export const PROGRAM_ID_STANDARD = new PublicKey("3iSNV84a4hp2AiZpczjeuJEy4PTVCSzZZyU533MR6tEU")
 export const PLAYER_SEED = "playerd2"
 export const ORACLE_QUEUE = new PublicKey("5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc")
 export const BASE_ENDPOINT = "https://rpc.magicblock.app/devnet"

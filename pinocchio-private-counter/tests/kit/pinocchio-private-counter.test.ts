@@ -46,7 +46,7 @@ describe("basic-test", async () => {
   console.log("🧪 Running pinocchio-counter.ts test suite...");
 
   // Load the deployed program keypair and get Proram ID
-  const keypairPath = "target/deploy/pinocchio_secret_counter-keypair.json";
+  const keypairPath = "target/deploy/pinocchio_private_counter-keypair.json";
   const secretKeyArray = Uint8Array.from(
     JSON.parse(fs.readFileSync(keypairPath, "utf8"))
   );
@@ -114,7 +114,7 @@ describe("basic-test", async () => {
     ]
     : [
         {
-          address: address("FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySXA"),
+          address: address("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"),
           role: AccountRole.READONLY
         }
     ];

@@ -1,10 +1,12 @@
 {
-  "name": "pinocchio-counter-client",
+  "name": "pinocchio-private-counter-client",
   "version": "0.1.0",
-  "description": "Client tests for pinocchio-counter program",
+  "description": "Client tests for pinocchio-private-counter program",
   "main": "index.js",
   "scripts": {
     "test": "vitest run tests/",
+    "test:kit": "vitest run tests/kit/",
+    "test:web3js": "vitest run tests/web3js/",
     "test:watch": "vitest watch tests/",
     "test:legacy": "ts-node tests/client.test.ts",
     "build": "cargo build --release",
