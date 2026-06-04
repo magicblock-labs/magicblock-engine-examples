@@ -8,7 +8,7 @@ import { initializeSessionSignerKeypair } from "../utils/initializeKeypair";
 
 const COUNTER_SEED = "counter"; 
 
-describe("anchor-counter-session", () => {
+describe.only("anchor-counter-session", () => {
   console.log("anchor-counter-session.ts");
 
   // Configure the client to use the local cluster.
@@ -70,7 +70,11 @@ describe("anchor-counter-session", () => {
 
     const topUp = true
     const validUntilBN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600); // valid for 1 hour
-    const topUpLamportsBN = new anchor.BN(0.0005 * LAMPORTS_PER_SOL);
+    // The sessionKeypair pays for: (a) rent-exempt minimum on its own system
+    // account (~890,880 lamports), (b) tx fees on every session-signed tx, and
+    // (c) the on-chain delegation buffer rent (~3M lamports) when it's the
+    // delegate ix's payer. 0.005 SOL covers all three with headroom.
+    const topUpLamportsBN = new anchor.BN(0.005 * LAMPORTS_PER_SOL);
 
     const tx = await sessionTokenManager.program.methods.createSessionV2(
       topUp,
@@ -84,9 +88,9 @@ describe("anchor-counter-session", () => {
       authority: provider.wallet.publicKey,
     })
     .transaction();
+    tx.feePayer = provider.wallet.publicKey;
 
-    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [sessionKeypair, provider.wallet.payer], {
-      skipPreflight: true,
+    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [provider.wallet.payer!, sessionKeypair], {
       commitment: "confirmed"
     });
     const duration = Date.now() - start;
@@ -283,9 +287,15 @@ describe("anchor-counter-session", () => {
       .revokeSessionV2()
       .accounts({
         sessionToken: sessionTokenPDA,
+        feePayer: provider.wallet.publicKey,
+        authority: provider.wallet.publicKey,
       })
       .transaction()
-    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [sessionKeypair],
+    // While the session is still within `valid_until`, the program requires
+    // `authority` to be a signer (see SessionError::InvalidAuthority). Sign
+    // with the wallet (authority), not the session signer.
+    tx.feePayer = provider.wallet.publicKey;
+    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [provider.wallet.payer!],
       {
         skipPreflight: true,
         commitment: "confirmed",

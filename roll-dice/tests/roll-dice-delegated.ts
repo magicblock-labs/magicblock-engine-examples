@@ -3,6 +3,11 @@ import {Program} from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { RandomDiceDelegated } from "../target/types/random_dice_delegated";
 
+// Default to the canonical ephemeral queue; override with VRF_EPHEMERAL_QUEUE env var to point at a test queue.
+const DEFAULT_EPHEMERAL_QUEUE = new PublicKey(
+  process.env.VRF_EPHEMERAL_QUEUE || "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc",
+);
+
 describe("roll-dice-delegated", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
@@ -31,6 +36,12 @@ describe("roll-dice-delegated", () => {
   console.log("Ephemeral Rollup Connection: ", providerEphemeralRollup.connection.rpcEndpoint);
   console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`)
   console.log("Player PDA: ", playerPda.toString());
+  // Annotate the queue source so a wrong queue is obvious from the test log
+  // (devnet/mainnet should be the SDK default; local needs the test queue).
+  console.log(
+    `VRF Ephemeral Queue: ${DEFAULT_EPHEMERAL_QUEUE.toString()}` +
+      `${process.env.VRF_EPHEMERAL_QUEUE ? " (from VRF_EPHEMERAL_QUEUE env)" : " (SDK default)"}`,
+  );
 
   before(async function () {
     const balance = await provider.connection.getBalance(anchor.Wallet.local().publicKey)
@@ -69,23 +80,53 @@ describe("roll-dice-delegated", () => {
   });
 
   it("Do Roll Dice Delegated!", async () => {
-    const before = await ephemeralProgram.account.player
-      .fetchNullable(playerPda)
-      .catch(() => null);
-    const tx = await ephemeralProgram.methods
-      .rollDiceDelegated(0)
-      .rpc({ skipPreflight: true, commitment: "confirmed" });
-    console.log("rollDiceDelegated tx:", tx);
+    // Generate the seed BEFORE subscribing so the handler closes over it.
+    // The program logs "Callback for client_seed={n}" inside
+    // callback_roll_dice_simple — we match on that exact substring.
+    const clientSeed = Math.floor(Math.random() * 256);
+    const seedTag = `client_seed=${clientSeed}`;
+    // Pre-arm a one-shot promise that the onLogs handler resolves with the
+    // matching signature. No polling — we just await it, racing a timeout.
+    let resolveSig!: (sig: string) => void;
+    const sigPromise = new Promise<string>((r) => { resolveSig = r; });
+    const callbackSubId = providerEphemeralRollup.connection.onLogs(
+      program.programId,
+      (info) => {
+        if (
+          !info.err &&
+          info.logs.some((l) => l.includes("CallbackRollDiceSimple")) &&
+          info.logs.some((l) => l.includes(seedTag))
+        ) {
+          resolveSig(info.signature);
+        }
+      },
+      "processed",
+    );
 
-    // Wait for the VRF callback to land on the ER and rewrite the player state.
-    const start = Date.now();
-    let player = await ephemeralProgram.account.player.fetch(playerPda, "processed");
-    while (Date.now() - start < 10_000) {
-      player = await ephemeralProgram.account.player.fetch(playerPda, "processed");
-      if (!before || JSON.stringify(player) !== JSON.stringify(before)) break;
-      await new Promise((r) => setTimeout(r, 500));
+    try {
+      const tx = await ephemeralProgram.methods
+        .rollDiceDelegated(clientSeed)
+        .accounts({ oracleQueue: DEFAULT_EPHEMERAL_QUEUE })
+        .rpc({ skipPreflight: true, commitment: "confirmed" });
+      console.log(`client_seed: ${clientSeed}`);
+      console.log("rollDiceDelegated tx:", tx);
+
+      const start = Date.now();
+      const sig = await Promise.race([
+        sigPromise,
+        new Promise<null>((r) => setTimeout(() => r(null), 1_000)),
+      ]);
+      if (sig) {
+        console.log(`callbackRollDiceSimple tx: ${sig} (after ${Date.now() - start}ms)`);
+      } else {
+        console.warn(`callbackRollDiceSimple not observed within 1s.`);
+      }
+
+      const player = await ephemeralProgram.account.player.fetch(playerPda, "processed");
+      console.log("player:", player);
+    } finally {
+      await providerEphemeralRollup.connection.removeOnLogsListener(callbackSubId);
     }
-    console.log(`player (ER, after ${Date.now() - start}ms):`, player);
   });
 
   it("Undelegate Roll Dice!", async () => {

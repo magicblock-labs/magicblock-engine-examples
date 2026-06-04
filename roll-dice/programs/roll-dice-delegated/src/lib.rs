@@ -6,7 +6,7 @@ use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-declare_id!("987QBJc2qrL6be9VJKSTtkSMBZCqzT8ACLshiw9JaSpe");
+declare_id!("nkPMzRtKV4feTsDfst5P6sH8Rzf4VNe3p9Y1MzMiAme");
 
 pub const PLAYER_SEED: &[u8] = b"playerd2";
 
@@ -31,7 +31,7 @@ pub mod random_dice_delegated {
         ctx: Context<DoRollDiceDelegatedCtx>,
         client_seed: u8,
     ) -> Result<()> {
-        msg!("Requesting randomness...");
+        msg!("Requesting randomness with client_seed={}", client_seed);
         let ix = create_request_randomness_ix(RequestRandomnessParams {
             payer: ctx.accounts.payer.key(),
             oracle_queue: ctx.accounts.oracle_queue.key(),
@@ -43,6 +43,10 @@ pub mod random_dice_delegated {
                 is_signer: false,
                 is_writable: true,
             }]),
+            // Echo client_seed forward — VRF appends these bytes after the
+            // `randomness` arg in the callback ix data, so the callback can
+            // read it back as a trailing u8 and log it for correlation.
+            callback_args: Some(vec![client_seed]),
             ..Default::default()
         });
         ctx.accounts
@@ -53,13 +57,18 @@ pub mod random_dice_delegated {
     pub fn callback_roll_dice_simple(
         ctx: Context<CallbackRollDiceSimpleCtx>,
         randomness: [u8; 32],
+        client_seed: u8,
     ) -> Result<()> {
+        msg!("client_seed={}", client_seed);
+        msg!("Randomness bytes: {:?}", randomness);
+
+        // ---- Derive + apply ----
         let player = &mut ctx.accounts.player;
         let rnd_u8 = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 6);
-        msg!("Consuming random number: {:?}", rnd_u8);
-        player.rollnum = player.rollnum.saturating_add(1);
-        msg!("Roll number: {:?}", player.rollnum);
         player.last_result = rnd_u8;
+        player.rollnum = player.rollnum.saturating_add(1);
+        msg!("Roll result (1-6): {}", rnd_u8);
+        msg!("Roll number: {}", player.rollnum);
         Ok(())
     }
 
@@ -107,8 +116,8 @@ pub struct DoRollDiceCtx<'info> {
     pub payer: Signer<'info>,
     #[account(seeds = [PLAYER_SEED, payer.key().to_bytes().as_slice()], bump)]
     pub player: Account<'info, Player>,
-    /// CHECK: The oracle queue
-    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
+    /// CHECK: validated by the ephemeral VRF program when it processes the request
+    #[account(mut)]
     pub oracle_queue: UncheckedAccount<'info>,
 }
 
@@ -119,8 +128,8 @@ pub struct DoRollDiceDelegatedCtx<'info> {
     pub payer: Signer<'info>,
     #[account(seeds = [PLAYER_SEED, payer.key().to_bytes().as_slice()], bump)]
     pub player: Account<'info, Player>,
-    /// CHECK: The oracle queue
-    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
+    /// CHECK: validated by the ephemeral VRF program when it processes the request
+    #[account(mut)]
     pub oracle_queue: UncheckedAccount<'info>,
 }
 

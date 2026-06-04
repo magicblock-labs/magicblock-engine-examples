@@ -35,7 +35,7 @@ describe("basic-test", async () => {
     console.log("pinocchio-counter.ts")
 
     // Get programId from target folder
-    const keypairPath = "target/deploy/pinocchio_secret_counter-keypair.json";
+    const keypairPath = "target/deploy/pinocchio_private_counter-keypair.json";
     const secretKeyArray = Uint8Array.from(JSON.parse(fs.readFileSync(keypairPath, "utf8")));
     const keypair = Keypair.fromSecretKey(secretKeyArray);
     const PROGRAM_ID = keypair.publicKey;
@@ -100,7 +100,7 @@ describe("basic-test", async () => {
         ]
     : [
         {
-            pubkey: new PublicKey("FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySXA"),
+            pubkey: new PublicKey("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"),
             isSigner: false,
             isWritable: false,
         },
@@ -193,12 +193,13 @@ describe("basic-test", async () => {
                     skipPreflight: true,
                     commitment: "confirmed"
                 }
-            ); 
+            );
             const duration = Date.now() - start;
             console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
             expect(txHash).toBeDefined();
         } catch (error: any) {
-            console.error("Initialize error:", error);
+            console.error("Initialize error:", error?.message ?? error);
+            if (error?.logs) console.error("  logs:", error.logs);
             throw error;
         }
 

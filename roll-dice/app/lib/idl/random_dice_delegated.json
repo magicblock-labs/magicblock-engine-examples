@@ -1,5 +1,5 @@
 {
-  "address": "D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM",
+  "address": "nkPMzRtKV4feTsDfst5P6sH8Rzf4VNe3p9Y1MzMiAme",
   "metadata": {
     "name": "random_dice_delegated",
     "version": "0.1.0",
@@ -43,6 +43,10 @@
               32
             ]
           }
+        },
+        {
+          "name": "client_seed",
+          "type": "u8"
         }
       ]
     },
@@ -91,38 +95,38 @@
             "program": {
               "kind": "const",
               "value": [
-                179,
-                217,
-                114,
-                141,
-                12,
-                154,
-                18,
+                11,
+                184,
+                49,
+                78,
+                162,
+                211,
+                162,
+                91,
+                77,
+                67,
+                94,
+                121,
+                20,
                 123,
-                68,
-                119,
-                180,
-                125,
-                173,
-                111,
-                60,
-                210,
-                43,
-                63,
-                230,
-                240,
-                225,
-                132,
-                125,
-                237,
-                175,
-                38,
-                240,
-                134,
-                203,
-                177,
-                191,
-                110
+                8,
+                193,
+                223,
+                61,
+                22,
+                164,
+                104,
+                216,
+                170,
+                3,
+                99,
+                93,
+                158,
+                232,
+                243,
+                30,
+                174,
+                169
               ]
             }
           }
@@ -228,7 +232,7 @@
         },
         {
           "name": "owner_program",
-          "address": "D74Ho1cWBHgZNpVG4FnBBA4JtjX4HFZ5QqqRXXVKA8gM"
+          "address": "nkPMzRtKV4feTsDfst5P6sH8Rzf4VNe3p9Y1MzMiAme"
         },
         {
           "name": "delegation_program",
@@ -372,8 +376,7 @@
         },
         {
           "name": "oracle_queue",
-          "writable": true,
-          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+          "writable": true
         },
         {
           "name": "program_identity",

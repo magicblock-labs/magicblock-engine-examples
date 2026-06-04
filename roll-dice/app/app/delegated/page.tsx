@@ -37,6 +37,8 @@ import {
   ROLL_TIMEOUT_MS,
   ROLL_ANIMATION_INTERVAL_MS,
 } from "@/lib/config"
+// Local IDL — bundle at build time instead of fetchIdl-ing from chain.
+import randomDiceDelegatedIdl from "@/lib/idl/random_dice_delegated.json"
 import {
   walletAdapterFrom,
   loadOrCreateKeypair,
@@ -44,6 +46,7 @@ import {
   fetchAndCacheBlockhash,
   getCachedBlockhash,
   checkDelegationStatus,
+  loadIdl,
 } from "@/lib/solana-utils"
 import type { RollEntry, CachedBlockhash } from "@/lib/types"
 
@@ -227,15 +230,13 @@ export default function DiceRollerDelegated() {
     ephemeralConnectionRef.current = newEphemeralConnection
     setEphemeralEndpoint(validatorFqdn)
     
-    // Recreate ephemeral program with new connection
-    const idl = await anchor.Program.fetchIdl(PROGRAM_ID, programRef.current.provider)
-    if (!idl) throw new Error("IDL not found")
-    
+    // Recreate ephemeral program with new connection — bundled IDL.
     const ephemeralProvider = new anchor.AnchorProvider(
       newEphemeralConnection,
       walletAdapterFrom(playerKeypairRef.current),
       anchor.AnchorProvider.defaultOptions()
     )
+    const idl = await loadIdl(PROGRAM_ID, programRef.current.provider, randomDiceDelegatedIdl)
     ephemeralProgramRef.current = new anchor.Program(idl, ephemeralProvider)
     
     // Recreate subscription with new connection
@@ -333,9 +334,7 @@ export default function DiceRollerDelegated() {
         anchor.AnchorProvider.defaultOptions()
       )
 
-      const idl = await anchor.Program.fetchIdl(PROGRAM_ID, provider)
-      if (!idl) throw new Error("IDL not found")
-
+      const idl = await loadIdl(PROGRAM_ID, provider, randomDiceDelegatedIdl)
       const program = new anchor.Program(idl, provider)
       programRef.current = program
 
@@ -665,32 +664,30 @@ export default function DiceRollerDelegated() {
       const validatorFqdn = delegationStatusWithFqdn.fqdn
       const wsEndpoint = validatorFqdn.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://")
       
-      // Fetch IDL once
-      const idl = await anchor.Program.fetchIdl(PROGRAM_ID, program.provider)
-      if (!idl) throw new Error("IDL not found")
-
       // Create connection to the specific validator we're delegated to
       const connection = new Connection(validatorFqdn, {
         wsEndpoint,
         commitment: "processed",
       })
-      
+
       const provider = new anchor.AnchorProvider(
         connection,
         walletAdapterFrom(playerKeypair),
         anchor.AnchorProvider.defaultOptions()
       )
-      
+
+      const idl = await loadIdl(PROGRAM_ID, program.provider, randomDiceDelegatedIdl)
       const ephemeralProgram = new anchor.Program(idl, provider)
+      console.log(ephemeralProgram.programId.toBase58(), "vs", program.programId.toBase58())
       
-      // Send undelegate RPC to the specific validator endpoint
+      // Send undelegate RPC to the specific validator endpoint.
       await ephemeralProgram.methods
         .undelegate()
         .accounts({
           payer: playerKeypair.publicKey,
           user: playerPda,
         })
-        .rpc()
+        .rpc({ skipPreflight: true })
 
       console.log(`Undelegation sent to ${validatorFqdn}`)
 
@@ -709,8 +706,35 @@ export default function DiceRollerDelegated() {
           setIsUndelegating(false)
         }
       }, 1000)
-    } catch (error) {
-      console.error("Undelegation failed:", error)
+    } catch (error: any) {
+      // Aggressive unwrap — SendTransactionError stores everything as
+      // non-enumerable, and Anchor wraps it with another object whose
+      // `.message` may itself be an object (printing as "[object Object]").
+      // Walk the layers and dump JSON for anything that isn't a string.
+      const safe = (v: any) => {
+        if (v == null) return v
+        if (typeof v === "string") return v
+        try { return JSON.stringify(v, Object.getOwnPropertyNames(v), 2) }
+        catch { return String(v) }
+      }
+      // One combined string so the Next.js error overlay (which only
+      // surfaces the first console.error per render) shows everything.
+      let extraLogs: string | null = null
+      if (typeof error?.getLogs === "function") {
+        try {
+          const logs = await error.getLogs(ephemeralConnectionRef.current ?? undefined)
+          extraLogs = safe(logs)
+        } catch { /* getLogs may fail if the tx never landed */ }
+      }
+      console.error(
+        "Undelegation failed:\n" +
+          `  error:     ${safe(error)}\n` +
+          `  message:   ${safe(error?.message)}\n` +
+          `  cause:     ${safe(error?.cause)}\n` +
+          `  logs:      ${safe(error?.logs)}\n` +
+          `  signature: ${error?.signature ?? error?.txid ?? error?.tx ?? "(none)"}\n` +
+          `  getLogs(): ${extraLogs ?? "(unavailable)"}`,
+      )
       if (delegationPollIntervalRef.current) {
         clearInterval(delegationPollIntervalRef.current)
         delegationPollIntervalRef.current = null

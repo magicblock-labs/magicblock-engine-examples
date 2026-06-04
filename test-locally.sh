@@ -462,7 +462,7 @@ for i in {1..60}; do
 done
 echo "Ephemeral validator is ready."
 
-# Start the VRF oracle (needed by rewards-delegated-vrf).
+# Start the VRF oracle.
 echo "Starting VRF oracle..."
 VRF_ORACLE_BIN=$(command -v vrf-oracle 2>/dev/null)
 if [ -z "$VRF_ORACLE_BIN" ]; then
@@ -527,43 +527,46 @@ run_magicsvm_test "pinocchio-counter" "pinocchio-counter" "cargo build-sbf && ya
 
 # anchor-counter has 3 test files: public-counter (local), private-counter (TEE), advanced-magic (router).
 # Locally we run only public-counter.ts. The other two run from the TEE/devnet block below.
-run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts; cd .."
+run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts && cd .."
 
 # private-counter is TEE-only — runs in the TEE/devnet block below.
 
 # crank-counter: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor would
 # re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
+run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
 
 # ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
 # anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
+run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
 
-run_test "magic-actions" "cd magic-actions && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts; cd .."
+run_test "magic-actions" "cd magic-actions && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts && cd .."
 
-run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js; cd .."
+run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js && cd .."
 
 run_test "pinocchio-secret-counter" "cd pinocchio-secret-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_secret_counter-keypair.json target/deploy/pinocchio_secret_counter.so && yarn install && yarn test; cd .."
 
 # rewards-delegated-vrf: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor
 # would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
+run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
 
 # roll-dice + roll-dice-delegated: VRF integration. roll-dice-delegated reads
 # VALIDATOR env var → defaults to the local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT
 # is localhost. Same Anchor.toml glob picks up both test files.
-run_test "roll-dice" "cd roll-dice && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'; cd .."
+run_test "roll-dice" "cd roll-dice && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
 
 # rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
-run_test "rust-counter" "cd rust-counter && yarn install && npx vitest run ./tests/kit/rust-counter.test.ts; cd .."
+# Build + deploy the native Rust program before running vitest — the test loads
+# the program keypair from target/deploy/ and expects the program live on the
+# local validator (matches the pinocchio-* pattern above).
+run_test "rust-counter" "cd rust-counter && cargo build-sbf && solana program deploy --program-id target/deploy/rust_counter-keypair.json target/deploy/rust_counter.so && yarn install && npx vitest run ./tests/kit/rust-counter.test.ts && cd .."
 
 # session-keys: skip ./tests/advanced-magic.ts — it's router-based (devnet-router).
-run_test "session-keys" "cd session-keys && anchor build && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/anchor-counter-session.ts; cd .."
+run_test "session-keys" "cd session-keys && anchor build && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/anchor-counter-session.ts && cd .."
 
 # spl-tokens: bypass `anchor test` (which calls fullstack-test.sh — that script
 # branches on Anchor.toml's cluster=devnet and overrides ANCHOR_PROVIDER_URL,
 # fighting our locally-exported env). Invoke ts-mocha directly.
-run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts; cd .."
+run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts && cd .."
 
 # ---- TEE tests: base layer = Solana devnet; ER = MagicBlock TEE devnet ----
 # TEE attestation isn't available locally, so these examples are tested against
@@ -578,9 +581,9 @@ if [ "${SKIP_TEE_TESTS:-0}" != "1" ]; then
 
   TEE_ENV="PROVIDER_ENDPOINT=$DEVNET_RPC WS_ENDPOINT=$DEVNET_WS EPHEMERAL_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app EPHEMERAL_WS_ENDPOINT=wss://devnet-tee.magicblock.app TEE_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app TEE_WS_ENDPOINT=wss://devnet-tee.magicblock.app ROUTER_ENDPOINT=https://devnet-router.magicblock.app ROUTER_WS_ENDPOINT=wss://devnet-router.magicblock.app VALIDATOR=MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
 
-  run_test "private-counter (devnet TEE)" "cd private-counter && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet; cd .."
+  run_test "private-counter (devnet TEE)" "cd private-counter && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
 
-  run_test "rock-paper-scissor (devnet TEE)" "cd rock-paper-scissor && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet; cd .."
+  run_test "rock-paper-scissor (devnet TEE)" "cd rock-paper-scissor && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
 fi
 
 # Print summary report

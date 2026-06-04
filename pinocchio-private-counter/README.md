@@ -1,6 +1,6 @@
-# ➕ Pinocchio Counter
+# 🔒 Pinocchio Private Counter
 
-Simple counter program using Pinocchio and Ephemeral Rollups.
+Pinocchio counter variant that exercises private state on the Ephemeral Rollup.
 
 This is a port of the Rust Counter program to use Pinocchio instead of Borsh for serialization, eliminating the need for Vec types.
 

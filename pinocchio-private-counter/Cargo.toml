@@ -1,5 +1,5 @@
 [package]
-name = "pinocchio-secret-counter"
+name = "pinocchio-private-counter"
 version = "0.1.0"
 edition = "2021"
 
@@ -25,7 +25,7 @@ solana-transaction = "4.1.1"
 solana-system-interface = { version = "3.2.0", features = ["bincode"] }
 
 [lib]
-name = "pinocchio_secret_counter"
+name = "pinocchio_private_counter"
 crate-type = ["cdylib"]
 
 [[test]]
