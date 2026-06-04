@@ -342,7 +342,7 @@ describe("basic-test", () => {
     const res = svm.sendTransaction(
       await transactionFromWeb3Transaction(tx, {
         payer: signerFromWeb3Keypair(userKeypair),
-        recentBlockhash: svm.latestBlockhash(),
+        recentBlockhash: svm.latestBlockhashFor({ target: "ephemeral" }),
       }),
       {
         target: "ephemeral",
