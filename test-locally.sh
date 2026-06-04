@@ -394,7 +394,10 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "Installing dependencies..."
-cd test-utils && yarn install && cd ..
+if ! (cd test-utils && yarn install); then
+  echo "ERROR: failed to install dependencies in test-utils"
+  exit 1
+fi
 
 echo "Starting validators..."
 
