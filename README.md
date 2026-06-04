@@ -16,7 +16,7 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 - [Anchor Counter](./anchor-counter/README.md) — Counter program in Anchor. Tests delegate/undelegate via the TypeScript SDK.
 - [Rust Counter](./rust-counter/README.md) — Counter program in native Rust. Tests delegate/undelegate natively.
 - [Pinocchio Counter](./pinocchio-counter/README.md) — Counter program built with Pinocchio (no heap, no Borsh `Vec`s).
-- [Pinocchio Secret Counter](./pinocchio-secret-counter/README.md) — Pinocchio counter variant exercising secret state on the ER.
+- [Pinocchio Private Counter](./pinocchio-private-counter/README.md) — Pinocchio counter variant exercising private state on the ER.
 - [Private Counter](./private-counter/README.md) — Anchor counter gated by an on-rollup ephemeral permission account.
 - [Session Keys](./session-keys/README.md) — Counter using gpl-session keys for delegated-signer auth on both base chain and ER.
 - [Crank Counter](./crank-counter/README.md) — Counter driven by MagicBlock's scheduled crank system.

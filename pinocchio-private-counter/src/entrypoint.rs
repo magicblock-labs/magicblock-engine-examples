@@ -1,6 +1,7 @@
 use crate::processor::{
-    process_commit, process_commit_and_undelegate, process_delegate, process_increase_counter,
-    process_increment_commit, process_increment_undelegate, process_initialize_counter,
+    process_close_permission, process_commit, process_commit_and_undelegate, process_delegate,
+    process_increase_counter, process_increment_commit, process_increment_undelegate,
+    process_init_permission, process_initialize_counter, process_set_privacy,
     process_undelegation_callback,
 };
 use core::{mem::MaybeUninit, slice::from_raw_parts};
@@ -18,6 +19,9 @@ enum InstructionDiscriminator {
     Commit,
     IncrementAndCommit,
     IncrementAndUndelegate,
+    InitPermission,
+    SetPrivacy,
+    ClosePermission,
     UndelegationCallback,
 }
 
@@ -29,6 +33,10 @@ impl InstructionDiscriminator {
     const COMMIT: [u8; 8] = [4, 0, 0, 0, 0, 0, 0, 0];
     const INCREMENT_AND_COMMIT: [u8; 8] = [5, 0, 0, 0, 0, 0, 0, 0];
     const INCREMENT_AND_UNDELEGATE: [u8; 8] = [6, 0, 0, 0, 0, 0, 0, 0];
+    // EphemeralPermission flow — created/updated/closed directly on the ER.
+    const INIT_PERMISSION: [u8; 8] = [7, 0, 0, 0, 0, 0, 0, 0];
+    const SET_PRIVACY: [u8; 8] = [8, 0, 0, 0, 0, 0, 0, 0];
+    const CLOSE_PERMISSION: [u8; 8] = [9, 0, 0, 0, 0, 0, 0, 0];
     // Undelegation callback called by the delegation program
     const UNDELEGATION_CALLBACK: [u8; 8] = [196, 28, 41, 206, 48, 37, 51, 167];
 
@@ -41,6 +49,9 @@ impl InstructionDiscriminator {
             Self::COMMIT => Ok(Self::Commit),
             Self::INCREMENT_AND_COMMIT => Ok(Self::IncrementAndCommit),
             Self::INCREMENT_AND_UNDELEGATE => Ok(Self::IncrementAndUndelegate),
+            Self::INIT_PERMISSION => Ok(Self::InitPermission),
+            Self::SET_PRIVACY => Ok(Self::SetPrivacy),
+            Self::CLOSE_PERMISSION => Ok(Self::ClosePermission),
             Self::UNDELEGATION_CALLBACK => Ok(Self::UndelegationCallback),
             _ => Err(ProgramError::InvalidInstructionData),
         }
@@ -133,6 +144,18 @@ pub(crate) fn inner_process_instruction(
             let (bump, increase_by) = read_bump_and_u64(payload)?;
             process_increment_undelegate(program_id, accounts, bump, increase_by)
         }
+        InstructionDiscriminator::InitPermission => {
+            let bump = read_u8(payload)?;
+            process_init_permission(program_id, accounts, bump)
+        }
+        InstructionDiscriminator::SetPrivacy => {
+            let (bump, is_private) = read_bump_and_bool(payload)?;
+            process_set_privacy(program_id, accounts, bump, is_private)
+        }
+        InstructionDiscriminator::ClosePermission => {
+            let bump = read_u8(payload)?;
+            process_close_permission(program_id, accounts, bump)
+        }
         InstructionDiscriminator::UndelegationCallback => {
             process_undelegation_callback(program_id, accounts, payload)
         }
@@ -164,6 +187,19 @@ fn read_bump_and_u64(input: &[u8]) -> Result<(u8, u64), ProgramError> {
     Ok((bump, value))
 }
 
+fn read_bump_and_bool(input: &[u8]) -> Result<(u8, bool), ProgramError> {
+    if input.len() < 2 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+    let bump = input[0];
+    let is_private = match input[1] {
+        0 => false,
+        1 => true,
+        _ => return Err(ProgramError::InvalidInstructionData),
+    };
+    Ok((bump, is_private))
+}
+
 #[allow(unused_variables)]
 fn log_instruction(discriminator: InstructionDiscriminator) {
     #[cfg(feature = "logging")]
@@ -189,6 +225,15 @@ fn log_instruction(discriminator: InstructionDiscriminator) {
             }
             InstructionDiscriminator::IncrementAndUndelegate => {
                 pinocchio_log::log!("IncrementAndUndelegate");
+            }
+            InstructionDiscriminator::InitPermission => {
+                pinocchio_log::log!("InitPermission");
+            }
+            InstructionDiscriminator::SetPrivacy => {
+                pinocchio_log::log!("SetPrivacy");
+            }
+            InstructionDiscriminator::ClosePermission => {
+                pinocchio_log::log!("ClosePermission");
             }
             InstructionDiscriminator::UndelegationCallback => {
                 pinocchio_log::log!("UndelegationCallback");
