@@ -444,8 +444,10 @@ binary = os.environ["EPHEMERAL_VALIDATOR_BIN"]
 status = pty.spawn([
     binary,
     "--lifecycle", "ephemeral",
-    "--remotes", "http://localhost:8899",
-    "--listen", "127.0.0.1:7799",
+    "--remotes", "http://127.0.0.1:8899",
+    "--remotes", "ws://127.0.0.1:8900",
+    "-l", "127.0.0.1:7799",
+    "--reset",
 ])
 sys.exit(os.WEXITSTATUS(status) if os.WIFEXITED(status) else 128 + os.WTERMSIG(status))
 ' > ./ephemeral-validator.log 2>&1 < /dev/null &
