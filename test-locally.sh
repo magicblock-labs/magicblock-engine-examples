@@ -424,13 +424,6 @@ for i in {1..30}; do
   sleep 1
 done
 echo "Solana validator is ready, waiting for RPC to stabilize..."
-for i in {1..90}; do
-  slot=$(curl -s --max-time 1 -X POST -H "content-type: application/json" \
-    -d '{"jsonrpc":"2.0","method":"getSlot","params":[{"commitment":"processed"}],"id":1}' http://127.0.0.1:8899 2>/dev/null \
-    | sed -nE 's/.*"result":([0-9]+).*/\1/p')
-  [ -n "$slot" ] && [ "$slot" -gt 0 ] && break
-  sleep 1
-done
 
 # Start MagicBlock Ephemeral Validator
 echo "Starting MagicBlock Ephemeral Validator..."
@@ -461,10 +454,9 @@ EPHEMERAL_PID=$!
 
 # Wait for ephemeral-validator RPC to come up — without this, fast tests fire
 # their first ER call before the server is listening and hit "fetch failed".
-# Using bash's /dev/tcp (no external process; doesn't touch tty).
 echo "Waiting for ephemeral-validator..."
 for i in {1..60}; do
-  if (echo > /dev/tcp/127.0.0.1/7799) 2>/dev/null; then
+  if curl -s --max-time 1 http://127.0.0.1:7799/health >/dev/null 2>&1; then
     sleep 1   # let the RPC handler finish wiring up after the socket binds
     break
   fi
