@@ -9,6 +9,7 @@ stty sane 2>/dev/null || true
 
 SOLANA_PID=""
 EPHEMERAL_PID=""
+QFS_PID=""
 VRF_PID=""
 VRF_ER_PID=""
 PASSED_TESTS=()
@@ -18,20 +19,32 @@ FAILED_TESTS_ERRORS=()
 TEST_COUNT=0
 
 # Optional first arg: substring filter for test names.
-#   bash test-locally.sh                       # runs everything
+#   bash test-locally.sh                           # runs everything
 #   bash test-locally.sh ephemeral-account-chats   # only that one
-#   bash test-locally.sh pinocchio             # matches both pinocchio-* examples
+#   bash test-locally.sh pinocchio                 # matches both pinocchio-* examples
 #
 # Optional env flags:
-#   SKIP_REGULAR_TESTS=1  skips non-VRF local tests
+#   SKIP_REGULAR_TESTS=1  skips regular local tests
 #   SKIP_VRF_TESTS=1      skips VRF oracle startup and VRF tests
 #   SKIP_TEE_TESTS=1      skips devnet TEE tests
 #   SETUP_ONLY=1          start the validators/oracles, then keep them running
 #                         until a key is pressed (no tests). Useful for poking at
 #                         the local cluster by hand.
 TEST_FILTER="${1:-}"
+SKIP_TEE_TESTS="${SKIP_TEE_TESTS:-0}"
+SKIP_REGULAR_TESTS="${SKIP_REGULAR_TESTS:-0}"
+SKIP_VRF_TESTS="${SKIP_VRF_TESTS:-0}"
+
 if [ -n "$TEST_FILTER" ]; then
   echo "Filter: only running tests matching '$TEST_FILTER'"
+  echo ""
+fi
+if [ "$SKIP_TEE_TESTS" = "1" ]; then
+  echo "Filter: skipping TEE tests"
+  echo ""
+fi
+if [ "$SKIP_NON_TEE_TESTS" = "1" ]; then
+  echo "Filter: skipping local/non-TEE tests"
   echo ""
 fi
 
@@ -79,7 +92,7 @@ run_test() {
   local cmd_er="$(echo "$test_command" | grep -oE 'EPHEMERAL_PROVIDER_ENDPOINT=[^ ]+' | head -1 | cut -d= -f2-)"
   local cmd_validator="$(echo "$test_command" | grep -oE 'VALIDATOR=[A-Za-z0-9]+' | head -1 | cut -d= -f2-)"
   echo "Base Layer Endpoint: ${cmd_base:-${PROVIDER_ENDPOINT:-http://localhost:8899}}"
-  echo "ER Endpoint:         ${cmd_er:-${EPHEMERAL_PROVIDER_ENDPOINT:-${TEE_PROVIDER_ENDPOINT:-http://localhost:7799}}}"
+  echo "ER Endpoint:         ${cmd_er:-${TEE_PROVIDER_ENDPOINT:-${EPHEMERAL_PROVIDER_ENDPOINT:-http://localhost:7799}}}"
   echo "ER Validator:        ${cmd_validator:-${VALIDATOR:-mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev}}"
   echo "Wallet:              $wallet"
   echo "Program ID:          $program_id"
@@ -306,7 +319,7 @@ cleanup() {
   printf 'Stopping validators... '
   
   # Kill by PID if available
-  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID $VRF_ER_PID; do
+  for pid in $SOLANA_PID $EPHEMERAL_PID $QFS_PID $VRF_PID $VRF_ER_PID; do
     [ -n "$pid" ] && kill -TERM $pid 2>/dev/null || true
   done
 
@@ -314,7 +327,7 @@ cleanup() {
   sleep 1
 
   # Force kill any remaining processes
-  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID $VRF_ER_PID; do
+  for pid in $SOLANA_PID $EPHEMERAL_PID $QFS_PID $VRF_PID $VRF_ER_PID; do
     [ -n "$pid" ] && kill -9 $pid 2>/dev/null || true
   done
 
@@ -322,16 +335,18 @@ cleanup() {
   pkill -f "solana-test-validator" 2>/dev/null || true
   pkill -f "mb-test-validator" 2>/dev/null || true
   pkill -f "ephemeral-validator" 2>/dev/null || true
+  pkill -f "query-filtering-service" 2>/dev/null || true
   pkill -f "vrf-oracle" 2>/dev/null || true
   pkill -f "vrf-oracle-er" 2>/dev/null || true
   
   # Wait for background jobs silently
   { wait 2>/dev/null || true; } 2>/dev/null
-  
+
   # Check if validators are actually stopped
   if ! pgrep -f "solana-test-validator" >/dev/null 2>&1 \
      && ! pgrep -f "mb-test-validator" >/dev/null 2>&1 \
      && ! pgrep -f "ephemeral-validator" >/dev/null 2>&1 \
+     && ! pgrep -f "query-filtering-service" >/dev/null 2>&1 \
      && ! pgrep -f "vrf-oracle" >/dev/null 2>&1; then
     echo "✓ Stopped"
   else
@@ -357,7 +372,7 @@ fi
 # Start MagicBlock Test Validator (wraps solana-test-validator and pre-clones MB programs).
 echo "Starting MagicBlock Test Validator..."
 mb-test-validator --reset > ./test-ledger.log 2>&1 < /dev/null &
-
+    
 SOLANA_PID=$!
 
 # Wait for validator to be ready
@@ -411,9 +426,56 @@ for i in {1..60}; do
 done
 echo "Ephemeral validator is ready."
 
+# Start the Query Filtering Service (QFS) — the middleware that fronts the ER.
+# Request flow for tests: client -> QFS (127.0.0.1:6699) -> ER validator
+# (127.0.0.1:7799) -> solana validator (127.0.0.1:8899). Local tests point their
+# ER endpoint (EPHEMERAL_PROVIDER_ENDPOINT) at the QFS rather than the ER directly.
+echo "Starting Query Filtering Service..."
+QFS_BIN=$(command -v query-filtering-service 2>/dev/null)
+if [ -z "$QFS_BIN" ]; then
+  echo "ERROR: 'query-filtering-service' not on PATH."
+  echo "  Install it and re-run (it fronts the ephemeral validator for tests)."
+  exit 1
+fi
+echo "  Binary: $QFS_BIN"
+echo "  Version: $("$QFS_BIN" --version 2>&1 | head -1 || echo unknown)"
+RUST_LOG=info "$QFS_BIN" \
+  --listen-addr 127.0.0.1:6699 \
+  --listen-addr-ws 127.0.0.1:6700 \
+  --ephemeral-url http://127.0.0.1:7799 \
+  --ephemeral-url-ws ws://127.0.0.1:7800 \
+  --add-cors-headers > ./query-filtering-service.log 2>&1 < /dev/null &
+
+QFS_PID=$!
+
+# Wait for the QFS to bind its HTTP listener before any test fires an ER call.
+echo "Waiting for query-filtering-service..."
+for i in {1..60}; do
+  if (echo > /dev/tcp/127.0.0.1/6699) 2>/dev/null; then
+    sleep 1   # let the RPC handler finish wiring up after the socket binds
+    break
+  fi
+  if ! kill -0 $QFS_PID 2>/dev/null; then
+    echo "query-filtering-service died. Last 100 lines of ./query-filtering-service.log:"
+    echo "----- query-filtering-service.log -----"
+    tail -100 ./query-filtering-service.log 2>/dev/null || echo "(log file not found)"
+    echo "----- end of log -----"
+    exit 1
+  fi
+  sleep 1
+done
+echo "Query Filtering Service is ready."
+
+# Start the VRF oracle.
+echo "Starting VRF oracle..."
+VRF_ORACLE_BIN=$(command -v vrf-oracle 2>/dev/null)
 # Start the VRF oracle unless VRF tests are disabled.
 if [ "${SKIP_VRF_TESTS:-0}" = "1" ]; then
   echo "Skipping VRF oracle startup (SKIP_VRF_TESTS=1)."
+else
+if [ -z "$VRF_ORACLE_BIN" ]; then
+  echo "ERROR: 'vrf-oracle' not on PATH — VRF-dependent tests will fail. Install it and re-run."
+  exit 1
 else
   echo "Starting VRF oracle..."
   VRF_ORACLE_BIN=$(command -v vrf-oracle 2>/dev/null)
@@ -485,27 +547,35 @@ echo ""
 
 # MagicBlock validator identities (used as the `validator` arg when delegating):
 #   Localnet:
-#     Local ER (http://localhost:7799)            : mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
+#     Local ER (http://localhost:7799, fronted by   : mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
+#       the QFS at http://localhost:6699)
 #   Devnet:
 #     Asia (https://devnet-as.magicblock.app)     : MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57
 #     EU   (https://devnet-eu.magicblock.app)     : MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e
 #     US   (https://devnet-us.magicblock.app)     : MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd
 #     TEE  (https://devnet-tee.magicblock.app)    : MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo
 
-# ---- Local tests: base layer = local solana-test-validator; ER = local ephemeral-validator ----
+# ---- Local tests: base layer = local solana-test-validator; ER = query-filtering-service ----
 # Exported so every child test process sees them (and any test that ignores them
 # and dials devnet will fail loudly rather than silently hit the wrong network).
+# The ER endpoint points at the local Query Filtering Service (QFS), which routes
+# to the ephemeral validator (7799) and on to the base solana validator (8899):
+#   client -> QFS (6699) -> ER validator (7799) -> solana validator (8899)
+# The base layer endpoint still talks to the solana validator directly.
 export PROVIDER_ENDPOINT=http://localhost:8899
 export WS_ENDPOINT=ws://localhost:8900
 export EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799
 export EPHEMERAL_WS_ENDPOINT=ws://localhost:7800
+export QFS_ENDPOINT=http://localhost:6699
+export QFS_WS_ENDPOINT=ws://localhost:6700
 # Anchor SDK reads ANCHOR_PROVIDER_URL/ANCHOR_WALLET when test code calls
 # AnchorProvider.env(). Without these, `anchor test` overrides them based on the
 # Anchor.toml [provider] cluster (often devnet) and tests silently hit the wrong network.
 export ANCHOR_PROVIDER_URL=$PROVIDER_ENDPOINT
 export ANCHOR_WALLET="${HOME}/.config/solana/id.json"
 # Router-style tests (advanced-magic, magic-actions, dummy-token-transfer) point at the
-# MagicBlock router on devnet — locally there's no router, so route them at the local ER.
+# MagicBlock router on devnet — locally there's no router, so route them through the
+# QFS (which is the local ER endpoint), same as every other ER call.
 export ROUTER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT
 export ROUTER_WS_ENDPOINT=$EPHEMERAL_WS_ENDPOINT
 export VALIDATOR=mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
@@ -513,6 +583,9 @@ export VALIDATOR=mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
 export VRF_BASE_QUEUE="GKE6d7iv8kCBrsxr78W3xVdjGLLLJnxsGiuzrsZCGEvb"
 export VRF_EPHEMERAL_QUEUE="Sc9MJUngNbQXSXGP3F67KvKwVnhaYn6kcioxXNVowYT"
 
+# ------------------------------------------------------------------------------
+# Regular tests
+# ------------------------------------------------------------------------------
 if [ "${SKIP_REGULAR_TESTS:-0}" = "1" ]; then
   echo "Skipping regular local tests (SKIP_REGULAR_TESTS=1)."
 else
@@ -557,6 +630,9 @@ else
   run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts && cd .."
 fi
 
+# ------------------------------------------------------------------------------
+# VRF tests
+# ------------------------------------------------------------------------------
 if [ "${SKIP_VRF_TESTS:-0}" = "1" ]; then
   echo "Skipping VRF tests (SKIP_VRF_TESTS=1)."
 else
@@ -571,24 +647,16 @@ else
   run_test "pinocchio-roll-dice" "cd pinocchio-roll-dice && yarn install && yarn keys-sync && cargo build-sbf --features logging && solana program deploy target/deploy/roll_dice.so && solana program deploy target/deploy/roll_dice_delegated.so && yarn test && cd .."
 fi
 
-# ---- TEE tests: base layer = Solana devnet; ER = MagicBlock TEE devnet ----
-# TEE attestation isn't available locally, so these examples are tested against
-# devnet TEE (validator MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo).
-# Requires: solana CLI default keypair funded with devnet SOL for the program deploy.
-# Set SKIP_TEE_TESTS=1 to skip this block.
-# Override the base-layer devnet RPC via DEVNET_RPC_URL (e.g. a private Helius/QuickNode
-# endpoint) to avoid public devnet rate limits. The WS URL is derived from it.
+# ------------------------------------------------------------------------------
+# TEE tests
+# ------------------------------------------------------------------------------
 if [ "${SKIP_TEE_TESTS:-0}" = "1" ]; then
   echo "Skipping TEE tests (SKIP_TEE_TESTS=1)."
 else
-  DEVNET_RPC="${DEVNET_RPC_URL:-https://api.devnet.solana.com}"
-  DEVNET_WS=$(echo "$DEVNET_RPC" | sed -e 's|^http:|ws:|' -e 's|^https:|wss:|')
+  TEE_ENV="PROVIDER_ENDPOINT=$PROVIDER_ENDPOINT WS_ENDPOINT=$WS_ENDPOINT EPHEMERAL_PROVIDER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT EPHEMERAL_WS_ENDPOINT=$EPHEMERAL_WS_ENDPOINT TEE_PROVIDER_ENDPOINT=$QFS_ENDPOINT TEE_WS_ENDPOINT=$QFS_WS_ENDPOINT VALIDATOR=$VALIDATOR"
 
-  TEE_ENV="PROVIDER_ENDPOINT=$DEVNET_RPC WS_ENDPOINT=$DEVNET_WS EPHEMERAL_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app EPHEMERAL_WS_ENDPOINT=wss://devnet-tee.magicblock.app TEE_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app TEE_WS_ENDPOINT=wss://devnet-tee.magicblock.app ROUTER_ENDPOINT=https://devnet-router.magicblock.app ROUTER_WS_ENDPOINT=wss://devnet-router.magicblock.app VALIDATOR=MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
-
-  run_test "private-counter (devnet TEE)" "cd private-counter && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
-
-  run_test "rock-paper-scissor (devnet TEE)" "cd rock-paper-scissor && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
+  run_test "private-counter (devnet TEE)" "cd private-counter && anchor keys sync && anchor build && anchor deploy && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
+  run_test "rock-paper-scissor (devnet TEE)" "cd rock-paper-scissor && anchor keys sync && anchor build && anchor deploy && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
 fi
 
 # Print summary report
