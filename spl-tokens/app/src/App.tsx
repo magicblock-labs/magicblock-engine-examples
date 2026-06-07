@@ -1148,6 +1148,9 @@ const App: React.FC = () => {
                             tokenProgram,
                         )
                     ),
+                );
+                mintTx.feePayer = payer.publicKey;
+                const queueSetupTx = new Transaction().add(
                     initTransferQueueIx(
                         payer.publicKey,
                         transferQueue,
@@ -1169,7 +1172,7 @@ const App: React.FC = () => {
                         mintKp.publicKey,
                     ),
                 );
-                mintTx.feePayer = payer.publicKey;
+                queueSetupTx.feePayer = payer.publicKey;
                 const setupVaultTx = new Transaction().add(
                     initVaultIx(vault, mint, payer.publicKey, tokenProgram),
                     initVaultAtaIx(payer.publicKey, vaultAta, vault, mint, tokenProgram),
@@ -1188,6 +1191,18 @@ const App: React.FC = () => {
                     },
                 );
                 console.log("[setup]   mintTx confirmed:", mintSig);
+                console.log("[setup]   sending queueSetupTx after confirmed mintTx...");
+                await sendAndConfirmTransaction(
+                    conn,
+                    queueSetupTx,
+                    [payer],
+                    {
+                        commitment: 'confirmed',
+                        preflightCommitment: 'confirmed',
+                        skipPreflight: false,
+                    },
+                );
+                console.log("[setup]   queueSetupTx confirmed");
                 console.log("[setup]   sending setupVaultTx...");
                 await sendAndConfirmTransaction(
                     conn,
