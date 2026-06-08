@@ -1,7 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
-import { execSync } from "child_process";
-import { existsSync } from "fs";
 import { MagicActionsAdvanced } from "../target/types/magic_actions_advanced";
 import {
   ConnectionMagicRouter,
@@ -262,23 +260,6 @@ describe("magic-actions-advanced", () => {
       "ER", sig, isLocal ? erConnection : routerConnection, knownAddresses
     );
 
-    const DB_PATH =
-      process.env.MAGICBLOCK_ER_DB_PATH ||
-      "/tmp/magicblock-er-storage/committor_service.sqlite";
-    const commitSigs = readCommitSigsFromDb(DB_PATH);
-    console.log(`\n  Found ${commitSigs.length} L1 commit transaction(s) in ER database:`);
-    for (const { commitSig, finalizeSig, status, pubkey } of commitSigs) {
-      console.log(`  pubkey=${pubkey}  status=${status}`);
-      if (commitSig) {
-        console.log(`  commit-stage sig: ${commitSig}`);
-        await printTransactionAccounts("L1 commit-stage", commitSig, baseConnection, knownAddresses);
-      }
-      if (finalizeSig) {
-        console.log(`  finalize-stage sig: ${finalizeSig}`);
-        await printTransactionAccounts("L1 finalize-stage", finalizeSig, baseConnection, knownAddresses);
-      }
-    }
-
     const lb = await program.account.leaderboard.fetch(leaderboardPda);
     expect(lb.highScore.toNumber()).to.be.greaterThan(
       0,
@@ -522,35 +503,3 @@ async function printTransactionAccounts(
   }
 }
 
-interface CommitRow {
-  pubkey: string;
-  status: string;
-  commitSig: string | null;
-  finalizeSig: string | null;
-}
-
-function readCommitSigsFromDb(dbPath: string): CommitRow[] {
-  if (!existsSync(dbPath)) {
-    console.warn(`  [warn] ER commit DB not found at ${dbPath} — set MAGICBLOCK_ER_DB_PATH to override`);
-    return [];
-  }
-  try {
-    const query = `SELECT pubkey, commit_status, commit_stage_signature, finalize_stage_signature FROM commit_status ORDER BY created_at ASC;`;
-    const raw = execSync(`sqlite3 "${dbPath}" "${query}"`, {
-      encoding: "utf8",
-    }).trim();
-    if (!raw) return [];
-    return raw.split("\n").map((line) => {
-      const [pubkey, status, commitSig, finalizeSig] = line.split("|");
-      return {
-        pubkey: pubkey ?? "",
-        status: status ?? "",
-        commitSig: commitSig || null,
-        finalizeSig: finalizeSig || null,
-      };
-    });
-  } catch (err) {
-    console.warn(`  [warn] Could not read ER commit DB: ${err instanceof Error ? err.message : err}`);
-    return [];
-  }
-}
