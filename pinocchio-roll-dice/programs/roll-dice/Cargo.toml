@@ -1,0 +1,23 @@
+[package]
+name = "roll-dice"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "roll_dice"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+logging = []
+no-entrypoint = []
+custom-heap = []
+custom-panic = []
+
+
+[dependencies]
+pinocchio = { workspace = true, default-features = false }
+pinocchio-log = { workspace = true }
+pinocchio-system = { workspace = true }
+ephemeral-rollups-pinocchio = { workspace = true }
