@@ -1,0 +1,25 @@
+[package]
+name = "magic-actions-advanced"
+version = "0.1.0"
+description = "Combines post-delegation actions and PDA-paid magic action commits in one program"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "magic_actions_advanced"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+ephemeral-rollups-sdk = { version = "0.12.0", features = ["anchor"] }
+magicblock-delegation-program-api = { version = "2.0.0", default-features = false }
