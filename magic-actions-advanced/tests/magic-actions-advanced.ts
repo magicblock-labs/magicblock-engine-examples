@@ -1,6 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
 import { execSync } from "child_process";
+import { existsSync } from "fs";
 import { MagicActionsAdvanced } from "../target/types/magic_actions_advanced";
 import {
   ConnectionMagicRouter,
@@ -261,7 +262,9 @@ describe("magic-actions-advanced", () => {
       "ER", sig, isLocal ? erConnection : routerConnection, knownAddresses
     );
 
-    const DB_PATH = "/tmp/magicblock-er-storage/committor_service.sqlite";
+    const DB_PATH =
+      process.env.MAGICBLOCK_ER_DB_PATH ||
+      "/tmp/magicblock-er-storage/committor_service.sqlite";
     const commitSigs = readCommitSigsFromDb(DB_PATH);
     console.log(`\n  Found ${commitSigs.length} L1 commit transaction(s) in ER database:`);
     for (const { commitSig, finalizeSig, status, pubkey } of commitSigs) {
@@ -527,6 +530,10 @@ interface CommitRow {
 }
 
 function readCommitSigsFromDb(dbPath: string): CommitRow[] {
+  if (!existsSync(dbPath)) {
+    console.warn(`  [warn] ER commit DB not found at ${dbPath} — set MAGICBLOCK_ER_DB_PATH to override`);
+    return [];
+  }
   try {
     const query = `SELECT pubkey, commit_status, commit_stage_signature, finalize_stage_signature FROM commit_status ORDER BY created_at ASC;`;
     const raw = execSync(`sqlite3 "${dbPath}" "${query}"`, {
@@ -542,7 +549,8 @@ function readCommitSigsFromDb(dbPath: string): CommitRow[] {
         finalizeSig: finalizeSig || null,
       };
     });
-  } catch {
+  } catch (err) {
+    console.warn(`  [warn] Could not read ER commit DB: ${err instanceof Error ? err.message : err}`);
     return [];
   }
 }
