@@ -68,8 +68,6 @@ fn log_error(_error: &ProgramError) {
 /// Process an instruction.
 #[inline(always)]
 pub fn process_instruction(accounts: &[AccountView], instruction_data: &[u8]) -> ProgramResult {
-    pinocchio_log::log!("Processing instruction: {}", instruction_data.len());
-    pinocchio_log::log!("Processing discriminator: {}", &instruction_data[..8]);
     if instruction_data.len() < 8 {
         return Err(ProgramError::InvalidInstructionData);
     }
