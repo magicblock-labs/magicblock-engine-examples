@@ -285,10 +285,69 @@ run_test() {
   fi
   echo "========================================"
   echo ""
+
+  if [ "$test_failed" = true ]; then
+    echo "Stopping after first failure."
+    exit 1
+  fi
+}
+
+run_magicsvm_test() {
+  local test_name="$1 (MagicSVM)"
+  local test_path=$2
+  local init_command=$3
+  local test_log="/tmp/test_${1}.log"
+
+  if [ -n "$TEST_FILTER" ] && [[ "$test_name" != *"$TEST_FILTER"* ]]; then
+    return
+  fi
+
+  ((TEST_COUNT++))
+
+  echo ""
+  echo "========================================"
+  echo "Testing: $TEST_COUNT. $test_name"
+  echo "========================================"
+  echo "Runtime: MagicSVM"
+  echo ""
+
+  ( cd "$test_path" && FORCE_COLOR=1 CARGO_TERM_COLOR=always NO_COLOR= eval "$init_command" && yarn test ) > "$test_log" 2>&1
+  local test_exit_code=$?
+
+  local test_failed=false
+  if [ $test_exit_code -ne 0 ] || grep -q "[0-9] failing\|error\[\|could not compile" "$test_log"; then
+    test_failed=true
+  fi
+
+  if [ "$test_failed" = true ]; then
+    cat "$test_log"
+    FAILED_TESTS+=("$test_name")
+    FAILED_TESTS_NAMES+=("$test_name")
+    FAILED_TESTS_ERRORS+=("(exit code $test_exit_code — see $test_log for full output)")
+  else
+    echo "  ✓ Testing"
+    PASSED_TESTS+=("$test_name")
+  fi
+
+  echo ""
+  if [ "$test_failed" = true ]; then
+    echo "Result: ✗ FAILED"
+  else
+    echo "Result: ✓ PASSED"
+  fi
+  echo "========================================"
+  echo ""
+
+  if [ "$test_failed" = true ]; then
+    echo "Stopping after first failure."
+    exit 1
+  fi
 }
 
 # Cleanup function
 cleanup() {
+  local exit_code=$?
+
   # Disable trap to prevent recursion
   trap - EXIT INT TERM
   
@@ -328,11 +387,17 @@ cleanup() {
     echo "✗ Failed to stop"
   fi
   
-  exit 0
+  exit $exit_code
 }
 
 # Set up trap to catch INT (Ctrl+C), TERM, and EXIT
 trap cleanup EXIT INT TERM
+
+echo "Installing dependencies..."
+if ! (cd test-utils && yarn install); then
+  echo "ERROR: failed to install dependencies in test-utils"
+  exit 1
+fi
 
 echo "Starting validators..."
 
@@ -370,19 +435,30 @@ if [ -z "$EPHEMERAL_VALIDATOR_BIN" ]; then
 fi
 echo "  Binary: $EPHEMERAL_VALIDATOR_BIN"
 echo "  Version: $("$EPHEMERAL_VALIDATOR_BIN" --version 2>&1 | head -1 || echo unknown)"
-RUST_LOG=info "$EPHEMERAL_VALIDATOR_BIN" \
-  --lifecycle ephemeral \
-  --remotes http://localhost:8899 \
-  --listen 127.0.0.1:7799 > ./ephemeral-validator.log 2>&1 < /dev/null &
+RUST_LOG=info EPHEMERAL_VALIDATOR_BIN="$EPHEMERAL_VALIDATOR_BIN" python3 -c '
+import os
+import pty
+import sys
+
+binary = os.environ["EPHEMERAL_VALIDATOR_BIN"]
+status = pty.spawn([
+    binary,
+    "--lifecycle", "ephemeral",
+    "--remotes", "http://127.0.0.1:8899",
+    "--remotes", "ws://127.0.0.1:8900",
+    "-l", "127.0.0.1:7799",
+    "--reset",
+])
+sys.exit(os.WEXITSTATUS(status) if os.WIFEXITED(status) else 128 + os.WTERMSIG(status))
+' > ./ephemeral-validator.log 2>&1 < /dev/null &
 
 EPHEMERAL_PID=$!
 
 # Wait for ephemeral-validator RPC to come up — without this, fast tests fire
 # their first ER call before the server is listening and hit "fetch failed".
-# Using bash's /dev/tcp (no external process; doesn't touch tty).
 echo "Waiting for ephemeral-validator..."
 for i in {1..60}; do
-  if (echo > /dev/tcp/127.0.0.1/7799) 2>/dev/null; then
+  if curl -s --max-time 1 http://127.0.0.1:7799/health >/dev/null 2>&1; then
     sleep 1   # let the RPC handler finish wiring up after the socket binds
     break
   fi
@@ -454,6 +530,12 @@ export ROUTER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT
 export ROUTER_WS_ENDPOINT=$EPHEMERAL_WS_ENDPOINT
 export VALIDATOR=mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
 
+# ------------------------------------------------------------
+# MagicSVM tests
+# ------------------------------------------------------------
+run_magicsvm_test "dummy-token-transfer" "dummy-token-transfer" "yarn install"
+run_magicsvm_test "pinocchio-counter" "pinocchio-counter" "cargo build-sbf && yarn install"
+
 # anchor-counter has 3 test files: public-counter (local), private-counter (TEE), advanced-magic (router).
 # Locally we run only public-counter.ts. The other two run from the TEE/devnet block below.
 run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts && cd .."
@@ -464,10 +546,6 @@ run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --
 # re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
 run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
 
-# dummy-token-transfer + magic-actions: have router-based tests (devnet-router) plus
-# local *-local.ts variants. We run only the local variants here.
-run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts && cd .."
-
 # ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
 # anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
 run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
@@ -476,9 +554,7 @@ run_test "magic-actions" "cd magic-actions && anchor build && anchor deploy --pr
 
 run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js && cd .."
 
-run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && yarn test && cd .."
-
-run_test "pinocchio-private-counter" "cd pinocchio-private-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_private_counter-keypair.json target/deploy/pinocchio_private_counter.so && yarn install && yarn test && cd .."
+run_test "pinocchio-secret-counter" "cd pinocchio-secret-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_secret_counter-keypair.json target/deploy/pinocchio_secret_counter.so && yarn install && yarn test; cd .."
 
 # rewards-delegated-vrf: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor
 # would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.

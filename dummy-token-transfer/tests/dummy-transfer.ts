@@ -2,312 +2,365 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN, Program, web3 } from "@coral-xyz/anchor";
 import { DummyTransfer } from "../target/types/dummy_transfer";
 import {
-  DELEGATION_PROGRAM_ID, ConnectionMagicRouter
-} from "@magicblock-labs/ephemeral-rollups-sdk";
-import { PublicKey, sendAndConfirmTransaction, Transaction} from "@solana/web3.js";
+  signerFromWeb3Keypair,
+  addressFromWeb3PublicKey,
+  transactionFromWeb3Transaction,
+} from "test-utils";
+import {
+  FailedTransactionMetadata,
+  MagicSVM,
+  TransactionMetadata,
+  TransactionTarget,
+} from "@magicblock-labs/magicsvm";
+import { expect } from "chai";
+import * as fs from "fs";
+import * as path from "path";
 
-// Helper function to print balances of all accounts
-async function printBalances(program: Program<DummyTransfer>, andyBalancePda: web3.PublicKey, bobBalancePda: web3.PublicKey) {
-  let andyBalanceAccount, bobBalanceAccount;
-  try {
-    andyBalanceAccount = await program.account.balance.fetch(andyBalancePda);
-  } catch (e) {
-    andyBalanceAccount = null;
-  }
-  try {
-    bobBalanceAccount = await program.account.balance.fetch(bobBalancePda);
-  } catch (e) {
-    bobBalanceAccount = null;
-  }
+const program = anchor.workspace.DummyTransfer as Program<DummyTransfer>;
+const programBytes = fs.readFileSync(
+  path.join(__dirname, "../target/deploy/dummy_transfer.so"),
+);
+const programId = addressFromWeb3PublicKey(program.programId);
 
-  if (andyBalanceAccount) {
-    console.log("Andy Balance: ", andyBalanceAccount.balance.toString());
+type ExpectedBalances = { andy: string | null; bob: string | null };
+
+function expectSuccess(meta: TransactionMetadata | FailedTransactionMetadata) {
+  if (meta instanceof FailedTransactionMetadata) {
+    console.error("❌ Failed to execute transaction", meta.toString());
+    console.error("Transaction logs: ", meta.meta().prettyLogs());
+    throw new Error("Failed to execute transaction");
+  } else if (meta instanceof TransactionMetadata) {
+    console.log("✅ Transaction executed successfully");
+  } else {
+    throw new Error("Invalid signature");
+  }
+  return meta;
+}
+
+function getBalance(
+  svm: MagicSVM,
+  balancePda: web3.PublicKey,
+  layer: TransactionTarget,
+): string | null {
+  try {
+    const accountData = svm.getAccountFor(
+      addressFromWeb3PublicKey(balancePda),
+      {
+        target: layer,
+      },
+    );
+    if (!accountData.exists) {
+      return null;
+    }
+
+    const account = program.coder.accounts.decode(
+      "balance",
+      Buffer.from(accountData.data),
+    );
+    return account.balance.toString();
+  } catch (e) {
+    return null;
+  }
+}
+
+function getBalances(
+  svm: MagicSVM,
+  andyBalancePda: web3.PublicKey,
+  bobBalancePda: web3.PublicKey,
+  layer: TransactionTarget,
+): ExpectedBalances {
+  return {
+    andy: getBalance(svm, andyBalancePda, layer),
+    bob: getBalance(svm, bobBalancePda, layer),
+  };
+}
+
+function printBalances(
+  svm: MagicSVM,
+  andyBalancePda: web3.PublicKey,
+  bobBalancePda: web3.PublicKey,
+  layer: TransactionTarget,
+) {
+  const balances = getBalances(svm, andyBalancePda, bobBalancePda, layer);
+
+  if (balances.andy !== null) {
+    console.log(
+      `${layer === "ephemeral" ? "Ephemeral" : "Base"} Andy Balance: ${
+        balances.andy
+      }`,
+    );
   } else {
     console.log("Andy Balance PDA not initialized");
   }
-  if (bobBalanceAccount) {
-    console.log("Bob Balance: ", bobBalanceAccount.balance.toString());
+  if (balances.bob !== null) {
+    console.log(
+      `${layer === "ephemeral" ? "Ephemeral" : "Base"} Bob Balance: ${
+        balances.bob
+      }`,
+    );
   } else {
     console.log("Bob Balance PDA not initialized");
   }
 }
 
+function expectBalances(
+  svm: MagicSVM,
+  andyBalancePda: web3.PublicKey,
+  bobBalancePda: web3.PublicKey,
+  layer: TransactionTarget,
+  expected: ExpectedBalances,
+) {
+  const balances = getBalances(svm, andyBalancePda, bobBalancePda, layer);
+  expect(balances).to.deep.equal(expected);
+}
+
 describe("dummy-transfer", () => {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
+  let svm = new MagicSVM();
 
-  // Configure the router endpoint for Magic Router
-  const routerConnection = new ConnectionMagicRouter(
-    process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app",
-    {
-      wsEndpoint: process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app",
-    }
-  );
-
-  console.log("Router Endpoint: ", routerConnection.rpcEndpoint)
-
-  const program = anchor.workspace.DummyTransfer as Program<DummyTransfer>;
-
+  const andy = web3.Keypair.generate();
   const bob = web3.Keypair.generate();
+  const andySigner = signerFromWeb3Keypair(andy);
+  const bobSigner = signerFromWeb3Keypair(bob);
 
   const andyBalancePda = web3.PublicKey.findProgramAddressSync(
-    [provider.wallet.publicKey.toBuffer()],
-    program.programId
+    [andy.publicKey.toBuffer()],
+    program.programId,
   )[0];
-
   const bobBalancePda = web3.PublicKey.findProgramAddressSync(
     [bob.publicKey.toBuffer()],
-    program.programId
+    program.programId,
   )[0];
 
   console.log("Program ID: ", program.programId.toBase58());
-  console.log("Andy Public Key: ", provider.wallet.publicKey.toBase58());
+  console.log("Andy Public Key: ", andy.publicKey.toBase58());
   console.log("Bob Public Key: ", bob.publicKey.toBase58());
   console.log("Andy Balance PDA: ", andyBalancePda.toBase58());
   console.log("Bob Balance PDA: ", bobBalancePda.toBase58());
 
-  before(async () => {
-    // If running locally, airdrop SOL to the wallet.
-    if (
-      provider.connection.rpcEndpoint.includes("localhost") ||
-      provider.connection.rpcEndpoint.includes("127.0.0.1")
-    ) {
-      // Airdrop to bob
-      const andyAirdropSignature = await provider.connection.requestAirdrop(
-        provider.wallet.publicKey,
-        2 * web3.LAMPORTS_PER_SOL
-      );
-    }
+  before(() => {
+    svm.addProgram(programId, programBytes);
+
+    // Airdrop to keypairs
+    const andyAirdropSignature = svm.airdrop(
+      addressFromWeb3PublicKey(andy.publicKey),
+      BigInt(2 * web3.LAMPORTS_PER_SOL),
+    );
+    expectSuccess(andyAirdropSignature);
+    const bobAirdropSignature = svm.airdrop(
+      addressFromWeb3PublicKey(bob.publicKey),
+      BigInt(2 * web3.LAMPORTS_PER_SOL),
+    );
+    expectSuccess(bobAirdropSignature);
   });
 
-  it("Initialize balances if not already initialized.", async () => {
-    const andyBalancePDA = await provider.connection.getAccountInfo(
-      andyBalancePda
+  it("Initialize balances", async () => {
+    const andyInitializeTx = await transactionFromWeb3Transaction(
+      await program.methods
+        .initialize()
+        .accountsPartial({
+          user: andy.publicKey,
+        })
+        .transaction(),
+      {
+        recentBlockhash: svm.latestBlockhash(),
+        payer: andySigner,
+      },
     );
-    const bobBalancePDA = await provider.connection.getAccountInfo(
-      bobBalancePda
-    );
+    const andyInitializeSignature = svm.sendTransaction(andyInitializeTx);
+    expectSuccess(andyInitializeSignature);
+    console.log("✅ Initialized Andy Balance PDA!");
 
-    if(!andyBalancePDA) {
-    const tx = await program.methods
-      .initialize()
-      .accounts({
-        user: provider.wallet.publicKey,
-      })
-      .transaction() as Transaction;
-
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [provider.wallet.payer],
-      { skipPreflight: true }
-    );
-    console.log("✅ Initialized Andy Balance PDA! Signature:", signature);
-    } 
-    else {
-      console.log("✅ Andy Balance PDA already initialized!");
-    }
-
-    if (!bobBalancePDA) {
-      const transferIx = web3.SystemProgram.transfer({
-        fromPubkey: provider.wallet.publicKey,
-        toPubkey: bob.publicKey,
-        lamports: web3.LAMPORTS_PER_SOL * 0.01,
-      });
-      // Build the initialize instruction
-      const initIx = await program.methods
+    const bobInitializeTx = await transactionFromWeb3Transaction(
+      await program.methods
         .initialize()
         .accounts({
           user: bob.publicKey,
         })
-        .instruction();
-      const tx = new web3.Transaction()
-        .add(transferIx)
-        .add(initIx);
+        .transaction(),
+      {
+        recentBlockhash: svm.latestBlockhash(),
+        payer: bobSigner,
+      },
+    );
+    const bobInitializeSignature = svm.sendTransaction(bobInitializeTx);
+    expectSuccess(bobInitializeSignature);
+    console.log("✅ Initialized Bob Balance PDA!");
 
-      const signature = await sendAndConfirmTransaction(
-        routerConnection,
-        tx,
-        [provider.wallet.payer, bob],
-        { skipPreflight: true }
-      );
-      console.log("✅ Initialized Bob Balance PDA! Signature:", signature);
-    } else {
-      console.log("✅ Bob Balance PDA already initialized!");
-    }
-
-    await printBalances(program, andyBalancePda, bobBalancePda);
+    printBalances(svm, andyBalancePda, bobBalancePda, "base");
+    printBalances(svm, andyBalancePda, bobBalancePda, "ephemeral");
+    expectBalances(svm, andyBalancePda, bobBalancePda, "base", {
+      andy: "100",
+      bob: "100",
+    });
+    expectBalances(svm, andyBalancePda, bobBalancePda, "ephemeral", {
+      andy: "100",
+      bob: "100",
+    });
   });
 
   it("Transfer on base chain from Andy to Bob", async () => {
-    const balanceAccountInfo = await provider.connection.getAccountInfo(
-      andyBalancePda
+    const tx = await transactionFromWeb3Transaction(
+      await program.methods
+        .transfer(new BN(5))
+        .accounts({
+          payer: andy.publicKey,
+          receiver: bob.publicKey,
+        })
+        .transaction(),
+      {
+        recentBlockhash: svm.latestBlockhash(),
+        payer: andySigner,
+      },
     );
-    if (
-      balanceAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()
-    ) {
-      console.log("❌ Cannot transfer: Balances are currently delegated");
-      return;
-    }
+    const signature = svm.sendTransaction(tx);
+    expectSuccess(signature);
+    console.log("✅ Transfered 5 from Andy to Bob!");
 
-    const tx = await program.methods
-      .transfer(new BN(5))
-      .accounts({
-        payer: provider.wallet.publicKey,
-        receiver: bob.publicKey,
-      })
-      .transaction();
-
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [provider.wallet.payer],
-      { skipPreflight: true }
-    );
-    console.log("✅ Transfered 5 from Andy to Bob");
-    console.log("Transfer Tx: ", signature);
-
-    await printBalances(program, andyBalancePda, bobBalancePda);
+    printBalances(svm, andyBalancePda, bobBalancePda, "base");
+    printBalances(svm, andyBalancePda, bobBalancePda, "ephemeral");
+    expectBalances(svm, andyBalancePda, bobBalancePda, "base", {
+      andy: "95",
+      bob: "105",
+    });
+    expectBalances(svm, andyBalancePda, bobBalancePda, "ephemeral", {
+      andy: "95",
+      bob: "105",
+    });
   });
 
   it("Delegate Balances of Andy and Bob", async () => {
-    const balanceAccountInfo = await provider.connection.getAccountInfo(
-      andyBalancePda
-    );
-    if (
-      balanceAccountInfo.owner.toBase58() == DELEGATION_PROGRAM_ID.toBase58()
-    ) {
-      console.log("❌ Balance is already delegated");
-      return;
-    }
-
-    const validatorKey = new PublicKey((await routerConnection.getClosestValidator()).identity);
-    const tx = await program.methods
-      .delegate({
-        commitFrequencyMs: 30000,
-        validator: validatorKey,
-      })
-      .accounts({
-        payer: provider.wallet.publicKey,
-      })
-      .postInstructions([
-        await program.methods
-          .delegate({
-        commitFrequencyMs: 30000,
-        validator: validatorKey,
-      })
-          .accounts({
-            payer: bob.publicKey,
-          })
-          .instruction()
-      ])
-      .transaction();
-
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [provider.wallet.payer, bob],
+    const validator = new web3.PublicKey(svm.validatorIdentity().toString());
+    const tx = await transactionFromWeb3Transaction(
+      await program.methods
+        .delegate({
+          commitFrequencyMs: 30000,
+          validator,
+        })
+        .accounts({
+          payer: andy.publicKey,
+        })
+        .postInstructions([
+          await program.methods
+            .delegate({
+              commitFrequencyMs: 30000,
+              validator,
+            })
+            .accounts({
+              payer: bob.publicKey,
+            })
+            .instruction(),
+        ])
+        .transaction(),
       {
-        skipPreflight: true
-      }
+        recentBlockhash: svm.latestBlockhash(),
+        payer: andySigner,
+        signers: [bobSigner],
+      },
     );
-
-    // Naive wait for the transaction to be confirmed on the base chain. Better pattern incoming soon.
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
+    const signature = svm.sendTransaction(tx);
+    expectSuccess(signature);
     console.log("✅ Delegated Balances of Andy and Bob");
-    console.log("Delegation signature", signature);
+    printBalances(svm, andyBalancePda, bobBalancePda, "base");
+    printBalances(svm, andyBalancePda, bobBalancePda, "ephemeral");
+    expectBalances(svm, andyBalancePda, bobBalancePda, "base", {
+      andy: "95",
+      bob: "105",
+    });
+    expectBalances(svm, andyBalancePda, bobBalancePda, "ephemeral", {
+      andy: "95",
+      bob: "105",
+    });
   });
 
   it("Perform transfers in the ephemeral rollup", async () => {
-    const balanceAccountInfo = await provider.connection.getAccountInfo(
-      andyBalancePda
+    const tx1 = await transactionFromWeb3Transaction(
+      await program.methods
+        .transfer(new BN(5))
+        .accounts({
+          payer: andy.publicKey,
+          receiver: bob.publicKey,
+        })
+        .transaction(),
+      {
+        recentBlockhash: svm.latestBlockhash(),
+        payer: andySigner,
+      },
     );
-    if (
-      balanceAccountInfo.owner.toBase58() != DELEGATION_PROGRAM_ID.toBase58()
-    ) {
-      console.log("Balance is not delegated");
-      return;
-    }
-
-    const tx1 = await program.methods
-      .transfer(new BN(5))
-      .accounts({
-        payer: provider.wallet.publicKey,
-        receiver: bob.publicKey,
-      })
-      .transaction();
-
-    const signature1 = await sendAndConfirmTransaction(
-      routerConnection,
-      tx1,
-      [provider.wallet.payer],
-      { skipPreflight: true }
-    );
+    const signature1 = svm.sendTransaction(tx1, { target: "ephemeral" });
+    expectSuccess(signature1);
     console.log("✅ Transfered 5 from Andy to Bob in the ephemeral rollup");
-    console.log("Transfer Tx: ", signature1);
 
-    const tx2 = await program.methods
-      .transfer(new BN(15))
-      .accounts({
-        payer: bob.publicKey,
-        receiver: provider.wallet.publicKey,
-      })
-      .transaction();
-
-    const signature2 = await sendAndConfirmTransaction(
-      routerConnection,
-      tx2,
-      [bob],
-      { skipPreflight: true }
+    const tx2 = await transactionFromWeb3Transaction(
+      await program.methods
+        .transfer(new BN(15))
+        .accounts({
+          payer: bob.publicKey,
+          receiver: andy.publicKey,
+        })
+        .transaction(),
+      {
+        recentBlockhash: svm.latestBlockhash(),
+        payer: bobSigner,
+      },
     );
+    const signature2 = svm.sendTransaction(tx2, { target: "ephemeral" });
+    expectSuccess(signature2);
     console.log("✅ Transfered 15 from Bob to Andy in the ephemeral rollup");
-    console.log("Transfer Tx: ", signature2);
+
+    printBalances(svm, andyBalancePda, bobBalancePda, "ephemeral");
+    printBalances(svm, andyBalancePda, bobBalancePda, "base");
+    expectBalances(svm, andyBalancePda, bobBalancePda, "ephemeral", {
+      andy: "105",
+      bob: "95",
+    });
+    expectBalances(svm, andyBalancePda, bobBalancePda, "base", {
+      andy: "95",
+      bob: "105",
+    });
   });
 
   it("Undelegate Balances of Andy and Bob", async () => {
-    const balanceAccountInfo = await provider.connection.getAccountInfo(
-      andyBalancePda
+    const tx1 = await transactionFromWeb3Transaction(
+      await program.methods
+        .undelegate()
+        .accounts({
+          payer: andy.publicKey,
+        })
+        .transaction(),
+      {
+        recentBlockhash: svm.latestBlockhash(),
+        payer: andySigner,
+      },
     );
-    if (
-      balanceAccountInfo.owner.toBase58() != DELEGATION_PROGRAM_ID.toBase58()
-    ) {
-      console.log("Balance is not delegated");
-      return;
-    }
+    const signature1 = svm.sendTransaction(tx1, { target: "ephemeral" });
+    expectSuccess(signature1);
 
-    const tx1 = await program.methods
-      .undelegate()
-      .accounts({
-        payer: provider.wallet.publicKey,
-      })
-      .transaction();
-
-    const signature1 = await sendAndConfirmTransaction(
-      routerConnection,
-      tx1,
-      [provider.wallet.payer],
-      { skipPreflight: true }
+    const tx2 = await transactionFromWeb3Transaction(
+      await program.methods
+        .undelegate()
+        .accounts({
+          payer: bob.publicKey,
+        })
+        .transaction(),
+      {
+        recentBlockhash: svm.latestBlockhash(),
+        payer: bobSigner,
+      },
     );
-
-    const tx2 = await program.methods
-      .undelegate()
-      .accounts({
-        payer: bob.publicKey,
-      })
-      .transaction();
-
-    const signature2 = await sendAndConfirmTransaction(
-      routerConnection,
-      tx2,
-      [bob],
-      { skipPreflight: true }
-    );
+    const signature2 = svm.sendTransaction(tx2, { target: "ephemeral" });
+    expectSuccess(signature2);
 
     console.log("✅ Undelegated Balances of Andy and Bob");
-    console.log("Undelegation signatures:", signature1, signature2);
-    // Naive wait for the transaction to be confirmed on the base chain. Better pattern incoming soon.
-    await new Promise(resolve => setTimeout(resolve, 5000)); 
-    await printBalances(program, andyBalancePda, bobBalancePda);
+
+    printBalances(svm, andyBalancePda, bobBalancePda, "base");
+    printBalances(svm, andyBalancePda, bobBalancePda, "ephemeral");
+    expectBalances(svm, andyBalancePda, bobBalancePda, "base", {
+      andy: "105",
+      bob: "95",
+    });
+    expectBalances(svm, andyBalancePda, bobBalancePda, "ephemeral", {
+      andy: "105",
+      bob: "95",
+    });
   });
 });

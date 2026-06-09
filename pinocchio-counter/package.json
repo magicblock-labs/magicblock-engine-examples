@@ -28,11 +28,13 @@
   "dependencies": {
     "@magicblock-labs/ephemeral-rollups-kit": "0.14.3",
     "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
+    "@magicblock-labs/magicsvm": "^0.1.1",
     "@solana-program/system": "^0.10.0",
     "@solana/kit": "^5.4.0",
     "@solana/web3.js": "^1.93.0",
     "borsh": "^0.7.0",
-    "dotenv": "^16.0.0"
+    "dotenv": "^16.0.0",
+    "test-utils": "link:../test-utils"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
