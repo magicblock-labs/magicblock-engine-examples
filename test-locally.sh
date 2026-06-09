@@ -418,7 +418,8 @@ else
   echo "Starting VRF oracle..."
   VRF_ORACLE_BIN=$(command -v vrf-oracle 2>/dev/null)
   if [ -z "$VRF_ORACLE_BIN" ]; then
-    echo "WARN: 'vrf-oracle' not on PATH — VRF-dependent tests will fail. Install it and re-run."
+    echo "ERROR: 'vrf-oracle' not on PATH. Install it or set SKIP_VRF_TESTS=1."
+    exit 1
   else
     echo "  Binary: $VRF_ORACLE_BIN"
     VRF_ORACLE_SKIP_PREFLIGHT="true" \
@@ -433,6 +434,7 @@ else
     if ! kill -0 $VRF_PID 2>/dev/null; then
       echo "VRF oracle died. Last 50 lines of ./vrf-oracle.log:"
       tail -50 ./vrf-oracle.log 2>/dev/null || true
+      exit 1
     else
       echo "VRF oracle is running (PID $VRF_PID)."
     fi
@@ -447,6 +449,7 @@ else
     if ! kill -0 $VRF_ER_PID 2>/dev/null; then
       echo "ER VRF oracle died. Last 50 lines of ./vrf-oracle-er.log:"
       tail -50 ./vrf-oracle-er.log 2>/dev/null || true
+      exit 1
     else
       echo "ER VRF oracle is running (PID $VRF_ER_PID)."
     fi
