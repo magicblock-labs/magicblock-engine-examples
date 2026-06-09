@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use ephemeral_rollups_sdk::consts::DELEGATION_PROGRAM_ID;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 
 use crate::constants::REWARD_LIST_SEED;
@@ -17,6 +18,11 @@ pub fn delegate_reward_list(ctx: Context<DelegateRewardList>) -> Result<()> {
     let distributor = RewardDistributor::try_deserialize(
         &mut &ctx.accounts.reward_distributor.data.borrow()[..],
     )?;
+    if !(ctx.accounts.reward_distributor.owner == &crate::ID
+        || ctx.accounts.reward_distributor.owner == &DELEGATION_PROGRAM_ID)
+    {
+        return Err(ProgramError::IllegalOwner.into());
+    }
     require!(
         distributor.super_admin == ctx.accounts.admin.key()
             || distributor.admins.contains(&ctx.accounts.admin.key()),
