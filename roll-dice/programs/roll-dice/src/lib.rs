@@ -78,7 +78,7 @@ pub struct DoRollDiceCtx<'info> {
     #[account(seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
     pub player: Account<'info, Player>,
     /// CHECK: The oracle queue
-    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
+    #[account(mut)]
     pub oracle_queue: UncheckedAccount<'info>,
 }
 

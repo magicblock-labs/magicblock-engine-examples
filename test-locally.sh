@@ -10,6 +10,7 @@ stty sane 2>/dev/null || true
 SOLANA_PID=""
 EPHEMERAL_PID=""
 VRF_PID=""
+VRF_ER_PID=""
 PASSED_TESTS=()
 FAILED_TESTS=()
 FAILED_TESTS_NAMES=()
@@ -20,6 +21,14 @@ TEST_COUNT=0
 #   bash test-locally.sh                       # runs everything
 #   bash test-locally.sh ephemeral-account-chats   # only that one
 #   bash test-locally.sh pinocchio             # matches both pinocchio-* examples
+#
+# Optional env flags:
+#   SKIP_REGULAR_TESTS=1  skips non-VRF local tests
+#   SKIP_VRF_TESTS=1      skips VRF oracle startup and VRF tests
+#   SKIP_TEE_TESTS=1      skips devnet TEE tests
+#   SETUP_ONLY=1          start the validators/oracles, then keep them running
+#                         until a key is pressed (no tests). Useful for poking at
+#                         the local cluster by hand.
 TEST_FILTER="${1:-}"
 if [ -n "$TEST_FILTER" ]; then
   echo "Filter: only running tests matching '$TEST_FILTER'"
@@ -297,7 +306,7 @@ cleanup() {
   printf 'Stopping validators... '
   
   # Kill by PID if available
-  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID; do
+  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID $VRF_ER_PID; do
     [ -n "$pid" ] && kill -TERM $pid 2>/dev/null || true
   done
 
@@ -305,7 +314,7 @@ cleanup() {
   sleep 1
 
   # Force kill any remaining processes
-  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID; do
+  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID $VRF_ER_PID; do
     [ -n "$pid" ] && kill -9 $pid 2>/dev/null || true
   done
 
@@ -314,6 +323,7 @@ cleanup() {
   pkill -f "mb-test-validator" 2>/dev/null || true
   pkill -f "ephemeral-validator" 2>/dev/null || true
   pkill -f "vrf-oracle" 2>/dev/null || true
+  pkill -f "vrf-oracle-er" 2>/dev/null || true
   
   # Wait for background jobs silently
   { wait 2>/dev/null || true; } 2>/dev/null
@@ -371,9 +381,13 @@ fi
 echo "  Binary: $EPHEMERAL_VALIDATOR_BIN"
 echo "  Version: $("$EPHEMERAL_VALIDATOR_BIN" --version 2>&1 | head -1 || echo unknown)"
 RUST_LOG=info "$EPHEMERAL_VALIDATOR_BIN" \
+  --no-tui \
   --lifecycle ephemeral \
-  --remotes http://localhost:8899 \
-  --listen 127.0.0.1:7799 > ./ephemeral-validator.log 2>&1 < /dev/null &
+  --remotes http://127.0.0.1:8899 \
+  --remotes ws://127.0.0.1:8900 \
+  --listen 127.0.0.1:7799 \
+  --reset \
+  > ./ephemeral-validator.log 2>&1 < /dev/null &
 
 EPHEMERAL_PID=$!
 
@@ -397,32 +411,74 @@ for i in {1..60}; do
 done
 echo "Ephemeral validator is ready."
 
-# Start the VRF oracle.
-echo "Starting VRF oracle..."
-VRF_ORACLE_BIN=$(command -v vrf-oracle 2>/dev/null)
-if [ -z "$VRF_ORACLE_BIN" ]; then
-  echo "WARN: 'vrf-oracle' not on PATH — VRF-dependent tests will fail. Install it and re-run."
+# Start the VRF oracle unless VRF tests are disabled.
+if [ "${SKIP_VRF_TESTS:-0}" = "1" ]; then
+  echo "Skipping VRF oracle startup (SKIP_VRF_TESTS=1)."
 else
-  echo "  Binary: $VRF_ORACLE_BIN"
-  VRF_ORACLE_SKIP_PREFLIGHT="true" \
-  RPC_URL="http://localhost:8899" \
-  WEBSOCKET_URL="ws://localhost:8999" \
-  RUST_LOG=info \
-    "$VRF_ORACLE_BIN" > ./vrf-oracle.log 2>&1 < /dev/null &
-  VRF_PID=$!
-  # Brief readiness wait — the oracle subscribes to events; no port to probe,
-  # so we just confirm the process is still alive after a moment.
-  sleep 2
-  if ! kill -0 $VRF_PID 2>/dev/null; then
-    echo "VRF oracle died. Last 50 lines of ./vrf-oracle.log:"
-    tail -50 ./vrf-oracle.log 2>/dev/null || true
+  echo "Starting VRF oracle..."
+  VRF_ORACLE_BIN=$(command -v vrf-oracle 2>/dev/null)
+  if [ -z "$VRF_ORACLE_BIN" ]; then
+    echo "ERROR: 'vrf-oracle' not on PATH. Install it or set SKIP_VRF_TESTS=1."
+    exit 1
   else
-    echo "VRF oracle is running (PID $VRF_PID)."
+    echo "  Binary: $VRF_ORACLE_BIN"
+    VRF_ORACLE_SKIP_PREFLIGHT="true" \
+    RPC_URL="http://localhost:8899" \
+    WEBSOCKET_URL="ws://localhost:8900" \
+    RUST_LOG=info \
+    "$VRF_ORACLE_BIN" > ./vrf-oracle.log 2>&1 < /dev/null &
+    VRF_PID=$!
+    # Brief readiness wait — the oracle subscribes to events; no port to probe,
+    # so we just confirm the process is still alive after a moment.
+    sleep 2
+    if ! kill -0 $VRF_PID 2>/dev/null; then
+      echo "VRF oracle died. Last 50 lines of ./vrf-oracle.log:"
+      tail -50 ./vrf-oracle.log 2>/dev/null || true
+      exit 1
+    else
+      echo "VRF oracle is running (PID $VRF_PID)."
+    fi
+    # ER VRF requests are fulfilled by a second oracle subscribed to the ephemeral validator.
+    VRF_ORACLE_SKIP_PREFLIGHT="true" \
+    RPC_URL="http://localhost:7799" \
+    WEBSOCKET_URL="ws://localhost:7800" \
+    RUST_LOG=info \
+      "$VRF_ORACLE_BIN" > ./vrf-oracle-er.log 2>&1 < /dev/null &
+    VRF_ER_PID=$!
+    sleep 2
+    if ! kill -0 $VRF_ER_PID 2>/dev/null; then
+      echo "ER VRF oracle died. Last 50 lines of ./vrf-oracle-er.log:"
+      tail -50 ./vrf-oracle-er.log 2>/dev/null || true
+      exit 1
+    else
+      echo "ER VRF oracle is running (PID $VRF_ER_PID)."
+    fi
   fi
 fi
 
 # Re-assert tty modes in case a validator's startup poked them.
 stty sane </dev/tty 2>/dev/null || true
+
+# SETUP_ONLY: bring the cluster up and hold it there for manual poking. The EXIT/INT
+# trap (cleanup) tears the validators down once we return from the read.
+if [ "${SETUP_ONLY:-0}" = "1" ]; then
+  echo ""
+  echo "========================================"
+  echo "SETUP_ONLY: validators are up and running."
+  echo "  Base Layer : ${PROVIDER_ENDPOINT:-http://localhost:8899}"
+  echo "  ER         : ${EPHEMERAL_PROVIDER_ENDPOINT:-http://localhost:7799}"
+  echo "========================================"
+  echo "Press any key to stop the validators and exit..."
+  # Read one key from the controlling tty (the test command pipeline may have
+  # redirected this script's stdin), falling back to stdin if /dev/tty is absent.
+  if [ -r /dev/tty ]; then
+    read -rsn1 </dev/tty
+  else
+    read -rsn1
+  fi
+  echo ""
+  exit 0
+fi
 
 echo "Validators ready. Running tests..."
 echo ""
@@ -453,55 +509,67 @@ export ANCHOR_WALLET="${HOME}/.config/solana/id.json"
 export ROUTER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT
 export ROUTER_WS_ENDPOINT=$EPHEMERAL_WS_ENDPOINT
 export VALIDATOR=mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
+# VRF queues — local oracle (paywJiVATr...) index 0 on base, index 1 delegated on ER.
+export VRF_BASE_QUEUE="GKE6d7iv8kCBrsxr78W3xVdjGLLLJnxsGiuzrsZCGEvb"
+export VRF_EPHEMERAL_QUEUE="Sc9MJUngNbQXSXGP3F67KvKwVnhaYn6kcioxXNVowYT"
 
-# anchor-counter has 3 test files: public-counter (local), private-counter (TEE), advanced-magic (router).
-# Locally we run only public-counter.ts. The other two run from the TEE/devnet block below.
-run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts && cd .."
+if [ "${SKIP_REGULAR_TESTS:-0}" = "1" ]; then
+  echo "Skipping regular local tests (SKIP_REGULAR_TESTS=1)."
+else
+  # anchor-counter has 3 test files: public-counter (local), private-counter (TEE), advanced-magic (router).
+  # Locally we run only public-counter.ts. The other two run from the TEE/devnet block below.
+  run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts && cd .."
 
-# private-counter is TEE-only — runs in the TEE/devnet block below.
+  # private-counter is TEE-only — runs in the TEE/devnet block below.
 
-# crank-counter: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor would
-# re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
+  # crank-counter: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor would
+  # re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
+  run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
 
-# dummy-token-transfer + magic-actions: have router-based tests (devnet-router) plus
-# local *-local.ts variants. We run only the local variants here.
-run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts && cd .."
+  # dummy-token-transfer + magic-actions: have router-based tests (devnet-router) plus
+  # local *-local.ts variants. We run only the local variants here.
+  run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts && cd .."
 
-# ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
-# anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
+  # ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
+  # anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
+  run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
 
-run_test "magic-actions" "cd magic-actions && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts && cd .."
+  run_test "magic-actions" "cd magic-actions && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts && cd .."
 
-run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js && cd .."
+  run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js && cd .."
 
-run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && yarn test && cd .."
+  run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && yarn test && cd .."
 
-run_test "pinocchio-private-counter" "cd pinocchio-private-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_private_counter-keypair.json target/deploy/pinocchio_private_counter.so && yarn install && yarn test && cd .."
+  run_test "pinocchio-private-counter" "cd pinocchio-private-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_private_counter-keypair.json target/deploy/pinocchio_private_counter.so && yarn install && yarn test && cd .."
 
-# rewards-delegated-vrf: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor
-# would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
+  # rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
+  # Build + deploy the native Rust program before running vitest — the test loads
+  # the program keypair from target/deploy/ and expects the program live on the
+  # local validator (matches the pinocchio-* pattern above).
+  run_test "rust-counter" "cd rust-counter && cargo build-sbf && solana program deploy --program-id target/deploy/rust_counter-keypair.json target/deploy/rust_counter.so && yarn install && npx vitest run ./tests/kit/rust-counter.test.ts && cd .."
 
-# roll-dice + roll-dice-delegated: VRF integration. roll-dice-delegated reads
-# VALIDATOR env var → defaults to the local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT
-# is localhost. Same Anchor.toml glob picks up both test files.
-run_test "roll-dice" "cd roll-dice && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
+  # session-keys: skip ./tests/advanced-magic.ts — it's router-based (devnet-router).
+  run_test "session-keys" "cd session-keys && anchor build && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/anchor-counter-session.ts && cd .."
 
-# rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
-# Build + deploy the native Rust program before running vitest — the test loads
-# the program keypair from target/deploy/ and expects the program live on the
-# local validator (matches the pinocchio-* pattern above).
-run_test "rust-counter" "cd rust-counter && cargo build-sbf && solana program deploy --program-id target/deploy/rust_counter-keypair.json target/deploy/rust_counter.so && yarn install && npx vitest run ./tests/kit/rust-counter.test.ts && cd .."
+  # spl-tokens: bypass `anchor test` (which calls fullstack-test.sh — that script
+  # branches on Anchor.toml's cluster=devnet and overrides ANCHOR_PROVIDER_URL,
+  # fighting our locally-exported env). Invoke ts-mocha directly.
+  run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts && cd .."
+fi
 
-# session-keys: skip ./tests/advanced-magic.ts — it's router-based (devnet-router).
-run_test "session-keys" "cd session-keys && anchor build && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/anchor-counter-session.ts && cd .."
+if [ "${SKIP_VRF_TESTS:-0}" = "1" ]; then
+  echo "Skipping VRF tests (SKIP_VRF_TESTS=1)."
+else
+  # rewards-delegated-vrf: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor
+  # would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
+  run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && yarn test && cd .."
 
-# spl-tokens: bypass `anchor test` (which calls fullstack-test.sh — that script
-# branches on Anchor.toml's cluster=devnet and overrides ANCHOR_PROVIDER_URL,
-# fighting our locally-exported env). Invoke ts-mocha directly.
-run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts && cd .."
+  # roll-dice + roll-dice-delegated: VRF integration. roll-dice-delegated reads
+  # VALIDATOR env var → defaults to the local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT
+  # is localhost. Same Anchor.toml glob picks up both test files.
+  run_test "anchor-roll-dice" "cd roll-dice && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && yarn test && cd ../.."
+  run_test "pinocchio-roll-dice" "cd pinocchio-roll-dice && yarn install && yarn keys-sync && cargo build-sbf --features logging && solana program deploy target/deploy/roll_dice.so && solana program deploy target/deploy/roll_dice_delegated.so && yarn test && cd .."
+fi
 
 # ---- TEE tests: base layer = Solana devnet; ER = MagicBlock TEE devnet ----
 # TEE attestation isn't available locally, so these examples are tested against
@@ -510,7 +578,9 @@ run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider
 # Set SKIP_TEE_TESTS=1 to skip this block.
 # Override the base-layer devnet RPC via DEVNET_RPC_URL (e.g. a private Helius/QuickNode
 # endpoint) to avoid public devnet rate limits. The WS URL is derived from it.
-if [ "${SKIP_TEE_TESTS:-0}" != "1" ]; then
+if [ "${SKIP_TEE_TESTS:-0}" = "1" ]; then
+  echo "Skipping TEE tests (SKIP_TEE_TESTS=1)."
+else
   DEVNET_RPC="${DEVNET_RPC_URL:-https://api.devnet.solana.com}"
   DEVNET_WS=$(echo "$DEVNET_RPC" | sed -e 's|^http:|ws:|' -e 's|^https:|wss:|')
 

@@ -3,6 +3,7 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "test": "npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'",
     "test:stress": "anchor test --skip-local-validator --skip-build --skip-deploy -- --grep \"Request Random Reward 100 times\""
   },
   "dependencies": {
@@ -10,6 +11,7 @@
     "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
     "@metaplex-foundation/mpl-token-auth-rules": "^3.0.3",
     "@metaplex-foundation/mpl-token-metadata": "^2.13.0",
+    "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4"
   },
   "devDependencies": {

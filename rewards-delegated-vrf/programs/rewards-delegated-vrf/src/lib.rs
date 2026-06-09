@@ -11,7 +11,7 @@ pub mod helpers;
 pub mod instructions;
 pub mod state;
 
-declare_id!("rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y");
+declare_id!("28DbXYgx2bPUhmoGZpU87gtyktzSZgLJ8DcgqtKFCgtC");
 
 #[ephemeral]
 #[program]
@@ -208,12 +208,14 @@ pub struct InitializeTransferLookupTable<'info> {
 #[delegate]
 #[derive(Accounts)]
 pub struct DelegateRewardList<'info> {
-    #[account(mut, constraint = admin.key() == reward_distributor.super_admin || reward_distributor.admins.contains(&admin.key()))]
+    #[account(mut)]
     pub admin: Signer<'info>,
-    pub reward_distributor: Account<'info, state::RewardDistributor>,
+
+    /// CHECK: Reward distributor PDA
+    pub reward_distributor: UncheckedAccount<'info>,
     /// CHECK: The pda to delegate
     #[account(mut, del, seeds = [constants::REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
-    pub reward_list: Account<'info, state::RewardsList>,
+    pub reward_list: UncheckedAccount<'info>,
 }
 
 #[vrf]
@@ -363,7 +365,6 @@ pub struct WhitelistTransfer<'info> {
     #[account(mut)]
     pub magic_fee_vault: UncheckedAccount<'info>,
 }
-
 
 #[derive(Accounts)]
 pub struct UpdateReward<'info> {

@@ -6,13 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-rewards_delegated_vrf = "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
+rewards_delegated_vrf = "28DbXYgx2bPUhmoGZpU87gtyktzSZgLJ8DcgqtKFCgtC"
 
 [programs.localnet]
 rewards_delegated_vrf = "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
-
-[registry]
-url = "https://api.apr.dev"
 
 [provider]
 cluster = "devnet"
@@ -20,3 +17,5 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 120000 tests/**/*.ts"
+
+[hooks]

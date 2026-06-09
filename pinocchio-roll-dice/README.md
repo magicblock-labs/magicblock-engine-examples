@@ -1,4 +1,4 @@
-# 🎲 Roll Dice
+# 🎲 Pinocchio Roll Dice
 
 Simple dice rolling application using Ephemeral Rollups to demonstrate using a verifiable random function (VRF) to generate random numbers.
 

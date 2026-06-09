@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { RewardsDelegatedVrf } from "../target/types/rewards_delegated_vrf";
 import {
   createMint,
@@ -20,17 +20,21 @@ import {
   getProgramDataPda,
   getTransferLookupAccounts,
   logRewardListDetails,
-  getValidatorAccounts,
   logTestEnvironment,
   logSection,
   logTxResult,
   logError,
 } from "./helpers";
 import { TOKEN_MINT, TOKEN_DECIMALS, DISTRIBUTOR_MINT_AMOUNT } from "./constants";
+import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
+
+const VALIDATOR= new PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev");
 
 describe.only("rewards-delegated-vrf", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
+
+  const connection =  new Connection(provider.connection.rpcEndpoint);
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
     new anchor.web3.Connection(
@@ -90,12 +94,16 @@ describe.only("rewards-delegated-vrf", () => {
   });
 
   it("Initialize Reward Distributor", async () => {
+    const distributorAccount = await program.provider.connection.getAccountInfo(rewardDistributorPda);
+    if (distributorAccount?.owner.equals(program.programId)) {
+      console.log("Reward Distributor already initialized");
+      return;
+    }
+
     const tx = await program.methods
       .initializeRewardDistributor([])
       .accounts({
         initializer: wallet.publicKey,
-        rewardDistributor: rewardDistributorPda,
-        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc({ skipPreflight: true });
 
@@ -109,7 +117,7 @@ describe.only("rewards-delegated-vrf", () => {
       // Create a new token mint, if it doesn't exist
       if (!tokenMint) {
         tokenMint = await createMint(
-          provider.connection,
+          connection,
           wallet.payer,
           wallet.publicKey, // Mint authority
           wallet.publicKey, // Freeze authority
@@ -134,7 +142,7 @@ describe.only("rewards-delegated-vrf", () => {
 
       // Mint tokens to distributor account
       const distributorMintTx = await mintTo(
-        provider.connection,
+        connection,
         wallet.payer as any,
         tokenMint,
         distributorTokenAccount,
@@ -180,7 +188,7 @@ describe.only("rewards-delegated-vrf", () => {
 
       // Create mint for collection
       collectionMint = await createMint(
-        provider.connection,
+        connection,
         wallet.payer,
         wallet.publicKey,
         wallet.publicKey,
@@ -229,7 +237,7 @@ describe.only("rewards-delegated-vrf", () => {
               uses: null,
             },
             isMutable: true,
-            collectionDetails: { __kind: "V1", size: 0n },
+            collectionDetails: { __kind: "V1", size: 0 },
           },
         }
       );
@@ -255,7 +263,7 @@ describe.only("rewards-delegated-vrf", () => {
     try {
       // Create NFT mint (0 decimals for NFTs)
       const nftMint = await createMint(
-        provider.connection,
+        connection,
         wallet.payer,
         wallet.publicKey,
         wallet.publicKey,
@@ -301,7 +309,7 @@ describe.only("rewards-delegated-vrf", () => {
 
       // Mint 1 NFT to the distributor's account
       const nftMintTx = await mintTo(
-        provider.connection,
+        connection,
         wallet.payer as any,
         nftMint,
         distributorNftAccount,
@@ -417,10 +425,10 @@ describe.only("rewards-delegated-vrf", () => {
           metadata: metadataAddress,
           collectionAuthority: wallet.publicKey,
           collectionMint: collectionMint,
-          collectionMetadata: collectionMetadataAddress,
           payer: wallet.publicKey,
-          systemProgram: anchor.web3.SystemProgram.programId,
-          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          updateAuthority: wallet.publicKey,
+          collection: collectionMetadataAddress,
+          collectionMasterEditionAccount: masterEditionAddress,
         });
 
         const verifyTx = new anchor.web3.Transaction().add(
@@ -477,8 +485,6 @@ it("Set Reward List Parameters", async () => {
       .accounts({
         admin: wallet.publicKey,
         rewardDistributor: rewardDistributorPda,
-        rewardList: rewardListPda,
-        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc({ skipPreflight: false });
 
@@ -528,8 +534,6 @@ it("Set Reward List Parameters", async () => {
         .accounts({
           authority: wallet.publicKey,
           programData: programData,
-          transferLookupTable: transferLookupTable,
-          systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc({ skipPreflight: true });
 
@@ -551,18 +555,17 @@ it("Set Reward List Parameters", async () => {
   });
 
   it("Delegate Reward List to ER", async () => {
-    const remainingAccounts = getValidatorAccounts(
-      providerEphemeralRollup.connection.rpcEndpoint
-    );
-
     const tx = await program.methods
       .delegateRewardList()
       .accounts({
         admin: wallet.publicKey,
         rewardDistributor: rewardDistributorPda,
-        rewardList: rewardListPda,
       })
-      .remainingAccounts(remainingAccounts)
+      .remainingAccounts(
+        [
+          { pubkey: VALIDATOR, isSigner: false, isWritable: false },
+        ]
+      )
       .rpc({ skipPreflight: true });
 
     console.log("Delegate Reward List txHash: ", tx);
@@ -572,7 +575,7 @@ it("Set Reward List Parameters", async () => {
 
   it("Request Random Reward (should fail - unauthorized user)", async () => {
     const clientSeed = Math.floor(Math.random() * 256);
-    const delegationRecordRewardList = PDAs.getDelegationRecord(program.programId, rewardListPda);
+    const delegationRecordRewardList = PDAs.getDelegationRecord(rewardListPda);
 
     try {
       const tx = await ephemeralProgram.methods
@@ -601,7 +604,7 @@ it("Set Reward List Parameters", async () => {
 
   it("Request Random Reward (authorized admin)", async () => {
     const clientSeed = Math.floor(Math.random() * 256);
-    const delegationRecordRewardList = PDAs.getDelegationRecord(program.programId, rewardListPda);
+    const delegationRecordRewardList = PDAs.getDelegationRecord(rewardListPda);
 
     let tx = await ephemeralProgram.methods
       .requestRandomReward(clientSeed)
@@ -859,7 +862,6 @@ it("Set Reward List Parameters", async () => {
       .accounts({
         payer: wallet.publicKey,
         rewardDistributor: rewardDistributorPda,
-        rewardList: rewardListPda,
       })
       .transaction();
 

@@ -119,7 +119,7 @@ describe("roll-dice-delegated", () => {
       if (sig) {
         console.log(`callbackRollDiceSimple tx: ${sig} (after ${Date.now() - start}ms)`);
       } else {
-        console.warn(`callbackRollDiceSimple not observed within 1s.`);
+        throw new Error(`callbackRollDiceSimple not observed within 1s.`);
       }
 
       const player = await ephemeralProgram.account.player.fetch(playerPda, "processed");

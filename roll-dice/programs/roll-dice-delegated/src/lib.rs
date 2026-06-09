@@ -6,7 +6,7 @@ use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
 
-declare_id!("nkPMzRtKV4feTsDfst5P6sH8Rzf4VNe3p9Y1MzMiAme");
+declare_id!("3YAqv3GbcFzWwLcv1gZNjj2Nhr9FoxKkFaLDkfUCXXLj");
 
 pub const PLAYER_SEED: &[u8] = b"playerd2";
 

@@ -11,7 +11,6 @@ import {
 import { MPL_TOKEN_AUTH_RULES_PROGRAM_ID } from "@metaplex-foundation/mpl-token-auth-rules";
 import { SYSVAR_INSTRUCTIONS_PUBKEY } from "@solana/web3.js";
 import {
-  REWARD_LIST_SEED,
   MPL_TOKEN_METADATA_PROGRAM_ID,
   BPF_UPGRADEABLE_LOADER,
 } from "./constants";
@@ -174,25 +173,6 @@ export async function logRewardListDetails(
       (err as Error).message
     );
   }
-}
-
-/**
- * Get validator account for localhost testing
- */
-export function getValidatorAccounts(rpcEndpoint: string): any[] {
-  if (
-    rpcEndpoint.includes("localhost") ||
-    rpcEndpoint.includes("127.0.0.1")
-  ) {
-    return [
-      {
-        pubkey: new web3.PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
-        isSigner: false,
-        isWritable: false,
-      },
-    ];
-  }
-  return [];
 }
 
 /**
