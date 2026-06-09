@@ -15,7 +15,7 @@ use pinocchio_system::instructions::CreateAccount;
 use crate::entrypoint::InstructionDiscriminator;
 use crate::state::Player;
 
-const INTENT_BUNDLE_SIZE: usize = 500;
+const INTENT_BUNDLE_SIZE: usize = 512;
 
 /// Create and initialize the counter PDA for the initializer.
 pub fn process_initialize(accounts: &[AccountView]) -> ProgramResult {
