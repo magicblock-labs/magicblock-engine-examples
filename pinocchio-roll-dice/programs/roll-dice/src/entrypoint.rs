@@ -87,6 +87,9 @@ pub fn process_instruction(accounts: &[AccountView], instruction_data: &[u8]) ->
             process_roll_dice(accounts, client_seed)
         }
         InstructionDiscriminator::CallbackRollDice => {
+            if payload.len() < 33 {
+                return Err(ProgramError::InvalidInstructionData);
+            }
             let randomness = payload[..32]
                 .try_into()
                 .map_err(|_| ProgramError::InvalidInstructionData)?;
