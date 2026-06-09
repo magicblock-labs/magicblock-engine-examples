@@ -306,7 +306,7 @@ cleanup() {
   printf 'Stopping validators... '
   
   # Kill by PID if available
-  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID; do
+  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID $VRF_ER_PID; do
     [ -n "$pid" ] && kill -TERM $pid 2>/dev/null || true
   done
 
@@ -314,7 +314,7 @@ cleanup() {
   sleep 1
 
   # Force kill any remaining processes
-  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID; do
+  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID $VRF_ER_PID; do
     [ -n "$pid" ] && kill -9 $pid 2>/dev/null || true
   done
 
@@ -323,6 +323,7 @@ cleanup() {
   pkill -f "mb-test-validator" 2>/dev/null || true
   pkill -f "ephemeral-validator" 2>/dev/null || true
   pkill -f "vrf-oracle" 2>/dev/null || true
+  pkill -f "vrf-oracle-er" 2>/dev/null || true
   
   # Wait for background jobs silently
   { wait 2>/dev/null || true; } 2>/dev/null
