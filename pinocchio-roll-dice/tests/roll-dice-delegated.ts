@@ -34,6 +34,7 @@ describe("roll-dice-delegated", () => {
   )[0];
 
   console.log("Base Layer Connection: ", baseConnection.rpcEndpoint);
+  console.log("Ephemeral Rollup Connection: ", ephemeralConnection.rpcEndpoint);
   console.log(`Current SOL Public Key: ${kp.publicKey}`);
   console.log("Player PDA: ", playerPda.toString());
 

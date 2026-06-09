@@ -26,6 +26,9 @@ TEST_COUNT=0
 #   SKIP_REGULAR_TESTS=1  skips non-VRF local tests
 #   SKIP_VRF_TESTS=1      skips VRF oracle startup and VRF tests
 #   SKIP_TEE_TESTS=1      skips devnet TEE tests
+#   SETUP_ONLY=1          start the validators/oracles, then keep them running
+#                         until a key is pressed (no tests). Useful for poking at
+#                         the local cluster by hand.
 TEST_FILTER="${1:-}"
 if [ -n "$TEST_FILTER" ]; then
   echo "Filter: only running tests matching '$TEST_FILTER'"
@@ -377,9 +380,13 @@ fi
 echo "  Binary: $EPHEMERAL_VALIDATOR_BIN"
 echo "  Version: $("$EPHEMERAL_VALIDATOR_BIN" --version 2>&1 | head -1 || echo unknown)"
 RUST_LOG=info "$EPHEMERAL_VALIDATOR_BIN" \
+  --no-tui \
   --lifecycle ephemeral \
-  --remotes http://localhost:8899 \
-  --listen 127.0.0.1:7799 > ./ephemeral-validator.log 2>&1 < /dev/null &
+  --remotes http://127.0.0.1:8899 \
+  --remotes ws://127.0.0.1:8900 \
+  --listen 127.0.0.1:7799 \
+  --reset \
+  > ./ephemeral-validator.log 2>&1 < /dev/null &
 
 EPHEMERAL_PID=$!
 
@@ -417,7 +424,7 @@ else
     RPC_URL="http://localhost:8899" \
     WEBSOCKET_URL="ws://localhost:8900" \
     RUST_LOG=info \
-      "$VRF_ORACLE_BIN" > ./vrf-oracle.log 2>&1 < /dev/null &
+    "$VRF_ORACLE_BIN" > ./vrf-oracle.log 2>&1 < /dev/null &
     VRF_PID=$!
     # Brief readiness wait — the oracle subscribes to events; no port to probe,
     # so we just confirm the process is still alive after a moment.
@@ -447,6 +454,27 @@ fi
 
 # Re-assert tty modes in case a validator's startup poked them.
 stty sane </dev/tty 2>/dev/null || true
+
+# SETUP_ONLY: bring the cluster up and hold it there for manual poking. The EXIT/INT
+# trap (cleanup) tears the validators down once we return from the read.
+if [ "${SETUP_ONLY:-0}" = "1" ]; then
+  echo ""
+  echo "========================================"
+  echo "SETUP_ONLY: validators are up and running."
+  echo "  Base Layer : ${PROVIDER_ENDPOINT:-http://localhost:8899}"
+  echo "  ER         : ${EPHEMERAL_PROVIDER_ENDPOINT:-http://localhost:7799}"
+  echo "========================================"
+  echo "Press any key to stop the validators and exit..."
+  # Read one key from the controlling tty (the test command pipeline may have
+  # redirected this script's stdin), falling back to stdin if /dev/tty is absent.
+  if [ -r /dev/tty ]; then
+    read -rsn1 </dev/tty
+  else
+    read -rsn1
+  fi
+  echo ""
+  exit 0
+fi
 
 echo "Validators ready. Running tests..."
 echo ""
@@ -509,23 +537,7 @@ else
   run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && yarn test && cd .."
 
   run_test "pinocchio-private-counter" "cd pinocchio-private-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_private_counter-keypair.json target/deploy/pinocchio_private_counter.so && yarn install && yarn test && cd .."
-fi
 
-if [ "${SKIP_VRF_TESTS:-0}" = "1" ]; then
-  echo "Skipping VRF tests (SKIP_VRF_TESTS=1)."
-else
-  # rewards-delegated-vrf: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor
-  # would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-  run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
-
-  # roll-dice + roll-dice-delegated: VRF integration. roll-dice-delegated reads
-  # VALIDATOR env var → defaults to the local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT
-  # is localhost. Same Anchor.toml glob picks up both test files.
-  run_test "anchor-roll-dice" "cd roll-dice/anchor && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && yarn test && cd ../.."
-  run_test "pinocchio-roll-dice" "cd roll-dice/pinocchio && yarn install && yarn keys-sync && cargo build-sbf && solana program deploy target/deploy/roll_dice.so && solana program deploy target/deploy/roll_dice_delegated.so && yarn test && cd ../.."
-fi
-
-if [ "${SKIP_REGULAR_TESTS:-0}" != "1" ]; then
   # rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
   # Build + deploy the native Rust program before running vitest — the test loads
   # the program keypair from target/deploy/ and expects the program live on the
@@ -539,6 +551,20 @@ if [ "${SKIP_REGULAR_TESTS:-0}" != "1" ]; then
   # branches on Anchor.toml's cluster=devnet and overrides ANCHOR_PROVIDER_URL,
   # fighting our locally-exported env). Invoke ts-mocha directly.
   run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts && cd .."
+fi
+
+if [ "${SKIP_VRF_TESTS:-0}" = "1" ]; then
+  echo "Skipping VRF tests (SKIP_VRF_TESTS=1)."
+else
+  # rewards-delegated-vrf: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor
+  # would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
+  run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && yarn test && cd .."
+
+  # roll-dice + roll-dice-delegated: VRF integration. roll-dice-delegated reads
+  # VALIDATOR env var → defaults to the local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT
+  # is localhost. Same Anchor.toml glob picks up both test files.
+  run_test "anchor-roll-dice" "cd roll-dice && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && yarn test && cd ../.."
+  run_test "pinocchio-roll-dice" "cd pinocchio-roll-dice && yarn install && yarn keys-sync && cargo build-sbf --features logging && solana program deploy target/deploy/roll_dice.so && solana program deploy target/deploy/roll_dice_delegated.so && yarn test && cd .."
 fi
 
 # ---- TEE tests: base layer = Solana devnet; ER = MagicBlock TEE devnet ----

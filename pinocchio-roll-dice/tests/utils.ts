@@ -8,12 +8,11 @@ export const VRF_PROGRAM = new PublicKey(
 );
 // Local oracle queue (paywJiVATr... index 0). Use VRF_BASE_QUEUE to override.
 export const DEFAULT_BASE_QUEUE = new PublicKey(
-  process.env.VRF_BASE_QUEUE ||
-    "GKE6d7iv8kCBrsxr78W3xVdjGLLLJnxsGiuzrsZCGEvb",
+  process.env.VRF_BASE_QUEUE || "Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh",
 );
 export const DEFAULT_EPHEMERAL_QUEUE = new PublicKey(
   process.env.VRF_EPHEMERAL_QUEUE ||
-    "Sc9MJUngNbQXSXGP3F67KvKwVnhaYn6kcioxXNVowYT",
+    "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc",
 );
 export const DELEGATION_PROGRAM = new PublicKey(
   "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh",
@@ -59,7 +58,9 @@ export function getEphemeralConnection() {
   );
 }
 
-export function readProgramId(program: "roll_dice" | "roll_dice_delegated" = "roll_dice_delegated") {
+export function readProgramId(
+  program: "roll_dice" | "roll_dice_delegated",
+) {
   return Keypair.fromSecretKey(
     Uint8Array.from(
       JSON.parse(

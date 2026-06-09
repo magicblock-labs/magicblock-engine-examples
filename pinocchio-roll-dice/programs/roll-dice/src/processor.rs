@@ -80,7 +80,7 @@ pub fn process_roll_dice(accounts: &[AccountView], client_seed: u8) -> ProgramRe
         slot_hashes,
         system_program,
         request: RequestRandomness {
-            high_priority: false,
+            high_priority: true,
             caller_seed: [client_seed; 32],
             callback_discriminator: &InstructionDiscriminator::CallbackRollDice.to_bytes(),
             callback_args: &[client_seed],
