@@ -443,6 +443,17 @@ else
   # Clear stale status files from a previous run before forking, so the poller can't
   # mistake an old status for this run's result.
   for p in "${BUILD_PROJECTS[@]}"; do rm -f "/tmp/build_${p}.status"; done
+
+  # Warm up the SBF platform-tools toolchain serially before forking. On a fresh
+  # machine `cargo build-sbf` downloads + extracts platform-tools into one shared
+  # global dir; N parallel first-time builds race on that extraction and leave it
+  # half-written ("not a directory: .../platform-tools/rust/lib"). One serial call
+  # installs it once so the parallel builds just reuse it. No-op if already present.
+  if command -v cargo-build-sbf >/dev/null 2>&1; then
+    echo "Warming up SBF platform-tools..."
+    cargo-build-sbf --version > /tmp/sbf-warmup.log 2>&1 || true
+  fi
+
   BUILD_PIDS=()
   for p in "${BUILD_PROJECTS[@]}"; do
     build_project "$p" &
