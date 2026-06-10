@@ -138,7 +138,7 @@ pub fn process_delegate(
     };
 
     if counter_pda != *pda_to_delegate.address() {
-        return Err(ProgramError::InvalidArgument);
+        return Err(ProgramError::InvalidSeeds);
     }
 
     delegate_account(

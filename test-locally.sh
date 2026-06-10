@@ -659,9 +659,10 @@ else
 
   run_test "magic-actions" "cd magic-actions && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts && cd .."
 
-  run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js && cd .."
+  # TODO: re-enable once the SDK is updated
+  # run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js && cd .."
 
-  run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && yarn run ts-mocha -p ./tsconfig.json -t 1000000 \"tests/kit/*.ts\" && cd .."
+  run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && npx vitest run tests/kit/ && cd .."
 
   # rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
   # Build + deploy the native Rust program before running vitest — the test loads
