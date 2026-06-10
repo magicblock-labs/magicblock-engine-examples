@@ -23,6 +23,8 @@ use ephemeral_rollups_pinocchio::acl::{
 use ephemeral_rollups_pinocchio::instruction::{delegate_account, undelegate};
 use ephemeral_rollups_pinocchio::intent_bundle::MagicIntentBundleBuilder;
 use ephemeral_rollups_pinocchio::types::DelegateConfig;
+use pinocchio::sysvars::rent::Rent;
+use pinocchio::sysvars::Sysvar;
 use pinocchio::{
     account::AccountView,
     cpi::{Seed, Signer},
@@ -61,11 +63,8 @@ fn counter_address_from_bump(
     let bump_seed = [bump];
     #[cfg(any(target_os = "solana", target_arch = "bpf"))]
     {
-        Address::create_program_address(
-            &[b"counter", authority.as_ref(), &bump_seed],
-            program_id,
-        )
-        .map_err(|_| ProgramError::InvalidArgument)
+        Address::create_program_address(&[b"counter", authority.as_ref(), &bump_seed], program_id)
+            .map_err(|_| ProgramError::InvalidArgument)
     }
     #[cfg(not(any(target_os = "solana", target_arch = "bpf")))]
     {
@@ -115,7 +114,7 @@ pub fn process_initialize_counter(
         // Base-layer rent for the counter PDA itself, plus the ER-side rent
         // for one EphemeralPermission account that will be created post-delegation.
         // Hardcoded base rent is generous; the ER prefund is computed exactly.
-        let base_rent_exempt: u64 = 1_000_000;
+        let base_rent_exempt: u64 = Rent::get()?.try_minimum_balance(Counter::SIZE)?;
         let ephemeral_permission_rent = ephemeral_rent(EphemeralPermission::size_of(1) as u32);
         let total_lamports = base_rent_exempt
             .checked_add(ephemeral_permission_rent)
@@ -188,7 +187,8 @@ pub fn process_delegate(
     };
     let validator = rest.first().map(|account| *account.address());
 
-    let counter_pda = counter_address_from_bump(owner_program.address(), authority.address(), bump)?;
+    let counter_pda =
+        counter_address_from_bump(owner_program.address(), authority.address(), bump)?;
     if counter_pda != *pda_to_delegate.address() {
         return Err(ProgramError::InvalidArgument);
     }
@@ -232,7 +232,7 @@ pub fn process_init_permission(
 
     let counter_pda = counter_address_from_bump(program_id, authority.address(), bump)?;
     if counter_pda != *counter_account.address() {
-        return Err(ProgramError::InvalidArgument);
+        return Err(ProgramError::InvalidSeeds);
     }
 
     if permission.lamports() > 0 {
@@ -305,7 +305,10 @@ pub fn process_set_privacy(
 
     let single_member = [Member {
         flags: MemberFlags::from_acl_flag_byte(
-            MemberFlags::TX_LOGS | MemberFlags::TX_MESSAGE | MemberFlags::TX_BALANCES,
+            MemberFlags::TX_LOGS
+                | MemberFlags::TX_MESSAGE
+                | MemberFlags::TX_BALANCES
+                | MemberFlags::ACCOUNT_SIGNATURES,
         ),
         pubkey: counter_authority,
     }];

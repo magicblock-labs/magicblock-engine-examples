@@ -27,6 +27,8 @@ TEST_COUNT=0
 #   SKIP_REGULAR_TESTS=1  skips regular local tests
 #   SKIP_VRF_TESTS=1      skips VRF oracle startup and VRF tests
 #   SKIP_TEE_TESTS=1      skips devnet TEE tests
+#   FAIL_FAST=0           keep running after a test fails (default: stop on the
+#                         first failure and exit non-zero — fail fast for CI)
 #   SETUP_ONLY=1          start the validators/oracles, then keep them running
 #                         until a key is pressed (no tests). Useful for poking at
 #                         the local cluster by hand.
@@ -34,6 +36,7 @@ TEST_FILTER="${1:-}"
 SKIP_TEE_TESTS="${SKIP_TEE_TESTS:-0}"
 SKIP_REGULAR_TESTS="${SKIP_REGULAR_TESTS:-0}"
 SKIP_VRF_TESTS="${SKIP_VRF_TESTS:-0}"
+FAIL_FAST="${FAIL_FAST:-1}"
 
 if [ -n "$TEST_FILTER" ]; then
   echo "Filter: only running tests matching '$TEST_FILTER'"
@@ -307,10 +310,28 @@ run_test() {
   fi
   echo "========================================"
   echo ""
+
+  # Fail fast: stop the whole run on the first failure (unless FAIL_FAST=0).
+  # The detailed error report below is normally printed at the end; print it
+  # here too so a fail-fast abort still surfaces why we stopped. Exiting triggers
+  # cleanup() (EXIT trap), which stops the validators and propagates code 1.
+  if [ "$test_failed" = true ] && [ "$FAIL_FAST" != "0" ]; then
+    echo "FAIL_FAST: stopping after first failure ($test_name)."
+    echo "  (set FAIL_FAST=0 to run the remaining tests anyway)"
+    echo ""
+    echo "--- $test_name ---"
+    echo "$error_details"
+    echo ""
+    exit 1
+  fi
 }
 
 # Cleanup function
 cleanup() {
+  # Capture the status that triggered this trap *before* running any cleanup
+  # commands (which would clobber $?). We re-exit with it so a failed test or an
+  # early `exit 1` (e.g. a validator that wouldn't start) surfaces to CI.
+  local exit_code=$?
   # Disable trap to prevent recursion
   trap - EXIT INT TERM
   
@@ -352,8 +373,8 @@ cleanup() {
   else
     echo "✗ Failed to stop"
   fi
-  
-  exit 0
+
+  exit $exit_code
 }
 
 # Set up trap to catch INT (Ctrl+C), TERM, and EXIT
@@ -444,6 +465,7 @@ RUST_LOG=info "$QFS_BIN" \
   --listen-addr-ws 127.0.0.1:6700 \
   --ephemeral-url http://127.0.0.1:7799 \
   --ephemeral-url-ws ws://127.0.0.1:7800 \
+  --token-expiry-days 180 \
   --add-cors-headers > ./query-filtering-service.log 2>&1 < /dev/null &
 
 QFS_PID=$!
@@ -472,8 +494,7 @@ VRF_ORACLE_BIN=$(command -v vrf-oracle 2>/dev/null)
 # Start the VRF oracle unless VRF tests are disabled.
 if [ "${SKIP_VRF_TESTS:-0}" = "1" ]; then
   echo "Skipping VRF oracle startup (SKIP_VRF_TESTS=1)."
-else
-if [ -z "$VRF_ORACLE_BIN" ]; then
+elif [ -z "$VRF_ORACLE_BIN" ]; then
   echo "ERROR: 'vrf-oracle' not on PATH — VRF-dependent tests will fail. Install it and re-run."
   exit 1
 else
@@ -597,23 +618,21 @@ else
 
   # crank-counter: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor would
   # re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-  run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
+  run_test "crank-counter" "cd crank-counter && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
 
   # dummy-token-transfer + magic-actions: have router-based tests (devnet-router) plus
   # local *-local.ts variants. We run only the local variants here.
-  run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts && cd .."
+  run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts && cd .."
 
   # ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
   # anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-  run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
+  run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
 
-  run_test "magic-actions" "cd magic-actions && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts && cd .."
+  run_test "magic-actions" "cd magic-actions && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts && cd .."
 
   run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js && cd .."
 
-  run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && yarn test && cd .."
-
-  run_test "pinocchio-private-counter" "cd pinocchio-private-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_private_counter-keypair.json target/deploy/pinocchio_private_counter.so && yarn install && yarn test && cd .."
+  run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && yarn run ts-mocha -p ./tsconfig.json -t 1000000 \"tests/kit/*.ts\" && cd .."
 
   # rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
   # Build + deploy the native Rust program before running vitest — the test loads
@@ -622,12 +641,12 @@ else
   run_test "rust-counter" "cd rust-counter && cargo build-sbf && solana program deploy --program-id target/deploy/rust_counter-keypair.json target/deploy/rust_counter.so && yarn install && npx vitest run ./tests/kit/rust-counter.test.ts && cd .."
 
   # session-keys: skip ./tests/advanced-magic.ts — it's router-based (devnet-router).
-  run_test "session-keys" "cd session-keys && anchor build && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/anchor-counter-session.ts && cd .."
+  run_test "session-keys" "cd session-keys && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/anchor-counter-session.ts && cd .."
 
   # spl-tokens: bypass `anchor test` (which calls fullstack-test.sh — that script
   # branches on Anchor.toml's cluster=devnet and overrides ANCHOR_PROVIDER_URL,
   # fighting our locally-exported env). Invoke ts-mocha directly.
-  run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts && cd .."
+  run_test "spl-tokens" "cd spl-tokens && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts && cd .."
 fi
 
 # ------------------------------------------------------------------------------
@@ -655,8 +674,11 @@ if [ "${SKIP_TEE_TESTS:-0}" = "1" ]; then
 else
   TEE_ENV="PROVIDER_ENDPOINT=$PROVIDER_ENDPOINT WS_ENDPOINT=$WS_ENDPOINT EPHEMERAL_PROVIDER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT EPHEMERAL_WS_ENDPOINT=$EPHEMERAL_WS_ENDPOINT TEE_PROVIDER_ENDPOINT=$QFS_ENDPOINT TEE_WS_ENDPOINT=$QFS_WS_ENDPOINT VALIDATOR=$VALIDATOR"
 
-  run_test "private-counter (devnet TEE)" "cd private-counter && anchor keys sync && anchor build && anchor deploy && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
-  run_test "rock-paper-scissor (devnet TEE)" "cd rock-paper-scissor && anchor keys sync && anchor build && anchor deploy && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
+  run_test "private-counter" "cd private-counter && anchor keys sync && anchor build && anchor deploy && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
+
+  run_test "pinocchio-private-counter" "cd pinocchio-private-counter && cargo build-sbf --features logging && solana program deploy --program-id target/deploy/pinocchio_private_counter-keypair.json target/deploy/pinocchio_private_counter.so && yarn install && $TEE_ENV npx vitest run tests/kit/ && cd .."
+
+  run_test "rock-paper-scissor" "cd rock-paper-scissor && anchor keys sync && anchor build && anchor deploy && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
 fi
 
 # Print summary report
@@ -699,3 +721,10 @@ if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
     echo ""
   done
 fi
+
+# Exit non-zero when any test failed so the CI job fails. cleanup() (EXIT trap)
+# captures this status and re-exits with it after stopping the validators.
+if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
+  exit 1
+fi
+exit 0

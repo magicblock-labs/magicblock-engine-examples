@@ -63,13 +63,15 @@ describe("spl-tokens", () => {
         
         recipientA = Keypair.generate();
         recipientB = Keypair.generate();
+        /// We need to fund the sponsor PDA to pay for the rent of the shuttles
+        const sponsorPda = new PublicKey("4RvdEGaUyChj3AketeBZoY1EotNtPveMFUXL8DVetrAp");
 
         // fund recipients from payer wallet (avoids faucet rate limits / 429s)
         const fundTx = new anchor.web3.Transaction();
-        for (const r of [recipientA, recipientB]) {
+        for (const r of [recipientA.publicKey, recipientB.publicKey, sponsorPda]) {
             fundTx.add(SystemProgram.transfer({
                 fromPubkey: payer.publicKey,
-                toPubkey: r.publicKey,
+                toPubkey: r,
                 lamports: 0.2 * LAMPORTS_PER_SOL,
             }));
         }

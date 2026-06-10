@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
-declare_id!("Ckyvyxw2rrFmhAKxDa7qjfTridciYHRTetS1WPGmKdpo");
+declare_id!("6hakvCNCdyi8hRSmqC5TbWHjp87kgoKxyiexjCs65dmf");
 
 #[ephemeral]
 #[program]

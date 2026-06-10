@@ -19,6 +19,9 @@ export enum CounterInstruction {
   Commit = "0400000000000000",                    // [4, 0, 0, 0, 0, 0, 0, 0]
   IncrementAndCommit = "0500000000000000",        // [5, 0, 0, 0, 0, 0, 0, 0]
   IncrementAndUndelegate = "0600000000000000",   // [6, 0, 0, 0, 0, 0, 0, 0]
+  InitPermission = "0700000000000000",           // [7, 0, 0, 0, 0, 0, 0, 0]
+  SetPrivacy = "0800000000000000",               // [8, 0, 0, 0, 0, 0, 0, 0]
+  ClosePermission = "0900000000000000",          // [9, 0, 0, 0, 0, 0, 0, 0]
 }
 
 export class IncreaseCounterPayload {
