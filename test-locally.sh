@@ -425,7 +425,11 @@ build_project() {
   local p="$1"
   local log="/tmp/build_${p}.log"
   rm -f "/tmp/build_${p}.status"
-  ( cd "$p" && yarn install && yarn build ) > "$log" 2>&1
+  # --mutex serializes cache access across the parallel installs. Without it,
+  # concurrent `yarn install` runs writing a shared dependency (e.g. @noble/hashes)
+  # race on the global cache and corrupt the extracted tarball ("file appears to
+  # be corrupt" / ENOENT on LICENSE). The build step still runs in parallel.
+  ( cd "$p" && yarn install --mutex file:/tmp/.yarn-install-mutex && yarn build ) > "$log" 2>&1
   echo "$?" > "/tmp/build_${p}.status"
 }
 
