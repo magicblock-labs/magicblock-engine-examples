@@ -406,6 +406,35 @@ for i in {1..30}; do
 done
 echo "Solana validator is ready, waiting for RPC to stabilize..."
 
+# Cap the local fee-payer balance so the ER can clone it.
+#
+# `mb-test-validator --reset` airdrops the CLI wallet ~500M SOL (the default
+# test-validator supply). When a test uses this wallet as the ER fee payer, the
+# ephemeral-validator's chainlink cloner mirrors the account into its bank and
+# must back those lamports from its bounded internal faucet. 500M SOL exceeds
+# that faucet, so every clone fails with:
+#   Cloner error: Failed to clone regular account <wallet> : InstructionError(0, InsufficientFunds)
+# and all ER-side tests fail. Draining the bulk of the balance to the incinerator
+# leaves a sane amount the ER can replicate. The base validator resets each run,
+# so this is safe and idempotent.
+WALLET_KP="${WALLET_KP:-$HOME/.config/solana/id.json}"
+KEEP_SOL="${ER_FEE_PAYER_KEEP_SOL:-1000}"
+INCINERATOR="1nc1nerator11111111111111111111111111111111"
+BAL_LAMPORTS=$(solana balance --lamports --url http://localhost:8899 --keypair "$WALLET_KP" 2>/dev/null | awk '{print $1}')
+KEEP_LAMPORTS=$((KEEP_SOL * 1000000000))
+if [[ "$BAL_LAMPORTS" =~ ^[0-9]+$ ]] && [ "$BAL_LAMPORTS" -gt "$KEEP_LAMPORTS" ]; then
+  SEND_SOL=$(((BAL_LAMPORTS - KEEP_LAMPORTS) / 1000000000))
+  echo "Capping fee-payer balance: draining $SEND_SOL SOL (keeping ~$KEEP_SOL SOL) so the ER can clone it..."
+  solana transfer "$INCINERATOR" "$SEND_SOL" \
+    --allow-unfunded-recipient \
+    --url http://localhost:8899 \
+    --keypair "$WALLET_KP" \
+    --fee-payer "$WALLET_KP" \
+    >/dev/null 2>&1 \
+    && echo "  Fee-payer balance now ~$(solana balance --url http://localhost:8899 --keypair "$WALLET_KP" 2>/dev/null)" \
+    || echo "  WARNING: failed to cap fee-payer balance; ER clone may fail."
+fi
+
 # Start MagicBlock Ephemeral Validator
 echo "Starting MagicBlock Ephemeral Validator..."
 EPHEMERAL_VALIDATOR_BIN=$(command -v ephemeral-validator 2>/dev/null)

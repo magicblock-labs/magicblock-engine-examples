@@ -4,7 +4,7 @@ import { PublicCounter } from "../target/types/public_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
-const COUNTER_SEED = "counter"; 
+const COUNTER_SEED = "counter";
 
 describe.only("public-counter", () => {
   console.log("public-counter.ts");
@@ -31,7 +31,8 @@ describe.only("public-counter", () => {
         "https://devnet-as.magicblock.app/",
       {
         wsEndpoint:
-          process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
+          process.env.EPHEMERAL_WS_ENDPOINT ||
+          "wss://devnet-as.magicblock.app/",
         commitment: "confirmed",
       },
     ),
@@ -49,13 +50,22 @@ describe.only("public-counter", () => {
       const balance = await provider.connection.getBalance(
         anchor.Wallet.local().publicKey,
       );
-      console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
-    } catch (error) { 
+      console.log(
+        "Current balance is",
+        balance / LAMPORTS_PER_SOL,
+        " SOL",
+        "\n",
+      );
+    } catch (error) {
       console.log("Error fetching balance:", error);
     }
   });
 
   const program = anchor.workspace.PublicCounter as Program<PublicCounter>;
+  const programEphemeral = new Program<PublicCounter>(
+    program.idl,
+    providerEphemeralRollup,
+  );
   const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(COUNTER_SEED)],
     program.programId,
@@ -105,7 +115,9 @@ describe.only("public-counter", () => {
       providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1");
     const validatorPubkey = new web3.PublicKey(
       process.env.VALIDATOR ||
-      (isLocal ? "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev" : "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57")
+        (isLocal
+          ? "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
+          : "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"),
     );
     const remainingAccounts = [
       { pubkey: validatorPubkey, isSigner: false, isWritable: false },
@@ -129,39 +141,25 @@ describe.only("public-counter", () => {
 
   it("Increase counter on ER", async () => {
     const start = Date.now();
-    let tx = await program.methods
+    const txHash = await programEphemeral.methods
       .increment()
       .accounts({
         counter: counterPDA,
       })
-      .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
+      .rpc();
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
   });
 
   it("Commit counter state on ER to Solana", async () => {
     const start = Date.now();
-    let tx = await program.methods
+    const txHash = await programEphemeral.methods
       .commit()
       .accounts({
         payer: providerEphemeralRollup.wallet.publicKey,
       })
-      .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
+      .rpc();
 
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx, [], {
-      skipPreflight: true,
-    });
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Commit txHash: ${txHash}`);
 
@@ -180,38 +178,27 @@ describe.only("public-counter", () => {
 
   it("Increase counter on ER and commit", async () => {
     const start = Date.now();
-    let tx = await program.methods
+    const txHash = await programEphemeral.methods
       .incrementAndCommit()
       .accounts({
-        payer: providerEphemeralRollup.wallet.publicKey
+        payer: providerEphemeralRollup.wallet.publicKey,
       })
-      .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
+      .rpc();
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Increment and Commit txHash: ${txHash}`);
   });
 
   it("Increment and undelegate counter on ER to Solana", async () => {
     const start = Date.now();
-    let tx = await program.methods
+    const txHash = await programEphemeral.methods
       .incrementAndUndelegate()
       .accounts({
         payer: providerEphemeralRollup.wallet.publicKey,
       })
-      .transaction();
-    tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
+      .rpc();
     const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`);
+    console.log(
+      `${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`,
+    );
   });
 });
