@@ -444,14 +444,16 @@ else
   # mistake an old status for this run's result.
   for p in "${BUILD_PROJECTS[@]}"; do rm -f "/tmp/build_${p}.status"; done
 
-  # Warm up the SBF platform-tools toolchain serially before forking. On a fresh
-  # machine `cargo build-sbf` downloads + extracts platform-tools into one shared
-  # global dir; N parallel first-time builds race on that extraction and leave it
-  # half-written ("not a directory: .../platform-tools/rust/lib"). One serial call
-  # installs it once so the parallel builds just reuse it. No-op if already present.
+  # Install the SBF platform-tools toolchain serially before forking. On a fresh
+  # machine the first real `cargo build-sbf` downloads + extracts platform-tools into
+  # one shared global dir; the N parallel builds otherwise race on that extraction and
+  # a build that reads it mid-flight sees a half-written tree ("not a directory:
+  # .../platform-tools/rust/lib"). `--install-only` downloads + installs the tools
+  # without compiling anything, and is a no-op if they're already present. (Note:
+  # `--version` does NOT trigger the install — it only prints the version string.)
   if command -v cargo-build-sbf >/dev/null 2>&1; then
-    echo "Warming up SBF platform-tools..."
-    cargo-build-sbf --version > /tmp/sbf-warmup.log 2>&1 || true
+    echo "Installing SBF platform-tools (serial, pre-build)..."
+    cargo-build-sbf --install-only > /tmp/sbf-warmup.log 2>&1 || true
   fi
 
   BUILD_PIDS=()
