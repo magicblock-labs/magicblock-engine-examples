@@ -71,12 +71,6 @@ jobs:
               --url devnet || echo "Airdrop failed (faucet rate-limited or down) — continuing."
           fi
 
-      - name: Configure validator limits
-        run: |
-          sudo sysctl fs.inotify.max_user_instances=1280
-          sudo sysctl fs.inotify.max_user_watches=655360
-          sudo prlimit --pid $$ --nofile=1048576:1048576
-
       - name: Run test-locally.sh
         env:
           # Optional override for the base-layer devnet RPC (TEE block only).
@@ -84,4 +78,9 @@ jobs:
           # api.devnet.solana.com. The WS URL is auto-derived from this.
           # If unset, the script falls back to the public RPC.
           DEVNET_RPC_URL: ${{ secrets.DEVNET_RPC_URL }}
-        run: bash test-locally.sh
+        run: |
+          sudo sysctl -w fs.inotify.max_user_instances=1280
+          sudo sysctl -w fs.inotify.max_user_watches=655360
+          sudo sysctl -w fs.file-max=2097152
+          sudo prlimit --pid $$ --nofile=1000000:1000000
+          bash test-locally.sh
