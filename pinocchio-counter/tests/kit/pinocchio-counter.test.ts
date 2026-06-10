@@ -102,7 +102,7 @@ describe("basic-test", async () => {
     "Initialize counter on Solana",
     async () => {
       const counterAccount = await rpc.getAccountInfo(counterPda).send();
-      if (counterAccount.value?.owner == DELEGATION_PROGRAM_ID) {
+      if (counterAccount.value?.owner === DELEGATION_PROGRAM_ID) {
         console.log("Counter account already delegated");
         return;
       }
@@ -150,7 +150,7 @@ describe("basic-test", async () => {
     "Increase counter on Solana",
     async () => {
       const counterAccount = await rpc.getAccountInfo(counterPda).send();
-      if (counterAccount.value?.owner == DELEGATION_PROGRAM_ID) {
+      if (counterAccount.value?.owner === DELEGATION_PROGRAM_ID) {
         console.log("Counter account already delegated");
         return;
       }
@@ -200,7 +200,7 @@ describe("basic-test", async () => {
     "Delegate counter to ER",
     async () => {
       const counterAccount = await rpc.getAccountInfo(counterPda).send();
-      if (counterAccount.value?.owner == DELEGATION_PROGRAM_ID) {
+      if (counterAccount.value?.owner === DELEGATION_PROGRAM_ID) {
         console.log("Counter account already delegated");
         return;
       }

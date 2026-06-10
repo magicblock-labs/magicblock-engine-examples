@@ -25,7 +25,7 @@ fn counter_address_from_bump(
             &[b"counter", initializer.address().as_ref(), &bump_seed],
             program_id,
         )
-        .map_err(|_| ProgramError::InvalidArgument)
+        .map_err(|_| ProgramError::InvalidSeeds)
     }
     #[cfg(not(any(target_os = "solana", target_arch = "bpf")))]
     {
@@ -36,7 +36,7 @@ fn counter_address_from_bump(
             &[b"counter", initializer_pubkey.as_ref(), &bump_seed],
             &program_pubkey,
         )
-        .map_err(|_| ProgramError::InvalidArgument)?;
+        .map_err(|_| ProgramError::InvalidSeeds)?;
         Ok(Address::new_from_array(pda.to_bytes()))
     }
 }
@@ -55,7 +55,7 @@ pub fn process_initialize_counter(
     let counter_pda = counter_address_from_bump(program_id, initializer_account, bump)?;
 
     if counter_pda != *counter_account.address() {
-        return Err(ProgramError::InvalidArgument);
+        return Err(ProgramError::InvalidSeeds);
     }
 
     // Create counter account if it doesn't exist.
@@ -101,7 +101,7 @@ pub fn process_increase_counter(
     let counter_pda = counter_address_from_bump(program_id, initializer_account, bump)?;
 
     if counter_pda != *counter_account.address() {
-        return Err(ProgramError::InvalidArgument);
+        return Err(ProgramError::InvalidSeeds);
     }
 
     let mut data = counter_account.try_borrow_mut()?;
@@ -212,7 +212,7 @@ pub fn process_increment_commit(
     let counter_pda = counter_address_from_bump(program_id, initializer, bump)?;
 
     if counter_pda != *counter_account.address() {
-        return Err(ProgramError::InvalidArgument);
+        return Err(ProgramError::InvalidSeeds);
     }
 
     let mut data = counter_account.try_borrow_mut()?;
@@ -245,7 +245,7 @@ pub fn process_increment_undelegate(
     let counter_pda = counter_address_from_bump(program_id, initializer, bump)?;
 
     if counter_pda != *counter_account.address() {
-        return Err(ProgramError::InvalidArgument);
+        return Err(ProgramError::InvalidSeeds);
     }
 
     let mut data = counter_account.try_borrow_mut()?;

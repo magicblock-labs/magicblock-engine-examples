@@ -625,7 +625,7 @@ export ANCHOR_PROVIDER_URL=$PROVIDER_ENDPOINT
 export ANCHOR_WALLET="${HOME}/.config/solana/id.json"
 # Router-style tests (advanced-magic, magic-actions, dummy-token-transfer) point at the
 # MagicBlock router on devnet — locally there's no router, so route them through the
-# QFS (which is the local ER endpoint), same as every other ER call.
+# ephemeral validator.
 export ROUTER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT
 export ROUTER_WS_ENDPOINT=$EPHEMERAL_WS_ENDPOINT
 export VALIDATOR=mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev

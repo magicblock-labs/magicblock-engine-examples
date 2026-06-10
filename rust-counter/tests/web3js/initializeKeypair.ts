@@ -54,7 +54,11 @@ export async function airdropSolIfNeeded(
     if (balance < threshold * web3.LAMPORTS_PER_SOL) {
       console.log(`Selected cluster: ${connection.rpcEndpoint}`);
       console.log(`Airdropping ${amount} SOL...`);
-      await connection.requestAirdrop(pubkey, amount * web3.LAMPORTS_PER_SOL);
+      const sig = await connection.requestAirdrop(
+        pubkey,
+        amount * web3.LAMPORTS_PER_SOL,
+      );
+      await connection.confirmTransaction(sig, "confirmed");
       console.log(`\rAirdrop of ${amount} SOL was successful.`);
     }
   }

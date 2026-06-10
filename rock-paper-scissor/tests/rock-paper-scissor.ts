@@ -441,6 +441,9 @@ describe("anchor-rock-paper-scissor", () => {
     let tx = new anchor.web3.Transaction().add(makeChoice2Ix);
 
     tx.feePayer = player2.publicKey;
+    tx.recentBlockhash = (
+      await providerTeePlayer2.connection.getLatestBlockhash()
+    ).blockhash;
     const txHash = await sendAndConfirmTransaction(
       providerTeePlayer2.connection,
       tx,
