@@ -58,11 +58,23 @@ else
   reverse_lines() { tail -r "$@"; }
 fi
 
-# Test runner function
+# Run one example's local test. Takes only the project name, which is also the
+# directory name. Building + preloading the program already happened up front
+# (parallel build phase + validator preload), so this just runs `yarn test:local`.
 run_test() {
   local test_name=$1
-  local test_command=$2
+  local test_dir="$test_name"
   local test_log="/tmp/test_${test_name}.log"
+  local test_command="cd \"$test_dir\" && yarn test:local"
+
+  # TEE examples reach the ER through the QFS, so they read TEE_PROVIDER_ENDPOINT/
+  # TEE_WS_ENDPOINT. Expose those to just those runs (every other endpoint and the
+  # validator id are exported globally and shared by all tests).
+  case " ${TEE_PROJECTS[*]} " in
+    *" $test_name "*)
+      test_command="TEE_PROVIDER_ENDPOINT=$QFS_ENDPOINT TEE_WS_ENDPOINT=$QFS_WS_ENDPOINT $test_command"
+      ;;
+  esac
 
   # Honor the script's TEST_FILTER substring (first CLI arg).
   if [ -n "$TEST_FILTER" ] && [[ "$test_name" != *"$TEST_FILTER"* ]]; then
@@ -75,12 +87,10 @@ run_test() {
   echo "========================================"
   echo "Testing: $TEST_COUNT. $test_name"
   echo "========================================"
-  # Test target summary — pulled from the env this script exports.
   # Program ID is best-effort: scans the project's target/deploy for the first keypair.
-  local project_dir="${test_name%% *}"  # take token before first space (e.g. "roll-dice + ...")
-  local program_id="(deploy first)"
+  local program_id="(unknown)"
   local keypair
-  keypair=$(ls "$project_dir"/target/deploy/*-keypair.json 2>/dev/null | head -1)
+  keypair=$(ls "$test_dir"/target/deploy/*-keypair.json 2>/dev/null | head -1)
   if [ -n "$keypair" ] && command -v solana-keygen >/dev/null 2>&1; then
     program_id=$(solana-keygen pubkey "$keypair" 2>/dev/null || echo "(unreadable)")
   fi
@@ -89,14 +99,9 @@ run_test() {
   if [ -f "$HOME/.config/solana/id.json" ] && command -v solana-keygen >/dev/null 2>&1; then
     wallet=$(solana-keygen pubkey "$HOME/.config/solana/id.json" 2>/dev/null || echo "(unreadable)")
   fi
-  # Pick env values out of the test_command's inline prefix (TEE_ENV) — those
-  # override the globally exported localnet defaults for this specific run.
-  local cmd_base="$(echo "$test_command" | grep -oE 'PROVIDER_ENDPOINT=[^ ]+' | head -1 | cut -d= -f2-)"
-  local cmd_er="$(echo "$test_command" | grep -oE 'EPHEMERAL_PROVIDER_ENDPOINT=[^ ]+' | head -1 | cut -d= -f2-)"
-  local cmd_validator="$(echo "$test_command" | grep -oE 'VALIDATOR=[A-Za-z0-9]+' | head -1 | cut -d= -f2-)"
-  echo "Base Layer Endpoint: ${cmd_base:-${PROVIDER_ENDPOINT:-http://localhost:8899}}"
-  echo "ER Endpoint:         ${cmd_er:-${TEE_PROVIDER_ENDPOINT:-${EPHEMERAL_PROVIDER_ENDPOINT:-http://localhost:7799}}}"
-  echo "ER Validator:        ${cmd_validator:-${VALIDATOR:-mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev}}"
+  echo "Base Layer Endpoint: ${PROVIDER_ENDPOINT:-http://localhost:8899}"
+  echo "ER Endpoint:         ${EPHEMERAL_PROVIDER_ENDPOINT:-http://localhost:7799}"
+  echo "ER Validator:        ${VALIDATOR:-mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev}"
   echo "Wallet:              $wallet"
   echo "Program ID:          $program_id"
   echo ""
@@ -390,10 +395,137 @@ if [ ! -f ~/.config/solana/id.json ]; then
   solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
 fi
 
-# Start MagicBlock Test Validator (wraps solana-test-validator and pre-clones MB programs).
+# ------------------------------------------------------------------------------
+# Example projects, grouped by the test phase that runs them. The directory name
+# IS the project name (and the argument passed to run_test). Each project exposes
+# `yarn build` (compile only) and `yarn test:local` (the local test subset).
+# ------------------------------------------------------------------------------
+REGULAR_PROJECTS=(anchor-counter crank-counter dummy-token-transfer ephemeral-account-chats magic-actions pinocchio-counter rust-counter session-keys spl-tokens)
+VRF_PROJECTS=(rewards-delegated-vrf roll-dice pinocchio-roll-dice)
+TEE_PROJECTS=(private-counter pinocchio-private-counter rock-paper-scissor)
+
+# Set of projects to build = everything the enabled test phases will run, honoring
+# the same TEST_FILTER substring the tests use.
+BUILD_PROJECTS=()
+add_build_projects() {
+  for p in "$@"; do
+    if [ -n "$TEST_FILTER" ] && [[ "$p" != *"$TEST_FILTER"* ]]; then
+      continue
+    fi
+    BUILD_PROJECTS+=("$p")
+  done
+}
+[ "$SKIP_REGULAR_TESTS" = "1" ] || add_build_projects "${REGULAR_PROJECTS[@]}"
+[ "$SKIP_VRF_TESTS" = "1" ]     || add_build_projects "${VRF_PROJECTS[@]}"
+[ "$SKIP_TEE_TESTS" = "1" ]     || add_build_projects "${TEE_PROJECTS[@]}"
+
+# Build one project: install JS deps + compile the program. The exit status is
+# written to a per-project status file so the parallel poller can read it race-free.
+build_project() {
+  local p="$1"
+  local log="/tmp/build_${p}.log"
+  rm -f "/tmp/build_${p}.status"
+  ( cd "$p" && yarn install && yarn build ) > "$log" 2>&1
+  echo "$?" > "/tmp/build_${p}.status"
+}
+
+# Build all programs in parallel (fail fast). They are compiled here, then
+# preloaded into the mb-test-validator below from their generated keypair + .so —
+# there is no per-test `anchor deploy` / `solana program deploy` step anymore.
+if [ "${#BUILD_PROJECTS[@]}" -eq 0 ]; then
+  echo "No projects to build (all phases skipped or filtered out)."
+else
+  echo "Building ${#BUILD_PROJECTS[@]} program(s) in parallel: ${BUILD_PROJECTS[*]}"
+  # Clear stale status files from a previous run before forking, so the poller can't
+  # mistake an old status for this run's result.
+  for p in "${BUILD_PROJECTS[@]}"; do rm -f "/tmp/build_${p}.status"; done
+  BUILD_PIDS=()
+  for p in "${BUILD_PROJECTS[@]}"; do
+    build_project "$p" &
+    BUILD_PIDS+=("$!")
+  done
+
+  build_total=${#BUILD_PROJECTS[@]}
+  build_done=0
+  build_failed=""
+  declare -a build_finished
+  for ((i=0;i<build_total;i++)); do build_finished[$i]=0; done
+
+  while [ "$build_done" -lt "$build_total" ]; do
+    for ((i=0;i<build_total;i++)); do
+      [ "${build_finished[$i]}" = "1" ] && continue
+      p="${BUILD_PROJECTS[$i]}"
+      if [ -f "/tmp/build_${p}.status" ]; then
+        build_finished[$i]=1
+        build_done=$((build_done + 1))
+        st=$(cat "/tmp/build_${p}.status" 2>/dev/null || echo 1)
+        if [ "$st" = "0" ]; then
+          printf '\033[2K\r  ✓ %s\n' "$p"
+        else
+          printf '\033[2K\r  ✗ %s (build failed, exit %s)\n' "$p" "$st"
+          build_failed="$p"
+        fi
+      fi
+    done
+    # Fail fast: stop polling as soon as one build fails (unless FAIL_FAST=0).
+    if [ -n "$build_failed" ] && [ "$FAIL_FAST" != "0" ]; then
+      break
+    fi
+    printf '\033[2K\r  Building... %d/%d done' "$build_done" "$build_total"
+    sleep 1
+  done
+  printf '\033[2K\r'
+
+  if [ -n "$build_failed" ]; then
+    # Stop any builds still running.
+    for ((i=0;i<build_total;i++)); do
+      [ "${build_finished[$i]}" = "0" ] && kill -TERM "${BUILD_PIDS[$i]}" 2>/dev/null
+    done
+    wait 2>/dev/null || true
+    if [ "$FAIL_FAST" != "0" ]; then
+      echo ""
+      echo "Build failed for '$build_failed'. Last 80 lines of /tmp/build_${build_failed}.log:"
+      echo "----- build_${build_failed}.log -----"
+      tail -80 "/tmp/build_${build_failed}.log" 2>/dev/null || echo "(log not found)"
+      echo "----- end of log -----"
+      exit 1
+    else
+      echo "  WARNING: some builds failed (FAIL_FAST=0); their tests will likely fail."
+    fi
+  fi
+  echo "Builds complete."
+fi
+
+# Collect generated program binaries to preload into the validator. For every
+# <name>.so under each project's target/deploy that has a matching
+# <name>-keypair.json, add an upgradeable program at the keypair's address with the
+# local wallet as upgrade authority — mirroring what `anchor deploy` /
+# `solana program deploy` produced before.
+PRELOAD_ARGS=()
+WALLET_PUBKEY=$(solana-keygen pubkey "$HOME/.config/solana/id.json" 2>/dev/null || echo "")
+if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
+  echo "Preloading programs into mb-test-validator:"
+  for p in "${BUILD_PROJECTS[@]}"; do
+    for so in "$p"/target/deploy/*.so; do
+      [ -e "$so" ] || continue
+      kp="${so%.so}-keypair.json"
+      if [ -f "$kp" ]; then
+        prog=$(solana-keygen pubkey "$kp" 2>/dev/null || echo "(unreadable)")
+        echo "  $p/$(basename "$so") -> $prog"
+        PRELOAD_ARGS+=(--upgradeable-program "$kp" "$so" "$WALLET_PUBKEY")
+      else
+        echo "  WARNING: $so has no matching keypair ($(basename "$kp")); not preloaded."
+      fi
+    done
+  done
+fi
+
+# Start MagicBlock Test Validator (wraps solana-test-validator and pre-clones MB
+# programs). The example programs are injected via --upgradeable-program so tests
+# find them already on-chain at their declared addresses.
 echo "Starting MagicBlock Test Validator..."
-mb-test-validator --reset > ./test-ledger.log 2>&1 < /dev/null &
-    
+mb-test-validator --reset "${PRELOAD_ARGS[@]}" > ./test-ledger.log 2>&1 < /dev/null &
+
 SOLANA_PID=$!
 
 # Wait for validator to be ready
@@ -639,44 +771,11 @@ export VRF_EPHEMERAL_QUEUE="Sc9MJUngNbQXSXGP3F67KvKwVnhaYn6kcioxXNVowYT"
 if [ "${SKIP_REGULAR_TESTS:-0}" = "1" ]; then
   echo "Skipping regular local tests (SKIP_REGULAR_TESTS=1)."
 else
-  # anchor-counter has 3 test files: public-counter (local), private-counter (TEE), advanced-magic (router).
-  # Locally we run only public-counter.ts. The other two run from the TEE/devnet block below.
-  run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts && cd .."
-
-  # private-counter is TEE-only — runs in the TEE/devnet block below.
-
-  # crank-counter: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor would
-  # re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-  run_test "crank-counter" "cd crank-counter && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
-
-  # dummy-token-transfer + magic-actions: have router-based tests (devnet-router) plus
-  # local *-local.ts variants. We run only the local variants here.
-  run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts && cd .."
-
-  # ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
-  # anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-  run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
-
-  run_test "magic-actions" "cd magic-actions && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts && cd .."
-
-  # TODO: re-enable once the SDK is updated
-  # run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js && cd .."
-
-  run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && npx vitest run tests/kit/ && cd .."
-
-  # rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
-  # Build + deploy the native Rust program before running vitest — the test loads
-  # the program keypair from target/deploy/ and expects the program live on the
-  # local validator (matches the pinocchio-* pattern above).
-  run_test "rust-counter" "cd rust-counter && cargo build-sbf && solana program deploy --program-id target/deploy/rust_counter-keypair.json target/deploy/rust_counter.so && yarn install && npx vitest run ./tests/kit/rust-counter.test.ts && cd .."
-
-  # session-keys: skip ./tests/advanced-magic.ts — it's router-based (devnet-router).
-  run_test "session-keys" "cd session-keys && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/anchor-counter-session.ts && cd .."
-
-  # spl-tokens: bypass `anchor test` (which calls fullstack-test.sh — that script
-  # branches on Anchor.toml's cluster=devnet and overrides ANCHOR_PROVIDER_URL,
-  # fighting our locally-exported env). Invoke ts-mocha directly.
-  run_test "spl-tokens" "cd spl-tokens && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts && cd .."
+  # Each project's `test:local` runs only the local subset of its tests (skipping
+  # router/TEE/devnet variants). oncurve-delegation is omitted pending an SDK update.
+  for project in "${REGULAR_PROJECTS[@]}"; do
+    run_test "$project"
+  done
 fi
 
 # ------------------------------------------------------------------------------
@@ -685,15 +784,11 @@ fi
 if [ "${SKIP_VRF_TESTS:-0}" = "1" ]; then
   echo "Skipping VRF tests (SKIP_VRF_TESTS=1)."
 else
-  # rewards-delegated-vrf: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor
-  # would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-  run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && yarn test && cd .."
-
-  # roll-dice + roll-dice-delegated: VRF integration. roll-dice-delegated reads
-  # VALIDATOR env var → defaults to the local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT
-  # is localhost. Same Anchor.toml glob picks up both test files.
-  run_test "anchor-roll-dice" "cd roll-dice && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && yarn test && cd ../.."
-  run_test "pinocchio-roll-dice" "cd pinocchio-roll-dice && yarn install && yarn keys-sync && cargo build-sbf --features logging && solana program deploy target/deploy/roll_dice.so && solana program deploy target/deploy/roll_dice_delegated.so && yarn test && cd .."
+  # VRF integration: roll-dice's delegated test reads VALIDATOR → defaults to the
+  # local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT is localhost.
+  for project in "${VRF_PROJECTS[@]}"; do
+    run_test "$project"
+  done
 fi
 
 # ------------------------------------------------------------------------------
@@ -702,13 +797,11 @@ fi
 if [ "${SKIP_TEE_TESTS:-0}" = "1" ]; then
   echo "Skipping TEE tests (SKIP_TEE_TESTS=1)."
 else
-  TEE_ENV="PROVIDER_ENDPOINT=$PROVIDER_ENDPOINT WS_ENDPOINT=$WS_ENDPOINT EPHEMERAL_PROVIDER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT EPHEMERAL_WS_ENDPOINT=$EPHEMERAL_WS_ENDPOINT TEE_PROVIDER_ENDPOINT=$QFS_ENDPOINT TEE_WS_ENDPOINT=$QFS_WS_ENDPOINT VALIDATOR=$VALIDATOR"
-
-  run_test "private-counter" "cd private-counter && anchor keys sync && anchor build && anchor deploy && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
-
-  run_test "pinocchio-private-counter" "cd pinocchio-private-counter && cargo build-sbf --features logging && solana program deploy -ul --program-id target/deploy/pinocchio_private_counter-keypair.json target/deploy/pinocchio_private_counter.so && yarn install && $TEE_ENV npx vitest run tests/kit/ && cd .."
-
-  run_test "rock-paper-scissor" "cd rock-paper-scissor && anchor keys sync && anchor build && anchor deploy && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
+  # TEE examples reach the ER through the QFS — run_test exposes TEE_PROVIDER_ENDPOINT/
+  # TEE_WS_ENDPOINT to these runs (see the TEE_PROJECTS case in run_test).
+  for project in "${TEE_PROJECTS[@]}"; do
+    run_test "$project"
+  done
 fi
 
 # Print summary report

@@ -5,9 +5,11 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run tests/",
+    "test:local": "npx vitest run tests/kit/",
     "test:watch": "vitest watch tests/",
     "test:legacy": "ts-node tests/client.test.ts",
-    "build": "cargo build --release",
+    "build": "cargo build-sbf --features logging",
+    "build:release": "cargo build --release",
     "build:dev": "cargo build",
     "check": "cargo check"
   },

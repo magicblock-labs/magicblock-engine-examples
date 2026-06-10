@@ -2,7 +2,9 @@
   "license": "ISC",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "build": "anchor keys sync && anchor build",
+    "test:local": "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",

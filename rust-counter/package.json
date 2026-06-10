@@ -17,7 +17,9 @@
   },
   "scripts": {
     "test": "npx vitest run ./tests/kit",
-    "test-web3js": "npx vitest run ./tests/web3js"
+    "test-web3js": "npx vitest run ./tests/web3js",
+    "build": "cargo build-sbf",
+    "test:local": "npx vitest run ./tests/kit/rust-counter.test.ts"
   },
   "devDependencies": {
     "@types/chai": "^5.2.2",
