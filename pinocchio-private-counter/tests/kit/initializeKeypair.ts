@@ -33,7 +33,13 @@ export function loadSecretKeyBytes(): Uint8Array {
 export async function initializeSolSignerKeypair(): Promise<
   ReturnType<typeof createKeyPairFromPrivateKeyBytes>
 > {
-  if (process.env.PRIVATE_KEY) {
+  if (process.env.ANCHOR_WALLET) {
+    const anchorWallet = await createKeyPairFromBytes(loadSecretKeyBytes());
+    console.log(
+      `\rCurrent Anchor Wallet Public Key: ${await getAddressFromPublicKey(anchorWallet.publicKey)}`,
+    );
+    return anchorWallet;
+  } else if (process.env.PRIVATE_KEY) {
     const secret = JSON.parse(process.env.PRIVATE_KEY) as number[];
     const keypair = await createKeyPairFromBytes(new Uint8Array(secret));
     console.log(
@@ -41,12 +47,6 @@ export async function initializeSolSignerKeypair(): Promise<
     );
 
     return keypair;
-  } else if (process.env.ANCHOR_WALLET) {
-    const anchorWallet = await createKeyPairFromBytes(loadSecretKeyBytes());
-    console.log(
-      `\rCurrent Anchor Wallet Public Key: ${await getAddressFromPublicKey(anchorWallet.publicKey)}`,
-    );
-    return anchorWallet;
   } else {
     const { privateKey, publicKey } = await generateKeyPair();
     const privateKeyBytes = new Uint8Array(

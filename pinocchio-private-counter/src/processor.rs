@@ -185,7 +185,14 @@ pub fn process_delegate(
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
-    let validator = rest.first().map(|account| *account.address());
+    let validator = rest.first().map(|account| {
+        #[cfg(feature = "logging")]
+        {
+            pinocchio_log::log!("validator");
+            account.address().log();
+        }
+        *account.address()
+    });
 
     let counter_pda =
         counter_address_from_bump(owner_program.address(), authority.address(), bump)?;

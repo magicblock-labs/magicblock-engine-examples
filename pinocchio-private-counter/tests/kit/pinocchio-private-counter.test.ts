@@ -1,8 +1,4 @@
-import {
-  initializeSolSignerKeypair,
-  airdropSolIfNeeded,
-  loadSecretKeyBytes,
-} from "./initializeKeypair";
+import { airdropSolIfNeeded } from "./initializeKeypair";
 import * as borsh from "borsh";
 import * as fs from "fs";
 import dotenv from "dotenv";
@@ -52,9 +48,17 @@ describe("basic-test", async () => {
   const keypair = await createKeyPairFromBytes(secretKeyArray);
   const PROGRAM_ID = await getAddressFromPublicKey(keypair.publicKey);
 
-  // Prepare user
-  const userKeypair = await initializeSolSignerKeypair();
+  // Prepare user: a freshly generated keypair every run. The counter PDA is
+  // derived from this pubkey, so each run gets a clean, never-delegated account.
+  // This avoids the stale split-delegation state a fixed wallet accumulates
+  // (base still shows the PDA delegated, so the Init/Delegate guards skip, while
+  // the ER copy is no longer delegated → every commit/undelegate then fails).
+  // tweetnacl's 64-byte secretKey (seed‖pubkey) is the exact format
+  // createKeyPairFromBytes wants and that nacl can sign the TEE auth challenge.
+  const userSecretKey = nacl.sign.keyPair().secretKey;
+  const userKeypair = await createKeyPairFromBytes(userSecretKey);
   const userPubkey = await getAddressFromPublicKey(userKeypair.publicKey);
+  console.log("User Public Key:", userPubkey);
 
   // Set up PER connection (QFS/TEE requires auth token even on localhost)
   const teeUrl =
@@ -62,7 +66,7 @@ describe("basic-test", async () => {
   const teeWsUrl = process.env.TEE_WS_ENDPOINT || "wss://tee.magicblock.app";
   const authToken = (
     await getAuthToken(teeUrl, userPubkey, (message: Uint8Array) =>
-      Promise.resolve(nacl.sign.detached(message, loadSecretKeyBytes())),
+      Promise.resolve(nacl.sign.detached(message, userSecretKey)),
     )
   ).token;
   const teeUserUrl = `${teeUrl}?token=${authToken}`;
@@ -72,15 +76,13 @@ describe("basic-test", async () => {
     `https://solscan.io/?cluster=custom&customUrl=${teeUserUrl}`,
   );
 
-  // Base layer uses kit; PER uses web3.js because kit signing is rejected by QFS/TEE.
-  const rpc = createSolanaRpc(
-    process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
-  );
   const connection = await Connection.create(
     process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
     process.env.WS_ENDPOINT || "wss://api.devnet.solana.com",
   );
+  connection.isMagicRouter = false;
   const ephemeralConnection = await Connection.create(teeUserUrl, teeUserWsUrl);
+  ephemeralConnection.isMagicRouter = false;
 
   console.log(
     "Base Layer RPC:",
@@ -111,26 +113,46 @@ describe("basic-test", async () => {
   console.log("Permision PDA:", permissionPda);
 
   // Add local validator identity to the remaining accounts if running on localnet
-  const remainingAccounts =
-    connection.clusterUrlHttp.includes("localhost") ||
-    connection.clusterUrlHttp.includes("127.0.0.1") ||
-    process.env.VALIDATOR
-      ? [
-          {
-            address: address(
-              process.env.VALIDATOR ||
-                "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev",
-            ),
-            role: AccountRole.READONLY,
-          },
-        ]
-      : [
-          {
-            address: address("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"),
-            role: AccountRole.READONLY,
-          },
-        ];
-  console.log("PER Validator: ", remainingAccounts[0].address);
+  const validator = address(
+    process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev",
+  );
+  console.log("PER Validator: ", validator);
+
+  // The local ER/QFS stack intermittently rejects the *first* send of an ER
+  // transaction with "Transaction signature verification failure" — a transient
+  // blockhash/routing hiccup (most often right after a commit, but also seen on
+  // a writable-signer fee payer). It never lands on-chain, and because the kit
+  // re-fetches the blockhash and re-signs on every call, an immediate re-send
+  // clears it deterministically. Retry only on that specific send-time error so
+  // genuine on-chain failures (which surface during confirmation with different
+  // messages) are never masked.
+  async function sendErAndConfirm(
+    transactionMessage: Parameters<
+      typeof ephemeralConnection.sendAndConfirmTransaction
+    >[0],
+    config: Parameters<
+      typeof ephemeralConnection.sendAndConfirmTransaction
+    >[2] = { skipPreflight: true },
+    attempts = 4,
+  ): Promise<string> {
+    let lastErr: unknown;
+    for (let i = 1; i <= attempts; i++) {
+      try {
+        return await ephemeralConnection.sendAndConfirmTransaction(
+          transactionMessage,
+          [userKeypair],
+          config,
+        );
+      } catch (err: any) {
+        lastErr = err;
+        if (!String(err?.message ?? err).includes("signature verification")) {
+          throw err;
+        }
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }
+    throw lastErr;
+  }
 
   // Ensure test wallet has SOL
   beforeAll(async () => {
@@ -145,8 +167,10 @@ describe("basic-test", async () => {
   it(
     "Initialize counter on Solana",
     async () => {
-      const counterAccount = await rpc.getAccountInfo(counterPda).send();
-      if (counterAccount?.value.owner == DELEGATION_PROGRAM_ID) {
+      const counterAccount = await connection.rpc
+        .getAccountInfo(counterPda)
+        .send();
+      if (counterAccount.value?.owner == DELEGATION_PROGRAM_ID) {
         console.log("Counter account already delegated");
         return;
       }
@@ -191,8 +215,10 @@ describe("basic-test", async () => {
   it(
     "Increase counter on Solana",
     async () => {
-      const counterAccount = await rpc.getAccountInfo(counterPda).send();
-      if (counterAccount?.value.owner == DELEGATION_PROGRAM_ID) {
+      const counterAccount = await connection.rpc
+        .getAccountInfo(counterPda)
+        .send();
+      if (counterAccount.value?.owner == DELEGATION_PROGRAM_ID) {
         console.log("Counter account already delegated");
         return;
       }
@@ -239,8 +265,10 @@ describe("basic-test", async () => {
   it(
     "Delegate counter to PER",
     async () => {
-      const counterAccount = await rpc.getAccountInfo(counterPda).send();
-      if (counterAccount?.value.owner == DELEGATION_PROGRAM_ID) {
+      const counterAccount = await connection.rpc
+        .getAccountInfo(counterPda)
+        .send();
+      if (counterAccount.value?.owner == DELEGATION_PROGRAM_ID) {
         console.log("Counter account already delegated");
         return;
       }
@@ -268,9 +296,7 @@ describe("basic-test", async () => {
         },
         { address: DELEGATION_PROGRAM_ID, role: AccountRole.READONLY },
         { address: SYSTEM_PROGRAM_ADDRESS, role: AccountRole.READONLY },
-        ...remainingAccounts,
-        { address: permissionPda, role: AccountRole.READONLY },
-        { address: PERMISSION_PROGRAM_ID, role: AccountRole.READONLY },
+        { address: validator, role: AccountRole.READONLY },
       ];
       const serializedInstructionData = Buffer.concat([
         Buffer.from(CounterInstruction.Delegate, "hex"),
@@ -331,11 +357,10 @@ describe("basic-test", async () => {
         (tx) => appendTransactionMessageInstructions([initPermissionIx], tx),
       );
 
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(
-        transactionMessage,
-        [userKeypair],
-        { commitment: "confirmed", skipPreflight: true },
-      );
+      const txHash = await sendErAndConfirm(transactionMessage, {
+        commitment: "confirmed",
+        skipPreflight: true,
+      });
 
       console.log(
         `${Date.now() - start}ms (PER) Init permission txHash: ${txHash}`,
@@ -350,7 +375,7 @@ describe("basic-test", async () => {
     async () => {
       const start = Date.now();
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+        { address: userPubkey, role: AccountRole.READONLY_SIGNER },
         { address: counterPda, role: AccountRole.WRITABLE },
       ];
       const serializedInstructionData = Buffer.concat([
@@ -372,12 +397,15 @@ describe("basic-test", async () => {
         (tx) => appendTransactionMessageInstructions([increaseCounterIx], tx),
       );
 
+      const counterAccount = await ephemeralConnection.rpc
+        .getAccountInfo(counterPda)
+        .send();
+      console.log(counterAccount);
+
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(
-        transactionMessage,
-        [userKeypair],
-        { skipPreflight: true },
-      );
+      const txHash = await sendErAndConfirm(transactionMessage, {
+        skipPreflight: true,
+      });
 
       console.log(`${Date.now() - start}ms (PER) Increment txHash: ${txHash}`);
       expect(txHash).toBeDefined();
@@ -390,7 +418,7 @@ describe("basic-test", async () => {
     async () => {
       const start = Date.now();
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+        { address: userPubkey, role: AccountRole.READONLY_SIGNER },
         { address: counterPda, role: AccountRole.WRITABLE },
         { address: permissionPda, role: AccountRole.WRITABLE },
         { address: EPHEMERAL_VAULT_ID, role: AccountRole.WRITABLE },
@@ -411,11 +439,9 @@ describe("basic-test", async () => {
         (tx) => setTransactionMessageFeePayer(userPubkey, tx),
         (tx) => appendTransactionMessageInstructions([closePermissionIx], tx),
       );
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(
-        transactionMessage,
-        [userKeypair],
-        { skipPreflight: true },
-      );
+      const txHash = await sendErAndConfirm(transactionMessage, {
+        skipPreflight: true,
+      });
       console.log(
         `${Date.now() - start}ms (PER) Close permission txHash: ${txHash}`,
       );
@@ -431,7 +457,7 @@ describe("basic-test", async () => {
 
       // Prepare transaction
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+        { address: userPubkey, role: AccountRole.READONLY_SIGNER },
         { address: counterPda, role: AccountRole.WRITABLE },
         {
           address: address(MAGIC_PROGRAM_ID.toString()),
@@ -457,12 +483,15 @@ describe("basic-test", async () => {
         (tx) => appendTransactionMessageInstructions([commitIx], tx),
       );
 
+      const counterAccount = await ephemeralConnection.rpc
+        .getAccountInfo(counterPda)
+        .send();
+      console.log(counterAccount);
+
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(
-        transactionMessage,
-        [userKeypair],
-        { skipPreflight: true },
-      );
+      const txHash = await sendErAndConfirm(transactionMessage, {
+        skipPreflight: true,
+      });
 
       const duration = Date.now() - start;
       console.log(`${duration}ms (PER) Commit txHash: ${txHash}`);
@@ -477,7 +506,7 @@ describe("basic-test", async () => {
     async () => {
       const start = Date.now();
       const accounts = [
-        { address: userPubkey, role: AccountRole.WRITABLE_SIGNER },
+        { address: userPubkey, role: AccountRole.READONLY_SIGNER },
         { address: counterPda, role: AccountRole.WRITABLE },
       ];
       const serializedInstructionData = Buffer.concat([
@@ -499,12 +528,15 @@ describe("basic-test", async () => {
         (tx) => appendTransactionMessageInstructions([increaseCounterIx], tx),
       );
 
+      const counterAccount = await ephemeralConnection.rpc
+        .getAccountInfo(counterPda)
+        .send();
+      console.log(counterAccount);
+
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(
-        transactionMessage,
-        [userKeypair],
-        { skipPreflight: true },
-      );
+      const txHash = await sendErAndConfirm(transactionMessage, {
+        skipPreflight: true,
+      });
       console.log(`${Date.now() - start}ms (PER) Increment txHash: ${txHash}`);
       expect(txHash).toBeDefined();
     },
@@ -538,12 +570,15 @@ describe("basic-test", async () => {
         (tx) => appendTransactionMessageInstructions([undelegateIx], tx),
       );
 
+      const counterAccount = await ephemeralConnection.rpc
+        .getAccountInfo(counterPda)
+        .send();
+      console.log(counterAccount);
+
       // Send and confirm transaction
-      const txHash = await ephemeralConnection.sendAndConfirmTransaction(
-        transactionMessage,
-        [userKeypair],
-        { skipPreflight: true },
-      );
+      const txHash = await sendErAndConfirm(transactionMessage, {
+        skipPreflight: true,
+      });
 
       const duration = Date.now() - start;
       console.log(`${duration}ms (PER) Undelegate txHash: ${txHash}`);

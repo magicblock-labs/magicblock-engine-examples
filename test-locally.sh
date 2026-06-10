@@ -706,7 +706,7 @@ else
 
   run_test "private-counter" "cd private-counter && anchor keys sync && anchor build && anchor deploy && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
 
-  run_test "pinocchio-private-counter" "cd pinocchio-private-counter && cargo build-sbf --features logging && solana program deploy --program-id target/deploy/pinocchio_private_counter-keypair.json target/deploy/pinocchio_private_counter.so && yarn install && $TEE_ENV npx vitest run tests/kit/ && cd .."
+  run_test "pinocchio-private-counter" "cd pinocchio-private-counter && cargo build-sbf --features logging && solana program deploy -ul --program-id target/deploy/pinocchio_private_counter-keypair.json target/deploy/pinocchio_private_counter.so && yarn install && $TEE_ENV npx vitest run tests/kit/ && cd .."
 
   run_test "rock-paper-scissor" "cd rock-paper-scissor && anchor keys sync && anchor build && anchor deploy && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
 fi
