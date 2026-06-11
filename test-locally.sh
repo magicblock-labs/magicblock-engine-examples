@@ -42,12 +42,16 @@ if [ -n "$TEST_FILTER" ]; then
   echo "Filter: only running tests matching '$TEST_FILTER'"
   echo ""
 fi
-if [ "$SKIP_TEE_TESTS" = "1" ]; then
-  echo "Filter: skipping TEE tests"
+if [ "$SKIP_REGULAR_TESTS" = "1" ]; then
+  echo "Filter: skipping regular tests"
   echo ""
 fi
-if [ "$SKIP_NON_TEE_TESTS" = "1" ]; then
-  echo "Filter: skipping local/non-TEE tests"
+if [ "$SKIP_VRF_TESTS" = "1" ]; then
+  echo "Filter: skipping VRF tests"
+  echo ""
+fi
+if [ "$SKIP_TEE_TESTS" = "1" ]; then
+  echo "Filter: skipping TEE tests"
   echo ""
 fi
 
@@ -451,9 +455,44 @@ else
   # .../platform-tools/rust/lib"). `--install-only` downloads + installs the tools
   # without compiling anything, and is a no-op if they're already present. (Note:
   # `--version` does NOT trigger the install — it only prints the version string.)
+  # A one-off dummy build-sbf also installs the sbpf rustup toolchain; parallel
+  # anchor/cargo build-sbf runs otherwise race on that and leave a broken toolchain.
   if command -v cargo-build-sbf >/dev/null 2>&1; then
     echo "Installing SBF platform-tools (serial, pre-build)..."
-    cargo-build-sbf --install-only > /tmp/sbf-warmup.log 2>&1 || true
+    if ! cargo-build-sbf --install-only > /tmp/sbf-warmup.log 2>&1; then
+      echo "SBF platform-tools install failed. Last 40 lines of /tmp/sbf-warmup.log:"
+      tail -40 /tmp/sbf-warmup.log 2>/dev/null || true
+      exit 1
+    fi
+    sbf_warmup_dir=$(mktemp -d)
+    cat > "$sbf_warmup_dir/Cargo.toml" <<'EOF'
+[package]
+name = "sbf-warmup"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "lib.rs"
+EOF
+    echo 'pub fn warm() {}' > "$sbf_warmup_dir/lib.rs"
+    if ! ( cd "$sbf_warmup_dir" && cargo-build-sbf >> /tmp/sbf-warmup.log 2>&1 ); then
+      echo "SBF rust toolchain warmup failed. Last 40 lines of /tmp/sbf-warmup.log:"
+      tail -40 /tmp/sbf-warmup.log 2>/dev/null || true
+      rm -rf "$sbf_warmup_dir"
+      exit 1
+    fi
+    rm -rf "$sbf_warmup_dir"
+  fi
+
+  # Pre-download yarn via corepack serially before parallel `yarn install` runs.
+  # Without this, concurrent builds race on ~/.cache/node/corepack/yarn/* and
+  # leave a broken shim (MODULE_NOT_FOUND on lib/cli).
+  if command -v corepack >/dev/null 2>&1; then
+    echo "Preparing yarn via corepack (serial, pre-build)..."
+    corepack enable 2>/dev/null || true
+    corepack prepare yarn@1.22.19 --activate >/tmp/corepack-yarn.log 2>&1
+    corepack prepare yarn@1.22.22 --activate >>/tmp/corepack-yarn.log 2>&1
   fi
 
   BUILD_PIDS=()
@@ -545,15 +584,40 @@ mb-test-validator --reset "${PRELOAD_ARGS[@]}" > ./test-ledger.log 2>&1 < /dev/n
 
 SOLANA_PID=$!
 
-# Wait for validator to be ready
-echo "Waiting for Solana validator..."
-for i in {1..30}; do
-  if solana cluster-version --url http://localhost:8899 >/dev/null 2>&1; then
+# Wait for solana-test-validator to be producing slots. cluster-version (and /health)
+# can succeed before the bank is producing; ephemeral-validator's chainlink then
+# fails to bootstrap against the remote and exits with "All pubsub clients failed".
+SOLANA_READY_TIMEOUT="${SOLANA_READY_TIMEOUT:-$([ "${ACT:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] && echo 120 || echo 90)}"
+echo "Waiting for Solana validator (up to ${SOLANA_READY_TIMEOUT}s for slot production)..."
+SOLANA_READY=0
+for ((i=1; i<=SOLANA_READY_TIMEOUT; i++)); do
+  if ! kill -0 "$SOLANA_PID" 2>/dev/null; then
+    echo "mb-test-validator exited before becoming ready."
+    echo "Last 100 lines of ./test-ledger.log:"
+    echo "----- test-ledger.log -----"
+    tail -100 ./test-ledger.log 2>/dev/null || echo "(log file not found)"
+    echo "----- end of log -----"
+    exit 1
+  fi
+  slot=$(curl -s --max-time 1 -X POST -H "content-type: application/json" \
+    -d '{"jsonrpc":"2.0","method":"getSlot","params":[{"commitment":"processed"}],"id":1}' http://127.0.0.1:8899 2>/dev/null \
+    | sed -nE 's/.*"result":([0-9]+).*/\1/p')
+  if [ -n "$slot" ] && [ "$slot" -gt 0 ]; then
+    echo "Solana validator is ready (slot=$slot)."
+    SOLANA_READY=1
     break
   fi
   sleep 1
 done
-echo "Solana validator is ready, waiting for RPC to stabilize..."
+if [ "$SOLANA_READY" != "1" ]; then
+  echo "Solana validator failed to produce slots within ${SOLANA_READY_TIMEOUT}s."
+  echo "Last 100 lines of ./test-ledger.log:"
+  echo "----- test-ledger.log -----"
+  tail -100 ./test-ledger.log 2>/dev/null || echo "(log file not found)"
+  echo "----- end of log -----"
+  exit 1
+fi
+echo "Waiting for RPC to stabilize..."
 
 # Cap the local fee-payer balance so the ER can clone it.
 #
@@ -609,9 +673,11 @@ EPHEMERAL_PID=$!
 # their first ER call before the server is listening and hit "fetch failed".
 # Using bash's /dev/tcp (no external process; doesn't touch tty).
 echo "Waiting for ephemeral-validator..."
+EPHEMERAL_READY=0
 for i in {1..60}; do
   if (echo > /dev/tcp/127.0.0.1/7799) 2>/dev/null; then
     sleep 1   # let the RPC handler finish wiring up after the socket binds
+    EPHEMERAL_READY=1
     break
   fi
   if ! kill -0 $EPHEMERAL_PID 2>/dev/null; then
@@ -623,6 +689,12 @@ for i in {1..60}; do
   fi
   sleep 1
 done
+if [ "$EPHEMERAL_READY" != "1" ]; then
+  echo "ephemeral-validator failed to bind port 7799 within 60s."
+  echo "Last 100 lines of ./ephemeral-validator.log:"
+  tail -100 ./ephemeral-validator.log 2>/dev/null || echo "(log file not found)"
+  exit 1
+fi
 echo "Ephemeral validator is ready."
 
 # Start the Query Filtering Service (QFS) — the middleware that fronts the ER.
@@ -650,9 +722,11 @@ QFS_PID=$!
 
 # Wait for the QFS to bind its HTTP listener before any test fires an ER call.
 echo "Waiting for query-filtering-service..."
+QFS_READY=0
 for i in {1..60}; do
   if (echo > /dev/tcp/127.0.0.1/6699) 2>/dev/null; then
     sleep 1   # let the RPC handler finish wiring up after the socket binds
+    QFS_READY=1
     break
   fi
   if ! kill -0 $QFS_PID 2>/dev/null; then
@@ -664,6 +738,11 @@ for i in {1..60}; do
   fi
   sleep 1
 done
+if [ "$QFS_READY" != "1" ]; then
+  echo "query-filtering-service failed to bind port 6699 within 60s."
+  tail -100 ./query-filtering-service.log 2>/dev/null || echo "(log file not found)"
+  exit 1
+fi
 echo "Query Filtering Service is ready."
 
 # Start the VRF oracle.

@@ -3,7 +3,7 @@
   "scripts": {
     "keys-sync": "node scripts/keys-sync.js",
     "deploy": "solana program deploy -ul target/deploy/roll_dice.so && solana program deploy -ul target/deploy/roll_dice_delegated.so",
-    "build": "yarn keys-sync && cargo build-sbf --features logging",
+    "build": "cargo build-sbf --features logging",
     "test": "npx ts-mocha -p ./tsconfig.json -t 1000000 --exit 'tests/**/*.ts'",
     "test:local": "npx ts-mocha -p ./tsconfig.json -t 1000000 --exit 'tests/**/*.ts'",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",

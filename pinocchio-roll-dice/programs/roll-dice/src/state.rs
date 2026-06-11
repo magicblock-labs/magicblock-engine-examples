@@ -23,8 +23,8 @@ impl Player {
         [Self::SEED, user.as_ref()]
     }
 
-    pub fn find_pda(user: &Address) -> (Address, u8) {
-        Address::find_program_address(&Self::seeds(user), &crate::ID)
+    pub fn find_pda(user: &Address, program_id: &Address) -> (Address, u8) {
+        Address::find_program_address(&Self::seeds(user), program_id)
     }
 
     pub fn load_mut(data: &mut [u8]) -> Result<&mut Self, ProgramError> {

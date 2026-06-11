@@ -10,27 +10,37 @@ on:
 jobs:
   test-examples:
     runs-on: ubuntu-latest
-
-    env:
-      # Set DEVNET_KEYPAIR_JSON secret to enable TEE tests against devnet
-      # (private-counter). Without the secret, TEE tests are skipped.
-      SKIP_TEE_TESTS: ${{ secrets.DEVNET_KEYPAIR_JSON == '' && '1' || '0' }}
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # Pin >=20.18 — @solana/codecs-numbers (via @solana/web3.js) rejects older 20.x.
+          # act's amd64 toolcache ships 20.11 unless a specific version is requested.
+          node-version: "20.20"
 
       - name: Enable Corepack
-        run: corepack enable
+        run: |
+          corepack enable
+          # Pre-download yarn before test-locally.sh forks parallel `yarn install`
+          # runs; otherwise corepack races on ~/.cache/node/corepack/yarn/* and
+          # leaves a broken shim (MODULE_NOT_FOUND on lib/cli).
+          corepack prepare yarn@1.22.19 --activate
+          corepack prepare yarn@1.22.22 --activate
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.89.0"
+
+      # anchor idl build invokes the host `stable` toolchain after cargo build-sbf.
+      # dtolnay/rust-toolchain only installs 1.89.0; without stable, act/CI fails with
+      # "Missing manifest in toolchain 'stable-x86_64-unknown-linux-gnu'".
+      - name: Ensure stable Rust for Anchor IDL
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default 1.89.0
 
       - name: Install native dependencies
         run: |
