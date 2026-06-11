@@ -289,10 +289,17 @@ describe("spl-tokens", () => {
     let acctA = await getAccount(connection, ataA);
     let acctB = await getAccount(connection, ataB);
 
+    // Test 1 already created the vault + ephemeral ATAs; only delegate more tokens.
+    const redelegateOpts = {
+      ...delegateOpts,
+      initIfMissing: false,
+      initVaultIfMissing: false,
+    };
+
     // Delegate 10 tokens for recipientA
     // multiply amount if decimals > 0: * (10n ** BigInt(decimals))
     const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 10n, {
-      ...delegateOpts,
+      ...redelegateOpts,
     });
     const tx = new anchor.web3.Transaction();
     ixs.forEach((ix) => tx.add(ix));
@@ -302,7 +309,7 @@ describe("spl-tokens", () => {
 
     // Delegate 10 tokens for recipientB
     const ixs2 = await delegateSpl(recipientB.publicKey, mint.publicKey, 10n, {
-      ...delegateOpts,
+      ...redelegateOpts,
     });
     const tx2 = new anchor.web3.Transaction();
     ixs2.forEach((ix) => tx2.add(ix));
@@ -318,6 +325,7 @@ describe("spl-tokens", () => {
         payer: recipientA.publicKey,
         from: ataA,
         to: ataB,
+        tokenProgram: TOKEN_PROGRAM_ID,
       })
       .transaction();
     txT.recentBlockhash = (
