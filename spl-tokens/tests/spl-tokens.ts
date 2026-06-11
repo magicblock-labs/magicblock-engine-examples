@@ -39,7 +39,10 @@ describe("spl-tokens", () => {
     : anchor.AnchorProvider.env();
   anchor.setProvider(provider);
   const connection = provider.connection;
-  let validator: PublicKey;
+  const validator = new PublicKey(
+    process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev",
+  );
+  console.log("Validator: ", validator.toBase58());
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
     new anchor.web3.Connection(
@@ -63,20 +66,28 @@ describe("spl-tokens", () => {
   let recipientA: Keypair;
   let recipientB: Keypair;
 
+  const TOKEN_AMOUNT = 1000n;
+
   /**
-   * Setup 2 recipients, with 1000 SPL tokens each for a random mint
+   * Create a fresh mint and two recipients, each funded with SOL and holding
+   * {@link TOKEN_AMOUNT} SPL tokens. Returns the mint, owners and their ATAs.
    */
-  before(async () => {
+  const setupMintWithRecipients = async (): Promise<{
+    mint: Keypair;
+    owners: [Keypair, Keypair];
+    atas: [PublicKey, PublicKey];
+  }> => {
     const payer = (provider.wallet as anchor.Wallet).payer;
 
-    recipientA = Keypair.generate();
-    recipientB = Keypair.generate();
+    const newMint = Keypair.generate();
+    const owner1 = Keypair.generate();
+    const owner2 = Keypair.generate();
     /// We need to fund the sponsor PDA to pay for the rent of the shuttles
     const [sponsorPda] = deriveRentPda();
 
     // fund recipients from payer wallet (avoids faucet rate limits / 429s)
     const fundTx = new anchor.web3.Transaction();
-    for (const r of [recipientA.publicKey, recipientB.publicKey, sponsorPda]) {
+    for (const r of [owner1.publicKey, owner2.publicKey, sponsorPda]) {
       fundTx.add(
         SystemProgram.transfer({
           fromPubkey: payer.publicKey,
@@ -87,75 +98,82 @@ describe("spl-tokens", () => {
     }
     await anchor.web3.sendAndConfirmTransaction(connection, fundTx, [payer]);
 
-    mint = Keypair.generate();
-    const decimals = 0;
-    const amount = 1000n;
-
-    const ataA = getAssociatedTokenAddressSync(
-      mint.publicKey,
-      recipientA.publicKey,
+    const ata1 = getAssociatedTokenAddressSync(
+      newMint.publicKey,
+      owner1.publicKey,
     );
-
-    const ataB = getAssociatedTokenAddressSync(
-      mint.publicKey,
-      recipientB.publicKey,
+    const ata2 = getAssociatedTokenAddressSync(
+      newMint.publicKey,
+      owner2.publicKey,
     );
 
     const tx = new anchor.web3.Transaction().add(
       // create mint
       SystemProgram.createAccount({
         fromPubkey: payer.publicKey,
-        newAccountPubkey: mint.publicKey,
+        newAccountPubkey: newMint.publicKey,
         space: MINT_SIZE,
         lamports: await getMinimumBalanceForRentExemptMint(connection),
         programId: TOKEN_PROGRAM_ID,
       }),
-      createInitializeMintInstruction(
-        mint.publicKey,
-        decimals,
-        payer.publicKey,
-        null,
-      ),
+      createInitializeMintInstruction(newMint.publicKey, 0, payer.publicKey, null),
 
       // create ATAs
       createAssociatedTokenAccountInstruction(
         payer.publicKey,
-        ataA,
-        recipientA.publicKey,
-        mint.publicKey,
+        ata1,
+        owner1.publicKey,
+        newMint.publicKey,
       ),
       createAssociatedTokenAccountInstruction(
         payer.publicKey,
-        ataB,
-        recipientB.publicKey,
-        mint.publicKey,
+        ata2,
+        owner2.publicKey,
+        newMint.publicKey,
       ),
 
       // mint tokens
-      createMintToInstruction(mint.publicKey, ataA, payer.publicKey, amount),
-      createMintToInstruction(mint.publicKey, ataB, payer.publicKey, amount),
+      createMintToInstruction(
+        newMint.publicKey,
+        ata1,
+        payer.publicKey,
+        TOKEN_AMOUNT,
+      ),
+      createMintToInstruction(
+        newMint.publicKey,
+        ata2,
+        payer.publicKey,
+        TOKEN_AMOUNT,
+      ),
     );
 
-    await provider.sendAndConfirm(tx, [payer, mint], {
+    await provider.sendAndConfirm(tx, [payer, newMint], {
       commitment: "confirmed",
     });
 
-    const acctA = await getAccount(connection, ataA);
-    const acctB = await getAccount(connection, ataB);
-
-    if (acctA.amount !== amount) {
-      throw new Error(`Recipient A expected ${amount}, got ${acctA.amount}`);
+    const acct1 = await getAccount(connection, ata1);
+    const acct2 = await getAccount(connection, ata2);
+    if (acct1.amount !== TOKEN_AMOUNT) {
+      throw new Error(`owner1 expected ${TOKEN_AMOUNT}, got ${acct1.amount}`);
     }
-    if (acctB.amount !== amount) {
-      throw new Error(`Recipient B expected ${amount}, got ${acctB.amount}`);
+    if (acct2.amount !== TOKEN_AMOUNT) {
+      throw new Error(`owner2 expected ${TOKEN_AMOUNT}, got ${acct2.amount}`);
     }
 
-    // Get the validator identity
-    validator = new PublicKey(
-      (await (ephemeralConnection as any)._rpcRequest("getIdentity", []))!
-        .result!.identity,
-    );
-    console.log("Validator: ", validator.toBase58());
+    return {
+      mint: newMint,
+      owners: [owner1, owner2],
+      atas: [ata1, ata2],
+    };
+  };
+
+  /**
+   * Setup 2 recipients, with 1000 SPL tokens each for a random mint
+   */
+  before(async () => {
+    const setup = await setupMintWithRecipients();
+    mint = setup.mint;
+    [recipientA, recipientB] = setup.owners;
   });
 
   it("Delegate SPL tokens, do a transfer and undelegate", async () => {
@@ -276,66 +294,68 @@ describe("spl-tokens", () => {
       idempotent: false as const,
       payer: admin.publicKey,
     };
-    const ataA = getAssociatedTokenAddressSync(
-      mint.publicKey,
-      recipientA.publicKey,
-    );
 
-    const ataB = getAssociatedTokenAddressSync(
-      mint.publicKey,
-      recipientB.publicKey,
-    );
+    // Use a fresh mint + fresh recipients so this test does not depend on the
+    // delegate/undelegate lifecycle of the first test.
+    const {
+      mint: mint2,
+      owners: [sender, receiver],
+      atas: [ataSender, ataReceiver],
+    } = await setupMintWithRecipients();
 
-    let acctA = await getAccount(connection, ataA);
-    let acctB = await getAccount(connection, ataB);
-
-    // Test 1 already created the vault + ephemeral ATAs; only delegate more tokens.
-    const redelegateOpts = {
+    // Delegate 10 tokens for the sender (first delegation for this mint creates
+    // the vault) and 10 for the receiver.
+    const ixsSender = await delegateSpl(sender.publicKey, mint2.publicKey, 10n, {
       ...delegateOpts,
-      initIfMissing: false,
-      initVaultIfMissing: false,
-    };
-
-    // Delegate 10 tokens for recipientA
-    // multiply amount if decimals > 0: * (10n ** BigInt(decimals))
-    const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 10n, {
-      ...redelegateOpts,
+      initVaultIfMissing: true,
     });
-    const tx = new anchor.web3.Transaction();
-    ixs.forEach((ix) => tx.add(ix));
-    await provider.sendAndConfirm(tx, [recipientA, admin], {
-      commitment: "confirmed",
-    });
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(...ixsSender),
+      [sender, admin],
+      { commitment: "confirmed", skipPreflight: true },
+    );
 
-    // Delegate 10 tokens for recipientB
-    const ixs2 = await delegateSpl(recipientB.publicKey, mint.publicKey, 10n, {
-      ...redelegateOpts,
-    });
-    const tx2 = new anchor.web3.Transaction();
-    ixs2.forEach((ix) => tx2.add(ix));
+    const ixsReceiver = await delegateSpl(
+      receiver.publicKey,
+      mint2.publicKey,
+      10n,
+      { ...delegateOpts, initVaultIfMissing: false },
+    );
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(...ixsReceiver),
+      [receiver, admin],
+      { commitment: "confirmed", skipPreflight: true },
+    );
 
-    await provider.sendAndConfirm(tx2, [recipientB, admin], {
-      commitment: "confirmed",
-    });
-
-    /// Transfer some tokens in the ER through a program
+    /// Transfer some tokens in the ER through the program
     const txT = await program.methods
       .transfer(new BN(2))
       .accounts({
-        payer: recipientA.publicKey,
-        from: ataA,
-        to: ataB,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        payer: sender.publicKey,
+        from: ataSender,
+        to: ataReceiver,
       })
       .transaction();
     txT.recentBlockhash = (
       await ephemeralConnection.getLatestBlockhash()
     ).blockhash;
-    txT.sign(recipientA);
+    txT.sign(sender);
+
     const sgn = await ephemeralConnection.sendRawTransaction(txT.serialize(), {
       skipPreflight: true,
     });
-    await ephemeralConnection.confirmTransaction(sgn, "confirmed");
+    const conf = await ephemeralConnection.confirmTransaction(sgn, "confirmed");
+    if (conf.value.err) {
+      throw new Error(
+        `Program transfer failed: ${JSON.stringify(conf.value.err)}`,
+      );
+    }
     console.log(`\nTransfer signature: ${sgn}`);
+
+    // Verify the transfer actually moved tokens inside the ER.
+    const erSender = await getAccount(ephemeralConnection, ataSender);
+    const erReceiver = await getAccount(ephemeralConnection, ataReceiver);
+    assert(erSender.amount == 8n, `sender ER balance ${erSender.amount}`);
+    assert(erReceiver.amount == 12n, `receiver ER balance ${erReceiver.amount}`);
   });
 });
