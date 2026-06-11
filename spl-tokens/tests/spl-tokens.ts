@@ -228,7 +228,11 @@ describe("spl-tokens", () => {
       recipientB.publicKey,
       mint.publicKey,
       2n,
-      { visibility: "public", fromBalance: "ephemeral", toBalance: "ephemeral" },
+      {
+        visibility: "public",
+        fromBalance: "ephemeral",
+        toBalance: "ephemeral",
+      },
     );
     const sgnTransfer = await providerEphemeralRollup.sendAndConfirm(
       new anchor.web3.Transaction().add(...transferIxs),
@@ -268,12 +272,22 @@ describe("spl-tokens", () => {
 
     // Withdraw both balances back to their base-layer ATAs via the SDK helper.
     const withdrawIxs = [
-      ...(await withdrawSpl(recipientA.publicKey, mint.publicKey, acctA.amount, {
-        idempotent: false,
-      })),
-      ...(await withdrawSpl(recipientB.publicKey, mint.publicKey, acctB.amount, {
-        idempotent: false,
-      })),
+      ...(await withdrawSpl(
+        recipientA.publicKey,
+        mint.publicKey,
+        acctA.amount,
+        {
+          idempotent: false,
+        },
+      )),
+      ...(await withdrawSpl(
+        recipientB.publicKey,
+        mint.publicKey,
+        acctB.amount,
+        {
+          idempotent: false,
+        },
+      )),
     ];
     await provider.sendAndConfirm(
       new anchor.web3.Transaction().add(...withdrawIxs),
