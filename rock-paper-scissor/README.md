@@ -10,141 +10,49 @@ This project showcases:
 - **On-chain Game Logic**: Automated winner determination with transparent results
 - **Permission System**: Fine-grained access control via the ephemeral rollups SDK
 
-## Versioning
+## Software Packages
 
-The following software packages may be required, other versions may also be compatible:
+| Software   | Version | Installation Guide                                              |
+| ---------- | ------- | --------------------------------------------------------------- |
+| **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)             |
+| **Rust**   | 1.89.0  | [Install Rust](https://www.rust-lang.org/tools/install)         |
+| **Anchor** | 1.0.2   | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
+| **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)          |
 
-| Software | Version | Installation Guide |
-|----------|---------|-------------------|
-| Solana | 3.1.9 | [Install Solana](https://docs.solana.com/cli/install-solana-cli-tools) |
-| Rust | 1.89.0 | [Install Rust](https://www.rust-lang.org/tools/install) |
-| Anchor | 1.0.2 | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
-| Node | 24.10.0 | [Install Node](https://nodejs.org/) |
-
-## Prerequisites
-
-- **Rust**: 1.89.0
-- **Node.js**: 24.10.0
-- **Solana CLI**: 3.1.9
-- **Anchor CLI**: 1.0.2
-- **Yarn**: Package manager (or npm)
-
-### Installation
-
-1. Install Rust:
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-2. Install Solana CLI:
-```bash
-sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.9/install)"
-```
-
-3. Install Anchor:
-```bash
-cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-avm install 1.0.2
+```sh
+agave-install init 3.1.9
+rustup install 1.89.0
 avm use 1.0.2
 ```
 
-4. Configure Solana (optional, for devnet):
-```bash
-solana config set --url devnet
-```
+## Build and Test
 
-## Project Structure
-
-```
-rock-paper-scissor/
-├── programs/
-│   └── anchor-rock-paper-scissor/
-│       ├── src/
-│       │   └── lib.rs                 # Program logic
-│       └── Cargo.toml
-├── tests/
-│   └── rock-paper-scissor.ts          # Test suite
-├── Anchor.toml                        # Anchor configuration
-├── Cargo.toml                         # Workspace configuration
-└── package.json                       # Node dependencies
-```
-
-## Build
-
-Build the Solana program:
+Install dependencies and build the program:
 
 ```bash
-anchor build
+yarn
+yarn build
 ```
 
-This will:
-- Compile the Rust program
-- Generate TypeScript IDL (Interface Definition Language)
-- Output artifacts to the `target/` directory
-
-## Deployment
-
-### Deploy to Devnet
-
-1. Set your wallet (if not already configured):
-```bash
-solana config set --keypair ~/.config/solana/id.json
-```
-
-2. Update `Anchor.toml` with your program ID (after first deployment)
-
-3. Deploy:
-```bash
-anchor deploy --provider.cluster devnet
-```
-
-The deployment will output your program ID. Update `Anchor.toml` and redeploy with the correct ID.
-
-### Deploy to Localnet
-
-Start a local Solana validator:
-```bash
-solana-test-validator
-```
-
-In another terminal, deploy:
-```bash
-anchor deploy --provider.cluster localnet
-```
-
-## Testing
-
-### Install Dependencies
+This example runs against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
 
 ```bash
-yarn install
+yarn setup
 ```
 
-### Run Tests
+`yarn setup` runs `SETUP_ONLY=1 ./test-locally.sh rock-paper-scissor` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
 
-Run the full test suite:
+Then, in a second terminal, run this example's tests against that cluster:
 
 ```bash
-yarn test
+yarn test:local
 ```
 
-The test suite includes:
-1. **Airdrop SOL** - Fund test players
-2. **Create Game** - Player 1 initiates a game
-3. **Join Game** - Player 2 joins the game
-4. **Make Choices** - Both players privately make their choices
-5. **Verify Privacy** - Confirm choices remain hidden from opponent
-6. **Reveal Winner** - Determine and announce the game winner
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
 
-### Custom Test Endpoint
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./test-locally.sh` directly.
 
-To test against a custom ephemeral rollup endpoint:
-
-```bash
-EPHEMERAL_PROVIDER_ENDPOINT=http://your-endpoint:port \
-EPHEMERAL_WS_ENDPOINT=ws://your-endpoint:port \
-yarn test
-```
+This is a TEE (Trusted Execution Environment) example: locally, ER calls route through the QFS via the `TEE_*` endpoints. The full devnet/TEE path additionally requires a funded devnet keypair, so in CI these tests are skipped unless a `DEVNET_KEYPAIR_JSON` secret is set (the repo sets `SKIP_TEE_TESTS=1` without it).
 
 ## Usage
 
@@ -202,64 +110,9 @@ Player choices are processed in MagicBlock's Ephemeral Rollups, which provides:
 | `EPHEMERAL_PROVIDER_ENDPOINT` | `https://tee.magicblock.app` | Ephemeral rollup RPC endpoint |
 | `EPHEMERAL_WS_ENDPOINT` | `wss://tee.magicblock.app` | WebSocket endpoint for subscriptions |
 
-## Troubleshooting
-
-### Build Errors
-
-**Error: "anchor-lang not found"**
-- Run: `cargo update`
-- Ensure Rust is up to date: `rustup update`
-
-### Deployment Issues
-
-**Error: "Account does not have enough SOL"**
-- Airdrop SOL: `solana airdrop 10 <your-address> --url devnet`
-
-### Test Failures
-
-**Tests timeout or fail to connect**
-- Verify the ephemeral endpoint is reachable
-- Check your internet connection
-- Ensure the Solana cluster is available
-
-**Permission denied errors**
-- Ensure wallet has sufficient SOL for transaction fees
-- Check permission setup in test (game and choice PDAs)
-
-## Development
-
-### Modify Program Logic
-
-Edit `programs/anchor-rock-paper-scissor/src/lib.rs`:
-
-1. Update instruction handlers
-2. Run `anchor build` to compile
-3. Run `yarn test` to validate changes
-
-### Generate New Types
-
-After program changes:
-```bash
-anchor build --skip-lint
-```
-
-This regenerates TypeScript types in `target/types/`.
-
 ## References
 
 - [Anchor Documentation](https://www.anchor-lang.com/)
 - [Solana Documentation](https://docs.solana.com/)
 - [MagicBlock Ephemeral Rollups SDK](https://github.com/magicblock-labs/ephemeral-rollups-sdk)
 - [Solana Web3.js](https://github.com/solana-labs/solana-web3.js)
-
-## License
-
-MIT
-
-## Support
-
-For issues or questions:
-1. Check existing GitHub issues
-2. Review test logs for error details
-3. Ensure all prerequisites are installed
-4. Verify network connectivity to Solana endpoints

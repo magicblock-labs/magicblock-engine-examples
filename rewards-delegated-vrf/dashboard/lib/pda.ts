@@ -12,7 +12,7 @@ export class PDAs {
   static getRewardDistributor(wallet: PublicKey): [PublicKey, number] {
     const [pda, bump] = PublicKey.findProgramAddressSync(
       [Buffer.from(REWARD_DISTRIBUTOR_SEED), wallet.toBuffer()],
-      PROGRAM_ID
+      PROGRAM_ID,
     );
     return [pda, bump];
   }
@@ -20,7 +20,7 @@ export class PDAs {
   static getRewardList(rewardDistributor: PublicKey): [PublicKey, number] {
     const [pda, bump] = PublicKey.findProgramAddressSync(
       [Buffer.from(REWARD_LIST_SEED), rewardDistributor.toBuffer()],
-      PROGRAM_ID
+      PROGRAM_ID,
     );
     return [pda, bump];
   }
@@ -28,7 +28,7 @@ export class PDAs {
   static getTransferLookupTable(): [PublicKey, number] {
     const [pda, bump] = PublicKey.findProgramAddressSync(
       [Buffer.from(TRANSFER_LOOKUP_TABLE_SEED)],
-      PROGRAM_ID
+      PROGRAM_ID,
     );
     return [pda, bump];
   }
@@ -38,11 +38,11 @@ export class PDAs {
    *  (signed by reward_distributor admins/super_admin or whitelist members)
    *  can move funds out. */
   static getWhitelistDistributor(
-    rewardDistributor: PublicKey
+    rewardDistributor: PublicKey,
   ): [PublicKey, number] {
     const [pda, bump] = PublicKey.findProgramAddressSync(
       [Buffer.from(WHITELIST_DISTRIBUTOR_SEED), rewardDistributor.toBuffer()],
-      PROGRAM_ID
+      PROGRAM_ID,
     );
     return [pda, bump];
   }
@@ -51,7 +51,7 @@ export class PDAs {
   static getDelegationRecord(delegatedAccount: PublicKey): [PublicKey, number] {
     const [pda, bump] = PublicKey.findProgramAddressSync(
       [Buffer.from("delegation"), delegatedAccount.toBuffer()],
-      DELEGATION_PROGRAM_ID
+      DELEGATION_PROGRAM_ID,
     );
     return [pda, bump];
   }
@@ -60,7 +60,7 @@ export class PDAs {
   static getMagicFeeVault(validator: PublicKey): [PublicKey, number] {
     const [pda, bump] = PublicKey.findProgramAddressSync(
       [Buffer.from("magic-fee-vault"), validator.toBuffer()],
-      DELEGATION_PROGRAM_ID
+      DELEGATION_PROGRAM_ID,
     );
     return [pda, bump];
   }

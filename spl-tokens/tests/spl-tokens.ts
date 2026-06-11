@@ -116,7 +116,12 @@ describe("spl-tokens", () => {
         lamports: await getMinimumBalanceForRentExemptMint(connection),
         programId: TOKEN_PROGRAM_ID,
       }),
-      createInitializeMintInstruction(newMint.publicKey, 0, payer.publicKey, null),
+      createInitializeMintInstruction(
+        newMint.publicKey,
+        0,
+        payer.publicKey,
+        null,
+      ),
 
       // create ATAs
       createAssociatedTokenAccountInstruction(
@@ -305,10 +310,15 @@ describe("spl-tokens", () => {
 
     // Delegate 10 tokens for the sender (first delegation for this mint creates
     // the vault) and 10 for the receiver.
-    const ixsSender = await delegateSpl(sender.publicKey, mint2.publicKey, 10n, {
-      ...delegateOpts,
-      initVaultIfMissing: true,
-    });
+    const ixsSender = await delegateSpl(
+      sender.publicKey,
+      mint2.publicKey,
+      10n,
+      {
+        ...delegateOpts,
+        initVaultIfMissing: true,
+      },
+    );
     await provider.sendAndConfirm(
       new anchor.web3.Transaction().add(...ixsSender),
       [sender, admin],
@@ -356,6 +366,9 @@ describe("spl-tokens", () => {
     const erSender = await getAccount(ephemeralConnection, ataSender);
     const erReceiver = await getAccount(ephemeralConnection, ataReceiver);
     assert(erSender.amount == 8n, `sender ER balance ${erSender.amount}`);
-    assert(erReceiver.amount == 12n, `receiver ER balance ${erReceiver.amount}`);
+    assert(
+      erReceiver.amount == 12n,
+      `receiver ER balance ${erReceiver.amount}`,
+    );
   });
 });

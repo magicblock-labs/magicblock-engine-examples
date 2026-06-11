@@ -834,32 +834,15 @@ echo ""
 #     TEE  (https://devnet-tee.magicblock.app)    : MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo
 
 # ---- Local tests: base layer = local solana-test-validator; ER = query-filtering-service ----
-# Exported so every child test process sees them (and any test that ignores them
-# and dials devnet will fail loudly rather than silently hit the wrong network).
-# The ER endpoint points at the local Query Filtering Service (QFS), which routes
-# to the ephemeral validator (7799) and on to the base solana validator (8899):
+# All localhost endpoints live in scripts/local-env.sh, the single source of truth
+# shared with each example's `yarn test:local` (so a standalone test run targets the
+# same local cluster instead of falling back to devnet). Exported here so every child
+# test process sees them. The ER endpoint points at the local Query Filtering Service
+# (QFS), which routes to the ephemeral validator (7799) and on to the base validator:
 #   client -> QFS (6699) -> ER validator (7799) -> solana validator (8899)
-# The base layer endpoint still talks to the solana validator directly.
-export PROVIDER_ENDPOINT=http://localhost:8899
-export WS_ENDPOINT=ws://localhost:8900
-export EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799
-export EPHEMERAL_WS_ENDPOINT=ws://localhost:7800
-export QFS_ENDPOINT=http://localhost:6699
-export QFS_WS_ENDPOINT=ws://localhost:6700
-# Anchor SDK reads ANCHOR_PROVIDER_URL/ANCHOR_WALLET when test code calls
-# AnchorProvider.env(). Without these, `anchor test` overrides them based on the
-# Anchor.toml [provider] cluster (often devnet) and tests silently hit the wrong network.
-export ANCHOR_PROVIDER_URL=$PROVIDER_ENDPOINT
-export ANCHOR_WALLET="${HOME}/.config/solana/id.json"
-# Router-style tests (advanced-magic, magic-actions, dummy-token-transfer) point at the
-# MagicBlock router on devnet — locally there's no router, so route them through the
-# ephemeral validator.
-export ROUTER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT
-export ROUTER_WS_ENDPOINT=$EPHEMERAL_WS_ENDPOINT
-export VALIDATOR=mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
-# VRF queues — local oracle (paywJiVATr...) index 0 on base, index 1 delegated on ER.
-export VRF_BASE_QUEUE="GKE6d7iv8kCBrsxr78W3xVdjGLLLJnxsGiuzrsZCGEvb"
-export VRF_EPHEMERAL_QUEUE="Sc9MJUngNbQXSXGP3F67KvKwVnhaYn6kcioxXNVowYT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/local-env.sh
+. "$SCRIPT_DIR/scripts/local-env.sh"
 
 # ------------------------------------------------------------------------------
 # Regular tests

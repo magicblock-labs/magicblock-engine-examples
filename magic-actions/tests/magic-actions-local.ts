@@ -49,21 +49,29 @@ describe("magic-actions-local", () => {
   );
 
   console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
-  console.log("Ephemeral Rollup Connection: ", providerEphemeralRollup.connection.rpcEndpoint);
+  console.log(
+    "Ephemeral Rollup Connection: ",
+    providerEphemeralRollup.connection.rpcEndpoint,
+  );
   console.log("Program ID: ", program.programId.toBase58());
   console.log("Counter PDA: ", pda.toBase58());
   console.log("Leaderboard PDA: ", leaderboardPda.toBase58());
 
   async function printCounter(message: string) {
     const counterInfo = await provider.connection.getAccountInfo(pda);
-    const isDelegated = counterInfo?.owner.toBase58() === DELEGATION_PROGRAM_ID.toBase58();
-    const leaderboardAccount = await program.account.leaderboard.fetch(leaderboardPda);
+    const isDelegated =
+      counterInfo?.owner.toBase58() === DELEGATION_PROGRAM_ID.toBase58();
+    const leaderboardAccount = await program.account.leaderboard.fetch(
+      leaderboardPda,
+    );
 
     let counterBase = "<n/a>";
     let counterER = "<n/a>";
     if (isDelegated) {
       counterBase = "<Delegated>";
-      const erInfo = await providerEphemeralRollup.connection.getAccountInfo(pda);
+      const erInfo = await providerEphemeralRollup.connection.getAccountInfo(
+        pda,
+      );
       counterER = erInfo?.data.readBigUInt64LE(8).toString() ?? "0";
     } else {
       const acc = await program.account.counter.fetch(pda);
@@ -163,10 +171,17 @@ describe("magic-actions-local", () => {
       console.log("Skipping — not delegated");
       return;
     }
-    const tx = await program.methods.increment().accounts({ counter: pda }).transaction();
+    const tx = await program.methods
+      .increment()
+      .accounts({ counter: pda })
+      .transaction();
     tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (await providerEphemeralRollup.connection.getLatestBlockhash()).blockhash;
-    const sig = await providerEphemeralRollup.sendAndConfirm(tx, [], { skipPreflight: true });
+    tx.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    const sig = await providerEphemeralRollup.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+    });
     await printCounter(`✅ Incremented (ER). Sig: ${sig}`);
   });
 
@@ -178,11 +193,18 @@ describe("magic-actions-local", () => {
     }
     const tx = await program.methods
       .commitAndUpdateLeaderboard()
-      .accounts({ payer: provider.wallet.publicKey, programId: program.programId } as any)
+      .accounts({
+        payer: provider.wallet.publicKey,
+        programId: program.programId,
+      } as any)
       .transaction();
     tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (await providerEphemeralRollup.connection.getLatestBlockhash()).blockhash;
-    const sig = await providerEphemeralRollup.sendAndConfirm(tx, [], { skipPreflight: true });
+    tx.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    const sig = await providerEphemeralRollup.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+    });
     await new Promise((r) => setTimeout(r, 2000));
     await printCounter(`✅ Updated leaderboard while delegated. Sig: ${sig}`);
   });
@@ -198,8 +220,12 @@ describe("magic-actions-local", () => {
       .accounts({ payer: provider.wallet.publicKey })
       .transaction();
     tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (await providerEphemeralRollup.connection.getLatestBlockhash()).blockhash;
-    const sig = await providerEphemeralRollup.sendAndConfirm(tx, [], { skipPreflight: true });
+    tx.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    const sig = await providerEphemeralRollup.sendAndConfirm(tx, [], {
+      skipPreflight: true,
+    });
     await new Promise((r) => setTimeout(r, 5000));
     await printCounter(`✅ Undelegated. Sig: ${sig}`);
   });
@@ -209,7 +235,9 @@ describe("magic-actions-local", () => {
       escrowPdaFromEscrowAuthority(provider.wallet.publicKey),
       provider.wallet.publicKey,
     );
-    const sig = await provider.sendAndConfirm(new Transaction().add(ix), [], { skipPreflight: true });
+    const sig = await provider.sendAndConfirm(new Transaction().add(ix), [], {
+      skipPreflight: true,
+    });
     console.log("✅ Escrow closed. Sig:", sig);
   });
 });

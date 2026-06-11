@@ -16,8 +16,13 @@
     "fs": "0.0.2"
   },
   "scripts": {
-    "test": "npx vitest run ./tests/kit",
-    "test-web3js": "npx vitest run ./tests/web3js"
+    "test:local": ". ../scripts/local-env.sh && npx vitest run ./tests/kit/oncurve-delegation.test.ts",
+    "setup": "cd .. && SETUP_ONLY=1 ./test-locally.sh oncurve-delegation",
+    "test": "yarn test:local",
+    "test:web3js": "npx vitest run ./tests/web3js",
+    "build": "echo \"No program to build — SDK integration tests only\"",
+    "lint": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
+    "lint:fix": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
   },
   "devDependencies": {
     "@types/chai": "^5.2.2",

@@ -1,10 +1,18 @@
 import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
+import {
+  MAGIC_CONTEXT_ID,
+  MAGIC_PROGRAM_ID,
+} from "@magicblock-labs/ephemeral-rollups-sdk";
 import { PDAs } from "@/lib/pda";
 import { PROGRAM_ID } from "@/lib/constants";
-import { VRF_PROGRAM_ID, ORACLE_QUEUE, SLOT_HASHES_SYSVAR, getVrfProgramIdentity } from "@/lib/vrfConstants";
+import {
+  VRF_PROGRAM_ID,
+  ORACLE_QUEUE,
+  SLOT_HASHES_SYSVAR,
+  getVrfProgramIdentity,
+} from "@/lib/vrfConstants";
 import { createReadonlyProvider, createProgram } from "@/lib/sendTransaction";
 import type { VrfCallbackData } from "./types";
 
@@ -14,11 +22,13 @@ import type { VrfCallbackData } from "./types";
  */
 async function getValidatorFromDelegationRecord(
   connection: Connection,
-  delegationRecord: PublicKey
+  delegationRecord: PublicKey,
 ): Promise<PublicKey> {
   const accountInfo = await connection.getAccountInfo(delegationRecord);
   if (!accountInfo || accountInfo.data.length < 40) {
-    throw new Error(`Delegation record not found or too short: ${delegationRecord.toBase58()}`);
+    throw new Error(
+      `Delegation record not found or too short: ${delegationRecord.toBase58()}`,
+    );
   }
   return new PublicKey(accountInfo.data.slice(8, 40));
 }
@@ -28,7 +38,7 @@ export async function buildRequestRandomReward(
   publicKey: PublicKey,
   rewardDistributorPda: PublicKey,
   user: PublicKey,
-  clientSeed: number
+  clientSeed: number,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
@@ -61,7 +71,7 @@ export async function buildRequestRandomReward(
  */
 export function listenForVrfCallback(
   connection: Connection,
-  timeoutMs = 30_000
+  timeoutMs = 30_000,
 ): { callbackPromise: Promise<VrfCallbackData | null>; cancel: () => void } {
   let listenerId: number | null = null;
   let done = false;
@@ -83,11 +93,12 @@ export function listenForVrfCallback(
               log.includes("Random result:") ||
               log.includes("Won reward") ||
               log.includes("exhausted") ||
-              log.includes("Reward:")
+              log.includes("Reward:"),
           );
           if (relevantLogs.length > 0) {
             done = true;
-            if (listenerId !== null) connection.removeOnLogsListener(listenerId);
+            if (listenerId !== null)
+              connection.removeOnLogsListener(listenerId);
             if (timeoutId) clearTimeout(timeoutId);
             resolve({
               signature: logs.signature,
@@ -97,7 +108,7 @@ export function listenForVrfCallback(
             });
           }
         },
-        "confirmed"
+        "confirmed",
       );
     } catch {
       if (timeoutId) clearTimeout(timeoutId);
@@ -125,7 +136,7 @@ export async function buildAddReward(
   drawRangeMin?: number,
   drawRangeMax?: number,
   redemptionLimit?: number,
-  metadataAccount?: PublicKey
+  metadataAccount?: PublicKey,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
@@ -136,7 +147,7 @@ export async function buildAddReward(
       rewardAmount ? new anchor.BN(rewardAmount) : null,
       drawRangeMin ?? null,
       drawRangeMax ?? null,
-      redemptionLimit ? new anchor.BN(redemptionLimit) : null
+      redemptionLimit ? new anchor.BN(redemptionLimit) : null,
     )
     .accounts({
       admin: publicKey,
@@ -162,7 +173,7 @@ export async function buildAddRewardsBatch(
     drawRangeMax?: number;
     redemptionLimit?: number;
     metadataAccount?: PublicKey;
-  }>
+  }>,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
@@ -175,7 +186,7 @@ export async function buildAddRewardsBatch(
         reward.rewardAmount ? new anchor.BN(reward.rewardAmount) : null,
         reward.drawRangeMin ?? null,
         reward.drawRangeMax ?? null,
-        reward.redemptionLimit ? new anchor.BN(reward.redemptionLimit) : null
+        reward.redemptionLimit ? new anchor.BN(reward.redemptionLimit) : null,
       )
       .accounts({
         admin: publicKey,
@@ -197,20 +208,23 @@ export async function buildRemoveReward(
   rewardDistributorPda: PublicKey,
   rewardName: string,
   rewardMint?: PublicKey,
-  redemptionAmount?: number
+  redemptionAmount?: number,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
   const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
   const [transferLookupTablePda] = PDAs.getTransferLookupTable();
   const [delegationRecordRewardList] = PDAs.getDelegationRecord(rewardListPda);
-  const validator = await getValidatorFromDelegationRecord(connection, delegationRecordRewardList);
+  const validator = await getValidatorFromDelegationRecord(
+    connection,
+    delegationRecordRewardList,
+  );
   const [magicFeeVault] = PDAs.getMagicFeeVault(validator);
   return program.methods
     .removeReward(
       rewardName,
       rewardMint ?? null,
-      redemptionAmount ? new anchor.BN(redemptionAmount) : null
+      redemptionAmount ? new anchor.BN(redemptionAmount) : null,
     )
     .accounts({
       admin: publicKey,
@@ -234,14 +248,17 @@ export async function buildRemoveRewardsBatch(
     rewardName: string;
     rewardMint?: PublicKey;
     redemptionAmount?: number;
-  }>
+  }>,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
   const rewardListPda = PDAs.getRewardList(rewardDistributorPda)[0];
   const [transferLookupTablePda] = PDAs.getTransferLookupTable();
   const [delegationRecordRewardList] = PDAs.getDelegationRecord(rewardListPda);
-  const validator = await getValidatorFromDelegationRecord(connection, delegationRecordRewardList);
+  const validator = await getValidatorFromDelegationRecord(
+    connection,
+    delegationRecordRewardList,
+  );
   const [magicFeeVault] = PDAs.getMagicFeeVault(validator);
   const tx = new Transaction();
   for (const item of items) {
@@ -249,7 +266,7 @@ export async function buildRemoveRewardsBatch(
       .removeReward(
         item.rewardName,
         item.rewardMint ?? null,
-        item.redemptionAmount ? new anchor.BN(item.redemptionAmount) : null
+        item.redemptionAmount ? new anchor.BN(item.redemptionAmount) : null,
       )
       .accounts({
         admin: publicKey,
@@ -278,7 +295,7 @@ export async function buildUpdateReward(
   tokenAccount: PublicKey | null,
   rewardAmount: number | null,
   drawRangeMin: number | null,
-  drawRangeMax: number | null
+  drawRangeMax: number | null,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
@@ -299,7 +316,7 @@ export async function buildUpdateReward(
       updatedRewardName,
       rewardAmount != null ? new anchor.BN(rewardAmount) : null,
       drawRangeMin,
-      drawRangeMax
+      drawRangeMax,
     )
     .accounts(accounts)
     .transaction();
@@ -319,7 +336,7 @@ export async function buildAdminTransfer(
   rewardDistributorPda: PublicKey,
   mint: PublicKey,
   user: PublicKey,
-  amount: number
+  amount: number,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
@@ -328,14 +345,17 @@ export async function buildAdminTransfer(
   const [delegationRecordRewardList] = PDAs.getDelegationRecord(rewardListPda);
   // Read the validator off the delegation record so we can derive the matching
   // magic_fee_vault (same pattern as buildRemoveReward).
-  const validator = await getValidatorFromDelegationRecord(connection, delegationRecordRewardList);
+  const validator = await getValidatorFromDelegationRecord(
+    connection,
+    delegationRecordRewardList,
+  );
   const [magicFeeVault] = PDAs.getMagicFeeVault(validator);
   // The distributor's ATA for this mint — passed in so the ER can clone it
   // read-only and check available balance.
   const sourceTokenAccount = getAssociatedTokenAddressSync(
     mint,
     rewardDistributorPda,
-    true
+    true,
   );
   return program.methods
     .adminTransfer(new anchor.BN(amount))

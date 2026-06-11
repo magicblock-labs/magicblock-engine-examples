@@ -11,22 +11,24 @@ import type { TransactionResponse } from "./instructions/types";
  */
 export function createReadonlyProvider(
   publicKey: PublicKey,
-  connection: Connection
+  connection: Connection,
 ): anchor.AnchorProvider {
   const dummyWallet = {
     publicKey,
     signTransaction: async (tx: Transaction) => tx,
     signAllTransactions: async (txs: Transaction[]) => txs,
   } as anchor.Wallet;
-  return new anchor.AnchorProvider(connection, dummyWallet, { commitment: "confirmed" });
+  return new anchor.AnchorProvider(connection, dummyWallet, {
+    commitment: "confirmed",
+  });
 }
 
 export async function createProgram(
-  provider: anchor.AnchorProvider
+  provider: anchor.AnchorProvider,
 ): Promise<anchor.Program<RewardsDelegatedVrf>> {
   return new anchor.Program<RewardsDelegatedVrf>(
     rewardsDelegatedVrfIdl as anchor.Idl,
-    provider
+    provider,
   );
 }
 
@@ -62,7 +64,7 @@ function formatTxError(err: unknown): string {
 async function enrichErrorWithLogs(
   connection: Connection,
   signature: string,
-  rawErr: unknown
+  rawErr: unknown,
 ): Promise<string> {
   const base = formatTxError(rawErr);
   try {
@@ -75,7 +77,9 @@ async function enrichErrorWithLogs(
     const anchorErr = logs.find((line) => line.includes("Error Code:"));
     if (anchorErr) return `${base} — ${anchorErr.trim()}`;
     // Otherwise, last "Program log:" line often holds a custom msg.
-    const lastLog = [...logs].reverse().find((line) => line.startsWith("Program log:"));
+    const lastLog = [...logs]
+      .reverse()
+      .find((line) => line.startsWith("Program log:"));
     if (lastLog) return `${base} — ${lastLog.trim()}`;
     return base;
   } catch {
@@ -97,19 +101,23 @@ export async function sendTransaction(
   tx: Transaction,
   publicKey: PublicKey,
   signTransaction: (tx: Transaction) => Promise<Transaction>,
-  endpoint: string
+  endpoint: string,
 ): Promise<TransactionResponse> {
   try {
     const connection = new Connection(endpoint, "confirmed");
     tx.feePayer = publicKey;
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    const { blockhash, lastValidBlockHeight } =
+      await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
 
     const signedTx = await signTransaction(tx);
-    const signature = await connection.sendRawTransaction(signedTx.serialize(), {
-      skipPreflight: true,
-      maxRetries: 3,
-    });
+    const signature = await connection.sendRawTransaction(
+      signedTx.serialize(),
+      {
+        skipPreflight: true,
+        maxRetries: 3,
+      },
+    );
 
     // Primary path: blockhash-aware confirm. Returns err in its result if the
     // tx landed and the program returned an error. Distinguishes confirmed
@@ -120,7 +128,7 @@ export async function sendTransaction(
       const result = await Promise.race([
         connection.confirmTransaction(
           { signature, blockhash, lastValidBlockHeight },
-          "confirmed"
+          "confirmed",
         ),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 60_000)),
       ]);
@@ -136,7 +144,11 @@ export async function sendTransaction(
 
     if (confirmed) {
       if (confirmedErr) {
-        const error = await enrichErrorWithLogs(connection, signature, confirmedErr);
+        const error = await enrichErrorWithLogs(
+          connection,
+          signature,
+          confirmedErr,
+        );
         return { success: false, signature, error, endpoint };
       }
       return { success: true, signature, endpoint };
@@ -159,7 +171,11 @@ export async function sendTransaction(
         };
       }
       if (status.err) {
-        const error = await enrichErrorWithLogs(connection, signature, status.err);
+        const error = await enrichErrorWithLogs(
+          connection,
+          signature,
+          status.err,
+        );
         return { success: false, signature, error, endpoint };
       }
       return { success: true, signature, endpoint };
@@ -195,12 +211,13 @@ export async function sendTransactionWithKeypair(
   publicKey: PublicKey,
   signTransaction: (tx: Transaction) => Promise<Transaction>,
   endpoint: string,
-  extraSigners: Keypair[]
+  extraSigners: Keypair[],
 ): Promise<TransactionResponse> {
   try {
     const connection = new Connection(endpoint, "confirmed");
     tx.feePayer = publicKey;
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    const { blockhash, lastValidBlockHeight } =
+      await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
 
     for (const keypair of extraSigners) {
@@ -208,10 +225,13 @@ export async function sendTransactionWithKeypair(
     }
 
     const signedTx = await signTransaction(tx);
-    const signature = await connection.sendRawTransaction(signedTx.serialize(), {
-      skipPreflight: true,
-      maxRetries: 3,
-    });
+    const signature = await connection.sendRawTransaction(
+      signedTx.serialize(),
+      {
+        skipPreflight: true,
+        maxRetries: 3,
+      },
+    );
 
     let confirmedErr: unknown = null;
     let confirmed = false;
@@ -219,7 +239,7 @@ export async function sendTransactionWithKeypair(
       const result = await Promise.race([
         connection.confirmTransaction(
           { signature, blockhash, lastValidBlockHeight },
-          "confirmed"
+          "confirmed",
         ),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 60_000)),
       ]);
@@ -233,7 +253,11 @@ export async function sendTransactionWithKeypair(
 
     if (confirmed) {
       if (confirmedErr) {
-        const error = await enrichErrorWithLogs(connection, signature, confirmedErr);
+        const error = await enrichErrorWithLogs(
+          connection,
+          signature,
+          confirmedErr,
+        );
         return { success: false, signature, error, endpoint };
       }
       return { success: true, signature, endpoint };
@@ -253,7 +277,11 @@ export async function sendTransactionWithKeypair(
       };
     }
     if (status.err) {
-      const error = await enrichErrorWithLogs(connection, signature, status.err);
+      const error = await enrichErrorWithLogs(
+        connection,
+        signature,
+        status.err,
+      );
       return { success: false, signature, error, endpoint };
     }
     return { success: true, signature, endpoint };

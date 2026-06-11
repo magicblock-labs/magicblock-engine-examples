@@ -5,159 +5,117 @@
  * IDL can be found at `target/idl/rewards_delegated_vrf.json`.
  */
 export type RewardsDelegatedVrf = {
-  "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y",
-  "metadata": {
-    "name": "rewardsDelegatedVrf",
-    "version": "0.1.0",
-    "spec": "0.1.0",
-    "description": "MagicBlock Rewards Program"
-  },
-  "instructions": [
+  address: "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y";
+  metadata: {
+    name: "rewardsDelegatedVrf";
+    version: "0.1.0";
+    spec: "0.1.0";
+    description: "MagicBlock Rewards Program";
+  };
+  instructions: [
     {
-      "name": "addReward",
-      "discriminator": [
-        4,
-        114,
-        188,
-        164,
-        149,
-        249,
-        198,
-        237
-      ],
-      "accounts": [
+      name: "addReward";
+      discriminator: [4, 114, 188, 164, 149, 249, 198, 237];
+      accounts: [
         {
-          "name": "admin",
-          "signer": true
+          name: "admin";
+          signer: true;
         },
         {
-          "name": "rewardDistributor"
+          name: "rewardDistributor";
         },
         {
-          "name": "rewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "rewardList";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  108,
-                  105,
-                  115,
-                  116
-                ]
+                kind: "const";
+                value: [114, 101, 119, 97, 114, 100, 95, 108, 105, 115, 116];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "mint"
+          name: "mint";
         },
         {
-          "name": "tokenAccount"
+          name: "tokenAccount";
         },
         {
-          "name": "metadata",
-          "optional": true
-        }
-      ],
-      "args": [
+          name: "metadata";
+          optional: true;
+        },
+      ];
+      args: [
         {
-          "name": "rewardName",
-          "type": "string"
+          name: "rewardName";
+          type: "string";
         },
         {
-          "name": "rewardAmount",
-          "type": {
-            "option": "u64"
-          }
+          name: "rewardAmount";
+          type: {
+            option: "u64";
+          };
         },
         {
-          "name": "drawRangeMin",
-          "type": {
-            "option": "u32"
-          }
+          name: "drawRangeMin";
+          type: {
+            option: "u32";
+          };
         },
         {
-          "name": "drawRangeMax",
-          "type": {
-            "option": "u32"
-          }
+          name: "drawRangeMax";
+          type: {
+            option: "u32";
+          };
         },
         {
-          "name": "redemptionLimit",
-          "type": {
-            "option": "u64"
-          }
-        }
-      ]
+          name: "redemptionLimit";
+          type: {
+            option: "u64";
+          };
+        },
+      ];
     },
     {
-      "name": "adminTransfer",
-      "discriminator": [
-        196,
-        77,
-        244,
-        188,
-        16,
-        7,
-        192,
-        73
-      ],
-      "accounts": [
+      name: "adminTransfer";
+      discriminator: [196, 77, 244, 188, 16, 7, 192, 73];
+      accounts: [
         {
-          "name": "admin",
-          "signer": true
+          name: "admin";
+          signer: true;
         },
         {
-          "name": "rewardDistributor"
+          name: "rewardDistributor";
         },
         {
-          "name": "rewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "rewardList";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  108,
-                  105,
-                  115,
-                  116
-                ]
+                kind: "const";
+                value: [114, 101, 119, 97, 114, 100, 95, 108, 105, 115, 116];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "transferLookupTable",
-          "pda": {
-            "seeds": [
+          name: "transferLookupTable";
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   116,
                   114,
                   97,
@@ -178,26 +136,26 @@ export type RewardsDelegatedVrf = {
                   97,
                   98,
                   108,
-                  101
-                ]
-              }
-            ]
-          }
+                  101,
+                ];
+              },
+            ];
+          };
         },
         {
-          "name": "mint"
+          name: "mint";
         },
         {
-          "name": "sourceTokenAccount",
-          "pda": {
-            "seeds": [
+          name: "sourceTokenAccount";
+          pda: {
+            seeds: [
               {
-                "kind": "account",
-                "path": "rewardDistributor"
+                kind: "account";
+                path: "rewardDistributor";
               },
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   6,
                   221,
                   246,
@@ -229,17 +187,17 @@ export type RewardsDelegatedVrf = {
                   126,
                   255,
                   0,
-                  169
-                ]
+                  169,
+                ];
               },
               {
-                "kind": "account",
-                "path": "mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
+                kind: "account";
+                path: "mint";
+              },
+            ];
+            program: {
+              kind: "const";
+              value: [
                 140,
                 151,
                 37,
@@ -271,97 +229,76 @@ export type RewardsDelegatedVrf = {
                 219,
                 233,
                 248,
-                89
-              ]
-            }
-          }
+                89,
+              ];
+            };
+          };
         },
         {
-          "name": "user"
+          name: "user";
         },
         {
-          "name": "delegationRecordRewardList"
+          name: "delegationRecordRewardList";
         },
         {
-          "name": "magicFeeVault",
-          "writable": true
+          name: "magicFeeVault";
+          writable: true;
         },
         {
-          "name": "magicProgram",
-          "address": "Magic11111111111111111111111111111111111111"
+          name: "magicProgram";
+          address: "Magic11111111111111111111111111111111111111";
         },
         {
-          "name": "magicContext",
-          "writable": true,
-          "address": "MagicContext1111111111111111111111111111111"
-        }
-      ],
-      "args": [
+          name: "magicContext";
+          writable: true;
+          address: "MagicContext1111111111111111111111111111111";
+        },
+      ];
+      args: [
         {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
+          name: "amount";
+          type: "u64";
+        },
+      ];
     },
     {
-      "name": "consumeRandomReward",
-      "discriminator": [
-        217,
-        114,
-        103,
-        58,
-        64,
-        195,
-        157,
-        3
-      ],
-      "accounts": [
+      name: "consumeRandomReward";
+      discriminator: [217, 114, 103, 58, 64, 195, 157, 3];
+      accounts: [
         {
-          "name": "vrfProgramIdentity",
-          "signer": true,
-          "address": "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw"
+          name: "vrfProgramIdentity";
+          signer: true;
+          address: "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw";
         },
         {
-          "name": "user"
+          name: "user";
         },
         {
-          "name": "rewardDistributor"
+          name: "rewardDistributor";
         },
         {
-          "name": "rewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "rewardList";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  108,
-                  105,
-                  115,
-                  116
-                ]
+                kind: "const";
+                value: [114, 101, 119, 97, 114, 100, 95, 108, 105, 115, 116];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "transferLookupTable",
-          "pda": {
-            "seeds": [
+          name: "transferLookupTable";
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   116,
                   114,
                   97,
@@ -382,83 +319,64 @@ export type RewardsDelegatedVrf = {
                   97,
                   98,
                   108,
-                  101
-                ]
-              }
-            ]
-          }
+                  101,
+                ];
+              },
+            ];
+          };
         },
         {
-          "name": "magicFeeVault",
-          "writable": true
+          name: "magicFeeVault";
+          writable: true;
         },
         {
-          "name": "magicProgram",
-          "address": "Magic11111111111111111111111111111111111111"
+          name: "magicProgram";
+          address: "Magic11111111111111111111111111111111111111";
         },
         {
-          "name": "magicContext",
-          "writable": true,
-          "address": "MagicContext1111111111111111111111111111111"
-        }
-      ],
-      "args": [
+          name: "magicContext";
+          writable: true;
+          address: "MagicContext1111111111111111111111111111111";
+        },
+      ];
+      args: [
         {
-          "name": "randomness",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
+          name: "randomness";
+          type: {
+            array: ["u8", 32];
+          };
+        },
+      ];
     },
     {
-      "name": "delegateRewardList",
-      "discriminator": [
-        33,
-        90,
-        35,
-        18,
-        214,
-        29,
-        202,
-        59
-      ],
-      "accounts": [
+      name: "delegateRewardList";
+      discriminator: [33, 90, 35, 18, 214, 29, 202, 59];
+      accounts: [
         {
-          "name": "admin",
-          "writable": true,
-          "signer": true
+          name: "admin";
+          writable: true;
+          signer: true;
         },
         {
-          "name": "rewardDistributor"
+          name: "rewardDistributor";
         },
         {
-          "name": "bufferRewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "bufferRewardList";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  102,
-                  102,
-                  101,
-                  114
-                ]
+                kind: "const";
+                value: [98, 117, 102, 102, 101, 114];
               },
               {
-                "kind": "account",
-                "path": "rewardList"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
+                kind: "account";
+                path: "rewardList";
+              },
+            ];
+            program: {
+              kind: "const";
+              value: [
                 12,
                 157,
                 54,
@@ -490,50 +408,39 @@ export type RewardsDelegatedVrf = {
                 91,
                 113,
                 51,
-                193
-              ]
-            }
-          }
+                193,
+              ];
+            };
+          };
         },
         {
-          "name": "delegationRecordRewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "delegationRecordRewardList";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
-                  100,
-                  101,
-                  108,
-                  101,
-                  103,
-                  97,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
+                kind: "const";
+                value: [100, 101, 108, 101, 103, 97, 116, 105, 111, 110];
               },
               {
-                "kind": "account",
-                "path": "rewardList"
-              }
-            ],
-            "program": {
-              "kind": "account",
-              "path": "delegationProgram"
-            }
-          }
+                kind: "account";
+                path: "rewardList";
+              },
+            ];
+            program: {
+              kind: "account";
+              path: "delegationProgram";
+            };
+          };
         },
         {
-          "name": "delegationMetadataRewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "delegationMetadataRewardList";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   100,
                   101,
                   108,
@@ -552,89 +459,68 @@ export type RewardsDelegatedVrf = {
                   100,
                   97,
                   116,
-                  97
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "rewardList"
-              }
-            ],
-            "program": {
-              "kind": "account",
-              "path": "delegationProgram"
-            }
-          }
-        },
-        {
-          "name": "rewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  119,
                   97,
-                  114,
-                  100,
-                  95,
-                  108,
-                  105,
-                  115,
-                  116
-                ]
+                ];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardList";
+              },
+            ];
+            program: {
+              kind: "account";
+              path: "delegationProgram";
+            };
+          };
         },
         {
-          "name": "ownerProgram",
-          "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
+          name: "rewardList";
+          writable: true;
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [114, 101, 119, 97, 114, 100, 95, 108, 105, 115, 116];
+              },
+              {
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "delegationProgram",
-          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+          name: "ownerProgram";
+          address: "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y";
         },
         {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
+          name: "delegationProgram";
+          address: "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh";
+        },
+        {
+          name: "systemProgram";
+          address: "11111111111111111111111111111111";
+        },
+      ];
+      args: [];
     },
     {
-      "name": "initializeRewardDistributor",
-      "discriminator": [
-        158,
-        15,
-        52,
-        95,
-        214,
-        28,
-        121,
-        131
-      ],
-      "accounts": [
+      name: "initializeRewardDistributor";
+      discriminator: [158, 15, 52, 95, 214, 28, 121, 131];
+      accounts: [
         {
-          "name": "initializer",
-          "writable": true,
-          "signer": true
+          name: "initializer";
+          writable: true;
+          signer: true;
         },
         {
-          "name": "rewardDistributor",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "rewardDistributor";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   114,
                   101,
                   119,
@@ -652,29 +538,29 @@ export type RewardsDelegatedVrf = {
                   117,
                   116,
                   111,
-                  114
-                ]
+                  114,
+                ];
               },
               {
-                "kind": "account",
-                "path": "initializer"
-              }
-            ]
-          }
+                kind: "account";
+                path: "initializer";
+              },
+            ];
+          };
         },
         {
-          "name": "whitelistDistributor",
-          "docs": [
+          name: "whitelistDistributor";
+          docs: [
             "Whitelist token bag — created alongside reward_distributor so the",
             "two PDAs stay in lockstep. `init_if_needed` backfills the account",
-            "on distributors that were created before this PDA existed."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
+            "on distributors that were created before this PDA existed.",
+          ];
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   119,
                   104,
                   105,
@@ -695,59 +581,50 @@ export type RewardsDelegatedVrf = {
                   117,
                   116,
                   111,
-                  114
-                ]
+                  114,
+                ];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
+          name: "systemProgram";
+          address: "11111111111111111111111111111111";
+        },
+      ];
+      args: [
         {
-          "name": "admins",
-          "type": {
-            "vec": "pubkey"
-          }
-        }
-      ]
+          name: "admins";
+          type: {
+            vec: "pubkey";
+          };
+        },
+      ];
     },
     {
-      "name": "initializeTransferLookupTable",
-      "discriminator": [
-        61,
-        55,
-        42,
-        239,
-        22,
-        80,
-        152,
-        247
-      ],
-      "accounts": [
+      name: "initializeTransferLookupTable";
+      discriminator: [61, 55, 42, 239, 22, 80, 152, 247];
+      accounts: [
         {
-          "name": "authority",
-          "writable": true,
-          "signer": true
+          name: "authority";
+          writable: true;
+          signer: true;
         },
         {
-          "name": "programData"
+          name: "programData";
         },
         {
-          "name": "transferLookupTable",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "transferLookupTable";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   116,
                   114,
                   97,
@@ -768,118 +645,88 @@ export type RewardsDelegatedVrf = {
                   97,
                   98,
                   108,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "lookupAccounts",
-          "type": {
-            "vec": "pubkey"
-          }
-        }
-      ]
-    },
-    {
-      "name": "processUndelegation",
-      "discriminator": [
-        196,
-        28,
-        41,
-        206,
-        48,
-        37,
-        51,
-        167
-      ],
-      "accounts": [
-        {
-          "name": "baseAccount",
-          "writable": true
-        },
-        {
-          "name": "buffer"
-        },
-        {
-          "name": "payer",
-          "writable": true
-        },
-        {
-          "name": "systemProgram"
-        }
-      ],
-      "args": [
-        {
-          "name": "accountSeeds",
-          "type": {
-            "vec": "bytes"
-          }
-        }
-      ]
-    },
-    {
-      "name": "removeReward",
-      "discriminator": [
-        208,
-        115,
-        143,
-        26,
-        159,
-        97,
-        59,
-        232
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "signer": true
-        },
-        {
-          "name": "rewardDistributor"
-        },
-        {
-          "name": "rewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
                   101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  108,
-                  105,
-                  115,
-                  116
-                ]
+                ];
+              },
+            ];
+          };
+        },
+        {
+          name: "systemProgram";
+          address: "11111111111111111111111111111111";
+        },
+      ];
+      args: [
+        {
+          name: "lookupAccounts";
+          type: {
+            vec: "pubkey";
+          };
+        },
+      ];
+    },
+    {
+      name: "processUndelegation";
+      discriminator: [196, 28, 41, 206, 48, 37, 51, 167];
+      accounts: [
+        {
+          name: "baseAccount";
+          writable: true;
+        },
+        {
+          name: "buffer";
+        },
+        {
+          name: "payer";
+          writable: true;
+        },
+        {
+          name: "systemProgram";
+        },
+      ];
+      args: [
+        {
+          name: "accountSeeds";
+          type: {
+            vec: "bytes";
+          };
+        },
+      ];
+    },
+    {
+      name: "removeReward";
+      discriminator: [208, 115, 143, 26, 159, 97, 59, 232];
+      accounts: [
+        {
+          name: "admin";
+          signer: true;
+        },
+        {
+          name: "rewardDistributor";
+        },
+        {
+          name: "rewardList";
+          writable: true;
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [114, 101, 119, 97, 114, 100, 95, 108, 105, 115, 116];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "transferLookupTable",
-          "pda": {
-            "seeds": [
+          name: "transferLookupTable";
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   116,
                   114,
                   97,
@@ -900,84 +747,75 @@ export type RewardsDelegatedVrf = {
                   97,
                   98,
                   108,
-                  101
-                ]
-              }
-            ]
-          }
+                  101,
+                ];
+              },
+            ];
+          };
         },
         {
-          "name": "destination"
+          name: "destination";
         },
         {
-          "name": "delegationRecordRewardList"
+          name: "delegationRecordRewardList";
         },
         {
-          "name": "magicFeeVault",
-          "writable": true
+          name: "magicFeeVault";
+          writable: true;
         },
         {
-          "name": "magicProgram",
-          "address": "Magic11111111111111111111111111111111111111"
+          name: "magicProgram";
+          address: "Magic11111111111111111111111111111111111111";
         },
         {
-          "name": "magicContext",
-          "writable": true,
-          "address": "MagicContext1111111111111111111111111111111"
-        }
-      ],
-      "args": [
+          name: "magicContext";
+          writable: true;
+          address: "MagicContext1111111111111111111111111111111";
+        },
+      ];
+      args: [
         {
-          "name": "rewardName",
-          "type": "string"
+          name: "rewardName";
+          type: "string";
         },
         {
-          "name": "mintToRemove",
-          "type": {
-            "option": "pubkey"
-          }
+          name: "mintToRemove";
+          type: {
+            option: "pubkey";
+          };
         },
         {
-          "name": "redemptionAmount",
-          "type": {
-            "option": "u64"
-          }
-        }
-      ]
+          name: "redemptionAmount";
+          type: {
+            option: "u64";
+          };
+        },
+      ];
     },
     {
-      "name": "requestRandomReward",
-      "discriminator": [
-        195,
-        78,
-        165,
-        47,
-        67,
-        12,
-        32,
-        10
-      ],
-      "accounts": [
+      name: "requestRandomReward";
+      discriminator: [195, 78, 165, 47, 67, 12, 32, 10];
+      accounts: [
         {
-          "name": "user"
+          name: "user";
         },
         {
-          "name": "admin",
-          "signer": true
+          name: "admin";
+          signer: true;
         },
         {
-          "name": "rewardDistributor"
+          name: "rewardDistributor";
         },
         {
-          "name": "rewardList"
+          name: "rewardList";
         },
         {
-          "name": "transferLookupTable",
-          "pda": {
-            "seeds": [
+          name: "transferLookupTable";
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   116,
                   114,
                   97,
@@ -998,545 +836,428 @@ export type RewardsDelegatedVrf = {
                   97,
                   98,
                   108,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "oracleQueue",
-          "writable": true,
-          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
-        },
-        {
-          "name": "delegationRecordRewardList"
-        },
-        {
-          "name": "programIdentity",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  100,
                   101,
-                  110,
-                  116,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
+                ];
+              },
+            ];
+          };
         },
         {
-          "name": "vrfProgram",
-          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+          name: "oracleQueue";
+          writable: true;
+          address: "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc";
         },
         {
-          "name": "slotHashes",
-          "address": "SysvarS1otHashes111111111111111111111111111"
+          name: "delegationRecordRewardList";
         },
         {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
+          name: "programIdentity";
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [105, 100, 101, 110, 116, 105, 116, 121];
+              },
+            ];
+          };
+        },
         {
-          "name": "clientSeed",
-          "type": "u8"
-        }
-      ]
+          name: "vrfProgram";
+          address: "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz";
+        },
+        {
+          name: "slotHashes";
+          address: "SysvarS1otHashes111111111111111111111111111";
+        },
+        {
+          name: "systemProgram";
+          address: "11111111111111111111111111111111";
+        },
+      ];
+      args: [
+        {
+          name: "clientSeed";
+          type: "u8";
+        },
+      ];
     },
     {
-      "name": "setAdmins",
-      "discriminator": [
-        152,
-        38,
-        44,
-        217,
-        51,
-        199,
-        77,
-        92
-      ],
-      "accounts": [
+      name: "setAdmins";
+      discriminator: [152, 38, 44, 217, 51, 199, 77, 92];
+      accounts: [
         {
-          "name": "admin",
-          "writable": true,
-          "signer": true
+          name: "admin";
+          writable: true;
+          signer: true;
         },
         {
-          "name": "rewardDistributor",
-          "writable": true
-        }
-      ],
-      "args": [
+          name: "rewardDistributor";
+          writable: true;
+        },
+      ];
+      args: [
         {
-          "name": "admins",
-          "type": {
-            "vec": "pubkey"
-          }
-        }
-      ]
+          name: "admins";
+          type: {
+            vec: "pubkey";
+          };
+        },
+      ];
     },
     {
-      "name": "setRewardList",
-      "discriminator": [
-        7,
-        241,
-        253,
-        206,
-        181,
-        172,
-        43,
-        128
-      ],
-      "accounts": [
+      name: "setRewardList";
+      discriminator: [7, 241, 253, 206, 181, 172, 43, 128];
+      accounts: [
         {
-          "name": "admin",
-          "writable": true,
-          "signer": true
+          name: "admin";
+          writable: true;
+          signer: true;
         },
         {
-          "name": "rewardDistributor"
+          name: "rewardDistributor";
         },
         {
-          "name": "rewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "rewardList";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  108,
-                  105,
-                  115,
-                  116
-                ]
+                kind: "const";
+                value: [114, 101, 119, 97, 114, 100, 95, 108, 105, 115, 116];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
+          name: "systemProgram";
+          address: "11111111111111111111111111111111";
+        },
+      ];
+      args: [
         {
-          "name": "startTimestamp",
-          "type": {
-            "option": "i64"
-          }
+          name: "startTimestamp";
+          type: {
+            option: "i64";
+          };
         },
         {
-          "name": "endTimestamp",
-          "type": {
-            "option": "i64"
-          }
+          name: "endTimestamp";
+          type: {
+            option: "i64";
+          };
         },
         {
-          "name": "globalRangeMin",
-          "type": {
-            "option": "u32"
-          }
+          name: "globalRangeMin";
+          type: {
+            option: "u32";
+          };
         },
         {
-          "name": "globalRangeMax",
-          "type": {
-            "option": "u32"
-          }
-        }
-      ]
+          name: "globalRangeMax";
+          type: {
+            option: "u32";
+          };
+        },
+      ];
     },
     {
-      "name": "setWhitelist",
-      "discriminator": [
-        69,
-        161,
-        114,
-        252,
-        244,
-        66,
-        197,
-        48
-      ],
-      "accounts": [
+      name: "setWhitelist";
+      discriminator: [69, 161, 114, 252, 244, 66, 197, 48];
+      accounts: [
         {
-          "name": "admin",
-          "writable": true,
-          "signer": true
+          name: "admin";
+          writable: true;
+          signer: true;
         },
         {
-          "name": "rewardDistributor",
-          "writable": true
-        }
-      ],
-      "args": [
+          name: "rewardDistributor";
+          writable: true;
+        },
+      ];
+      args: [
         {
-          "name": "whitelist",
-          "type": {
-            "vec": "pubkey"
-          }
-        }
-      ]
+          name: "whitelist";
+          type: {
+            vec: "pubkey";
+          };
+        },
+      ];
     },
     {
-      "name": "transferProgrammableNft",
-      "discriminator": [
-        160,
-        198,
-        250,
-        77,
-        171,
-        102,
-        253,
-        168
-      ],
-      "accounts": [
+      name: "transferProgrammableNft";
+      discriminator: [160, 198, 250, 77, 171, 102, 253, 168];
+      accounts: [
         {
-          "name": "tokenProgram"
+          name: "tokenProgram";
         },
         {
-          "name": "sourceTokenAccount",
-          "writable": true
+          name: "sourceTokenAccount";
+          writable: true;
         },
         {
-          "name": "mint"
+          name: "mint";
         },
         {
-          "name": "destinationTokenAccount",
-          "writable": true
+          name: "destinationTokenAccount";
+          writable: true;
         },
         {
-          "name": "sourceAuthority",
-          "docs": [
+          name: "sourceAuthority";
+          docs: [
             "Must be owned by this program and the Metaplex transfer will fail if",
-            "its derived PDA doesn't match `source_token_account.owner`."
-          ]
+            "its derived PDA doesn't match `source_token_account.owner`.",
+          ];
         },
         {
-          "name": "user"
+          name: "user";
         },
         {
-          "name": "associatedTokenProgram"
+          name: "associatedTokenProgram";
         },
         {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
+          name: "systemProgram";
+          address: "11111111111111111111111111111111";
         },
         {
-          "name": "tokenMetadataProgram"
+          name: "tokenMetadataProgram";
         },
         {
-          "name": "sysvarInstructionProgram"
+          name: "sysvarInstructionProgram";
         },
         {
-          "name": "authRuleProgram"
+          name: "authRuleProgram";
         },
         {
-          "name": "metadata"
+          name: "metadata";
         },
         {
-          "name": "edition"
+          name: "edition";
         },
         {
-          "name": "sourceTokenRecord"
+          name: "sourceTokenRecord";
         },
         {
-          "name": "destinationTokenRecord"
+          name: "destinationTokenRecord";
         },
         {
-          "name": "authRule"
+          name: "authRule";
         },
         {
-          "name": "sourceProgram",
-          "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
+          name: "sourceProgram";
+          address: "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y";
         },
         {
-          "name": "escrowAuth"
+          name: "escrowAuth";
         },
         {
-          "name": "escrow"
-        }
-      ],
-      "args": [
+          name: "escrow";
+        },
+      ];
+      args: [
         {
-          "name": "amount",
-          "type": "u64"
+          name: "amount";
+          type: "u64";
         },
         {
-          "name": "source",
-          "type": {
-            "defined": {
-              "name": "sourceKind"
-            }
-          }
-        }
-      ]
+          name: "source";
+          type: {
+            defined: {
+              name: "sourceKind";
+            };
+          };
+        },
+      ];
     },
     {
-      "name": "transferSplToken",
-      "discriminator": [
-        75,
-        213,
-        193,
-        42,
-        238,
-        168,
-        160,
-        138
-      ],
-      "accounts": [
+      name: "transferSplToken";
+      discriminator: [75, 213, 193, 42, 238, 168, 160, 138];
+      accounts: [
         {
-          "name": "tokenProgram"
+          name: "tokenProgram";
         },
         {
-          "name": "sourceTokenAccount",
-          "writable": true
+          name: "sourceTokenAccount";
+          writable: true;
         },
         {
-          "name": "mint"
+          name: "mint";
         },
         {
-          "name": "destinationTokenAccount",
-          "writable": true
+          name: "destinationTokenAccount";
+          writable: true;
         },
         {
-          "name": "sourceAuthority",
-          "docs": [
+          name: "sourceAuthority";
+          docs: [
             "Must be owned by this program and the SPL transfer will fail if its",
-            "derived PDA doesn't match `source_token_account.owner`."
-          ]
+            "derived PDA doesn't match `source_token_account.owner`.",
+          ];
         },
         {
-          "name": "user"
+          name: "user";
         },
         {
-          "name": "associatedTokenProgram"
+          name: "associatedTokenProgram";
         },
         {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
+          name: "systemProgram";
+          address: "11111111111111111111111111111111";
         },
         {
-          "name": "sourceProgram",
-          "address": "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
+          name: "sourceProgram";
+          address: "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y";
         },
         {
-          "name": "escrowAuth"
+          name: "escrowAuth";
         },
         {
-          "name": "escrow"
-        }
-      ],
-      "args": [
+          name: "escrow";
+        },
+      ];
+      args: [
         {
-          "name": "amount",
-          "type": "u64"
+          name: "amount";
+          type: "u64";
         },
         {
-          "name": "source",
-          "type": {
-            "defined": {
-              "name": "sourceKind"
-            }
-          }
-        }
-      ]
+          name: "source";
+          type: {
+            defined: {
+              name: "sourceKind";
+            };
+          };
+        },
+      ];
     },
     {
-      "name": "undelegateRewardList",
-      "discriminator": [
-        207,
-        3,
-        201,
-        148,
-        98,
-        2,
-        162,
-        111
-      ],
-      "accounts": [
+      name: "undelegateRewardList";
+      discriminator: [207, 3, 201, 148, 98, 2, 162, 111];
+      accounts: [
         {
-          "name": "payer",
-          "writable": true,
-          "signer": true
+          name: "payer";
+          writable: true;
+          signer: true;
         },
         {
-          "name": "rewardDistributor"
+          name: "rewardDistributor";
         },
         {
-          "name": "rewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "rewardList";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  108,
-                  105,
-                  115,
-                  116
-                ]
+                kind: "const";
+                value: [114, 101, 119, 97, 114, 100, 95, 108, 105, 115, 116];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "magicProgram",
-          "address": "Magic11111111111111111111111111111111111111"
+          name: "magicProgram";
+          address: "Magic11111111111111111111111111111111111111";
         },
         {
-          "name": "magicContext",
-          "writable": true,
-          "address": "MagicContext1111111111111111111111111111111"
-        }
-      ],
-      "args": []
+          name: "magicContext";
+          writable: true;
+          address: "MagicContext1111111111111111111111111111111";
+        },
+      ];
+      args: [];
     },
     {
-      "name": "updateReward",
-      "discriminator": [
-        62,
-        165,
-        125,
-        122,
-        39,
-        204,
-        160,
-        29
-      ],
-      "accounts": [
+      name: "updateReward";
+      discriminator: [62, 165, 125, 122, 39, 204, 160, 29];
+      accounts: [
         {
-          "name": "admin",
-          "signer": true
+          name: "admin";
+          signer: true;
         },
         {
-          "name": "rewardDistributor"
+          name: "rewardDistributor";
         },
         {
-          "name": "rewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "rewardList";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  108,
-                  105,
-                  115,
-                  116
-                ]
+                kind: "const";
+                value: [114, 101, 119, 97, 114, 100, 95, 108, 105, 115, 116];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "mint",
-          "optional": true
+          name: "mint";
+          optional: true;
         },
         {
-          "name": "tokenAccount",
-          "optional": true
-        }
-      ],
-      "args": [
+          name: "tokenAccount";
+          optional: true;
+        },
+      ];
+      args: [
         {
-          "name": "currentRewardName",
-          "type": "string"
+          name: "currentRewardName";
+          type: "string";
         },
         {
-          "name": "updatedRewardName",
-          "type": {
-            "option": "string"
-          }
+          name: "updatedRewardName";
+          type: {
+            option: "string";
+          };
         },
         {
-          "name": "rewardAmount",
-          "type": {
-            "option": "u64"
-          }
+          name: "rewardAmount";
+          type: {
+            option: "u64";
+          };
         },
         {
-          "name": "drawRangeMin",
-          "type": {
-            "option": "u32"
-          }
+          name: "drawRangeMin";
+          type: {
+            option: "u32";
+          };
         },
         {
-          "name": "drawRangeMax",
-          "type": {
-            "option": "u32"
-          }
-        }
-      ]
+          name: "drawRangeMax";
+          type: {
+            option: "u32";
+          };
+        },
+      ];
     },
     {
-      "name": "whitelistTransfer",
-      "discriminator": [
-        254,
-        207,
-        47,
-        182,
-        77,
-        243,
-        66,
-        148
-      ],
-      "accounts": [
+      name: "whitelistTransfer";
+      discriminator: [254, 207, 47, 182, 77, 243, 66, 148];
+      accounts: [
         {
-          "name": "signer",
-          "signer": true
+          name: "signer";
+          signer: true;
         },
         {
-          "name": "rewardDistributor"
+          name: "rewardDistributor";
         },
         {
-          "name": "whitelistDistributor",
-          "pda": {
-            "seeds": [
+          name: "whitelistDistributor";
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   119,
                   104,
                   105,
@@ -1557,51 +1278,39 @@ export type RewardsDelegatedVrf = {
                   117,
                   116,
                   111,
-                  114
-                ]
+                  114,
+                ];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "rewardList",
-          "writable": true,
-          "pda": {
-            "seeds": [
+          name: "rewardList";
+          writable: true;
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  108,
-                  105,
-                  115,
-                  116
-                ]
+                kind: "const";
+                value: [114, 101, 119, 97, 114, 100, 95, 108, 105, 115, 116];
               },
               {
-                "kind": "account",
-                "path": "rewardDistributor"
-              }
-            ]
-          }
+                kind: "account";
+                path: "rewardDistributor";
+              },
+            ];
+          };
         },
         {
-          "name": "transferLookupTable",
-          "pda": {
-            "seeds": [
+          name: "transferLookupTable";
+          pda: {
+            seeds: [
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   116,
                   114,
                   97,
@@ -1622,26 +1331,26 @@ export type RewardsDelegatedVrf = {
                   97,
                   98,
                   108,
-                  101
-                ]
-              }
-            ]
-          }
+                  101,
+                ];
+              },
+            ];
+          };
         },
         {
-          "name": "mint"
+          name: "mint";
         },
         {
-          "name": "sourceTokenAccount",
-          "pda": {
-            "seeds": [
+          name: "sourceTokenAccount";
+          pda: {
+            seeds: [
               {
-                "kind": "account",
-                "path": "whitelistDistributor"
+                kind: "account";
+                path: "whitelistDistributor";
               },
               {
-                "kind": "const",
-                "value": [
+                kind: "const";
+                value: [
                   6,
                   221,
                   246,
@@ -1673,17 +1382,17 @@ export type RewardsDelegatedVrf = {
                   126,
                   255,
                   0,
-                  169
-                ]
+                  169,
+                ];
               },
               {
-                "kind": "account",
-                "path": "mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
+                kind: "account";
+                path: "mint";
+              },
+            ];
+            program: {
+              kind: "const";
+              value: [
                 140,
                 151,
                 37,
@@ -1715,492 +1424,456 @@ export type RewardsDelegatedVrf = {
                 219,
                 233,
                 248,
-                89
-              ]
-            }
-          }
+                89,
+              ];
+            };
+          };
         },
         {
-          "name": "user"
+          name: "user";
         },
         {
-          "name": "delegationRecordRewardList"
+          name: "delegationRecordRewardList";
         },
         {
-          "name": "magicFeeVault",
-          "writable": true
+          name: "magicFeeVault";
+          writable: true;
         },
         {
-          "name": "magicProgram",
-          "address": "Magic11111111111111111111111111111111111111"
+          name: "magicProgram";
+          address: "Magic11111111111111111111111111111111111111";
         },
         {
-          "name": "magicContext",
-          "writable": true,
-          "address": "MagicContext1111111111111111111111111111111"
-        }
-      ],
-      "args": [
+          name: "magicContext";
+          writable: true;
+          address: "MagicContext1111111111111111111111111111111";
+        },
+      ];
+      args: [
         {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    }
-  ],
-  "accounts": [
+          name: "amount";
+          type: "u64";
+        },
+      ];
+    },
+  ];
+  accounts: [
     {
-      "name": "rewardDistributor",
-      "discriminator": [
-        215,
-        10,
-        217,
-        199,
-        104,
-        194,
-        97,
-        227
-      ]
+      name: "rewardDistributor";
+      discriminator: [215, 10, 217, 199, 104, 194, 97, 227];
     },
     {
-      "name": "rewardsList",
-      "discriminator": [
-        68,
-        169,
-        237,
-        16,
-        133,
-        97,
-        67,
-        78
-      ]
+      name: "rewardsList";
+      discriminator: [68, 169, 237, 16, 133, 97, 67, 78];
     },
     {
-      "name": "transferLookupTable",
-      "discriminator": [
-        63,
-        196,
-        231,
-        155,
-        181,
-        204,
-        67,
-        62
-      ]
+      name: "transferLookupTable";
+      discriminator: [63, 196, 231, 155, 181, 204, 67, 62];
     },
     {
-      "name": "whitelistDistributor",
-      "discriminator": [
-        176,
-        131,
-        124,
-        116,
-        152,
-        164,
-        43,
-        76
-      ]
-    }
-  ],
-  "errors": [
+      name: "whitelistDistributor";
+      discriminator: [176, 131, 124, 116, 152, 164, 43, 76];
+    },
+  ];
+  errors: [
     {
-      "code": 6000,
-      "name": "rewardNotFound",
-      "msg": "Reward not found with the specified name"
+      code: 6000;
+      name: "rewardNotFound";
+      msg: "Reward not found with the specified name";
     },
     {
-      "code": 6001,
-      "name": "invalidTokenAccount",
-      "msg": "Invalid token account provided"
+      code: 6001;
+      name: "invalidTokenAccount";
+      msg: "Invalid token account provided";
     },
     {
-      "code": 6002,
-      "name": "tokenNotOwnedByDistributor",
-      "msg": "Token account is not owned by the reward distributor"
+      code: 6002;
+      name: "tokenNotOwnedByDistributor";
+      msg: "Token account is not owned by the reward distributor";
     },
     {
-      "code": 6003,
-      "name": "invalidTokenProgramOwner",
-      "msg": "Token account owner is not the token program"
+      code: 6003;
+      name: "invalidTokenProgramOwner";
+      msg: "Token account owner is not the token program";
     },
     {
-      "code": 6004,
-      "name": "invalidTokenAccountData",
-      "msg": "Failed to deserialize token account data"
+      code: 6004;
+      name: "invalidTokenAccountData";
+      msg: "Failed to deserialize token account data";
     },
     {
-      "code": 6005,
-      "name": "unauthorized",
-      "msg": "Unauthorized - caller is not an admin or whitelist member"
+      code: 6005;
+      name: "unauthorized";
+      msg: "Unauthorized - caller is not an admin or whitelist member";
     },
     {
-      "code": 6006,
-      "name": "collectionVerificationFailed",
-      "msg": "Collection cannot be verified in this instruction"
+      code: 6006;
+      name: "collectionVerificationFailed";
+      msg: "Collection cannot be verified in this instruction";
     },
     {
-      "code": 6007,
-      "name": "rewardNotStarted",
-      "msg": "Reward distribution time window has not started"
+      code: 6007;
+      name: "rewardNotStarted";
+      msg: "Reward distribution time window has not started";
     },
     {
-      "code": 6008,
-      "name": "rewardEnded",
-      "msg": "Reward distribution time window has ended"
+      code: 6008;
+      name: "rewardEnded";
+      msg: "Reward distribution time window has ended";
     },
     {
-      "code": 6009,
-      "name": "noRewardForValue",
-      "msg": "No rewards available for the drawn value"
+      code: 6009;
+      name: "noRewardForValue";
+      msg: "No rewards available for the drawn value";
     },
     {
-      "code": 6010,
-      "name": "redemptionLimitExceeded",
-      "msg": "Reward redemption limit has been exceeded"
+      code: 6010;
+      name: "redemptionLimitExceeded";
+      msg: "Reward redemption limit has been exceeded";
     },
     {
-      "code": 6011,
-      "name": "invalidRewardType",
-      "msg": "Invalid reward type for transfer"
+      code: 6011;
+      name: "invalidRewardType";
+      msg: "Invalid reward type for transfer";
     },
     {
-      "code": 6012,
-      "name": "rewardTypeMismatch",
-      "msg": "Reward type does not match the specified type with existing Reward"
+      code: 6012;
+      name: "rewardTypeMismatch";
+      msg: "Reward type does not match the specified type with existing Reward";
     },
     {
-      "code": 6013,
-      "name": "unsupportedAssetType",
-      "msg": "Unsupported asset type - only Fungible, NonFungible, and ProgrammableNonFungible are supported"
+      code: 6013;
+      name: "unsupportedAssetType";
+      msg: "Unsupported asset type - only Fungible, NonFungible, and ProgrammableNonFungible are supported";
     },
     {
-      "code": 6014,
-      "name": "tokenCannotBeAdded",
-      "msg": "Token rewards cannot be added to existing reward"
+      code: 6014;
+      name: "tokenCannotBeAdded";
+      msg: "Token rewards cannot be added to existing reward";
     },
     {
-      "code": 6015,
-      "name": "rulesetMismatch",
-      "msg": "ProgrammableNft ruleset does not match the existing reward's ruleset"
+      code: 6015;
+      name: "rulesetMismatch";
+      msg: "ProgrammableNft ruleset does not match the existing reward's ruleset";
     },
     {
-      "code": 6016,
-      "name": "missingMint",
-      "msg": "Missing required mint"
+      code: 6016;
+      name: "missingMint";
+      msg: "Missing required mint";
     },
     {
-      "code": 6017,
-      "name": "missingRewardParameters",
-      "msg": "Missing required reward parameters for new reward creation"
+      code: 6017;
+      name: "missingRewardParameters";
+      msg: "Missing required reward parameters for new reward creation";
     },
     {
-      "code": 6018,
-      "name": "missingDrawRangeMin",
-      "msg": "Missing required parameter: draw_range_min"
+      code: 6018;
+      name: "missingDrawRangeMin";
+      msg: "Missing required parameter: draw_range_min";
     },
     {
-      "code": 6019,
-      "name": "missingDrawRangeMax",
-      "msg": "Missing required parameter: draw_range_max"
+      code: 6019;
+      name: "missingDrawRangeMax";
+      msg: "Missing required parameter: draw_range_max";
     },
     {
-      "code": 6020,
-      "name": "missingRewardAmount",
-      "msg": "Missing required parameter: reward_amount"
+      code: 6020;
+      name: "missingRewardAmount";
+      msg: "Missing required parameter: reward_amount";
     },
     {
-      "code": 6021,
-      "name": "missingRedemptionLimit",
-      "msg": "Missing required parameter: redemption_limit"
+      code: 6021;
+      name: "missingRedemptionLimit";
+      msg: "Missing required parameter: redemption_limit";
     },
     {
-      "code": 6022,
-      "name": "missingMetadataForProgrammableNft",
-      "msg": "ProgrammableNft requires metadata account"
+      code: 6022;
+      name: "missingMetadataForProgrammableNft";
+      msg: "ProgrammableNft requires metadata account";
     },
     {
-      "code": 6023,
-      "name": "rewardRangeExceedsGlobalBounds",
-      "msg": "Reward range exceeds global bounds"
+      code: 6023;
+      name: "rewardRangeExceedsGlobalBounds";
+      msg: "Reward range exceeds global bounds";
     },
     {
-      "code": 6024,
-      "name": "rewardRangesOverlap",
-      "msg": "Reward ranges overlap"
+      code: 6024;
+      name: "rewardRangesOverlap";
+      msg: "Reward ranges overlap";
     },
     {
-      "code": 6025,
-      "name": "rewardRangeMismatch",
-      "msg": "Provided draw range does not match the existing reward range"
+      code: 6025;
+      name: "rewardRangeMismatch";
+      msg: "Provided draw range does not match the existing reward range";
     },
     {
-      "code": 6026,
-      "name": "rewardAmountMismatch",
-      "msg": "Provided reward amount does not match the existing reward amount"
+      code: 6026;
+      name: "rewardAmountMismatch";
+      msg: "Provided reward amount does not match the existing reward amount";
     },
     {
-      "code": 6027,
-      "name": "duplicateRewardName",
-      "msg": "Reward name is already used by another reward"
+      code: 6027;
+      name: "duplicateRewardName";
+      msg: "Reward name is already used by another reward";
     },
     {
-      "code": 6028,
-      "name": "missingRedemptionsAdded",
-      "msg": "Existing token rewards require a redemption increment to be provided"
+      code: 6028;
+      name: "missingRedemptionsAdded";
+      msg: "Existing token rewards require a redemption increment to be provided";
     },
     {
-      "code": 6029,
-      "name": "mintNotFoundInReward",
-      "msg": "Mint not found in reward"
+      code: 6029;
+      name: "mintNotFoundInReward";
+      msg: "Mint not found in reward";
     },
     {
-      "code": 6030,
-      "name": "insufficientRedemptionLimit",
-      "msg": "Insufficient redemption limit to remove"
+      code: 6030;
+      name: "insufficientRedemptionLimit";
+      msg: "Insufficient redemption limit to remove";
     },
     {
-      "code": 6031,
-      "name": "invalidDrawRange",
-      "msg": "Invalid draw range: draw_range_min must be less than or equal to draw_range_max"
+      code: 6031;
+      name: "invalidDrawRange";
+      msg: "Invalid draw range: draw_range_min must be less than or equal to draw_range_max";
     },
     {
-      "code": 6032,
-      "name": "invalidRedemptionState",
-      "msg": "Invalid redemption state: redemption_count cannot exceed redemption_limit"
+      code: 6032;
+      name: "invalidRedemptionState";
+      msg: "Invalid redemption state: redemption_count cannot exceed redemption_limit";
     },
     {
-      "code": 6033,
-      "name": "invalidRewardAmount",
-      "msg": "Invalid reward amount: must be greater than 0"
+      code: 6033;
+      name: "invalidRewardAmount";
+      msg: "Invalid reward amount: must be greater than 0";
     },
     {
-      "code": 6034,
-      "name": "insufficientTokenBalanceForReward",
-      "msg": "Distributor token account does not hold enough tokens for the requested reward inventory"
+      code: 6034;
+      name: "insufficientTokenBalanceForReward";
+      msg: "Distributor token account does not hold enough tokens for the requested reward inventory";
     },
     {
-      "code": 6035,
-      "name": "arithmeticOverflow",
-      "msg": "Arithmetic overflow while calculating reward inventory requirements"
+      code: 6035;
+      name: "arithmeticOverflow";
+      msg: "Arithmetic overflow while calculating reward inventory requirements";
     },
     {
-      "code": 6036,
-      "name": "nftMintAlreadyAssigned",
-      "msg": "NFT mint is already used by another reward"
+      code: 6036;
+      name: "nftMintAlreadyAssigned";
+      msg: "NFT mint is already used by another reward";
     },
     {
-      "code": 6037,
-      "name": "rewardListAlreadyInitialized",
-      "msg": "Reward list rewards can only be initialized once"
+      code: 6037;
+      name: "rewardListAlreadyInitialized";
+      msg: "Reward list rewards can only be initialized once";
     },
     {
-      "code": 6038,
-      "name": "insufficientRewardMints",
-      "msg": "Reward does not have enough remaining mints for its remaining redemptions"
+      code: 6038;
+      name: "insufficientRewardMints";
+      msg: "Reward does not have enough remaining mints for its remaining redemptions";
     },
     {
-      "code": 6039,
-      "name": "missingMintAccountForReward",
-      "msg": "Missing mint account for reward inventory validation"
+      code: 6039;
+      name: "missingMintAccountForReward";
+      msg: "Missing mint account for reward inventory validation";
     },
     {
-      "code": 6040,
-      "name": "mintAlreadyInReward",
-      "msg": "Mint is already part of the existing reward"
+      code: 6040;
+      name: "mintAlreadyInReward";
+      msg: "Mint is already part of the existing reward";
     },
     {
-      "code": 6041,
-      "name": "invalidDelegationRecord",
-      "msg": "Failed to deserialize the delegation record for reward_list"
-    }
-  ],
-  "types": [
+      code: 6041;
+      name: "invalidDelegationRecord";
+      msg: "Failed to deserialize the delegation record for reward_list";
+    },
+  ];
+  types: [
     {
-      "name": "reward",
-      "type": {
-        "kind": "struct",
-        "fields": [
+      name: "reward";
+      type: {
+        kind: "struct";
+        fields: [
           {
-            "name": "name",
-            "type": "string"
+            name: "name";
+            type: "string";
           },
           {
-            "name": "drawRangeMin",
-            "type": "u32"
+            name: "drawRangeMin";
+            type: "u32";
           },
           {
-            "name": "drawRangeMax",
-            "type": "u32"
+            name: "drawRangeMax";
+            type: "u32";
           },
           {
-            "name": "rewardType",
-            "type": {
-              "defined": {
-                "name": "rewardType"
-              }
-            }
+            name: "rewardType";
+            type: {
+              defined: {
+                name: "rewardType";
+              };
+            };
           },
           {
-            "name": "rewardMints",
-            "type": {
-              "vec": "pubkey"
-            }
+            name: "rewardMints";
+            type: {
+              vec: "pubkey";
+            };
           },
           {
-            "name": "rewardAmount",
-            "type": "u64"
+            name: "rewardAmount";
+            type: "u64";
           },
           {
-            "name": "redemptionCount",
-            "type": "u64"
+            name: "redemptionCount";
+            type: "u64";
           },
           {
-            "name": "redemptionLimit",
-            "type": "u64"
+            name: "redemptionLimit";
+            type: "u64";
           },
           {
-            "name": "additionalPubkeys",
-            "type": {
-              "vec": "pubkey"
-            }
-          }
-        ]
-      }
+            name: "additionalPubkeys";
+            type: {
+              vec: "pubkey";
+            };
+          },
+        ];
+      };
     },
     {
-      "name": "rewardDistributor",
-      "type": {
-        "kind": "struct",
-        "fields": [
+      name: "rewardDistributor";
+      type: {
+        kind: "struct";
+        fields: [
           {
-            "name": "superAdmin",
-            "type": "pubkey"
+            name: "superAdmin";
+            type: "pubkey";
           },
           {
-            "name": "bump",
-            "type": "u8"
+            name: "bump";
+            type: "u8";
           },
           {
-            "name": "admins",
-            "type": {
-              "vec": "pubkey"
-            }
+            name: "admins";
+            type: {
+              vec: "pubkey";
+            };
           },
           {
-            "name": "whitelist",
-            "type": {
-              "vec": "pubkey"
-            }
-          }
-        ]
-      }
+            name: "whitelist";
+            type: {
+              vec: "pubkey";
+            };
+          },
+        ];
+      };
     },
     {
-      "name": "rewardType",
-      "type": {
-        "kind": "enum",
-        "variants": [
+      name: "rewardType";
+      type: {
+        kind: "enum";
+        variants: [
           {
-            "name": "splToken"
+            name: "splToken";
           },
           {
-            "name": "legacyNft"
+            name: "legacyNft";
           },
           {
-            "name": "programmableNft"
+            name: "programmableNft";
           },
           {
-            "name": "splToken2022"
+            name: "splToken2022";
           },
           {
-            "name": "compressedNft"
-          }
-        ]
-      }
+            name: "compressedNft";
+          },
+        ];
+      };
     },
     {
-      "name": "rewardsList",
-      "type": {
-        "kind": "struct",
-        "fields": [
+      name: "rewardsList";
+      type: {
+        kind: "struct";
+        fields: [
           {
-            "name": "rewardDistributor",
-            "type": "pubkey"
+            name: "rewardDistributor";
+            type: "pubkey";
           },
           {
-            "name": "bump",
-            "type": "u8"
+            name: "bump";
+            type: "u8";
           },
           {
-            "name": "rewards",
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "reward"
-                }
-              }
-            }
+            name: "rewards";
+            type: {
+              vec: {
+                defined: {
+                  name: "reward";
+                };
+              };
+            };
           },
           {
-            "name": "startTimestamp",
-            "type": "i64"
+            name: "startTimestamp";
+            type: "i64";
           },
           {
-            "name": "endTimestamp",
-            "type": "i64"
+            name: "endTimestamp";
+            type: "i64";
           },
           {
-            "name": "globalRangeMin",
-            "type": "u32"
+            name: "globalRangeMin";
+            type: "u32";
           },
           {
-            "name": "globalRangeMax",
-            "type": "u32"
-          }
-        ]
-      }
+            name: "globalRangeMax";
+            type: "u32";
+          },
+        ];
+      };
     },
     {
-      "name": "sourceKind",
-      "docs": [
+      name: "sourceKind";
+      docs: [
         "Which PDA the post-commit SPL/Metaplex CPI should sign as. Encoded in",
         "the post-commit instruction data so a single handler can sign as either",
         "RewardDistributor or WhitelistDistributor without needing the typed",
-        "Account in its context."
-      ],
-      "type": {
-        "kind": "enum",
-        "variants": [
+        "Account in its context.",
+      ];
+      type: {
+        kind: "enum";
+        variants: [
           {
-            "name": "rewardDistributor"
+            name: "rewardDistributor";
           },
           {
-            "name": "whitelistDistributor"
-          }
-        ]
-      }
+            name: "whitelistDistributor";
+          },
+        ];
+      };
     },
     {
-      "name": "transferLookupTable",
-      "type": {
-        "kind": "struct",
-        "fields": [
+      name: "transferLookupTable";
+      type: {
+        kind: "struct";
+        fields: [
           {
-            "name": "bump",
-            "type": "u8"
+            name: "bump";
+            type: "u8";
           },
           {
-            "name": "lookupAccounts",
-            "type": {
-              "vec": "pubkey"
-            }
-          }
-        ]
-      }
+            name: "lookupAccounts";
+            type: {
+              vec: "pubkey";
+            };
+          },
+        ];
+      };
     },
     {
-      "name": "whitelistDistributor",
-      "docs": [
+      name: "whitelistDistributor";
+      docs: [
         "Auxiliary PDA owned by the rewards program that holds a separate token",
         "bag for whitelist-driven payouts. Lives at",
         "`[WHITELIST_DISTRIBUTOR_SEED, reward_distributor]` so each reward",
@@ -2208,21 +1881,21 @@ export type RewardsDelegatedVrf = {
         "and `whitelist_transfer` signs CPIs with the bump stored here.",
         "",
         "Authority to move funds is delegated to either the distributor's admins",
-        "(and super_admin) OR the addresses in `reward_distributor.whitelist`."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
+        "(and super_admin) OR the addresses in `reward_distributor.whitelist`.",
+      ];
+      type: {
+        kind: "struct";
+        fields: [
           {
-            "name": "rewardDistributor",
-            "type": "pubkey"
+            name: "rewardDistributor";
+            type: "pubkey";
           },
           {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
-    }
-  ]
+            name: "bump";
+            type: "u8";
+          },
+        ];
+      };
+    },
+  ];
 };

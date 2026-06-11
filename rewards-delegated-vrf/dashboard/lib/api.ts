@@ -39,7 +39,7 @@ export async function fetchWalletRewardData(wallet: PublicKey) {
 export async function getTokenBalance(
   connection: Connection,
   mint: PublicKey,
-  owner: PublicKey
+  owner: PublicKey,
 ): Promise<number> {
   try {
     const tokenAccount = getAssociatedTokenAddressSync(mint, owner, true);
@@ -89,7 +89,9 @@ export function getRewardStats(rewardListPda: any) {
   }
 
   const utilizationPercent =
-    totalCapacity > 0n ? (Number(totalRedeemed) / Number(totalCapacity)) * 100 : 0;
+    totalCapacity > 0n
+      ? (Number(totalRedeemed) / Number(totalCapacity)) * 100
+      : 0;
 
   return {
     totalRewards: rewardListPda.rewards.length,
@@ -102,14 +104,11 @@ export function getRewardStats(rewardListPda: any) {
 /**
  * Check if a user is admin of distributor
  */
-export function isAdmin(
-  userAddress: PublicKey,
-  distributor: any
-): boolean {
+export function isAdmin(userAddress: PublicKey, distributor: any): boolean {
   if (!distributor) return false;
   if (distributor.superAdmin.equals(userAddress)) return true;
   return distributor.admins.some((admin: PublicKey) =>
-    admin.equals(userAddress)
+    admin.equals(userAddress),
   );
 }
 
@@ -118,11 +117,11 @@ export function isAdmin(
  */
 export function isWhitelisted(
   userAddress: PublicKey,
-  distributor: any
+  distributor: any,
 ): boolean {
   if (!distributor || !distributor.whitelist) return false;
   return distributor.whitelist.some((item: PublicKey) =>
-    item.equals(userAddress)
+    item.equals(userAddress),
   );
 }
 
@@ -148,22 +147,19 @@ export function getAvailableRewards(rewardListPda: any): any[] {
 
   return rewardListPda.rewards.filter(
     (reward: any) =>
-      BigInt(reward.redemptionCount) < BigInt(reward.redemptionLimit)
+      BigInt(reward.redemptionCount) < BigInt(reward.redemptionLimit),
   );
 }
 
 /**
  * Search for rewards by name
  */
-export function searchRewards(
-  rewardListPda: any,
-  query: string
-): any[] {
+export function searchRewards(rewardListPda: any, query: string): any[] {
   if (!rewardListPda || !rewardListPda.rewards) return [];
 
   const lowerQuery = query.toLowerCase();
   return rewardListPda.rewards.filter((reward: any) =>
-    reward.name.toLowerCase().includes(lowerQuery)
+    reward.name.toLowerCase().includes(lowerQuery),
   );
 }
 
@@ -175,7 +171,7 @@ export function getRewardByName(rewardListPda: any, name: string): any | null {
 
   return (
     rewardListPda.rewards.find(
-      (reward: any) => reward.name.toLowerCase() === name.toLowerCase()
+      (reward: any) => reward.name.toLowerCase() === name.toLowerCase(),
     ) || null
   );
 }
@@ -185,12 +181,12 @@ export function getRewardByName(rewardListPda: any, name: string): any | null {
  */
 export function filterRewardsByType(
   rewardListPda: any,
-  rewardTypeName: string
+  rewardTypeName: string,
 ): any[] {
   if (!rewardListPda || !rewardListPda.rewards) return [];
 
   const searchTerm = rewardTypeName.toLowerCase();
-  
+
   return rewardListPda.rewards.filter((reward: any) => {
     const typeName = Object.keys(reward.rewardType)[0]?.toLowerCase() || "";
     return typeName.includes(searchTerm);

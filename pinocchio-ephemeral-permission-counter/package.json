@@ -4,10 +4,14 @@
   "description": "Tests for pinocchio-ephemeral-permission-counter program",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run tests/",
+    "test:local": ". ../scripts/local-env.sh && npx vitest run tests/",
+    "setup": "cd .. && SETUP_ONLY=1 ./test-locally.sh pinocchio-ephemeral-permission-counter",
+    "test": "yarn test:local",
     "test:watch": "vitest watch tests/",
     "build": "cargo build-sbf",
-    "check": "cargo check"
+    "check": "cargo check",
+    "lint": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
+    "lint:fix": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
   },
   "keywords": [
     "solana",
@@ -30,6 +34,7 @@
     "ts-node": "^10.9.0",
     "tweetnacl": "^1.0.3",
     "typescript": "^5.0.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "prettier": "^3.5.3"
   }
 }

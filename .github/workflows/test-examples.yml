@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-examples:
     runs-on: ubuntu-latest
@@ -80,6 +84,9 @@ jobs:
               "$(solana-keygen pubkey ~/.config/solana/id.json)" \
               --url devnet || echo "Airdrop failed (faucet rate-limited or down) — continuing."
           fi
+
+      - name: Check formatting
+        run: bash check-prettier.sh
 
       - name: Run test-locally.sh
         env:

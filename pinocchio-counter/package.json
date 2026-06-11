@@ -5,13 +5,15 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run tests/",
-    "test:local": "npx vitest run tests/kit/",
+    "test:local": ". ../scripts/local-env.sh && npx vitest run tests/kit/",
+    "setup": "cd .. && SETUP_ONLY=1 ./test-locally.sh pinocchio-counter",
     "test:watch": "vitest watch tests/",
-    "test:legacy": "ts-node tests/client.test.ts",
     "build": "cargo build-sbf --features logging",
     "build:release": "cargo build --release",
     "build:dev": "cargo build",
-    "check": "cargo check"
+    "check": "cargo check",
+    "lint": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
+    "lint:fix": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
   },
   "keywords": [
     "solana",
@@ -25,7 +27,8 @@
     "@types/node": "^20.0.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0",
-    "vitest": "^0.34.0"
+    "vitest": "^0.34.0",
+    "prettier": "^3.5.3"
   },
   "dependencies": {
     "@magicblock-labs/ephemeral-rollups-kit": "0.14.3",
