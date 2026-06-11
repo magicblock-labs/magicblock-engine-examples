@@ -37,6 +37,10 @@ SKIP_TEE_TESTS="${SKIP_TEE_TESTS:-0}"
 SKIP_REGULAR_TESTS="${SKIP_REGULAR_TESTS:-0}"
 SKIP_VRF_TESTS="${SKIP_VRF_TESTS:-0}"
 FAIL_FAST="${FAIL_FAST:-1}"
+# EXACT_MATCH=1 turns TEST_FILTER into an exact project-name match instead of the
+# default substring match. Used by scripts/test-example.sh to select a single
+# example without over-selecting siblings (e.g. roll-dice vs pinocchio-roll-dice).
+EXACT_MATCH="${EXACT_MATCH:-0}"
 
 if [ -n "$TEST_FILTER" ]; then
   echo "Filter: only running tests matching '$TEST_FILTER'"
@@ -62,6 +66,18 @@ else
   reverse_lines() { tail -r "$@"; }
 fi
 
+# True when a project name passes the active TEST_FILTER. With no filter set,
+# everything matches. EXACT_MATCH=1 requires an exact name match; otherwise the
+# filter is a substring match (the historical behavior).
+matches_filter() {
+  [ -z "$TEST_FILTER" ] && return 0
+  if [ "$EXACT_MATCH" = "1" ]; then
+    [ "$1" = "$TEST_FILTER" ]
+  else
+    [[ "$1" == *"$TEST_FILTER"* ]]
+  fi
+}
+
 # Run one example's local test. Takes only the project name, which is also the
 # directory name. Building + preloading the program already happened up front
 # (parallel build phase + validator preload), so this just runs `yarn test:local`.
@@ -80,8 +96,8 @@ run_test() {
       ;;
   esac
 
-  # Honor the script's TEST_FILTER substring (first CLI arg).
-  if [ -n "$TEST_FILTER" ] && [[ "$test_name" != *"$TEST_FILTER"* ]]; then
+  # Honor the script's TEST_FILTER (first CLI arg); see matches_filter.
+  if ! matches_filter "$test_name"; then
     return
   fi
 
@@ -400,20 +416,22 @@ if [ ! -f ~/.config/solana/id.json ]; then
 fi
 
 # ------------------------------------------------------------------------------
-# Example projects, grouped by the test phase that runs them. The directory name
-# IS the project name (and the argument passed to run_test). Each project exposes
-# `yarn build` (compile only) and `yarn test:local` (the local test subset).
+# Example projects, grouped by the test phase that runs them. Defined in
+# scripts/projects.sh (single source of truth, shared with scripts/test-example.sh
+# and the CI matrix). The directory name IS the project name (and the argument
+# passed to run_test). Each project exposes `yarn build` (compile only) and
+# `yarn test:local` (the local test subset).
 # ------------------------------------------------------------------------------
-REGULAR_PROJECTS=(anchor-counter crank-counter dummy-token-transfer ephemeral-account-chats magic-actions pinocchio-counter rust-counter session-keys spl-tokens)
-VRF_PROJECTS=(rewards-delegated-vrf roll-dice pinocchio-roll-dice)
-TEE_PROJECTS=(private-counter pinocchio-private-counter rock-paper-scissor)
+PROJECTS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/projects.sh
+. "$PROJECTS_SCRIPT_DIR/scripts/projects.sh"
 
 # Set of projects to build = everything the enabled test phases will run, honoring
 # the same TEST_FILTER substring the tests use.
 BUILD_PROJECTS=()
 add_build_projects() {
   for p in "$@"; do
-    if [ -n "$TEST_FILTER" ] && [[ "$p" != *"$TEST_FILTER"* ]]; then
+    if ! matches_filter "$p"; then
       continue
     fi
     BUILD_PROJECTS+=("$p")
