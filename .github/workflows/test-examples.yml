@@ -53,7 +53,7 @@ jobs:
     needs: list-examples
     name: test (${{ matrix.example }})
     runs-on:
-      labels: ubuntu-24.04-16core
+      labels: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
