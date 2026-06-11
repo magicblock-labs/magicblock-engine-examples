@@ -5,7 +5,7 @@ use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::{CallHandler, MagicIntentBundleBuilder};
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 
-declare_id!("HnAdFav4AoQV8WUDt6UQjwR8nNPCJRZBGaac61VUqMC6");
+declare_id!("9K7ybJnAYtVY7RQU8ELwLqCFeXi6e8FD33Yq8ZnjDsi9");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 pub const LEADERBOARD_SEED: &[u8] = b"leaderboard";

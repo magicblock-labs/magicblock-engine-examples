@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 
 // Anchor deserializes enums as { variantName: {} }
-export type RewardType = 
+export type RewardType =
   | { splToken: {} }
   | { legacyNft: {} }
   | { programmableNft: {} }

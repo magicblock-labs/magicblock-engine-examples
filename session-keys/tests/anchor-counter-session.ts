@@ -6,7 +6,7 @@ import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { SessionTokenManager } from "@magicblock-labs/gum-sdk";
 import { initializeSessionSignerKeypair } from "../utils/initializeKeypair";
 
-const COUNTER_SEED = "counter"; 
+const COUNTER_SEED = "counter";
 
 describe.only("anchor-counter-session", () => {
   console.log("anchor-counter-session.ts");
@@ -21,7 +21,8 @@ describe.only("anchor-counter-session", () => {
         "https://devnet-as.magicblock.app/",
       {
         wsEndpoint:
-          process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
+          process.env.EPHEMERAL_WS_ENDPOINT ||
+          "wss://devnet-as.magicblock.app/",
       },
     ),
     anchor.Wallet.local(),
@@ -33,7 +34,6 @@ describe.only("anchor-counter-session", () => {
   );
   console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`);
 
-
   before(async function () {
     const balance = await provider.connection.getBalance(
       anchor.Wallet.local().publicKey,
@@ -41,7 +41,8 @@ describe.only("anchor-counter-session", () => {
     console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
   });
 
-  const program = anchor.workspace.AnchorCounterSession as Program<AnchorCounterSession>;
+  const program = anchor.workspace
+    .AnchorCounterSession as Program<AnchorCounterSession>;
   const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(COUNTER_SEED), provider.wallet.publicKey.toBuffer()],
     program.programId,
@@ -50,25 +51,32 @@ describe.only("anchor-counter-session", () => {
   console.log("Program ID: ", program.programId.toString());
   console.log("Counter PDA: ", counterPDA.toString());
 
-
   // Initialize Session Manager
   const sessionKeypair = initializeSessionSignerKeypair();
-  const sessionTokenManager = new SessionTokenManager(provider.wallet, provider.connection);
+  const sessionTokenManager = new SessionTokenManager(
+    provider.wallet,
+    provider.connection,
+  );
   const SESSION_TOKEN_SEED = "session_token_v2";
-  const sessionTokenPDA = web3.PublicKey.findProgramAddressSync([
-    Buffer.from(SESSION_TOKEN_SEED),
-    program.programId.toBytes(),
-    sessionKeypair.publicKey.toBytes(),
-    provider.wallet.publicKey.toBytes(),
-  ],sessionTokenManager.program.programId)[0];
-  console.log("Session Signer Public Key: ", sessionKeypair.publicKey.toString());
+  const sessionTokenPDA = web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from(SESSION_TOKEN_SEED),
+      program.programId.toBytes(),
+      sessionKeypair.publicKey.toBytes(),
+      provider.wallet.publicKey.toBytes(),
+    ],
+    sessionTokenManager.program.programId,
+  )[0];
+  console.log(
+    "Session Signer Public Key: ",
+    sessionKeypair.publicKey.toString(),
+  );
   console.log("Session Token PDA: ", sessionTokenPDA.toString());
 
-
-  it("Create session on Solana", async () => {
+  (it("Create session on Solana", async () => {
     const start = Date.now();
 
-    const topUp = true
+    const topUp = true;
     const validUntilBN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600); // valid for 1 hour
     // The sessionKeypair pays for: (a) rent-exempt minimum on its own system
     // account (~890,880 lamports), (b) tx fees on every session-signed tx, and
@@ -76,42 +84,48 @@ describe.only("anchor-counter-session", () => {
     // delegate ix's payer. 0.005 SOL covers all three with headroom.
     const topUpLamportsBN = new anchor.BN(0.005 * LAMPORTS_PER_SOL);
 
-    const tx = await sessionTokenManager.program.methods.createSessionV2(
-      topUp,
-      validUntilBN,
-      topUpLamportsBN
-    )
-    .accounts({
-      targetProgram: program.programId,
-      sessionSigner: sessionKeypair.publicKey,
-      feePayer: provider.wallet.publicKey,
-      authority: provider.wallet.publicKey,
-    })
-    .transaction();
+    const tx = await sessionTokenManager.program.methods
+      .createSessionV2(topUp, validUntilBN, topUpLamportsBN)
+      .accounts({
+        targetProgram: program.programId,
+        sessionSigner: sessionKeypair.publicKey,
+        feePayer: provider.wallet.publicKey,
+        authority: provider.wallet.publicKey,
+      })
+      .transaction();
     tx.feePayer = provider.wallet.publicKey;
 
-    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [provider.wallet.payer!, sessionKeypair], {
-      commitment: "confirmed"
-    });
+    const txHash = await sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [provider.wallet.payer!, sessionKeypair],
+      {
+        commitment: "confirmed",
+      },
+    );
     const duration = Date.now() - start;
     console.log(`${duration}ms (Base Layer) CreateSession txHash: ${txHash}`);
   }),
-
-  it("Initialize counter on Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
-      .initialize()
-      .accounts({
-        user: provider.wallet.publicKey,
-      })
-      .transaction();
-    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed"
-    });
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
-  });
+    it("Initialize counter on Solana", async () => {
+      const start = Date.now();
+      let tx = await program.methods
+        .initialize()
+        .accounts({
+          user: provider.wallet.publicKey,
+        })
+        .transaction();
+      const txHash = await sendAndConfirmTransaction(
+        provider.connection,
+        tx,
+        [provider.wallet.payer],
+        {
+          skipPreflight: true,
+          commitment: "confirmed",
+        },
+      );
+      const duration = Date.now() - start;
+      console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
+    }));
 
   it("Increase counter on Solana", async () => {
     const start = Date.now();
@@ -121,13 +135,17 @@ describe.only("anchor-counter-session", () => {
         counter: counterPDA,
         sessionToken: sessionTokenPDA,
         payer: sessionKeypair.publicKey,
-
       })
       .transaction();
-    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [sessionKeypair], {
-      skipPreflight: true,
-      commitment: "confirmed"
-    });
+    const txHash = await sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [sessionKeypair],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
     const duration = Date.now() - start;
     console.log(`${duration}ms (Base Layer) Increment txHash: ${txHash}`);
   });
@@ -142,8 +160,8 @@ describe.only("anchor-counter-session", () => {
     const validatorPubkey = process.env.VALIDATOR
       ? new web3.PublicKey(process.env.VALIDATOR)
       : isLocal
-      ? new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev")
-      : null;
+        ? new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev")
+        : null;
     const remainingAccounts = validatorPubkey
       ? [{ pubkey: validatorPubkey, isSigner: false, isWritable: false }]
       : [];
@@ -156,10 +174,15 @@ describe.only("anchor-counter-session", () => {
       })
       .remainingAccounts(remainingAccounts)
       .transaction();
-    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [sessionKeypair], {
-      skipPreflight: true,
-      commitment: "confirmed"
-    });
+    const txHash = await sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [sessionKeypair],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
     const duration = Date.now() - start;
     console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
   });
@@ -173,12 +196,15 @@ describe.only("anchor-counter-session", () => {
         sessionToken: sessionTokenPDA,
         payer: sessionKeypair.publicKey,
       })
-      .transaction()
-    const txHash = await sendAndConfirmTransaction(providerEphemeralRollup.connection, tx, [sessionKeypair],
+      .transaction();
+    const txHash = await sendAndConfirmTransaction(
+      providerEphemeralRollup.connection,
+      tx,
+      [sessionKeypair],
       {
         skipPreflight: true,
         commitment: "confirmed",
-      }
+      },
     );
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
@@ -191,14 +217,17 @@ describe.only("anchor-counter-session", () => {
       .accounts({
         counter: counterPDA,
         sessionToken: sessionTokenPDA,
-        payer: sessionKeypair.publicKey
+        payer: sessionKeypair.publicKey,
       })
       .transaction();
-    const txHash = await sendAndConfirmTransaction(providerEphemeralRollup.connection, tx, [sessionKeypair],
+    const txHash = await sendAndConfirmTransaction(
+      providerEphemeralRollup.connection,
+      tx,
+      [sessionKeypair],
       {
         skipPreflight: true,
         commitment: "confirmed",
-      }
+      },
     );
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Commit txHash: ${txHash}`);
@@ -223,14 +252,17 @@ describe.only("anchor-counter-session", () => {
       .accounts({
         counter: counterPDA,
         sessionToken: sessionTokenPDA,
-        payer: sessionKeypair.publicKey
+        payer: sessionKeypair.publicKey,
       })
       .transaction();
-    const txHash = await sendAndConfirmTransaction(providerEphemeralRollup.connection, tx, [sessionKeypair],
+    const txHash = await sendAndConfirmTransaction(
+      providerEphemeralRollup.connection,
+      tx,
+      [sessionKeypair],
       {
         skipPreflight: true,
         commitment: "confirmed",
-      }
+      },
     );
     const duration = Date.now() - start;
     console.log(`${duration}ms (ER) Increment and Commit txHash: ${txHash}`);
@@ -239,8 +271,8 @@ describe.only("anchor-counter-session", () => {
     const comfirmCommitStart = Date.now();
     // Await for the commitment on the base layer
     const txCommitSgn = await GetCommitmentSignature(
-        txHash,
-        providerEphemeralRollup.connection,
+      txHash,
+      providerEphemeralRollup.connection,
     );
     const commitDuration = Date.now() - comfirmCommitStart;
     console.log(
@@ -255,25 +287,29 @@ describe.only("anchor-counter-session", () => {
       .accounts({
         counter: counterPDA,
         sessionToken: sessionTokenPDA,
-        payer: sessionKeypair.publicKey
+        payer: sessionKeypair.publicKey,
       })
       .transaction();
-    const txHash = await sendAndConfirmTransaction(providerEphemeralRollup.connection, tx, [sessionKeypair],
+    const txHash = await sendAndConfirmTransaction(
+      providerEphemeralRollup.connection,
+      tx,
+      [sessionKeypair],
       {
         skipPreflight: true,
         commitment: "confirmed",
-      }
+      },
     );
     const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`);
-
+    console.log(
+      `${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`,
+    );
 
     // Get the commitment signature on the base layer
     const comfirmCommitStart = Date.now();
     // Await for the commitment on the base layer
     const txCommitSgn = await GetCommitmentSignature(
-        txHash,
-        providerEphemeralRollup.connection,
+      txHash,
+      providerEphemeralRollup.connection,
     );
     const commitDuration = Date.now() - comfirmCommitStart;
     console.log(
@@ -290,18 +326,21 @@ describe.only("anchor-counter-session", () => {
         feePayer: provider.wallet.publicKey,
         authority: provider.wallet.publicKey,
       })
-      .transaction()
+      .transaction();
     // While the session is still within `valid_until`, the program requires
     // `authority` to be a signer (see SessionError::InvalidAuthority). Sign
     // with the wallet (authority), not the session signer.
     tx.feePayer = provider.wallet.publicKey;
-    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [provider.wallet.payer!],
+    const txHash = await sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [provider.wallet.payer!],
       {
         skipPreflight: true,
         commitment: "confirmed",
-      }
+      },
     );
     const duration = Date.now() - start;
     console.log(`${duration}ms (Base Layer) revokeSession txHash: ${txHash}`);
-  })
+  });
 });

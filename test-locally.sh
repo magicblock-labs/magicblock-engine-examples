@@ -9,6 +9,7 @@ stty sane 2>/dev/null || true
 
 SOLANA_PID=""
 EPHEMERAL_PID=""
+QFS_PID=""
 VRF_PID=""
 VRF_ER_PID=""
 PASSED_TESTS=()
@@ -18,20 +19,43 @@ FAILED_TESTS_ERRORS=()
 TEST_COUNT=0
 
 # Optional first arg: substring filter for test names.
-#   bash test-locally.sh                       # runs everything
+#   bash test-locally.sh                           # runs everything
 #   bash test-locally.sh ephemeral-account-chats   # only that one
-#   bash test-locally.sh pinocchio             # matches both pinocchio-* examples
+#   bash test-locally.sh pinocchio                 # matches both pinocchio-* examples
 #
 # Optional env flags:
-#   SKIP_REGULAR_TESTS=1  skips non-VRF local tests
+#   SKIP_REGULAR_TESTS=1  skips regular local tests
 #   SKIP_VRF_TESTS=1      skips VRF oracle startup and VRF tests
 #   SKIP_TEE_TESTS=1      skips devnet TEE tests
+#   FAIL_FAST=0           keep running after a test fails (default: stop on the
+#                         first failure and exit non-zero — fail fast for CI)
 #   SETUP_ONLY=1          start the validators/oracles, then keep them running
 #                         until a key is pressed (no tests). Useful for poking at
 #                         the local cluster by hand.
 TEST_FILTER="${1:-}"
+SKIP_TEE_TESTS="${SKIP_TEE_TESTS:-0}"
+SKIP_REGULAR_TESTS="${SKIP_REGULAR_TESTS:-0}"
+SKIP_VRF_TESTS="${SKIP_VRF_TESTS:-0}"
+FAIL_FAST="${FAIL_FAST:-1}"
+# EXACT_MATCH=1 turns TEST_FILTER into an exact project-name match instead of the
+# default substring match. Used by scripts/test-example.sh to select a single
+# example without over-selecting siblings (e.g. roll-dice vs pinocchio-roll-dice).
+EXACT_MATCH="${EXACT_MATCH:-0}"
+
 if [ -n "$TEST_FILTER" ]; then
   echo "Filter: only running tests matching '$TEST_FILTER'"
+  echo ""
+fi
+if [ "$SKIP_REGULAR_TESTS" = "1" ]; then
+  echo "Filter: skipping regular tests"
+  echo ""
+fi
+if [ "$SKIP_VRF_TESTS" = "1" ]; then
+  echo "Filter: skipping VRF tests"
+  echo ""
+fi
+if [ "$SKIP_TEE_TESTS" = "1" ]; then
+  echo "Filter: skipping TEE tests"
   echo ""
 fi
 
@@ -42,14 +66,38 @@ else
   reverse_lines() { tail -r "$@"; }
 fi
 
-# Test runner function
+# True when a project name passes the active TEST_FILTER. With no filter set,
+# everything matches. EXACT_MATCH=1 requires an exact name match; otherwise the
+# filter is a substring match (the historical behavior).
+matches_filter() {
+  [ -z "$TEST_FILTER" ] && return 0
+  if [ "$EXACT_MATCH" = "1" ]; then
+    [ "$1" = "$TEST_FILTER" ]
+  else
+    [[ "$1" == *"$TEST_FILTER"* ]]
+  fi
+}
+
+# Run one example's local test. Takes only the project name, which is also the
+# directory name. Building + preloading the program already happened up front
+# (parallel build phase + validator preload), so this just runs `yarn test:local`.
 run_test() {
   local test_name=$1
-  local test_command=$2
+  local test_dir="$test_name"
   local test_log="/tmp/test_${test_name}.log"
+  local test_command="cd \"$test_dir\" && yarn test:local"
 
-  # Honor the script's TEST_FILTER substring (first CLI arg).
-  if [ -n "$TEST_FILTER" ] && [[ "$test_name" != *"$TEST_FILTER"* ]]; then
+  # TEE examples reach the ER through the QFS, so they read TEE_PROVIDER_ENDPOINT/
+  # TEE_WS_ENDPOINT. Expose those to just those runs (every other endpoint and the
+  # validator id are exported globally and shared by all tests).
+  case " ${TEE_PROJECTS[*]} " in
+    *" $test_name "*)
+      test_command="TEE_PROVIDER_ENDPOINT=$QFS_ENDPOINT TEE_WS_ENDPOINT=$QFS_WS_ENDPOINT $test_command"
+      ;;
+  esac
+
+  # Honor the script's TEST_FILTER (first CLI arg); see matches_filter.
+  if ! matches_filter "$test_name"; then
     return
   fi
 
@@ -59,12 +107,10 @@ run_test() {
   echo "========================================"
   echo "Testing: $TEST_COUNT. $test_name"
   echo "========================================"
-  # Test target summary — pulled from the env this script exports.
   # Program ID is best-effort: scans the project's target/deploy for the first keypair.
-  local project_dir="${test_name%% *}"  # take token before first space (e.g. "roll-dice + ...")
-  local program_id="(deploy first)"
+  local program_id="(unknown)"
   local keypair
-  keypair=$(ls "$project_dir"/target/deploy/*-keypair.json 2>/dev/null | head -1)
+  keypair=$(ls "$test_dir"/target/deploy/*-keypair.json 2>/dev/null | head -1)
   if [ -n "$keypair" ] && command -v solana-keygen >/dev/null 2>&1; then
     program_id=$(solana-keygen pubkey "$keypair" 2>/dev/null || echo "(unreadable)")
   fi
@@ -73,14 +119,9 @@ run_test() {
   if [ -f "$HOME/.config/solana/id.json" ] && command -v solana-keygen >/dev/null 2>&1; then
     wallet=$(solana-keygen pubkey "$HOME/.config/solana/id.json" 2>/dev/null || echo "(unreadable)")
   fi
-  # Pick env values out of the test_command's inline prefix (TEE_ENV) — those
-  # override the globally exported localnet defaults for this specific run.
-  local cmd_base="$(echo "$test_command" | grep -oE 'PROVIDER_ENDPOINT=[^ ]+' | head -1 | cut -d= -f2-)"
-  local cmd_er="$(echo "$test_command" | grep -oE 'EPHEMERAL_PROVIDER_ENDPOINT=[^ ]+' | head -1 | cut -d= -f2-)"
-  local cmd_validator="$(echo "$test_command" | grep -oE 'VALIDATOR=[A-Za-z0-9]+' | head -1 | cut -d= -f2-)"
-  echo "Base Layer Endpoint: ${cmd_base:-${PROVIDER_ENDPOINT:-http://localhost:8899}}"
-  echo "ER Endpoint:         ${cmd_er:-${EPHEMERAL_PROVIDER_ENDPOINT:-${TEE_PROVIDER_ENDPOINT:-http://localhost:7799}}}"
-  echo "ER Validator:        ${cmd_validator:-${VALIDATOR:-mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev}}"
+  echo "Base Layer Endpoint: ${PROVIDER_ENDPOINT:-http://localhost:8899}"
+  echo "ER Endpoint:         ${EPHEMERAL_PROVIDER_ENDPOINT:-http://localhost:7799}"
+  echo "ER Validator:        ${VALIDATOR:-mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev}"
   echo "Wallet:              $wallet"
   echo "Program ID:          $program_id"
   echo ""
@@ -175,7 +216,7 @@ run_test() {
 
     spinner_idx=$(( (spinner_idx + 1) % 10 ))
     dots_idx=$(( (dots_idx + 1) % 3 ))
-    sleep 0.5
+    sleep 5
   done
   
   # Wait for completion and capture exit code as the primary failure signal.
@@ -294,10 +335,28 @@ run_test() {
   fi
   echo "========================================"
   echo ""
+
+  # Fail fast: stop the whole run on the first failure (unless FAIL_FAST=0).
+  # The detailed error report below is normally printed at the end; print it
+  # here too so a fail-fast abort still surfaces why we stopped. Exiting triggers
+  # cleanup() (EXIT trap), which stops the validators and propagates code 1.
+  if [ "$test_failed" = true ] && [ "$FAIL_FAST" != "0" ]; then
+    echo "FAIL_FAST: stopping after first failure ($test_name)."
+    echo "  (set FAIL_FAST=0 to run the remaining tests anyway)"
+    echo ""
+    echo "--- $test_name ---"
+    echo "$error_details"
+    echo ""
+    exit 1
+  fi
 }
 
 # Cleanup function
 cleanup() {
+  # Capture the status that triggered this trap *before* running any cleanup
+  # commands (which would clobber $?). We re-exit with it so a failed test or an
+  # early `exit 1` (e.g. a validator that wouldn't start) surfaces to CI.
+  local exit_code=$?
   # Disable trap to prevent recursion
   trap - EXIT INT TERM
   
@@ -306,7 +365,7 @@ cleanup() {
   printf 'Stopping validators... '
   
   # Kill by PID if available
-  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID $VRF_ER_PID; do
+  for pid in $SOLANA_PID $EPHEMERAL_PID $QFS_PID $VRF_PID $VRF_ER_PID; do
     [ -n "$pid" ] && kill -TERM $pid 2>/dev/null || true
   done
 
@@ -314,7 +373,7 @@ cleanup() {
   sleep 1
 
   # Force kill any remaining processes
-  for pid in $SOLANA_PID $EPHEMERAL_PID $VRF_PID $VRF_ER_PID; do
+  for pid in $SOLANA_PID $EPHEMERAL_PID $QFS_PID $VRF_PID $VRF_ER_PID; do
     [ -n "$pid" ] && kill -9 $pid 2>/dev/null || true
   done
 
@@ -322,23 +381,25 @@ cleanup() {
   pkill -f "solana-test-validator" 2>/dev/null || true
   pkill -f "mb-test-validator" 2>/dev/null || true
   pkill -f "ephemeral-validator" 2>/dev/null || true
+  pkill -f "query-filtering-service" 2>/dev/null || true
   pkill -f "vrf-oracle" 2>/dev/null || true
   pkill -f "vrf-oracle-er" 2>/dev/null || true
   
   # Wait for background jobs silently
   { wait 2>/dev/null || true; } 2>/dev/null
-  
+
   # Check if validators are actually stopped
   if ! pgrep -f "solana-test-validator" >/dev/null 2>&1 \
      && ! pgrep -f "mb-test-validator" >/dev/null 2>&1 \
      && ! pgrep -f "ephemeral-validator" >/dev/null 2>&1 \
+     && ! pgrep -f "query-filtering-service" >/dev/null 2>&1 \
      && ! pgrep -f "vrf-oracle" >/dev/null 2>&1; then
     echo "✓ Stopped"
   else
     echo "✗ Failed to stop"
   fi
-  
-  exit 0
+
+  exit $exit_code
 }
 
 # Set up trap to catch INT (Ctrl+C), TERM, and EXIT
@@ -354,21 +415,256 @@ if [ ! -f ~/.config/solana/id.json ]; then
   solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
 fi
 
-# Start MagicBlock Test Validator (wraps solana-test-validator and pre-clones MB programs).
+# ------------------------------------------------------------------------------
+# Example projects, grouped by the test phase that runs them. Defined in
+# scripts/projects.sh (single source of truth, shared with scripts/test-example.sh
+# and the CI matrix). The directory name IS the project name (and the argument
+# passed to run_test). Each project exposes `yarn build` (compile only) and
+# `yarn test:local` (the local test subset).
+# ------------------------------------------------------------------------------
+PROJECTS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/projects.sh
+. "$PROJECTS_SCRIPT_DIR/scripts/projects.sh"
+
+# Set of projects to build = everything the enabled test phases will run, honoring
+# the same TEST_FILTER substring the tests use.
+BUILD_PROJECTS=()
+add_build_projects() {
+  for p in "$@"; do
+    if ! matches_filter "$p"; then
+      continue
+    fi
+    BUILD_PROJECTS+=("$p")
+  done
+}
+[ "$SKIP_REGULAR_TESTS" = "1" ] || add_build_projects "${REGULAR_PROJECTS[@]}"
+[ "$SKIP_VRF_TESTS" = "1" ]     || add_build_projects "${VRF_PROJECTS[@]}"
+[ "$SKIP_TEE_TESTS" = "1" ]     || add_build_projects "${TEE_PROJECTS[@]}"
+
+# Build one project: install JS deps + compile the program. The exit status is
+# written to a per-project status file so the parallel poller can read it race-free.
+build_project() {
+  local p="$1"
+  local log="/tmp/build_${p}.log"
+  rm -f "/tmp/build_${p}.status"
+  # --mutex serializes cache access across the parallel installs. Without it,
+  # concurrent `yarn install` runs writing a shared dependency (e.g. @noble/hashes)
+  # race on the global cache and corrupt the extracted tarball ("file appears to
+  # be corrupt" / ENOENT on LICENSE). The build step still runs in parallel.
+  ( cd "$p" && yarn install --mutex file:/tmp/.yarn-install-mutex && yarn build ) > "$log" 2>&1
+  echo "$?" > "/tmp/build_${p}.status"
+}
+
+# Build all programs in parallel (fail fast). They are compiled here, then
+# preloaded into the mb-test-validator below from their generated keypair + .so —
+# there is no per-test `anchor deploy` / `solana program deploy` step anymore.
+if [ "${#BUILD_PROJECTS[@]}" -eq 0 ]; then
+  echo "No projects to build (all phases skipped or filtered out)."
+else
+  echo "Building ${#BUILD_PROJECTS[@]} program(s) in parallel: ${BUILD_PROJECTS[*]}"
+  # Clear stale status files from a previous run before forking, so the poller can't
+  # mistake an old status for this run's result.
+  for p in "${BUILD_PROJECTS[@]}"; do rm -f "/tmp/build_${p}.status"; done
+
+  # Install the SBF platform-tools toolchain serially before forking. On a fresh
+  # machine the first real `cargo build-sbf` downloads + extracts platform-tools into
+  # one shared global dir; the N parallel builds otherwise race on that extraction and
+  # a build that reads it mid-flight sees a half-written tree ("not a directory:
+  # .../platform-tools/rust/lib"). `--install-only` downloads + installs the tools
+  # without compiling anything, and is a no-op if they're already present. (Note:
+  # `--version` does NOT trigger the install — it only prints the version string.)
+  # A one-off dummy build-sbf also installs the sbpf rustup toolchain; parallel
+  # anchor/cargo build-sbf runs otherwise race on that and leave a broken toolchain.
+  if command -v cargo-build-sbf >/dev/null 2>&1; then
+    echo "Installing SBF platform-tools (serial, pre-build)..."
+    if ! cargo-build-sbf --install-only > /tmp/sbf-warmup.log 2>&1; then
+      echo "SBF platform-tools install failed. Last 40 lines of /tmp/sbf-warmup.log:"
+      tail -40 /tmp/sbf-warmup.log 2>/dev/null || true
+      exit 1
+    fi
+    sbf_warmup_dir=$(mktemp -d)
+    cat > "$sbf_warmup_dir/Cargo.toml" <<'EOF'
+[package]
+name = "sbf-warmup"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "lib.rs"
+EOF
+    echo 'pub fn warm() {}' > "$sbf_warmup_dir/lib.rs"
+    if ! ( cd "$sbf_warmup_dir" && cargo-build-sbf >> /tmp/sbf-warmup.log 2>&1 ); then
+      echo "SBF rust toolchain warmup failed. Last 40 lines of /tmp/sbf-warmup.log:"
+      tail -40 /tmp/sbf-warmup.log 2>/dev/null || true
+      rm -rf "$sbf_warmup_dir"
+      exit 1
+    fi
+    rm -rf "$sbf_warmup_dir"
+  fi
+
+  # Pre-download yarn via corepack serially before parallel `yarn install` runs.
+  # Without this, concurrent builds race on ~/.cache/node/corepack/yarn/* and
+  # leave a broken shim (MODULE_NOT_FOUND on lib/cli).
+  if command -v corepack >/dev/null 2>&1; then
+    echo "Preparing yarn via corepack (serial, pre-build)..."
+    corepack enable 2>/dev/null || true
+    corepack prepare yarn@1.22.19 --activate >/tmp/corepack-yarn.log 2>&1
+    corepack prepare yarn@1.22.22 --activate >>/tmp/corepack-yarn.log 2>&1
+  fi
+
+  BUILD_PIDS=()
+  for p in "${BUILD_PROJECTS[@]}"; do
+    build_project "$p" &
+    BUILD_PIDS+=("$!")
+  done
+
+  build_total=${#BUILD_PROJECTS[@]}
+  build_done=0
+  build_failed=""
+  declare -a build_finished
+  for ((i=0;i<build_total;i++)); do build_finished[$i]=0; done
+
+  while [ "$build_done" -lt "$build_total" ]; do
+    for ((i=0;i<build_total;i++)); do
+      [ "${build_finished[$i]}" = "1" ] && continue
+      p="${BUILD_PROJECTS[$i]}"
+      if [ -f "/tmp/build_${p}.status" ]; then
+        build_finished[$i]=1
+        build_done=$((build_done + 1))
+        st=$(cat "/tmp/build_${p}.status" 2>/dev/null || echo 1)
+        if [ "$st" = "0" ]; then
+          printf '\033[2K\r  ✓ %s\n' "$p"
+        else
+          printf '\033[2K\r  ✗ %s (build failed, exit %s)\n' "$p" "$st"
+          build_failed="$p"
+        fi
+      fi
+    done
+    # Fail fast: stop polling as soon as one build fails (unless FAIL_FAST=0).
+    if [ -n "$build_failed" ] && [ "$FAIL_FAST" != "0" ]; then
+      break
+    fi
+    printf '\033[2K\r  Building... %d/%d done' "$build_done" "$build_total"
+    sleep 5
+  done
+  printf '\033[2K\r'
+
+  if [ -n "$build_failed" ]; then
+    # Stop any builds still running.
+    for ((i=0;i<build_total;i++)); do
+      [ "${build_finished[$i]}" = "0" ] && kill -TERM "${BUILD_PIDS[$i]}" 2>/dev/null
+    done
+    wait 2>/dev/null || true
+    if [ "$FAIL_FAST" != "0" ]; then
+      echo ""
+      echo "Build failed for '$build_failed'. Last 80 lines of /tmp/build_${build_failed}.log:"
+      echo "----- build_${build_failed}.log -----"
+      tail -80 "/tmp/build_${build_failed}.log" 2>/dev/null || echo "(log not found)"
+      echo "----- end of log -----"
+      exit 1
+    else
+      echo "  WARNING: some builds failed (FAIL_FAST=0); their tests will likely fail."
+    fi
+  fi
+  echo "Builds complete."
+fi
+
+# Collect generated program binaries to preload into the validator. For every
+# <name>.so under each project's target/deploy that has a matching
+# <name>-keypair.json, add an upgradeable program at the keypair's address with the
+# local wallet as upgrade authority — mirroring what `anchor deploy` /
+# `solana program deploy` produced before.
+PRELOAD_ARGS=()
+WALLET_PUBKEY=$(solana-keygen pubkey "$HOME/.config/solana/id.json" 2>/dev/null || echo "")
+if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
+  echo "Preloading programs into mb-test-validator:"
+  for p in "${BUILD_PROJECTS[@]}"; do
+    for so in "$p"/target/deploy/*.so; do
+      [ -e "$so" ] || continue
+      kp="${so%.so}-keypair.json"
+      if [ -f "$kp" ]; then
+        prog=$(solana-keygen pubkey "$kp" 2>/dev/null || echo "(unreadable)")
+        echo "  $p/$(basename "$so") -> $prog"
+        PRELOAD_ARGS+=(--upgradeable-program "$kp" "$so" "$WALLET_PUBKEY")
+      else
+        echo "  WARNING: $so has no matching keypair ($(basename "$kp")); not preloaded."
+      fi
+    done
+  done
+fi
+
+# Start MagicBlock Test Validator (wraps solana-test-validator and pre-clones MB
+# programs). The example programs are injected via --upgradeable-program so tests
+# find them already on-chain at their declared addresses.
 echo "Starting MagicBlock Test Validator..."
-mb-test-validator --reset > ./test-ledger.log 2>&1 < /dev/null &
+mb-test-validator --reset "${PRELOAD_ARGS[@]}" > ./test-ledger.log 2>&1 < /dev/null &
 
 SOLANA_PID=$!
 
-# Wait for validator to be ready
-echo "Waiting for Solana validator..."
-for i in {1..30}; do
-  if solana cluster-version --url http://localhost:8899 >/dev/null 2>&1; then
+# Wait for solana-test-validator to be producing slots. cluster-version (and /health)
+# can succeed before the bank is producing; ephemeral-validator's chainlink then
+# fails to bootstrap against the remote and exits with "All pubsub clients failed".
+SOLANA_READY_TIMEOUT="${SOLANA_READY_TIMEOUT:-$([ "${ACT:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] && echo 120 || echo 90)}"
+echo "Waiting for Solana validator (up to ${SOLANA_READY_TIMEOUT}s for slot production)..."
+SOLANA_READY=0
+for ((i=1; i<=SOLANA_READY_TIMEOUT; i++)); do
+  if ! kill -0 "$SOLANA_PID" 2>/dev/null; then
+    echo "mb-test-validator exited before becoming ready."
+    echo "Last 100 lines of ./test-ledger.log:"
+    echo "----- test-ledger.log -----"
+    tail -100 ./test-ledger.log 2>/dev/null || echo "(log file not found)"
+    echo "----- end of log -----"
+    exit 1
+  fi
+  slot=$(curl -s --max-time 1 -X POST -H "content-type: application/json" \
+    -d '{"jsonrpc":"2.0","method":"getSlot","params":[{"commitment":"processed"}],"id":1}' http://127.0.0.1:8899 2>/dev/null \
+    | sed -nE 's/.*"result":([0-9]+).*/\1/p')
+  if [ -n "$slot" ] && [ "$slot" -gt 0 ]; then
+    echo "Solana validator is ready (slot=$slot)."
+    SOLANA_READY=1
     break
   fi
   sleep 1
 done
-echo "Solana validator is ready, waiting for RPC to stabilize..."
+if [ "$SOLANA_READY" != "1" ]; then
+  echo "Solana validator failed to produce slots within ${SOLANA_READY_TIMEOUT}s."
+  echo "Last 100 lines of ./test-ledger.log:"
+  echo "----- test-ledger.log -----"
+  tail -100 ./test-ledger.log 2>/dev/null || echo "(log file not found)"
+  echo "----- end of log -----"
+  exit 1
+fi
+echo "Waiting for RPC to stabilize..."
+
+# Cap the local fee-payer balance so the ER can clone it.
+#
+# `mb-test-validator --reset` airdrops the CLI wallet ~500M SOL (the default
+# test-validator supply). When a test uses this wallet as the ER fee payer, the
+# ephemeral-validator's chainlink cloner mirrors the account into its bank and
+# must back those lamports from its bounded internal faucet. 500M SOL exceeds
+# that faucet, so every clone fails with:
+#   Cloner error: Failed to clone regular account <wallet> : InstructionError(0, InsufficientFunds)
+# and all ER-side tests fail. Draining the bulk of the balance to the incinerator
+# leaves a sane amount the ER can replicate. The base validator resets each run,
+# so this is safe and idempotent.
+WALLET_KP="${WALLET_KP:-$HOME/.config/solana/id.json}"
+KEEP_SOL="${ER_FEE_PAYER_KEEP_SOL:-1000}"
+INCINERATOR="1nc1nerator11111111111111111111111111111111"
+BAL_LAMPORTS=$(solana balance --lamports --url http://localhost:8899 --keypair "$WALLET_KP" 2>/dev/null | awk '{print $1}')
+KEEP_LAMPORTS=$((KEEP_SOL * 1000000000))
+if [[ "$BAL_LAMPORTS" =~ ^[0-9]+$ ]] && [ "$BAL_LAMPORTS" -gt "$KEEP_LAMPORTS" ]; then
+  SEND_SOL=$(((BAL_LAMPORTS - KEEP_LAMPORTS) / 1000000000))
+  echo "Capping fee-payer balance: draining $SEND_SOL SOL (keeping ~$KEEP_SOL SOL) so the ER can clone it..."
+  solana transfer "$INCINERATOR" "$SEND_SOL" \
+    --allow-unfunded-recipient \
+    --url http://localhost:8899 \
+    --keypair "$WALLET_KP" \
+    --fee-payer "$WALLET_KP" \
+    >/dev/null 2>&1 \
+    && echo "  Fee-payer balance now ~$(solana balance --url http://localhost:8899 --keypair "$WALLET_KP" 2>/dev/null)" \
+    || echo "  WARNING: failed to cap fee-payer balance; ER clone may fail."
+fi
 
 # Start MagicBlock Ephemeral Validator
 echo "Starting MagicBlock Ephemeral Validator..."
@@ -395,9 +691,11 @@ EPHEMERAL_PID=$!
 # their first ER call before the server is listening and hit "fetch failed".
 # Using bash's /dev/tcp (no external process; doesn't touch tty).
 echo "Waiting for ephemeral-validator..."
+EPHEMERAL_READY=0
 for i in {1..60}; do
   if (echo > /dev/tcp/127.0.0.1/7799) 2>/dev/null; then
     sleep 1   # let the RPC handler finish wiring up after the socket binds
+    EPHEMERAL_READY=1
     break
   fi
   if ! kill -0 $EPHEMERAL_PID 2>/dev/null; then
@@ -409,11 +707,71 @@ for i in {1..60}; do
   fi
   sleep 1
 done
+if [ "$EPHEMERAL_READY" != "1" ]; then
+  echo "ephemeral-validator failed to bind port 7799 within 60s."
+  echo "Last 100 lines of ./ephemeral-validator.log:"
+  tail -100 ./ephemeral-validator.log 2>/dev/null || echo "(log file not found)"
+  exit 1
+fi
 echo "Ephemeral validator is ready."
 
+# Start the Query Filtering Service (QFS) — the middleware that fronts the ER.
+# Request flow for tests: client -> QFS (127.0.0.1:6699) -> ER validator
+# (127.0.0.1:7799) -> solana validator (127.0.0.1:8899). Local tests point their
+# ER endpoint (EPHEMERAL_PROVIDER_ENDPOINT) at the QFS rather than the ER directly.
+echo "Starting Query Filtering Service..."
+QFS_BIN=$(command -v query-filtering-service 2>/dev/null)
+if [ -z "$QFS_BIN" ]; then
+  echo "ERROR: 'query-filtering-service' not on PATH."
+  echo "  Install it and re-run (it fronts the ephemeral validator for tests)."
+  exit 1
+fi
+echo "  Binary: $QFS_BIN"
+echo "  Version: $("$QFS_BIN" --version 2>&1 | head -1 || echo unknown)"
+RUST_LOG=info "$QFS_BIN" \
+  --listen-addr 127.0.0.1:6699 \
+  --listen-addr-ws 127.0.0.1:6700 \
+  --ephemeral-url http://127.0.0.1:7799 \
+  --ephemeral-url-ws ws://127.0.0.1:7800 \
+  --token-expiry-days 180 \
+  --add-cors-headers > ./query-filtering-service.log 2>&1 < /dev/null &
+
+QFS_PID=$!
+
+# Wait for the QFS to bind its HTTP listener before any test fires an ER call.
+echo "Waiting for query-filtering-service..."
+QFS_READY=0
+for i in {1..60}; do
+  if (echo > /dev/tcp/127.0.0.1/6699) 2>/dev/null; then
+    sleep 1   # let the RPC handler finish wiring up after the socket binds
+    QFS_READY=1
+    break
+  fi
+  if ! kill -0 $QFS_PID 2>/dev/null; then
+    echo "query-filtering-service died. Last 100 lines of ./query-filtering-service.log:"
+    echo "----- query-filtering-service.log -----"
+    tail -100 ./query-filtering-service.log 2>/dev/null || echo "(log file not found)"
+    echo "----- end of log -----"
+    exit 1
+  fi
+  sleep 1
+done
+if [ "$QFS_READY" != "1" ]; then
+  echo "query-filtering-service failed to bind port 6699 within 60s."
+  tail -100 ./query-filtering-service.log 2>/dev/null || echo "(log file not found)"
+  exit 1
+fi
+echo "Query Filtering Service is ready."
+
+# Start the VRF oracle.
+echo "Starting VRF oracle..."
+VRF_ORACLE_BIN=$(command -v vrf-oracle 2>/dev/null)
 # Start the VRF oracle unless VRF tests are disabled.
 if [ "${SKIP_VRF_TESTS:-0}" = "1" ]; then
   echo "Skipping VRF oracle startup (SKIP_VRF_TESTS=1)."
+elif [ -z "$VRF_ORACLE_BIN" ]; then
+  echo "ERROR: 'vrf-oracle' not on PATH — VRF-dependent tests will fail. Install it and re-run."
+  exit 1
 else
   echo "Starting VRF oracle..."
   VRF_ORACLE_BIN=$(command -v vrf-oracle 2>/dev/null)
@@ -485,110 +843,62 @@ echo ""
 
 # MagicBlock validator identities (used as the `validator` arg when delegating):
 #   Localnet:
-#     Local ER (http://localhost:7799)            : mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
+#     Local ER (http://localhost:7799, fronted by   : mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
+#       the QFS at http://localhost:6699)
 #   Devnet:
 #     Asia (https://devnet-as.magicblock.app)     : MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57
 #     EU   (https://devnet-eu.magicblock.app)     : MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e
 #     US   (https://devnet-us.magicblock.app)     : MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd
 #     TEE  (https://devnet-tee.magicblock.app)    : MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo
 
-# ---- Local tests: base layer = local solana-test-validator; ER = local ephemeral-validator ----
-# Exported so every child test process sees them (and any test that ignores them
-# and dials devnet will fail loudly rather than silently hit the wrong network).
-export PROVIDER_ENDPOINT=http://localhost:8899
-export WS_ENDPOINT=ws://localhost:8900
-export EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799
-export EPHEMERAL_WS_ENDPOINT=ws://localhost:7800
-# Anchor SDK reads ANCHOR_PROVIDER_URL/ANCHOR_WALLET when test code calls
-# AnchorProvider.env(). Without these, `anchor test` overrides them based on the
-# Anchor.toml [provider] cluster (often devnet) and tests silently hit the wrong network.
-export ANCHOR_PROVIDER_URL=$PROVIDER_ENDPOINT
-export ANCHOR_WALLET="${HOME}/.config/solana/id.json"
-# Router-style tests (advanced-magic, magic-actions, dummy-token-transfer) point at the
-# MagicBlock router on devnet — locally there's no router, so route them at the local ER.
-export ROUTER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT
-export ROUTER_WS_ENDPOINT=$EPHEMERAL_WS_ENDPOINT
-export VALIDATOR=mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
-# VRF queues — local oracle (paywJiVATr...) index 0 on base, index 1 delegated on ER.
-export VRF_BASE_QUEUE="GKE6d7iv8kCBrsxr78W3xVdjGLLLJnxsGiuzrsZCGEvb"
-export VRF_EPHEMERAL_QUEUE="Sc9MJUngNbQXSXGP3F67KvKwVnhaYn6kcioxXNVowYT"
+# ---- Local tests: base layer = local solana-test-validator; ER = query-filtering-service ----
+# All localhost endpoints live in scripts/local-env.sh, the single source of truth
+# shared with each example's `yarn test:local` (so a standalone test run targets the
+# same local cluster instead of falling back to devnet). Exported here so every child
+# test process sees them. The ER endpoint points at the local Query Filtering Service
+# (QFS), which routes to the ephemeral validator (7799) and on to the base validator:
+#   client -> QFS (6699) -> ER validator (7799) -> solana validator (8899)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/local-env.sh
+. "$SCRIPT_DIR/scripts/local-env.sh"
 
+# ------------------------------------------------------------------------------
+# Regular tests
+# ------------------------------------------------------------------------------
 if [ "${SKIP_REGULAR_TESTS:-0}" = "1" ]; then
   echo "Skipping regular local tests (SKIP_REGULAR_TESTS=1)."
 else
-  # anchor-counter has 3 test files: public-counter (local), private-counter (TEE), advanced-magic (router).
-  # Locally we run only public-counter.ts. The other two run from the TEE/devnet block below.
-  run_test "anchor-counter" "cd anchor-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts && cd .."
-
-  # private-counter is TEE-only — runs in the TEE/devnet block below.
-
-  # crank-counter: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor would
-  # re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-  run_test "crank-counter" "cd crank-counter && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
-
-  # dummy-token-transfer + magic-actions: have router-based tests (devnet-router) plus
-  # local *-local.ts variants. We run only the local variants here.
-  run_test "dummy-token-transfer" "cd dummy-token-transfer && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts && cd .."
-
-  # ephemeral-account-chats: bypass `anchor test` — Anchor.toml has cluster=devnet so
-  # anchor would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-  run_test "ephemeral-account-chats" "cd ephemeral-account-chats && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts' && cd .."
-
-  run_test "magic-actions" "cd magic-actions && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/magic-actions-local.ts && cd .."
-
-  run_test "oncurve-delegation" "cd oncurve-delegation && yarn install && yarn test && yarn test-web3js && cd .."
-
-  run_test "pinocchio-counter" "cd pinocchio-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_counter-keypair.json target/deploy/pinocchio_counter.so && yarn install && yarn test && cd .."
-
-  run_test "pinocchio-private-counter" "cd pinocchio-private-counter && cargo build-sbf && solana program deploy --program-id target/deploy/pinocchio_private_counter-keypair.json target/deploy/pinocchio_private_counter.so && yarn install && yarn test && cd .."
-
-  # rust-counter: skip ./tests/kit/advanced-magic.test.ts — it's router-based (devnet-router).
-  # Build + deploy the native Rust program before running vitest — the test loads
-  # the program keypair from target/deploy/ and expects the program live on the
-  # local validator (matches the pinocchio-* pattern above).
-  run_test "rust-counter" "cd rust-counter && cargo build-sbf && solana program deploy --program-id target/deploy/rust_counter-keypair.json target/deploy/rust_counter.so && yarn install && npx vitest run ./tests/kit/rust-counter.test.ts && cd .."
-
-  # session-keys: skip ./tests/advanced-magic.ts — it's router-based (devnet-router).
-  run_test "session-keys" "cd session-keys && anchor build && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/anchor-counter-session.ts && cd .."
-
-  # spl-tokens: bypass `anchor test` (which calls fullstack-test.sh — that script
-  # branches on Anchor.toml's cluster=devnet and overrides ANCHOR_PROVIDER_URL,
-  # fighting our locally-exported env). Invoke ts-mocha directly.
-  run_test "spl-tokens" "cd spl-tokens && anchor build && anchor deploy --provider.cluster localnet && yarn install && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts && cd .."
+  # Each project's `test:local` runs only the local subset of its tests (skipping
+  # router/TEE/devnet variants). oncurve-delegation is omitted pending an SDK update.
+  for project in "${REGULAR_PROJECTS[@]}"; do
+    run_test "$project"
+  done
 fi
 
+# ------------------------------------------------------------------------------
+# VRF tests
+# ------------------------------------------------------------------------------
 if [ "${SKIP_VRF_TESTS:-0}" = "1" ]; then
   echo "Skipping VRF tests (SKIP_VRF_TESTS=1)."
 else
-  # rewards-delegated-vrf: bypass `anchor test` — Anchor.toml has cluster=devnet so anchor
-  # would re-set ANCHOR_PROVIDER_URL to devnet, overriding our local export.
-  run_test "rewards-delegated-vrf" "cd rewards-delegated-vrf && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && yarn test && cd .."
-
-  # roll-dice + roll-dice-delegated: VRF integration. roll-dice-delegated reads
-  # VALIDATOR env var → defaults to the local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT
-  # is localhost. Same Anchor.toml glob picks up both test files.
-  run_test "anchor-roll-dice" "cd roll-dice && anchor keys sync && anchor build && anchor deploy --provider.cluster localnet && yarn install && yarn test && cd ../.."
-  run_test "pinocchio-roll-dice" "cd pinocchio-roll-dice && yarn install && yarn keys-sync && cargo build-sbf --features logging && solana program deploy target/deploy/roll_dice.so && solana program deploy target/deploy/roll_dice_delegated.so && yarn test && cd .."
+  # VRF integration: roll-dice's delegated test reads VALIDATOR → defaults to the
+  # local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT is localhost.
+  for project in "${VRF_PROJECTS[@]}"; do
+    run_test "$project"
+  done
 fi
 
-# ---- TEE tests: base layer = Solana devnet; ER = MagicBlock TEE devnet ----
-# TEE attestation isn't available locally, so these examples are tested against
-# devnet TEE (validator MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo).
-# Requires: solana CLI default keypair funded with devnet SOL for the program deploy.
-# Set SKIP_TEE_TESTS=1 to skip this block.
-# Override the base-layer devnet RPC via DEVNET_RPC_URL (e.g. a private Helius/QuickNode
-# endpoint) to avoid public devnet rate limits. The WS URL is derived from it.
+# ------------------------------------------------------------------------------
+# TEE tests
+# ------------------------------------------------------------------------------
 if [ "${SKIP_TEE_TESTS:-0}" = "1" ]; then
   echo "Skipping TEE tests (SKIP_TEE_TESTS=1)."
 else
-  DEVNET_RPC="${DEVNET_RPC_URL:-https://api.devnet.solana.com}"
-  DEVNET_WS=$(echo "$DEVNET_RPC" | sed -e 's|^http:|ws:|' -e 's|^https:|wss:|')
-
-  TEE_ENV="PROVIDER_ENDPOINT=$DEVNET_RPC WS_ENDPOINT=$DEVNET_WS EPHEMERAL_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app EPHEMERAL_WS_ENDPOINT=wss://devnet-tee.magicblock.app TEE_PROVIDER_ENDPOINT=https://devnet-tee.magicblock.app TEE_WS_ENDPOINT=wss://devnet-tee.magicblock.app ROUTER_ENDPOINT=https://devnet-router.magicblock.app ROUTER_WS_ENDPOINT=wss://devnet-router.magicblock.app VALIDATOR=MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
-
-  run_test "private-counter (devnet TEE)" "cd private-counter && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
-
-  run_test "rock-paper-scissor (devnet TEE)" "cd rock-paper-scissor && anchor build && anchor deploy --provider.cluster devnet && yarn install && $TEE_ENV anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet && cd .."
+  # TEE examples reach the ER through the QFS — run_test exposes TEE_PROVIDER_ENDPOINT/
+  # TEE_WS_ENDPOINT to these runs (see the TEE_PROJECTS case in run_test).
+  for project in "${TEE_PROJECTS[@]}"; do
+    run_test "$project"
+  done
 fi
 
 # Print summary report
@@ -631,3 +941,10 @@ if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
     echo ""
   done
 fi
+
+# Exit non-zero when any test failed so the CI job fails. cleanup() (EXIT trap)
+# captures this status and re-exits with it after stopping the validators.
+if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
+  exit 1
+fi
+exit 0

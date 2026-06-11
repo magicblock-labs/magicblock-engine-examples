@@ -40,7 +40,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
  */
 export function openExplorer(
   signature: string,
-  network: "devnet" | "mainnet-beta" | "custom" = "devnet"
+  network: "devnet" | "mainnet-beta" | "custom" = "devnet",
 ): void {
   const baseUrl = `https://explorer.solana.com`;
   const networkParam = network === "devnet" ? "?cluster=devnet" : "";
@@ -120,7 +120,7 @@ export function sleep(ms: number): Promise<void> {
 export async function retry<T>(
   fn: () => Promise<T>,
   maxAttempts = 3,
-  delayMs = 1000
+  delayMs = 1000,
 ): Promise<T> {
   let lastError: Error | undefined;
 
@@ -145,7 +145,7 @@ export async function retry<T>(
  */
 export function debounce<T extends (...args: any[]) => any>(
   fn: T,
-  delay: number
+  delay: number,
 ): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout;
 
@@ -160,7 +160,7 @@ export function debounce<T extends (...args: any[]) => any>(
  */
 export function throttle<T extends (...args: any[]) => any>(
   fn: T,
-  delay: number
+  delay: number,
 ): (...args: Parameters<T>) => void {
   let lastCall = 0;
 
@@ -176,10 +176,7 @@ export function throttle<T extends (...args: any[]) => any>(
 /**
  * Safe JSON parse with fallback
  */
-export function safeJsonParse<T>(
-  json: string,
-  fallback: T
-): T {
+export function safeJsonParse<T>(json: string, fallback: T): T {
   try {
     return JSON.parse(json) as T;
   } catch {
@@ -190,10 +187,7 @@ export function safeJsonParse<T>(
 /**
  * Merge objects recursively
  */
-export function deepMerge<T extends object>(
-  target: T,
-  source: Partial<T>
-): T {
+export function deepMerge<T extends object>(target: T, source: Partial<T>): T {
   const result = { ...target };
 
   for (const key in source) {
@@ -211,7 +205,7 @@ export function deepMerge<T extends object>(
       ) {
         result[key] = deepMerge(
           targetValue as object,
-          sourceValue as object
+          sourceValue as object,
         ) as any;
       } else {
         result[key] = sourceValue as any;
@@ -234,10 +228,16 @@ export function truncateAddress(address: string, chars = 4): string {
  */
 export function getRedemptionPercentage(
   redemptionCount: number | bigint,
-  redemptionLimit: number | bigint
+  redemptionLimit: number | bigint,
 ): number {
-  const count = typeof redemptionCount === "bigint" ? Number(redemptionCount) : redemptionCount;
-  const limit = typeof redemptionLimit === "bigint" ? Number(redemptionLimit) : redemptionLimit;
+  const count =
+    typeof redemptionCount === "bigint"
+      ? Number(redemptionCount)
+      : redemptionCount;
+  const limit =
+    typeof redemptionLimit === "bigint"
+      ? Number(redemptionLimit)
+      : redemptionLimit;
   if (limit === 0) return 0;
   return Math.round((count / limit) * 100);
 }
@@ -265,14 +265,16 @@ export function getRewardTypeName(type: unknown): string {
     "2": "Programmable NFT",
     "3": "SPL Token 2022",
     "4": "Compressed NFT",
-    "splToken": "SPL Token",
-    "legacyNft": "Legacy NFT",
-    "programmableNft": "Programmable NFT",
-    "splToken2022": "SPL Token 2022",
-    "compressedNft": "Compressed NFT",
+    splToken: "SPL Token",
+    legacyNft: "Legacy NFT",
+    programmableNft: "Programmable NFT",
+    splToken2022: "SPL Token 2022",
+    compressedNft: "Compressed NFT",
   };
   const normalizedType = normalizeRewardType(type);
-  return normalizedType != null ? types[normalizedType] || "Unknown" : "Unknown";
+  return normalizedType != null
+    ? types[normalizedType] || "Unknown"
+    : "Unknown";
 }
 
 /**
@@ -285,12 +287,14 @@ export function getRewardTypeColor(type: unknown): string {
     "2": "bg-pink-500",
     "3": "bg-cyan-500",
     "4": "bg-green-500",
-    "splToken": "bg-blue-500",
-    "legacyNft": "bg-purple-500",
-    "programmableNft": "bg-pink-500",
-    "splToken2022": "bg-cyan-500",
-    "compressedNft": "bg-green-500",
+    splToken: "bg-blue-500",
+    legacyNft: "bg-purple-500",
+    programmableNft: "bg-pink-500",
+    splToken2022: "bg-cyan-500",
+    compressedNft: "bg-green-500",
   };
   const normalizedType = normalizeRewardType(type);
-  return normalizedType != null ? colors[normalizedType] || "bg-gray-500" : "bg-gray-500";
+  return normalizedType != null
+    ? colors[normalizedType] || "bg-gray-500"
+    : "bg-gray-500";
 }

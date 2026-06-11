@@ -49,16 +49,18 @@ function formatTokenAmount(amount: bigint, decimals: number): string {
 async function fetchAccountsForProgram(
   connection: Connection,
   owner: PublicKey,
-  programId: PublicKey
+  programId: PublicKey,
 ): Promise<OwnedSplMintOption[]> {
-  const response = await connection.getTokenAccountsByOwner(owner, { programId });
+  const response = await connection.getTokenAccountsByOwner(owner, {
+    programId,
+  });
 
   const decodedAccounts = response.value.flatMap((accountInfo) => {
     try {
       const decodedAccount = unpackAccount(
         accountInfo.pubkey,
         accountInfo.account,
-        programId
+        programId,
       );
 
       if (decodedAccount.amount === 0n) {
@@ -78,7 +80,7 @@ async function fetchAccountsForProgram(
   });
 
   const uniqueMintKeys = Array.from(
-    new Set(decodedAccounts.map((account) => account.mint.toBase58()))
+    new Set(decodedAccounts.map((account) => account.mint.toBase58())),
   ).map((mint) => new PublicKey(mint));
 
   const mintInfos =
@@ -120,7 +122,7 @@ async function fetchAccountsForProgram(
 
 export async function fetchOwnedSplMintOptions(
   connection: Connection,
-  owner: PublicKey
+  owner: PublicKey,
 ): Promise<OwnedSplMintFetchResult> {
   const readEndpoint = getBaseLayerSolanaEndpoint(connection.rpcEndpoint);
   const readConnection =
@@ -139,7 +141,7 @@ export async function fetchOwnedSplMintOptions(
     tokenProgramCount: tokenProgramOptions.length,
     token2022ProgramCount: token2022Options.length,
     options: [...tokenProgramOptions, ...token2022Options].sort((left, right) =>
-      left.mint.localeCompare(right.mint)
+      left.mint.localeCompare(right.mint),
     ),
   };
 }

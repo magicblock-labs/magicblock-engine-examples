@@ -4,10 +4,9 @@ import { AnchorCounter } from "../target/types/anchor_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 
-const COUNTER_SEED = "counter"; 
+const COUNTER_SEED = "counter";
 
 describe("crank-counter", () => {
-
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -18,7 +17,8 @@ describe("crank-counter", () => {
         "https://devnet-as.magicblock.app/",
       {
         wsEndpoint:
-          process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
+          process.env.EPHEMERAL_WS_ENDPOINT ||
+          "wss://devnet-as.magicblock.app/",
       },
     ),
     anchor.Wallet.local(),
@@ -115,7 +115,7 @@ describe("crank-counter", () => {
       commitment: "confirmed",
     });
     console.log(`[ER] Schedule Increment txHash: ${txHash}`);
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   });
 
   it("Undelegate counter on ER to Solana", async () => {
@@ -133,7 +133,6 @@ describe("crank-counter", () => {
 
     const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
     console.log(`[ER] Undelegate txHash: ${txHash}`);
-
   });
 
   after(async () => {

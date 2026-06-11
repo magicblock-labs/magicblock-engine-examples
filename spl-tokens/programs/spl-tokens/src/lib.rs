@@ -3,7 +3,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer as SplTransfer};
 
 use ephemeral_rollups_sdk::anchor::ephemeral;
 
-declare_id!("DnxzJfHaXUaYCrKo4avb8GeUaTPvfgbCGoD8N4GSe3Z6");
+declare_id!("4mrt3xHdkhpw1W3sThTWF5KcAE83E612aEiYAEqJHq3r");
 
 #[ephemeral]
 #[program]

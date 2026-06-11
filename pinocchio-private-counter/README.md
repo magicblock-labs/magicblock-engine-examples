@@ -2,27 +2,49 @@
 
 Pinocchio counter variant that exercises private state on the Ephemeral Rollup.
 
-This is a port of the Rust Counter program to use Pinocchio instead of Borsh for serialization, eliminating the need for Vec types.
+This is a port of the Rust Counter program to use Pinocchio instead of Borsh for serialization, eliminating the need for Vec types. It demonstrates confidential counter state on a MagicBlock TEE without the Anchor framework.
 
 ## Software Packages
 
-| Software | Version | Installation Guide |
-| -------- | ------- | ------------------- |
-| **Solana** | 2.3.13 | [Install Solana](https://docs.anza.xyz/cli/install) |
-| **Rust** | 1.85.0 | [Install Rust](https://www.rust-lang.org/tools/install) |
-| **Node** | 24.10.0 | [Install Node](https://nodejs.org/en/download/current) |
+| Software   | Version | Installation Guide                                      |
+| ---------- | ------- | ------------------------------------------------------- |
+| **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)     |
+| **Rust**   | 1.89.0  | [Install Rust](https://www.rust-lang.org/tools/install) |
+| **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)  |
 
-## Build
-
-```bash
-cargo build-sbf
+```sh
+agave-install init 3.1.9
+rustup install 1.89.0
 ```
 
-## Test
+## Build and Test
+
+Install dependencies and build the program:
 
 ```bash
-cargo test-sbf --features logging
+yarn
+yarn build
 ```
+
+This example runs against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
+
+```bash
+yarn setup
+```
+
+`yarn setup` runs `SETUP_ONLY=1 ./test-locally.sh pinocchio-private-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+
+Then, in a second terminal, run this example's tests against that cluster:
+
+```bash
+yarn test:local
+```
+
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
+
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./test-locally.sh` directly.
+
+This is a TEE (Trusted Execution Environment) example: locally, ER calls route through the QFS via the `TEE_*` endpoints. The full devnet/TEE path additionally requires a funded devnet keypair, so in CI these tests are skipped unless a `DEVNET_KEYPAIR_JSON` secret is set (the repo sets `SKIP_TEE_TESTS=1` without it).
 
 ## Key Differences from Rust Counter
 

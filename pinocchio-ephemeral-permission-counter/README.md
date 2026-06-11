@@ -4,57 +4,47 @@ A minimal Solana counter program built with [Pinocchio](https://github.com/anza-
 
 The program is `no_std`, does not use Borsh, and keeps account data in a fixed-size `Counter` struct.
 
-## Requirements
+## Software Packages
 
-| Software   | Version | Installation Guide                                          |
-| ---------- | ------- | ----------------------------------------------------------- |
-| Solana CLI | 2.3.13  | [Install Solana](https://docs.anza.xyz/cli/install)         |
-| Rust       | 1.87.0  | [Install Rust](https://www.rust-lang.org/tools/install)     |
-| Node.js    | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)      |
-| Yarn       | 4.x     | [Install Yarn](https://yarnpkg.com/getting-started/install) |
+| Software   | Version | Installation Guide                                      |
+| ---------- | ------- | ------------------------------------------------------- |
+| **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)     |
+| **Rust**   | 1.89.0  | [Install Rust](https://www.rust-lang.org/tools/install) |
+| **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)  |
 
-## Setup
-
-Install the TypeScript test dependencies:
-
-```bash
-yarn install
+```sh
+agave-install init 3.1.9
+rustup install 1.89.0
 ```
 
-The tests read `PRIVATE_KEY` from the environment, or fall back to `~/.config/solana/id.json`.
+## Build and Test
+
+Install dependencies and build the program:
 
 ```bash
-cp .env.example .env
-```
-
-Optional RPC overrides:
-
-- `PROVIDER_ENDPOINT`
-- `WS_ENDPOINT`
-- `EPHEMERAL_PROVIDER_ENDPOINT`
-- `EPHEMERAL_WS_ENDPOINT`
-
-## Build
-
-```bash
+yarn
 yarn build
 ```
 
-This runs:
+This example runs against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
 
 ```bash
-cargo build-sbf
+yarn setup
 ```
 
-## Test
+`yarn setup` runs `SETUP_ONLY=1 ./test-locally.sh pinocchio-ephemeral-permission-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
 
-Run the Vitest integration flow:
+Then, in a second terminal, run this example's tests against that cluster:
 
 ```bash
-yarn test
+yarn test:local
 ```
 
-The test initializes the counter on Solana devnet, delegates it to the Ephemeral Rollup, increments it on both layers, creates/updates/closes a permission account, and commits the delegated state back to Solana.
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet). Use `yarn test:watch` to re-run the suite on file changes.
+
+The test initializes the counter on the base layer, delegates it to the Ephemeral Rollup, increments it on both layers, creates/updates/closes a permission account, and commits the delegated state back to the base layer.
+
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./test-locally.sh` directly.
 
 ## Program Model
 

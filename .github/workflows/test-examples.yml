@@ -7,30 +7,88 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test-examples:
+  # Formatting is repo-wide, so it runs once rather than per-example.
+  lint:
     runs-on: ubuntu-latest
-
-    env:
-      # Set DEVNET_KEYPAIR_JSON secret to enable TEE tests against devnet
-      # (private-counter). Without the secret, TEE tests are skipped.
-      SKIP_TEE_TESTS: ${{ secrets.DEVNET_KEYPAIR_JSON == '' && '1' || '0' }}
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "20.20"
 
       - name: Enable Corepack
-        run: corepack enable
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+
+      - name: Check formatting
+        run: bash check-prettier.sh
+
+  # Emit the list of examples as a JSON array so the test job can fan out one
+  # runner per example via a matrix. Single source of truth: scripts/projects.sh.
+  list-examples:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set
+        run: |
+          # shellcheck source=scripts/projects.sh
+          . scripts/projects.sh
+          echo "matrix=$(projects_json)" >> "$GITHUB_OUTPUT"
+
+  # One job per example. Each runs on its own runner so building/testing a single
+  # example keeps disk usage bounded — building every example on one runner was
+  # exhausting disk. fail-fast: false so one failing example doesn't cancel the
+  # rest. Each job builds + tests exactly its example via scripts/test-example.sh.
+  test-example:
+    needs: list-examples
+    name: test (${{ matrix.example }})
+    runs-on:
+      labels: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example: ${{ fromJSON(needs.list-examples.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Pin >=20.18 — @solana/codecs-numbers (via @solana/web3.js) rejects older 20.x.
+          # act's amd64 toolcache ships 20.11 unless a specific version is requested.
+          node-version: "20.20"
+
+      - name: Enable Corepack
+        run: |
+          corepack enable
+          # Pre-download yarn before test-locally.sh forks parallel `yarn install`
+          # runs; otherwise corepack races on ~/.cache/node/corepack/yarn/* and
+          # leaves a broken shim (MODULE_NOT_FOUND on lib/cli).
+          corepack prepare yarn@1.22.19 --activate
+          corepack prepare yarn@1.22.22 --activate
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.89.0"
+
+      # anchor idl build invokes the host `stable` toolchain after cargo build-sbf.
+      # dtolnay/rust-toolchain only installs 1.89.0; without stable, act/CI fails with
+      # "Missing manifest in toolchain 'stable-x86_64-unknown-linux-gnu'".
+      - name: Ensure stable Rust for Anchor IDL
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default 1.89.0
 
       - name: Install native dependencies
         run: |
@@ -48,6 +106,8 @@ jobs:
 
       - name: Install MagicBlock Ephemeral Validator
         run: |
+          # Provides ephemeral-validator, query-filtering-service, vrf-oracle and
+          # mb-test-validator — every binary test-locally.sh needs.
           npm install -g @magicblock-labs/ephemeral-validator@latest
 
       - name: Configure Solana
@@ -71,17 +131,16 @@ jobs:
               --url devnet || echo "Airdrop failed (faucet rate-limited or down) — continuing."
           fi
 
-      - name: Configure validator limits
-        run: |
-          sudo sysctl fs.inotify.max_user_instances=1280
-          sudo sysctl fs.inotify.max_user_watches=655360
-          sudo prlimit --pid $$ --nofile=1048576:1048576
-
-      - name: Run test-locally.sh
+      - name: Test ${{ matrix.example }}
         env:
-          # Optional override for the base-layer devnet RPC (TEE block only).
+          # Optional override for the base-layer devnet RPC (TEE examples only).
           # Useful to point at a private endpoint with higher rate limits than
           # api.devnet.solana.com. The WS URL is auto-derived from this.
           # If unset, the script falls back to the public RPC.
           DEVNET_RPC_URL: ${{ secrets.DEVNET_RPC_URL }}
-        run: bash test-locally.sh
+        run: |
+          sudo sysctl -w fs.inotify.max_user_instances=1280
+          sudo sysctl -w fs.inotify.max_user_watches=655360
+          sudo sysctl -w fs.file-max=2097152
+          sudo prlimit --pid $$ --nofile=1000000:1000000
+          bash scripts/test-example.sh "${{ matrix.example }}"

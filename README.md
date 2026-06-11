@@ -16,6 +16,7 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 - [Anchor Counter](./anchor-counter/README.md) — Counter program in Anchor. Tests delegate/undelegate via the TypeScript SDK.
 - [Rust Counter](./rust-counter/README.md) — Counter program in native Rust. Tests delegate/undelegate natively.
 - [Pinocchio Counter](./pinocchio-counter/README.md) — Counter program built with Pinocchio (no heap, no Borsh `Vec`s).
+- [Pinocchio Ephemeral Permission Counter](./pinocchio-ephemeral-permission-counter/README.md) — Pinocchio counter with ephemeral permission accounts on the ER.
 - [Pinocchio Private Counter](./pinocchio-private-counter/README.md) — Pinocchio counter variant exercising private state on the ER.
 - [Private Counter](./private-counter/README.md) — Anchor counter gated by an on-rollup ephemeral permission account.
 - [Session Keys](./session-keys/README.md) — Counter using gpl-session keys for delegated-signer auth on both base chain and ER.
@@ -25,11 +26,13 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 ### Tokens & payments
 
 - [Dummy Token Transfer](./dummy-token-transfer/README.md) — Token transferer that can delegate and execute on both the base chain and the ER.
-- [SPL Tokens](./spl-tokens/) — SPL token delegation example.
+- [SPL Tokens](./spl-tokens/README.md) — SPL token delegation example with transfers on the ER.
+- [Private Payments](./private-payments/README.md) — Next.js demo for MagicBlock private payments.
 
 ### VRF & games
 
 - [Roll Dice](./roll-dice/README.md) — Dice roll using a verifiable random function (VRF) on the ER.
+- [Pinocchio Roll Dice](./pinocchio-roll-dice/README.md) — Pinocchio (no-Anchor) VRF dice variant.
 - [Rewards (Delegated VRF)](./rewards-delegated-vrf/README.md) — Rewards distribution program using delegated VRF.
 - [Rock Paper Scissor](./rock-paper-scissor/README.md) — Two-player RPS with hidden moves on the ER until reveal.
 

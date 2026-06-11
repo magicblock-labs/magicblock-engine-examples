@@ -58,9 +58,7 @@ export function getEphemeralConnection() {
   );
 }
 
-export function readProgramId(
-  program: "roll_dice" | "roll_dice_delegated",
-) {
+export function readProgramId(program: "roll_dice" | "roll_dice_delegated") {
   return Keypair.fromSecretKey(
     Uint8Array.from(
       JSON.parse(

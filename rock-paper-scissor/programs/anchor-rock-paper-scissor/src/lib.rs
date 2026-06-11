@@ -11,7 +11,7 @@ use ephemeral_rollups_sdk::consts::{EPHEMERAL_VAULT_ID, MAGIC_PROGRAM_ID, PERMIS
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
-declare_id!("J7Zmxm5U7PJzqLJvGcwJr38d6L2NyrgjjGf8bQVTLZ8H");
+declare_id!("4AEU8Dhg5dRXyfPCdPUibbhQvQVrqs9ZGPvft6wyDBvE");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";

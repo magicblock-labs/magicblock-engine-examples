@@ -7,7 +7,7 @@ export async function buildInitializeDistributor(
   connection: Connection,
   publicKey: PublicKey,
   rewardDistributorPda: PublicKey,
-  whitelist: PublicKey[] = []
+  whitelist: PublicKey[] = [],
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
@@ -31,13 +31,16 @@ export async function buildSetAdmins(
   connection: Connection,
   publicKey: PublicKey,
   rewardDistributorPda: PublicKey,
-  newAdmins: PublicKey[]
+  newAdmins: PublicKey[],
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
   return program.methods
     .setAdmins(newAdmins)
-    .accounts({ admin: publicKey, rewardDistributor: rewardDistributorPda } as any)
+    .accounts({
+      admin: publicKey,
+      rewardDistributor: rewardDistributorPda,
+    } as any)
     .transaction();
 }
 
@@ -45,13 +48,16 @@ export async function buildSetWhitelist(
   connection: Connection,
   publicKey: PublicKey,
   rewardDistributorPda: PublicKey,
-  newWhitelist: PublicKey[]
+  newWhitelist: PublicKey[],
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
   return program.methods
     .setWhitelist(newWhitelist)
-    .accounts({ admin: publicKey, rewardDistributor: rewardDistributorPda } as any)
+    .accounts({
+      admin: publicKey,
+      rewardDistributor: rewardDistributorPda,
+    } as any)
     .transaction();
 }
 
@@ -62,7 +68,7 @@ export async function buildSetRewardList(
   globalRangeMin: number | null,
   globalRangeMax: number | null,
   startTimestamp: number | null,
-  endTimestamp: number | null
+  endTimestamp: number | null,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
@@ -80,7 +86,7 @@ export async function buildSetRewardList(
         : null,
       typeof globalRangeMax === "number" && Number.isFinite(globalRangeMax)
         ? globalRangeMax
-        : null
+        : null,
     )
     .accounts({
       admin: publicKey,

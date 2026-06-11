@@ -7,14 +7,17 @@ import {
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
-import { DELEGATION_PROGRAM_ID, GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
+import {
+  DELEGATION_PROGRAM_ID,
+  GetCommitmentSignature,
+} from "@magicblock-labs/ephemeral-rollups-sdk";
 import { Program } from "@coral-xyz/anchor";
 import { EphemeralAccountChats } from "../target/types/ephemeral_account_chats";
 
 function generateName(): string {
   // Random number padded with 0s to 10 digits
   const randomNumber = Math.floor(Math.random() * 10000000000);
-  return randomNumber.toString().padStart(10, '0');
+  return randomNumber.toString().padStart(10, "0");
 }
 
 function conversationSize(messageCount: number): number {
@@ -27,7 +30,8 @@ describe("ephemeral-account-chats", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
 
   const provider = anchor.getProvider() as anchor.AnchorProvider;
-  const program: Program<EphemeralAccountChats> = anchor.workspace.ephemeralAccountChats;
+  const program: Program<EphemeralAccountChats> =
+    anchor.workspace.ephemeralAccountChats;
   const connection = provider.connection;
   const userA = provider.wallet;
   const userBKp = Keypair.generate();
@@ -38,33 +42,30 @@ describe("ephemeral-account-chats", () => {
 
   const [profileAPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("profile"), Buffer.from(nameA)],
-    program.programId
+    program.programId,
   );
   const [profileBPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("profile"), Buffer.from(nameB)],
-    program.programId
+    program.programId,
   );
   const [conversationPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("conversation"), Buffer.from(nameA), Buffer.from(nameB)],
-    program.programId
+    program.programId,
   );
 
   const erRpcUrl =
     process.env.EPHEMERAL_PROVIDER_ENDPOINT ??
     process.env.MAGICBLOCK_RPC_URL ??
     "https://devnet-as.magicblock.app";
-  const erConnection = new Connection(
-    erRpcUrl,
-    "confirmed"
-  );
+  const erConnection = new Connection(erRpcUrl, "confirmed");
   let validator: PublicKey;
   const erProgramA = new Program<EphemeralAccountChats>(
     program.idl,
-    new anchor.AnchorProvider(erConnection, userA)
+    new anchor.AnchorProvider(erConnection, userA),
   );
   const erProgramB = new Program<EphemeralAccountChats>(
     program.idl,
-    new anchor.AnchorProvider(erConnection, userB)
+    new anchor.AnchorProvider(erConnection, userB),
   );
 
   ///---------------------------------------------------------------------------
@@ -78,7 +79,7 @@ describe("ephemeral-account-chats", () => {
         fromPubkey: userA.publicKey,
         toPubkey: userB.publicKey,
         lamports: 0.1 * anchor.web3.LAMPORTS_PER_SOL,
-      })
+      }),
     );
     tx.feePayer = userA.publicKey;
     tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
@@ -87,14 +88,17 @@ describe("ephemeral-account-chats", () => {
     await connection.confirmTransaction(txHash, "confirmed");
 
     const response = await fetch(erRpcUrl, {
-      method: "POST", body: JSON.stringify({
-        "method": "getIdentity",
-        "jsonrpc": "2.0",
-        "params": [{
-          "commitment": "confirmed"
-        }],
-        "id": "c1cae191-92ec-4606-880c-c7817afaa121"
-      })
+      method: "POST",
+      body: JSON.stringify({
+        method: "getIdentity",
+        jsonrpc: "2.0",
+        params: [
+          {
+            commitment: "confirmed",
+          },
+        ],
+        id: "c1cae191-92ec-4606-880c-c7817afaa121",
+      }),
     });
     const data: any = await response.json();
     validator = new PublicKey(data.result.identity);
@@ -126,7 +130,7 @@ describe("ephemeral-account-chats", () => {
         systemProgram: SystemProgram.programId,
       })
       .signers([userBKp])
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
 
     const profileA = await program.account.profile.fetch(profileAPda);
     const profileB = await program.account.profile.fetch(profileBPda);
@@ -145,10 +149,12 @@ describe("ephemeral-account-chats", () => {
         profile: profileAPda,
         systemProgram: SystemProgram.programId,
       })
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
 
     profileA = await connection.getAccountInfo(profileAPda);
-    expect(profileA?.lamports).to.equal(0.05 * anchor.web3.LAMPORTS_PER_SOL + profileALamportsBefore);
+    expect(profileA?.lamports).to.equal(
+      0.05 * anchor.web3.LAMPORTS_PER_SOL + profileALamportsBefore,
+    );
   });
 
   it("delegates profiles", async () => {
@@ -158,7 +164,7 @@ describe("ephemeral-account-chats", () => {
         authority: userA.publicKey,
         profile: profileAPda,
       })
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
 
     await program.methods
       .delegateProfile(validator)
@@ -167,12 +173,16 @@ describe("ephemeral-account-chats", () => {
         profile: profileBPda,
       })
       .signers([userBKp])
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
 
     const profileA = await connection.getAccountInfo(profileAPda);
     const profileB = await connection.getAccountInfo(profileBPda);
-    expect(profileA?.owner?.toBase58()).to.equal(DELEGATION_PROGRAM_ID.toBase58());
-    expect(profileB?.owner?.toBase58()).to.equal(DELEGATION_PROGRAM_ID.toBase58());
+    expect(profileA?.owner?.toBase58()).to.equal(
+      DELEGATION_PROGRAM_ID.toBase58(),
+    );
+    expect(profileB?.owner?.toBase58()).to.equal(
+      DELEGATION_PROGRAM_ID.toBase58(),
+    );
   });
 
   ///---------------------------------------------------------------------------
@@ -189,11 +199,15 @@ describe("ephemeral-account-chats", () => {
         conversation: conversationPda,
         systemProgram: SystemProgram.programId,
       })
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
 
-    const conversation = await erProgramA.account.conversation.fetch(conversationPda);
+    const conversation = await erProgramA.account.conversation.fetch(
+      conversationPda,
+    );
     expect(conversation.messages.length).to.equal(0);
-    const conversationAccount = await erConnection.getAccountInfo(conversationPda);
+    const conversationAccount = await erConnection.getAccountInfo(
+      conversationPda,
+    );
     expect(conversationAccount?.data.length).to.equal(conversationSize(0));
   });
 
@@ -205,18 +219,26 @@ describe("ephemeral-account-chats", () => {
         profileSender: profileAPda,
         profileOther: profileBPda,
       })
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
 
     const conversation = await erConnection.getAccountInfo(conversationPda);
-    expect(conversation?.data.length).to.equal(conversationSize(MAX_MESSAGE_COUNT));
+    expect(conversation?.data.length).to.equal(
+      conversationSize(MAX_MESSAGE_COUNT),
+    );
   });
 
   it("appends messages to a conversation", async () => {
     let receivedMessages = 0;
-    const subscriptionId = erConnection.onAccountChange(conversationPda, (account) => {
-      const parsedMessage = erProgramA.coder.accounts.decode('conversation', account.data);
-      receivedMessages++;
-    });
+    const subscriptionId = erConnection.onAccountChange(
+      conversationPda,
+      (account) => {
+        const parsedMessage = erProgramA.coder.accounts.decode(
+          "conversation",
+          account.data,
+        );
+        receivedMessages++;
+      },
+    );
 
     const nMessages = MAX_MESSAGE_COUNT;
     try {
@@ -251,7 +273,7 @@ describe("ephemeral-account-chats", () => {
         if (receivedMessages === nMessages) {
           break;
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     } finally {
       await erConnection.removeAccountChangeListener(subscriptionId);
@@ -261,7 +283,9 @@ describe("ephemeral-account-chats", () => {
 
     try {
       await erProgramA.methods
-        .appendMessage("Hello world, appending another message, this should be failed!")
+        .appendMessage(
+          "Hello world, appending another message, this should be failed!",
+        )
         .accountsPartial({
           authority: userA.publicKey,
           profileOwner: profileAPda,
@@ -271,7 +295,9 @@ describe("ephemeral-account-chats", () => {
       assert.fail("The conversation should have been full");
     } catch (error) {
       let programError = error as anchor.ProgramError;
-      const expectedError = program.idl.errors.find(e => e.name === "conversationCapacityExceeded");
+      const expectedError = program.idl.errors.find(
+        (e) => e.name === "conversationCapacityExceeded",
+      );
       expect(programError.msg).to.equal(expectedError?.msg);
     }
   });
@@ -285,7 +311,7 @@ describe("ephemeral-account-chats", () => {
         profileOther: profileBPda,
         conversation: conversationPda,
       })
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
   });
 
   it("undelegates profiles", async () => {
@@ -295,20 +321,32 @@ describe("ephemeral-account-chats", () => {
         authority: userA.publicKey,
         profile: profileAPda,
       })
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
     const txHashB = await erProgramB.methods
       .undelegateProfile()
       .accountsPartial({
         authority: userB.publicKey,
         profile: profileBPda,
       })
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
 
-    const commitmentSignatureA = await GetCommitmentSignature(txHashA, erConnection);
-    const commitmentSignatureB = await GetCommitmentSignature(txHashB, erConnection);
+    const commitmentSignatureA = await GetCommitmentSignature(
+      txHashA,
+      erConnection,
+    );
+    const commitmentSignatureB = await GetCommitmentSignature(
+      txHashB,
+      erConnection,
+    );
 
-    await connection.getTransaction(commitmentSignatureA, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
-    await connection.getTransaction(commitmentSignatureB, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+    await connection.getTransaction(commitmentSignatureA, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+    await connection.getTransaction(commitmentSignatureB, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
 
     const profileA = await connection.getAccountInfo(profileAPda);
     const profileB = await connection.getAccountInfo(profileBPda);
@@ -335,7 +373,7 @@ describe("ephemeral-account-chats", () => {
         profile: profileBPda,
       })
       .signers([userBKp])
-      .rpc({skipPreflight: true});
+      .rpc({ skipPreflight: true });
 
     const profileA = await connection.getAccountInfo(profileAPda);
     const profileB = await connection.getAccountInfo(profileBPda);
@@ -348,7 +386,7 @@ describe("ephemeral-account-chats", () => {
         fromPubkey: userB.publicKey,
         toPubkey: userA.publicKey,
         lamports: userBBalance - 5000,
-      })
+      }),
     );
     tx.feePayer = userB.publicKey;
     tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;

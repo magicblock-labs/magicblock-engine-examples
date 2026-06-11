@@ -16,8 +16,13 @@
     "fs": "0.0.2"
   },
   "scripts": {
+    "test:local": ". ../scripts/local-env.sh && npx vitest run ./tests/kit/rust-counter.test.ts",
+    "setup": "cd .. && SETUP_ONLY=1 ./test-locally.sh rust-counter",
     "test": "npx vitest run ./tests/kit",
-    "test-web3js": "npx vitest run ./tests/web3js"
+    "test:web3js": "npx vitest run ./tests/web3js",
+    "build": "cargo build-sbf",
+    "lint": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
+    "lint:fix": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
   },
   "devDependencies": {
     "@types/chai": "^5.2.2",

@@ -10,11 +10,19 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { createCreateMetadataAccountV3Instruction, createSetAndVerifyCollectionInstruction, createCreateMasterEditionV3Instruction } from "@metaplex-foundation/mpl-token-metadata";
+import {
+  createCreateMetadataAccountV3Instruction,
+  createSetAndVerifyCollectionInstruction,
+  createCreateMasterEditionV3Instruction,
+} from "@metaplex-foundation/mpl-token-metadata";
 import * as fs from "fs";
 
 import { PDAs } from "./pdas";
-import { loadOrGenerateUserKeypair, ensureUserBalance, saveMints } from "./setup";
+import {
+  loadOrGenerateUserKeypair,
+  ensureUserBalance,
+  saveMints,
+} from "./setup";
 import {
   getOrCreateDistributorTokenAccount,
   getProgramDataPda,
@@ -25,16 +33,22 @@ import {
   logTxResult,
   logError,
 } from "./helpers";
-import { TOKEN_MINT, TOKEN_DECIMALS, DISTRIBUTOR_MINT_AMOUNT } from "./constants";
+import {
+  TOKEN_MINT,
+  TOKEN_DECIMALS,
+  DISTRIBUTOR_MINT_AMOUNT,
+} from "./constants";
 import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 
-const VALIDATOR= new PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev");
+const VALIDATOR = new PublicKey(
+  process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev",
+);
 
 describe.only("rewards-delegated-vrf", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  const connection =  new Connection(provider.connection.rpcEndpoint);
+  const connection = new Connection(provider.connection.rpcEndpoint);
 
   const providerEphemeralRollup = new anchor.AnchorProvider(
     new anchor.web3.Connection(
@@ -42,33 +56,45 @@ describe.only("rewards-delegated-vrf", () => {
         "https://devnet-as.magicblock.app/",
       {
         wsEndpoint:
-          process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
-      }
+          process.env.EPHEMERAL_WS_ENDPOINT ||
+          "wss://devnet-as.magicblock.app/",
+      },
     ),
-    anchor.Wallet.local()
+    anchor.Wallet.local(),
   );
 
-  const program = anchor.workspace.RewardsDelegatedVrf as Program<RewardsDelegatedVrf>;
+  const program = anchor.workspace
+    .RewardsDelegatedVrf as Program<RewardsDelegatedVrf>;
   const ephemeralProgram = new Program(
     program.idl,
-    providerEphemeralRollup
+    providerEphemeralRollup,
   ) as Program<RewardsDelegatedVrf>;
 
   const wallet = anchor.Wallet.local();
   const user = loadOrGenerateUserKeypair("tests/fixtures/user-keypair.json");
 
-  const rewardDistributorPda = PDAs.getRewardDistributor(program.programId, wallet.publicKey);
-  const rewardListPda = PDAs.getRewardList(program.programId, rewardDistributorPda);
+  const rewardDistributorPda = PDAs.getRewardDistributor(
+    program.programId,
+    wallet.publicKey,
+  );
+  const rewardListPda = PDAs.getRewardList(
+    program.programId,
+    rewardDistributorPda,
+  );
   const transferLookupTable = PDAs.getTransferLookupTable(program.programId);
 
-  const whitelist = [wallet.publicKey, new PublicKey("MBRsimXx8nMHvXYgRHLQeVQR3FDALK2eZeXfQ3fJeSv"), new PublicKey("JonasQ6kwFknJKQpVXbAs2d3fdVLy2DnXd13ynwhgV4")];
+  const whitelist = [
+    wallet.publicKey,
+    new PublicKey("MBRsimXx8nMHvXYgRHLQeVQR3FDALK2eZeXfQ3fJeSv"),
+    new PublicKey("JonasQ6kwFknJKQpVXbAs2d3fdVLy2DnXd13ynwhgV4"),
+  ];
 
   // Initialize pubkeys
   let tokenMint: PublicKey = TOKEN_MINT;
   let distributorTokenAccount: PublicKey = getAssociatedTokenAddressSync(
     TOKEN_MINT,
     rewardDistributorPda,
-    true // allowOffCurve - allows PDAs
+    true, // allowOffCurve - allows PDAs
   );
   let collectionMint: PublicKey;
 
@@ -78,23 +104,20 @@ describe.only("rewards-delegated-vrf", () => {
     wallet.publicKey,
     user.publicKey,
     rewardDistributorPda,
-    rewardListPda
+    rewardListPda,
   );
 
   before(async function () {
     const balance = await provider.connection.getBalance(wallet.publicKey);
-    console.log(
-      "Current balance is",
-      balance / LAMPORTS_PER_SOL,
-      " SOL",
-      "\n"
-    );
+    console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
 
     await ensureUserBalance(provider, user);
   });
 
   it("Initialize Reward Distributor", async () => {
-    const distributorAccount = await program.provider.connection.getAccountInfo(rewardDistributorPda);
+    const distributorAccount = await program.provider.connection.getAccountInfo(
+      rewardDistributorPda,
+    );
     if (distributorAccount?.owner.equals(program.programId)) {
       console.log("Reward Distributor already initialized");
       return;
@@ -121,7 +144,7 @@ describe.only("rewards-delegated-vrf", () => {
           wallet.payer,
           wallet.publicKey, // Mint authority
           wallet.publicKey, // Freeze authority
-          TOKEN_DECIMALS
+          TOKEN_DECIMALS,
         );
         console.log("Token Mint created:", tokenMint.toString());
       } else {
@@ -137,7 +160,7 @@ describe.only("rewards-delegated-vrf", () => {
         provider,
         tokenMint,
         rewardDistributorPda,
-        wallet.payer
+        wallet.payer,
       );
 
       // Mint tokens to distributor account
@@ -147,21 +170,28 @@ describe.only("rewards-delegated-vrf", () => {
         tokenMint,
         distributorTokenAccount,
         wallet.payer,
-        DISTRIBUTOR_MINT_AMOUNT
+        DISTRIBUTOR_MINT_AMOUNT,
       );
 
-      console.log("Tokens minted to distributor. Transaction:", distributorMintTx);
       console.log(
-        `Minted ${DISTRIBUTOR_MINT_AMOUNT / Math.pow(10, TOKEN_DECIMALS)} tokens to distributor`
+        "Tokens minted to distributor. Transaction:",
+        distributorMintTx,
+      );
+      console.log(
+        `Minted ${
+          DISTRIBUTOR_MINT_AMOUNT / Math.pow(10, TOKEN_DECIMALS)
+        } tokens to distributor`,
       );
 
       // Verify the token account balance
       const distributorAccountBalance =
-        await provider.connection.getTokenAccountBalance(distributorTokenAccount);
+        await provider.connection.getTokenAccountBalance(
+          distributorTokenAccount,
+        );
       console.log(
         "Distributor Token Account Balance:",
         distributorAccountBalance.value.uiAmount,
-        distributorAccountBalance.value.uiAmountString
+        distributorAccountBalance.value.uiAmountString,
       );
     } catch (err) {
       console.error("Error minting tokens to distributor:", err);
@@ -181,7 +211,10 @@ describe.only("rewards-delegated-vrf", () => {
         mintsData = JSON.parse(fs.readFileSync(mintsPath, "utf-8"));
         if (mintsData.collectionMint) {
           collectionMint = new PublicKey(mintsData.collectionMint);
-          console.log("Collection already exists. Mint:", collectionMint.toString());
+          console.log(
+            "Collection already exists. Mint:",
+            collectionMint.toString(),
+          );
           return;
         }
       }
@@ -192,7 +225,7 @@ describe.only("rewards-delegated-vrf", () => {
         wallet.payer,
         wallet.publicKey,
         wallet.publicKey,
-        0 // NFT has 0 decimals
+        0, // NFT has 0 decimals
       );
 
       console.log("Collection Mint created:", collectionMint.toString());
@@ -201,13 +234,18 @@ describe.only("rewards-delegated-vrf", () => {
       const [collectionMetadataAddress] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("metadata"),
-          new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+          new PublicKey(
+            "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+          ).toBuffer(),
           collectionMint.toBuffer(),
         ],
-        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"),
       );
 
-      console.log("Collection Metadata PDA:", collectionMetadataAddress.toString());
+      console.log(
+        "Collection Metadata PDA:",
+        collectionMetadataAddress.toString(),
+      );
 
       const collectionMetadataIx = createCreateMetadataAccountV3Instruction(
         {
@@ -239,7 +277,7 @@ describe.only("rewards-delegated-vrf", () => {
             isMutable: true,
             collectionDetails: { __kind: "V1", size: 0 },
           },
-        }
+        },
       );
 
       const tx = new anchor.web3.Transaction().add(collectionMetadataIx);
@@ -257,7 +295,7 @@ describe.only("rewards-delegated-vrf", () => {
 
   it("Create and mint Legacy NFT to reward distributor", async () => {
     console.log(
-      "\n=== Creating and Minting Legacy NFT to Reward Distributor (part of collection) ==="
+      "\n=== Creating and Minting Legacy NFT to Reward Distributor (part of collection) ===",
     );
 
     try {
@@ -267,7 +305,7 @@ describe.only("rewards-delegated-vrf", () => {
         wallet.payer,
         wallet.publicKey,
         wallet.publicKey,
-        0 // 0 decimals for NFTs
+        0, // 0 decimals for NFTs
       );
       console.log("NFT Mint created:", nftMint.toString());
 
@@ -275,14 +313,14 @@ describe.only("rewards-delegated-vrf", () => {
       const distributorNftAccount = getAssociatedTokenAddressSync(
         nftMint,
         rewardDistributorPda,
-        true // allowOffCurve - allows PDAs
+        true, // allowOffCurve - allows PDAs
       );
 
       console.log("Distributor NFT account:", distributorNftAccount.toString());
 
       // Check if the account exists
       const nftAccountInfo = await provider.connection.getAccountInfo(
-        distributorNftAccount
+        distributorNftAccount,
       );
 
       if (!nftAccountInfo) {
@@ -295,12 +333,12 @@ describe.only("rewards-delegated-vrf", () => {
             rewardDistributorPda,
             nftMint,
             TOKEN_PROGRAM_ID,
-            ASSOCIATED_TOKEN_PROGRAM_ID
-          )
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+          ),
         );
 
         const createNftAccountSig = await provider.sendAndConfirm(
-          createNftAccountTx
+          createNftAccountTx,
         );
         console.log("NFT account created. Signature:", createNftAccountSig);
       } else {
@@ -314,24 +352,29 @@ describe.only("rewards-delegated-vrf", () => {
         nftMint,
         distributorNftAccount,
         wallet.payer,
-        1 // Mint 1 NFT
+        1, // Mint 1 NFT
       );
 
       console.log("NFT minted to distributor. Transaction:", nftMintTx);
 
       const nftBalance = await provider.connection.getTokenAccountBalance(
-        distributorNftAccount
+        distributorNftAccount,
       );
-      console.log("Distributor NFT Account Balance:", nftBalance.value.uiAmount);
+      console.log(
+        "Distributor NFT Account Balance:",
+        nftBalance.value.uiAmount,
+      );
 
       // Create metadata for the NFT with collection reference
       const [metadataAddress] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("metadata"),
-          new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+          new PublicKey(
+            "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+          ).toBuffer(),
           nftMint.toBuffer(),
         ],
-        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"),
       );
 
       console.log("Metadata PDA:", metadataAddress.toString());
@@ -369,7 +412,7 @@ describe.only("rewards-delegated-vrf", () => {
             isMutable: true,
             collectionDetails: null,
           },
-        }
+        },
       );
 
       const metadataTx = new anchor.web3.Transaction().add(createMetadataIx);
@@ -380,11 +423,13 @@ describe.only("rewards-delegated-vrf", () => {
       const [masterEditionAddress] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("metadata"),
-          new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+          new PublicKey(
+            "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+          ).toBuffer(),
           nftMint.toBuffer(),
           Buffer.from("edition"),
         ],
-        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"),
       );
 
       const createMasterEditionIx = createCreateMasterEditionV3Instruction(
@@ -401,11 +446,13 @@ describe.only("rewards-delegated-vrf", () => {
         {
           createMasterEditionArgs: {
             maxSupply: null, // null for unlimited editions
-          }
-        }
+          },
+        },
       );
 
-      const masterEditionTx = new anchor.web3.Transaction().add(createMasterEditionIx);
+      const masterEditionTx = new anchor.web3.Transaction().add(
+        createMasterEditionIx,
+      );
       const masterEditionSig = await provider.sendAndConfirm(masterEditionTx);
       console.log("Master Edition created. Signature:", masterEditionSig);
 
@@ -413,10 +460,12 @@ describe.only("rewards-delegated-vrf", () => {
       const [collectionMetadataAddress] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("metadata"),
-          new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+          new PublicKey(
+            "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+          ).toBuffer(),
           collectionMint.toBuffer(),
         ],
-        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"),
       );
 
       // Verify NFT collection membership
@@ -431,19 +480,17 @@ describe.only("rewards-delegated-vrf", () => {
           collectionMasterEditionAccount: masterEditionAddress,
         });
 
-        const verifyTx = new anchor.web3.Transaction().add(
-          verifyCollectionIx
-        );
+        const verifyTx = new anchor.web3.Transaction().add(verifyCollectionIx);
         const verifySig = await provider.sendAndConfirm(verifyTx);
         console.log("NFT Collection verified. Signature:", verifySig);
       } catch (verifyErr) {
         console.warn(
           "Collection verification failed (optional):",
-          (verifyErr as Error).message
+          (verifyErr as Error).message,
         );
       }
       console.log(
-        "NFT successfully created and minted to distributor as part of collection"
+        "NFT successfully created and minted to distributor as part of collection",
       );
 
       // Load existing mints and add the new NFT
@@ -471,7 +518,7 @@ describe.only("rewards-delegated-vrf", () => {
     }
   });
 
-it("Set Reward List Parameters", async () => {
+  it("Set Reward List Parameters", async () => {
     const startTimestamp = Math.floor(Date.now() / 1000);
     const endTimestamp = startTimestamp + 86400 * 30;
 
@@ -480,7 +527,7 @@ it("Set Reward List Parameters", async () => {
         new anchor.BN(startTimestamp),
         new anchor.BN(endTimestamp),
         1,
-        100
+        100,
       )
       .accounts({
         admin: wallet.publicKey,
@@ -510,10 +557,13 @@ it("Set Reward List Parameters", async () => {
 
       // Verify the whitelist was set
       const distributorAccount = await program.account.rewardDistributor.fetch(
-        rewardDistributorPda
+        rewardDistributorPda,
       );
 
-      console.log("Total Whitelisted Users:", distributorAccount.whitelist.length);
+      console.log(
+        "Total Whitelisted Users:",
+        distributorAccount.whitelist.length,
+      );
       distributorAccount.whitelist.forEach((address, index) => {
         console.log(`${index + 1}. ${address.toString()}`);
       });
@@ -540,17 +590,23 @@ it("Set Reward List Parameters", async () => {
       console.log("\nInitialize Transfer Lookup Table txHash: ", tx);
 
       const lookupTable = await program.account.transferLookupTable.fetch(
-        transferLookupTable
+        transferLookupTable,
       );
 
       console.log("\n✓ Transfer Lookup Table Initialized");
-      console.log("Total Lookup Accounts Registered:", lookupTable.lookupAccounts.length);
+      console.log(
+        "Total Lookup Accounts Registered:",
+        lookupTable.lookupAccounts.length,
+      );
 
       lookupTable.lookupAccounts.forEach((account, index) => {
         console.log(`  ${index + 1}. ${account.toString()}`);
       });
     } catch (err) {
-      console.log("Error initializing transfer lookup table:", (err as Error).message);
+      console.log(
+        "Error initializing transfer lookup table:",
+        (err as Error).message,
+      );
     }
   });
 
@@ -561,11 +617,9 @@ it("Set Reward List Parameters", async () => {
         admin: wallet.publicKey,
         rewardDistributor: rewardDistributorPda,
       })
-      .remainingAccounts(
-        [
-          { pubkey: VALIDATOR, isSigner: false, isWritable: false },
-        ]
-      )
+      .remainingAccounts([
+        { pubkey: VALIDATOR, isSigner: false, isWritable: false },
+      ])
       .rpc({ skipPreflight: true });
 
     console.log("Delegate Reward List txHash: ", tx);
@@ -627,7 +681,7 @@ it("Set Reward List Parameters", async () => {
       .catch((err) => {
         console.log(
           "Request Random Reward error (may fail if VRF not available):",
-          err.message
+          err.message,
         );
         return null;
       });
@@ -643,7 +697,9 @@ it("Set Reward List Parameters", async () => {
             ephemeralProgram.provider.connection.removeOnLogsListener(listener);
             listenerRemoved = true;
           }
-          console.log("VRF callback listener timeout (callback may still come)");
+          console.log(
+            "VRF callback listener timeout (callback may still come)",
+          );
           resolve();
         }, 30000); // 30 second timeout
 
@@ -653,14 +709,22 @@ it("Set Reward List Parameters", async () => {
             try {
               console.log("Program logs received:", logs.logs);
               console.log("VRF callback signature:", logs.signature);
-              console.log("VRF callback status:", logs.err ? "Error" : "Success");
+              console.log(
+                "VRF callback status:",
+                logs.err ? "Error" : "Success",
+              );
               console.log("VRF callback logs:");
               const relevantLogs = logs.logs.filter(
-                (log) => log.includes("Random result:") || log.includes("Won reward") || log.includes("exhausted")
+                (log) =>
+                  log.includes("Random result:") ||
+                  log.includes("Won reward") ||
+                  log.includes("exhausted"),
               );
               relevantLogs.forEach((log) => console.log("  " + log));
               if (listener !== null && !listenerRemoved) {
-                ephemeralProgram.provider.connection.removeOnLogsListener(listener);
+                ephemeralProgram.provider.connection.removeOnLogsListener(
+                  listener,
+                );
                 listenerRemoved = true;
               }
               clearTimeout(timeoutId);
@@ -669,7 +733,7 @@ it("Set Reward List Parameters", async () => {
               console.error("Error in log listener:", err);
             }
           },
-          "confirmed"
+          "confirmed",
         );
       });
 
@@ -697,18 +761,22 @@ it("Set Reward List Parameters", async () => {
       // Use the last NFT
       const nftData = mintsData.nfts[mintsData.nfts.length - 1];
       const nftMint = new PublicKey(nftData.mint);
-      const distributorNftAccount = new PublicKey(nftData.distributorTokenAccount);
+      const distributorNftAccount = new PublicKey(
+        nftData.distributorTokenAccount,
+      );
       const [metadataAddress] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("metadata"),
-          new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+          new PublicKey(
+            "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+          ).toBuffer(),
           nftMint.toBuffer(),
         ],
-        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"),
       );
 
       // Adding NFT to "Bronze Prize" reward
-      const accountsObj: any = { 
+      const accountsObj: any = {
         admin: wallet.publicKey,
         rewardDistributor: rewardDistributorPda,
         rewardList: rewardListPda,
@@ -723,7 +791,7 @@ it("Set Reward List Parameters", async () => {
           null, // reward_amount (not needed for existing reward)
           null, // redemption_limit (not needed for existing reward)
           null, // draw_range_min (not needed for existing reward)
-          null  // draw_range_max (not needed for existing reward)
+          null, // draw_range_max (not needed for existing reward)
         )
         .accounts(accountsObj)
         .transaction();
@@ -746,20 +814,29 @@ it("Set Reward List Parameters", async () => {
         console.log("Successfully added NFT to 'Silver Prize' reward");
 
         // Log updated reward list details
-        await logRewardListDetails(program, ephemeralProgram, rewardListPda, true);
+        await logRewardListDetails(
+          program,
+          ephemeralProgram,
+          rewardListPda,
+          true,
+        );
       } else {
         console.log("Add Reward transaction failed or was not confirmed");
       }
     } catch (addRewardErr) {
       console.error("Error adding reward:", addRewardErr);
-      console.log("Error details:", addRewardErr instanceof Error ? addRewardErr.message : JSON.stringify(addRewardErr));
+      console.log(
+        "Error details:",
+        addRewardErr instanceof Error
+          ? addRewardErr.message
+          : JSON.stringify(addRewardErr),
+      );
     }
   });
 
   it("Add Token Reward to Bronze Prize with SPL Token", async () => {
     logSection("Adding SPL Token to Bronze Prize Reward");
     try {
-
       // Adding SPL tokens to "Bronze Prize" reward (no metadata needed for tokens)
       const accountsObj: any = {
         admin: wallet.publicKey,
@@ -775,9 +852,9 @@ it("Set Reward List Parameters", async () => {
         .addReward(
           "Bronze Prize",
           new anchor.BN(500), // reward_amount: 500 tokens (must match existing)
-          null,               // draw_range_min (not needed for existing reward)
-          null,               // draw_range_max (not needed for existing reward)
-          new anchor.BN(15)   // redemption_limit: increase from 10 to 15
+          null, // draw_range_min (not needed for existing reward)
+          null, // draw_range_max (not needed for existing reward)
+          new anchor.BN(15), // redemption_limit: increase from 10 to 15
         )
         .accounts(accountsObj)
         .transaction();
@@ -798,7 +875,12 @@ it("Set Reward List Parameters", async () => {
       if (txHash) {
         logTxResult("Add Token Reward", txHash);
         console.log("Successfully added SPL token to 'Bronze Prize' reward");
-        await logRewardListDetails(program, ephemeralProgram, rewardListPda, true);
+        await logRewardListDetails(
+          program,
+          ephemeralProgram,
+          rewardListPda,
+          true,
+        );
       } else {
         console.log("Add Token Reward transaction failed or was not confirmed");
       }
@@ -826,7 +908,7 @@ it("Set Reward List Parameters", async () => {
           "Bronze Prize Updated",
           new anchor.BN(500),
           1,
-          25
+          25,
         )
         .accounts(accountsObj)
         .transaction();
@@ -846,7 +928,12 @@ it("Set Reward List Parameters", async () => {
 
       if (txHash) {
         logTxResult("Update Reward", txHash);
-        await logRewardListDetails(program, ephemeralProgram, rewardListPda, true);
+        await logRewardListDetails(
+          program,
+          ephemeralProgram,
+          rewardListPda,
+          true,
+        );
       } else {
         console.log("Update Reward transaction failed or was not confirmed");
       }
@@ -874,7 +961,10 @@ it("Set Reward List Parameters", async () => {
     const txHash = await providerEphemeralRollup
       .sendAndConfirm(tx, [], { skipPreflight: true })
       .catch((err) => {
-        console.log("Undelegate may fail if reward list not delegated:", err.message);
+        console.log(
+          "Undelegate may fail if reward list not delegated:",
+          err.message,
+        );
         return null;
       });
 
@@ -885,9 +975,16 @@ it("Set Reward List Parameters", async () => {
 
   it("Verify reward state after operations", async () => {
     try {
-      await logRewardListDetails(program, ephemeralProgram, rewardListPda, true);
+      await logRewardListDetails(
+        program,
+        ephemeralProgram,
+        rewardListPda,
+        true,
+      );
     } catch (err) {
-      console.log("Could not fetch final state (accounts may not be accessible)");
+      console.log(
+        "Could not fetch final state (accounts may not be accessible)",
+      );
     }
   });
 });

@@ -1,285 +1,384 @@
 import * as anchor from "@coral-xyz/anchor";
-import {BN, Program} from "@coral-xyz/anchor";
+import { BN, Program } from "@coral-xyz/anchor";
 import {
-    Keypair,
-    LAMPORTS_PER_SOL, PublicKey,
-    SystemProgram,
+  Keypair,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  SystemProgram,
 } from "@solana/web3.js";
 
 import {
-    TOKEN_PROGRAM_ID,
-    getAssociatedTokenAddressSync,
-    createAssociatedTokenAccountInstruction,
-    getAccount,
-    createInitializeMintInstruction, MINT_SIZE, getMinimumBalanceForRentExemptMint, createMintToInstruction,
-    createTransferInstruction,
+  TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+  createAssociatedTokenAccountInstruction,
+  getAccount,
+  createInitializeMintInstruction,
+  MINT_SIZE,
+  getMinimumBalanceForRentExemptMint,
+  createMintToInstruction,
 } from "@solana/spl-token";
-import {SplTokens} from "../target/types/spl_tokens";
+import { SplTokens } from "../target/types/spl_tokens";
 import {
-    delegateSpl, GetCommitmentSignature,
-    undelegateIx, withdrawSplIx
+  delegateSpl,
+  deriveRentPda,
+  GetCommitmentSignature,
+  transferSpl,
+  undelegateIx,
+  withdrawSpl,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import {assert} from "chai";
+import { assert } from "chai";
 
 describe("spl-tokens", () => {
-    console.log("spl-tokens.ts");
+  console.log("spl-tokens.ts");
 
-    const provider = process.env.PROVIDER_ENDPOINT
-        ? new anchor.AnchorProvider(
-            new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT, "confirmed"),
-            anchor.Wallet.local(),
-        )
-        : anchor.AnchorProvider.env();
-    anchor.setProvider(provider);
-    const connection = provider.connection;
-    let validator: PublicKey;
+  const provider = process.env.PROVIDER_ENDPOINT
+    ? new anchor.AnchorProvider(
+        new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT, "confirmed"),
+        anchor.Wallet.local(),
+      )
+    : anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+  const connection = provider.connection;
+  const validator = new PublicKey(
+    process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev",
+  );
+  console.log("Validator: ", validator.toBase58());
 
-    const providerEphemeralRollup = new anchor.AnchorProvider(
-      new anchor.web3.Connection(
-        process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
-          "https://devnet-as.magicblock.app/",
-          {
-              wsEndpoint:
-                  process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app/",
-          },
+  const providerEphemeralRollup = new anchor.AnchorProvider(
+    new anchor.web3.Connection(
+      process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
+        "https://devnet-as.magicblock.app/",
+      {
+        wsEndpoint:
+          process.env.EPHEMERAL_WS_ENDPOINT ||
+          "wss://devnet-as.magicblock.app/",
+      },
+    ),
+    anchor.Wallet.local(),
+  );
+  console.log(
+    "Ephemeral Rollup Connection: ",
+    providerEphemeralRollup.connection.rpcEndpoint,
+  );
+  const ephemeralConnection = providerEphemeralRollup.connection;
+
+  let mint: Keypair;
+  let recipientA: Keypair;
+  let recipientB: Keypair;
+
+  const TOKEN_AMOUNT = 1000n;
+
+  /**
+   * Create a fresh mint and two recipients, each funded with SOL and holding
+   * {@link TOKEN_AMOUNT} SPL tokens. Returns the mint, owners and their ATAs.
+   */
+  const setupMintWithRecipients = async (): Promise<{
+    mint: Keypair;
+    owners: [Keypair, Keypair];
+    atas: [PublicKey, PublicKey];
+  }> => {
+    const payer = (provider.wallet as anchor.Wallet).payer;
+
+    const newMint = Keypair.generate();
+    const owner1 = Keypair.generate();
+    const owner2 = Keypair.generate();
+    /// We need to fund the sponsor PDA to pay for the rent of the shuttles
+    const [sponsorPda] = deriveRentPda();
+
+    // fund recipients from payer wallet (avoids faucet rate limits / 429s)
+    const fundTx = new anchor.web3.Transaction();
+    for (const r of [owner1.publicKey, owner2.publicKey, sponsorPda]) {
+      fundTx.add(
+        SystemProgram.transfer({
+          fromPubkey: payer.publicKey,
+          toPubkey: r,
+          lamports: 0.2 * LAMPORTS_PER_SOL,
+        }),
+      );
+    }
+    await anchor.web3.sendAndConfirmTransaction(connection, fundTx, [payer]);
+
+    const ata1 = getAssociatedTokenAddressSync(
+      newMint.publicKey,
+      owner1.publicKey,
+    );
+    const ata2 = getAssociatedTokenAddressSync(
+      newMint.publicKey,
+      owner2.publicKey,
+    );
+
+    const tx = new anchor.web3.Transaction().add(
+      // create mint
+      SystemProgram.createAccount({
+        fromPubkey: payer.publicKey,
+        newAccountPubkey: newMint.publicKey,
+        space: MINT_SIZE,
+        lamports: await getMinimumBalanceForRentExemptMint(connection),
+        programId: TOKEN_PROGRAM_ID,
+      }),
+      createInitializeMintInstruction(
+        newMint.publicKey,
+        0,
+        payer.publicKey,
+        null,
       ),
-      anchor.Wallet.local(),
+
+      // create ATAs
+      createAssociatedTokenAccountInstruction(
+        payer.publicKey,
+        ata1,
+        owner1.publicKey,
+        newMint.publicKey,
+      ),
+      createAssociatedTokenAccountInstruction(
+        payer.publicKey,
+        ata2,
+        owner2.publicKey,
+        newMint.publicKey,
+      ),
+
+      // mint tokens
+      createMintToInstruction(
+        newMint.publicKey,
+        ata1,
+        payer.publicKey,
+        TOKEN_AMOUNT,
+      ),
+      createMintToInstruction(
+        newMint.publicKey,
+        ata2,
+        payer.publicKey,
+        TOKEN_AMOUNT,
+      ),
     );
-    console.log(
-      "Ephemeral Rollup Connection: ",
-      providerEphemeralRollup.connection.rpcEndpoint,
+
+    await provider.sendAndConfirm(tx, [payer, newMint], {
+      commitment: "confirmed",
+    });
+
+    const acct1 = await getAccount(connection, ata1);
+    const acct2 = await getAccount(connection, ata2);
+    if (acct1.amount !== TOKEN_AMOUNT) {
+      throw new Error(`owner1 expected ${TOKEN_AMOUNT}, got ${acct1.amount}`);
+    }
+    if (acct2.amount !== TOKEN_AMOUNT) {
+      throw new Error(`owner2 expected ${TOKEN_AMOUNT}, got ${acct2.amount}`);
+    }
+
+    return {
+      mint: newMint,
+      owners: [owner1, owner2],
+      atas: [ata1, ata2],
+    };
+  };
+
+  /**
+   * Setup 2 recipients, with 1000 SPL tokens each for a random mint
+   */
+  before(async () => {
+    const setup = await setupMintWithRecipients();
+    mint = setup.mint;
+    [recipientA, recipientB] = setup.owners;
+  });
+
+  it("Delegate SPL tokens, do a transfer and undelegate", async () => {
+    const admin = (provider.wallet as anchor.Wallet).payer;
+    console.log("\nUser1: ", recipientA.publicKey.toBase58());
+    console.log("User2: ", recipientB.publicKey.toBase58());
+    const ataA = getAssociatedTokenAddressSync(
+      mint.publicKey,
+      recipientA.publicKey,
     );
-    const ephemeralConnection = providerEphemeralRollup.connection;
+    const ataB = getAssociatedTokenAddressSync(
+      mint.publicKey,
+      recipientB.publicKey,
+    );
 
-    let mint: Keypair;
-    let recipientA: Keypair;
-    let recipientB: Keypair;
+    assert((await getAccount(connection, ataA)).amount == 1000n);
+    assert((await getAccount(connection, ataB)).amount == 1000n);
 
-    /**
-     * Setup 2 recipients, with 1000 SPL tokens each for a random mint
-     */
-    before(async () => {
-        const payer = (provider.wallet as anchor.Wallet).payer;
-        
-        recipientA = Keypair.generate();
-        recipientB = Keypair.generate();
+    // Legacy vault flow — must match undelegateIx/withdrawSpl below (the SDK's
+    // default idempotent shuttle path uses a different account layout).
+    const delegateOpts = {
+      validator,
+      idempotent: false as const,
+      payer: admin.publicKey,
+    };
 
-        // fund recipients from payer wallet (avoids faucet rate limits / 429s)
-        const fundTx = new anchor.web3.Transaction();
-        for (const r of [recipientA, recipientB]) {
-            fundTx.add(SystemProgram.transfer({
-                fromPubkey: payer.publicKey,
-                toPubkey: r.publicKey,
-                lamports: 0.2 * LAMPORTS_PER_SOL,
-            }));
-        }
-        await anchor.web3.sendAndConfirmTransaction(connection, fundTx, [payer]);
+    // A's delegation creates the shared vault for this mint; B reuses it.
+    const delegations: [Keypair, bigint, boolean][] = [
+      [recipientA, 50n, true],
+      [recipientB, 10n, false],
+    ];
+    for (const [owner, amount, initVaultIfMissing] of delegations) {
+      const ixs = await delegateSpl(owner.publicKey, mint.publicKey, amount, {
+        ...delegateOpts,
+        initVaultIfMissing,
+      });
+      await provider.sendAndConfirm(
+        new anchor.web3.Transaction().add(...ixs),
+        [owner, admin],
+        { commitment: "confirmed", skipPreflight: true },
+      );
+    }
 
-        mint = Keypair.generate();
-        const decimals = 0;
-        const amount = 1000n;
+    // Transfer 2 tokens A -> B inside the ER via the SDK helper.
+    const transferIxs = await transferSpl(
+      recipientA.publicKey,
+      recipientB.publicKey,
+      mint.publicKey,
+      2n,
+      {
+        visibility: "public",
+        fromBalance: "ephemeral",
+        toBalance: "ephemeral",
+      },
+    );
+    const sgnTransfer = await providerEphemeralRollup.sendAndConfirm(
+      new anchor.web3.Transaction().add(...transferIxs),
+      [recipientA],
+      { commitment: "confirmed", skipPreflight: true },
+    );
+    console.log(`\nTransfer signature: ${sgnTransfer}`);
 
-        const ataA = getAssociatedTokenAddressSync(
-            mint.publicKey,
-            recipientA.publicKey
-        );
+    // Check balances in the ER
+    const acctA = await getAccount(ephemeralConnection, ataA);
+    const acctB = await getAccount(ephemeralConnection, ataB);
+    assert(acctA.amount == 48n);
+    assert(acctB.amount == 12n);
 
-        const ataB = getAssociatedTokenAddressSync(
-            mint.publicKey,
-            recipientB.publicKey
-        );
+    // Undelegate each owner in the ER (one per tx — combined undelegates are flaky
+    // in CI). Withdraw runs on the base layer and requires each ephemeral ATA to be
+    // owned by the SDK program again, which only happens once that owner's
+    // undelegation has committed back to base — so wait for BOTH commits before
+    // withdrawing (waiting for one races the other's withdraw → InvalidAccountOwner).
+    const commits: string[] = [];
+    for (const owner of [recipientA, recipientB]) {
+      const sgn = await providerEphemeralRollup.sendAndConfirm(
+        new anchor.web3.Transaction().add(
+          undelegateIx(owner.publicKey, mint.publicKey),
+        ),
+        [owner],
+        { commitment: "confirmed", skipPreflight: true },
+      );
+      console.log(`Undelegate ${owner.publicKey.toBase58()} signature: ${sgn}`);
+      commits.push(
+        await GetCommitmentSignature(sgn, providerEphemeralRollup.connection),
+      );
+    }
+    await Promise.all(
+      commits.map((c) => connection.confirmTransaction(c, "confirmed")),
+    );
 
-        const tx = new anchor.web3.Transaction().add(
-            // create mint
-            SystemProgram.createAccount({
-                fromPubkey: payer.publicKey,
-                newAccountPubkey: mint.publicKey,
-                space: MINT_SIZE,
-                lamports: await getMinimumBalanceForRentExemptMint(connection),
-                programId: TOKEN_PROGRAM_ID,
-            }),
-            createInitializeMintInstruction(
-                mint.publicKey,
-                decimals,
-                payer.publicKey,
-                null
-            ),
+    // Withdraw both balances back to their base-layer ATAs via the SDK helper.
+    const withdrawIxs = [
+      ...(await withdrawSpl(
+        recipientA.publicKey,
+        mint.publicKey,
+        acctA.amount,
+        {
+          idempotent: false,
+        },
+      )),
+      ...(await withdrawSpl(
+        recipientB.publicKey,
+        mint.publicKey,
+        acctB.amount,
+        {
+          idempotent: false,
+        },
+      )),
+    ];
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(...withdrawIxs),
+      [recipientA, recipientB],
+      { commitment: "confirmed" },
+    );
 
-            // create ATAs
-            createAssociatedTokenAccountInstruction(
-                payer.publicKey,
-                ataA,
-                recipientA.publicKey,
-                mint.publicKey
-            ),
-            createAssociatedTokenAccountInstruction(
-                payer.publicKey,
-                ataB,
-                recipientB.publicKey,
-                mint.publicKey
-            ),
+    // Check balances
+    assert((await getAccount(connection, ataA)).amount == 998n);
+    assert((await getAccount(connection, ataB)).amount == 1002n);
+  });
 
-            // mint tokens
-            createMintToInstruction(
-                mint.publicKey,
-                ataA,
-                payer.publicKey,
-                amount
-            ),
-            createMintToInstruction(
-                mint.publicKey,
-                ataB,
-                payer.publicKey,
-                amount
-            )
-        );
+  const program = anchor.workspace.SplTokens as Program<SplTokens>;
 
-        await provider.sendAndConfirm(
-            tx,
-            [payer, mint],
-            {commitment: "confirmed"}
-        );
+  it("Delegate SPL tokens and do a transfer through a program", async () => {
+    const admin = (provider.wallet as anchor.Wallet).payer;
+    const delegateOpts = {
+      validator,
+      idempotent: false as const,
+      payer: admin.publicKey,
+    };
 
-        const acctA = await getAccount(connection, ataA);
-        const acctB = await getAccount(connection, ataB);
+    // Use a fresh mint + fresh recipients so this test does not depend on the
+    // delegate/undelegate lifecycle of the first test.
+    const {
+      mint: mint2,
+      owners: [sender, receiver],
+      atas: [ataSender, ataReceiver],
+    } = await setupMintWithRecipients();
 
-        if (acctA.amount !== amount) {
-            throw new Error(`Recipient A expected ${amount}, got ${acctA.amount}`);
-        }
-        if (acctB.amount !== amount) {
-            throw new Error(`Recipient B expected ${amount}, got ${acctB.amount}`);
-        }
+    // Delegate 10 tokens for the sender (first delegation for this mint creates
+    // the vault) and 10 for the receiver.
+    const ixsSender = await delegateSpl(
+      sender.publicKey,
+      mint2.publicKey,
+      10n,
+      {
+        ...delegateOpts,
+        initVaultIfMissing: true,
+      },
+    );
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(...ixsSender),
+      [sender, admin],
+      { commitment: "confirmed", skipPreflight: true },
+    );
 
-        // Get the validator identity
-        validator = new PublicKey((await (ephemeralConnection as any)._rpcRequest("getIdentity", []))!.result!.identity);
-        console.log("Validator: ", validator.toBase58());
+    const ixsReceiver = await delegateSpl(
+      receiver.publicKey,
+      mint2.publicKey,
+      10n,
+      { ...delegateOpts, initVaultIfMissing: false },
+    );
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(...ixsReceiver),
+      [receiver, admin],
+      { commitment: "confirmed", skipPreflight: true },
+    );
+
+    /// Transfer some tokens in the ER through the program
+    const txT = await program.methods
+      .transfer(new BN(2))
+      .accounts({
+        payer: sender.publicKey,
+        from: ataSender,
+        to: ataReceiver,
+      })
+      .transaction();
+    txT.recentBlockhash = (
+      await ephemeralConnection.getLatestBlockhash()
+    ).blockhash;
+    txT.sign(sender);
+
+    const sgn = await ephemeralConnection.sendRawTransaction(txT.serialize(), {
+      skipPreflight: true,
     });
+    const conf = await ephemeralConnection.confirmTransaction(sgn, "confirmed");
+    if (conf.value.err) {
+      throw new Error(
+        `Program transfer failed: ${JSON.stringify(conf.value.err)}`,
+      );
+    }
+    console.log(`\nTransfer signature: ${sgn}`);
 
-    it("Delegate SPL tokens, do a transfer and undelegate", async () => {
-        console.log("\nUser1: ", recipientA.publicKey.toBase58());
-        console.log("User2: ", recipientB.publicKey.toBase58());
-        const ataA = getAssociatedTokenAddressSync(
-            mint.publicKey,
-            recipientA.publicKey
-        );
-
-        const ataB = getAssociatedTokenAddressSync(
-            mint.publicKey,
-            recipientB.publicKey
-        );
-
-        let acctA = await getAccount(connection, ataA);
-        let acctB = await getAccount(connection, ataB);
-
-        assert(acctA.amount == 1000n);
-        assert(acctB.amount == 1000n);
-
-        // Delegate 50 tokens for recipientA
-        // multiply amount if decimals > 0: * (10n ** BigInt(decimals))
-        // initVaultIfMissing=true: vault PDA must be created the first time a mint is delegated
-        const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 50n, {validator: validator, initVaultIfMissing: true});
-        const tx = new anchor.web3.Transaction();
-        ixs.forEach(ix => tx.add(ix));
-        await provider.sendAndConfirm(tx, [recipientA], { commitment: "confirmed", skipPreflight: true });
-
-        // Delegate 10 tokens for recipientB
-        const ixs2 = await delegateSpl(recipientB.publicKey, mint.publicKey, 10n, {validator: validator});
-        const tx2 = new anchor.web3.Transaction();
-        ixs2.forEach(ix => tx2.add(ix));
-
-        await provider.sendAndConfirm(tx2, [recipientB], { commitment: "confirmed", skipPreflight: true });
-
-        /// Transfer some tokens in the ER
-        const amountToTransfer = 2;
-        const ixTransfer = createTransferInstruction(
-            ataA, // source
-            ataB, // destination
-            recipientA.publicKey,
-            amountToTransfer,
-            [],
-            TOKEN_PROGRAM_ID
-        );
-        let sgn = await providerEphemeralRollup.sendAndConfirm(new anchor.web3.Transaction().add(ixTransfer), [recipientA], { commitment: "confirmed", skipPreflight: true });
-        console.log(`\nTransfer signature: ${sgn}`)
-
-        // Check balances in the ER
-        acctA = await getAccount(ephemeralConnection, ataA);
-        acctB = await getAccount(ephemeralConnection, ataB);
-        assert(acctA.amount == 48n);
-        assert(acctB.amount == 12n);
-
-        // Undelegate ER balance
-        const ixUndelegateA = undelegateIx(recipientA.publicKey, mint.publicKey);
-        const ixUndelegateB = undelegateIx(recipientB.publicKey, mint.publicKey);
-        try {
-            sgn = await providerEphemeralRollup.sendAndConfirm(new anchor.web3.Transaction().add(ixUndelegateA).add(ixUndelegateB), [recipientA, recipientB], { commitment: "confirmed", skipPreflight: false });
-        } catch (e: any) {
-            console.error("Undelegate failed. Raw error:", e);
-            if (e?.getLogs) console.error("Program logs:", await e.getLogs(ephemeralConnection));
-            if (e?.logs) console.error("Logs:", e.logs);
-            throw e;
-        }
-        console.log(`Undelegate signature: ${sgn}`)
-        const txCommitSgn = await GetCommitmentSignature(
-            sgn,
-            providerEphemeralRollup.connection,
-        );
-        await connection.confirmTransaction(txCommitSgn, "confirmed");
-
-        // Withdraw from both accounts
-        const tx3 = new anchor.web3.Transaction();
-        tx3.add(withdrawSplIx(recipientA.publicKey, mint.publicKey, acctA.amount));
-        tx3.add(withdrawSplIx(recipientB.publicKey, mint.publicKey, acctB.amount));
-        await provider.sendAndConfirm(tx3, [recipientA, recipientB], { commitment: "confirmed" });
-
-        // Check balances
-        acctA = await getAccount(connection, ataA);
-        acctB = await getAccount(connection, ataB);
-        assert(acctA.amount == 998n);
-        assert(acctB.amount == 1002n);
-    });
-
-    const program = anchor.workspace.SplTokens as Program<SplTokens>;
-
-    it("Delegate SPL tokens and do a transfer through a program", async () => {
-        const ataA = getAssociatedTokenAddressSync(
-            mint.publicKey,
-            recipientA.publicKey
-        );
-
-        const ataB = getAssociatedTokenAddressSync(
-            mint.publicKey,
-            recipientB.publicKey
-        );
-
-        let acctA = await getAccount(connection, ataA);
-        let acctB = await getAccount(connection, ataB);
-
-        // Delegate 10 tokens for recipientA
-        // multiply amount if decimals > 0: * (10n ** BigInt(decimals))
-        const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 10n, {validator: validator});
-        const tx = new anchor.web3.Transaction();
-        ixs.forEach(ix => tx.add(ix));
-        await provider.sendAndConfirm(tx, [recipientA], { commitment: "confirmed" });
-
-        // Delegate 10 tokens for recipientB
-        const ixs2 = await delegateSpl(recipientB.publicKey, mint.publicKey, 10n, {validator: validator});
-        const tx2 = new anchor.web3.Transaction();
-        ixs2.forEach(ix => tx2.add(ix));
-
-        await provider.sendAndConfirm(tx2, [recipientB], { commitment: "confirmed" });
-
-        /// Transfer some tokens in the ER through a program
-        const txT = await program.methods.transfer(new BN(2)).accounts({
-            payer: recipientA.publicKey,
-            from: ataA,
-            to: ataB,
-        }).transaction();
-        txT.recentBlockhash = (await ephemeralConnection.getLatestBlockhash()).blockhash;
-        txT.sign(recipientA);
-        const sgn = await ephemeralConnection.sendRawTransaction(txT.serialize(), { skipPreflight: true });
-        await ephemeralConnection.confirmTransaction(sgn, "confirmed");
-        console.log(`\nTransfer signature: ${sgn}`);
-    });
-
+    // Verify the transfer actually moved tokens inside the ER.
+    const erSender = await getAccount(ephemeralConnection, ataSender);
+    const erReceiver = await getAccount(ephemeralConnection, ataReceiver);
+    assert(erSender.amount == 8n, `sender ER balance ${erSender.amount}`);
+    assert(
+      erReceiver.amount == 12n,
+      `receiver ER balance ${erReceiver.amount}`,
+    );
+  });
 });

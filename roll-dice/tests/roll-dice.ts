@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import {Program, web3} from "@coral-xyz/anchor";
+import { Program, web3 } from "@coral-xyz/anchor";
 import { RandomDice } from "../target/types/random_dice";
 import { PublicKey } from "@solana/web3.js";
 
@@ -39,7 +39,9 @@ describe("roll-dice", () => {
     // Pre-arm a one-shot promise that the onLogs handler resolves with the
     // matching signature. No polling — we just await it, racing a timeout.
     let resolveSig!: (sig: string) => void;
-    const sigPromise = new Promise<string>((r) => { resolveSig = r; });
+    const sigPromise = new Promise<string>((r) => {
+      resolveSig = r;
+    });
     const callbackSubId = provider.connection.onLogs(
       program.programId,
       (info) => {
@@ -71,7 +73,9 @@ describe("roll-dice", () => {
         new Promise<null>((r) => setTimeout(() => r(null), 10_000)),
       ]);
       if (sig) {
-        console.log(`callbackRollDice tx: ${sig} (after ${Date.now() - start}ms)`);
+        console.log(
+          `callbackRollDice tx: ${sig} (after ${Date.now() - start}ms)`,
+        );
       } else {
         throw new Error(`callbackRollDice not observed within 10s.`);
       }
@@ -82,5 +86,4 @@ describe("roll-dice", () => {
       await provider.connection.removeOnLogsListener(callbackSubId);
     }
   });
-
 });

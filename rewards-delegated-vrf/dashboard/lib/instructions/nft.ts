@@ -16,7 +16,7 @@ import {
 } from "@metaplex-foundation/mpl-token-metadata";
 
 const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
-  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
 );
 
 function deriveMetadataPda(mint: PublicKey): PublicKey {
@@ -26,7 +26,7 @@ function deriveMetadataPda(mint: PublicKey): PublicKey {
       TOKEN_METADATA_PROGRAM_ID.toBuffer(),
       mint.toBuffer(),
     ],
-    TOKEN_METADATA_PROGRAM_ID
+    TOKEN_METADATA_PROGRAM_ID,
   )[0];
 }
 
@@ -38,7 +38,7 @@ function deriveMasterEditionPda(mint: PublicKey): PublicKey {
       mint.toBuffer(),
       Buffer.from("edition"),
     ],
-    TOKEN_METADATA_PROGRAM_ID
+    TOKEN_METADATA_PROGRAM_ID,
   )[0];
 }
 
@@ -52,11 +52,14 @@ export async function buildMintNftCollection(
   publicKey: PublicKey,
   name: string,
   symbol: string,
-  uri: string
+  uri: string,
 ): Promise<{ tx: Transaction; mintKeypair: Keypair }> {
   const mintKeypair = Keypair.generate();
   const mintRent = await connection.getMinimumBalanceForRentExemption(82);
-  const ownerTokenAccount = getAssociatedTokenAddressSync(mintKeypair.publicKey, publicKey);
+  const ownerTokenAccount = getAssociatedTokenAddressSync(
+    mintKeypair.publicKey,
+    publicKey,
+  );
   const metadataAddress = deriveMetadataPda(mintKeypair.publicKey);
   const masterEditionAddress = deriveMasterEditionPda(mintKeypair.publicKey);
 
@@ -68,11 +71,37 @@ export async function buildMintNftCollection(
         space: 82,
         lamports: mintRent,
         programId: TOKEN_PROGRAM_ID,
-      })
+      }),
     )
-    .add(createInitializeMintInstruction(mintKeypair.publicKey, 0, publicKey, publicKey, TOKEN_PROGRAM_ID))
-    .add(createAssociatedTokenAccountInstruction(publicKey, ownerTokenAccount, publicKey, mintKeypair.publicKey, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID))
-    .add(createMintToInstruction(mintKeypair.publicKey, ownerTokenAccount, publicKey, 1, [], TOKEN_PROGRAM_ID))
+    .add(
+      createInitializeMintInstruction(
+        mintKeypair.publicKey,
+        0,
+        publicKey,
+        publicKey,
+        TOKEN_PROGRAM_ID,
+      ),
+    )
+    .add(
+      createAssociatedTokenAccountInstruction(
+        publicKey,
+        ownerTokenAccount,
+        publicKey,
+        mintKeypair.publicKey,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
+    )
+    .add(
+      createMintToInstruction(
+        mintKeypair.publicKey,
+        ownerTokenAccount,
+        publicKey,
+        1,
+        [],
+        TOKEN_PROGRAM_ID,
+      ),
+    )
     .add(
       createCreateMetadataAccountV3Instruction(
         {
@@ -98,8 +127,8 @@ export async function buildMintNftCollection(
             isMutable: true,
             collectionDetails: { __kind: "V1", size: new anchor.BN(0) },
           },
-        }
-      )
+        },
+      ),
     )
     .add(
       createCreateMasterEditionV3Instruction(
@@ -114,8 +143,8 @@ export async function buildMintNftCollection(
           tokenProgram: TOKEN_PROGRAM_ID,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         },
-        { createMasterEditionArgs: { maxSupply: new anchor.BN(0) } }
-      )
+        { createMasterEditionArgs: { maxSupply: new anchor.BN(0) } },
+      ),
     );
 
   return { tx, mintKeypair };
@@ -131,11 +160,14 @@ export async function buildMintNftToCollection(
   collectionMint: PublicKey,
   name: string,
   symbol: string,
-  uri: string
+  uri: string,
 ): Promise<{ tx: Transaction; mintKeypair: Keypair }> {
   const mintKeypair = Keypair.generate();
   const mintRent = await connection.getMinimumBalanceForRentExemption(82);
-  const ownerTokenAccount = getAssociatedTokenAddressSync(mintKeypair.publicKey, publicKey);
+  const ownerTokenAccount = getAssociatedTokenAddressSync(
+    mintKeypair.publicKey,
+    publicKey,
+  );
   const metadataAddress = deriveMetadataPda(mintKeypair.publicKey);
   const masterEditionAddress = deriveMasterEditionPda(mintKeypair.publicKey);
   const collectionMetadataAddress = deriveMetadataPda(collectionMint);
@@ -149,11 +181,37 @@ export async function buildMintNftToCollection(
         space: 82,
         lamports: mintRent,
         programId: TOKEN_PROGRAM_ID,
-      })
+      }),
     )
-    .add(createInitializeMintInstruction(mintKeypair.publicKey, 0, publicKey, publicKey, TOKEN_PROGRAM_ID))
-    .add(createAssociatedTokenAccountInstruction(publicKey, ownerTokenAccount, publicKey, mintKeypair.publicKey, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID))
-    .add(createMintToInstruction(mintKeypair.publicKey, ownerTokenAccount, publicKey, 1, [], TOKEN_PROGRAM_ID))
+    .add(
+      createInitializeMintInstruction(
+        mintKeypair.publicKey,
+        0,
+        publicKey,
+        publicKey,
+        TOKEN_PROGRAM_ID,
+      ),
+    )
+    .add(
+      createAssociatedTokenAccountInstruction(
+        publicKey,
+        ownerTokenAccount,
+        publicKey,
+        mintKeypair.publicKey,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
+    )
+    .add(
+      createMintToInstruction(
+        mintKeypair.publicKey,
+        ownerTokenAccount,
+        publicKey,
+        1,
+        [],
+        TOKEN_PROGRAM_ID,
+      ),
+    )
     .add(
       createCreateMetadataAccountV3Instruction(
         {
@@ -179,8 +237,8 @@ export async function buildMintNftToCollection(
             isMutable: true,
             collectionDetails: null,
           },
-        }
-      )
+        },
+      ),
     )
     .add(
       createCreateMasterEditionV3Instruction(
@@ -195,8 +253,8 @@ export async function buildMintNftToCollection(
           tokenProgram: TOKEN_PROGRAM_ID,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         },
-        { createMasterEditionArgs: { maxSupply: null } }
-      )
+        { createMasterEditionArgs: { maxSupply: null } },
+      ),
     )
     .add(
       createSetAndVerifySizedCollectionItemInstruction({
@@ -207,7 +265,7 @@ export async function buildMintNftToCollection(
         collectionMint,
         collection: collectionMetadataAddress,
         collectionMasterEditionAccount: collectionMasterEditionAddress,
-      } as any)
+      } as any),
     );
 
   return { tx, mintKeypair };
@@ -222,7 +280,7 @@ export function buildUpdateNftMetadata(
   mint: PublicKey,
   name: string,
   symbol: string,
-  uri: string
+  uri: string,
 ): Transaction {
   const metadataAddress = deriveMetadataPda(mint);
   return new Transaction().add(
@@ -243,7 +301,7 @@ export function buildUpdateNftMetadata(
           primarySaleHappened: null,
           isMutable: null,
         },
-      }
-    )
+      },
+    ),
   );
 }

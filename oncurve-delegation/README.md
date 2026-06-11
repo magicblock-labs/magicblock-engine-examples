@@ -18,20 +18,48 @@ The project contains two test implementations:
   - `oncurve-delegation.test.ts`: Main test suite using web3.js
   - `initializeKeypair.ts`: Helper functions for keypair initialization and management
 
-## Running Tests
+## Software Packages
 
-### Solana Kit Tests (Default)
+| Software   | Version | Installation Guide                                      |
+| ---------- | ------- | ------------------------------------------------------- |
+| **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)     |
+| **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)  |
+
+## Build and Test
+
+Install dependencies:
+
 ```bash
-npm run test
-# or with yarn
-yarn test
+yarn
+yarn build
 ```
 
-### Web3.js Tests
+This is an SDK-only integration example — there is no on-chain program here, so `yarn build` is a no-op.
+
+The tests run against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
+
 ```bash
-npm run test-web3js
-# or with yarn
-yarn test-web3js
+yarn setup
+```
+
+`yarn setup` runs `SETUP_ONLY=1 ./test-locally.sh oncurve-delegation` from the repo root: it boots the validators and holds them until you press a key.
+
+Then, in a second terminal, run the tests against that cluster:
+
+```bash
+yarn test:local
+```
+
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
+
+> Note: this example is **not** part of the default CI test suite.
+
+### Web3.js Tests
+
+A parallel web3.js implementation of the same flow is available (run against the configured endpoints):
+
+```bash
+yarn test:web3js
 ```
 
 ## Delegation Workflow

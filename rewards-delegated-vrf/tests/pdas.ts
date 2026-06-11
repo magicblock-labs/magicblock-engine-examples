@@ -13,22 +13,22 @@ import {
 export class PDAs {
   static getRewardDistributor(
     programId: PublicKey,
-    wallet: PublicKey
+    wallet: PublicKey,
   ): PublicKey {
     const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(REWARD_DISTRIBUTOR_SEED), wallet.toBytes()],
-      programId
+      programId,
     );
     return pda;
   }
 
   static getRewardList(
     programId: PublicKey,
-    rewardDistributorPda: PublicKey
+    rewardDistributorPda: PublicKey,
   ): PublicKey {
     const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(REWARD_LIST_SEED), rewardDistributorPda.toBytes()],
-      programId
+      programId,
     );
     return pda;
   }
@@ -36,7 +36,7 @@ export class PDAs {
   static getTransferLookupTable(programId: PublicKey): PublicKey {
     const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from(TRANSFER_LOOKUP_TABLE_SEED)],
-      programId
+      programId,
     );
     return pda;
   }
@@ -45,7 +45,7 @@ export class PDAs {
   static getDelegationRecord(delegatedAccount: PublicKey): PublicKey {
     const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("delegation"), delegatedAccount.toBytes()],
-      DELEGATION_PROGRAM_ID
+      DELEGATION_PROGRAM_ID,
     );
     return pda;
   }

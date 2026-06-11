@@ -1,7 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
 
 export const PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_PROGRAM_ID || "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
+  process.env.NEXT_PUBLIC_PROGRAM_ID ||
+    "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y",
 );
 
 export const REWARD_DISTRIBUTOR_SEED = "reward_distributor";
@@ -10,7 +11,7 @@ export const TRANSFER_LOOKUP_TABLE_SEED = "transfer_lookup_table";
 export const WHITELIST_DISTRIBUTOR_SEED = "whitelist_distributor";
 
 export const DELEGATION_PROGRAM_ID = new PublicKey(
-  "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+  "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh",
 );
 
 export const REWARD_TYPES = {

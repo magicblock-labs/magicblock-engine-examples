@@ -1,71 +1,49 @@
 # 🎲 Pinocchio Roll Dice
 
-Simple dice rolling application using Ephemeral Rollups to demonstrate using a verifiable random function (VRF) to generate random numbers.
+Pinocchio (no-Anchor) dice rolling program using Ephemeral Rollups and MagicBlock's verifiable random function (VRF) to generate random numbers.
 
-# Demo
+For the Anchor-based variant and frontend demo, see [Roll Dice](../roll-dice/README.md).
 
-<img width="508" alt="Screenshot 2025-03-27 at 18 48 50" src="https://github.com/user-attachments/assets/8b67fd33-c9b4-48f1-9a1a-92a9e8d74111" />
+## VRF Flow
 
-[https://roll-dice-demo.vercel.app/](https://roll-dice-demo.vercel.app//)
+The dice account is delegated to the Ephemeral Rollup. On the ER, the program requests randomness from the VRF oracle with a client seed; the oracle fulfills the request by invoking the program's callback instruction with verified random bytes, which become the dice roll.
 
 ## Software Packages
 
-This program has utilized the following software packages.
-
-| Software   | Version | Installation Guide                                              |
-| ---------- | ------- | --------------------------------------------------------------- |
-| **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)             |
-| **Rust**   | 1.89.0  | [Install Rust](https://www.rust-lang.org/tools/install)         |
-| **Anchor** | 1.0.2   | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
-| **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)          |
+| Software   | Version | Installation Guide                                      |
+| ---------- | ------- | ------------------------------------------------------- |
+| **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)     |
+| **Rust**   | 1.89.0  | [Install Rust](https://www.rust-lang.org/tools/install) |
+| **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)  |
 
 ```sh
-# Check and initialize your Solana version
-agave-install list
 agave-install init 3.1.9
-
-# Check and initialize your Rust version
-rustup show
 rustup install 1.89.0
-
-# Check and initialize your Anchor version
-avm list
-avm use 1.0.2
 ```
 
-## ✨ Build and Test
+## Build and Test
 
-Build the program:
+Install dependencies and build the program:
 
 ```bash
-anchor build
+yarn
+yarn build
 ```
 
-Run the tests:
+This example runs against a **local MagicBlock cluster** — a base Solana validator, an Ephemeral Rollup fronted by the Query Filtering Service, and a VRF oracle that fulfills randomness requests. Start it in one terminal and leave it running:
 
 ```bash
-anchor test --skip-deploy --skip-build --skip-local-validator
+yarn setup
 ```
 
-## 🚀 Launch the Frontend
+`yarn setup` runs `SETUP_ONLY=1 ./test-locally.sh pinocchio-roll-dice` from the repo root: it builds this example, boots the validators and VRF oracle, and holds them until you press a key.
 
-To start the frontend application locally:
+Then, in a second terminal, run this example's tests against that cluster:
 
 ```bash
-cd roll-dice/app
+yarn test:local
 ```
 
-Install dependencies:
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
 
-```bash
-yarn install
-```
-
-Start the development server:
-
-```bash
-yarn dev
-```
-
-The application will be available at `http://localhost:3000` (or another port if 3000 is already in use).
-The delegated dice demo will be available at `http://localhost:3000/delegated`.
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./test-locally.sh` directly.

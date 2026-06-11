@@ -21,13 +21,13 @@ export async function buildSplTokenTransfer(
   distributorPda: PublicKey,
   tokenMint: PublicKey,
   amount: number,
-  decimals: number
+  decimals: number,
 ): Promise<Transaction> {
   const userTokenAccount = getAssociatedTokenAddressSync(tokenMint, publicKey);
   const distributorTokenAccount = getAssociatedTokenAddressSync(
     tokenMint,
     distributorPda,
-    true // allowOffCurve for PDAs
+    true, // allowOffCurve for PDAs
   );
 
   const tx = new Transaction();
@@ -43,8 +43,8 @@ export async function buildSplTokenTransfer(
         distributorPda,
         tokenMint,
         TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      )
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
     );
   }
 
@@ -55,8 +55,8 @@ export async function buildSplTokenTransfer(
       publicKey,
       Math.floor(amount * Math.pow(10, decimals)),
       [],
-      TOKEN_PROGRAM_ID
-    )
+      TOKEN_PROGRAM_ID,
+    ),
   );
 
   return tx;
@@ -79,7 +79,7 @@ export async function buildWhitelistTransfer(
   rewardDistributorPda: PublicKey,
   tokenMint: PublicKey,
   user: PublicKey,
-  amount: number
+  amount: number,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
@@ -91,7 +91,7 @@ export async function buildWhitelistTransfer(
   const sourceTokenAccount = getAssociatedTokenAddressSync(
     tokenMint,
     whitelistDistributorPda,
-    true
+    true,
   );
   const delegationRecord = PDAs.getDelegationRecord(rewardListPda)[0];
 
@@ -100,11 +100,11 @@ export async function buildWhitelistTransfer(
   // hold the authority pubkey (= validator).
   const delegationRecordInfo = await connection.getAccountInfo(
     delegationRecord,
-    "confirmed"
+    "confirmed",
   );
   if (!delegationRecordInfo || delegationRecordInfo.data.length < 40) {
     throw new Error(
-      "Reward list delegation record not found — delegate reward_list to the ER first."
+      "Reward list delegation record not found — delegate reward_list to the ER first.",
     );
   }
   const validator = new PublicKey(delegationRecordInfo.data.subarray(8, 40));

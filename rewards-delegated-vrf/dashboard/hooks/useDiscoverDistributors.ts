@@ -45,7 +45,7 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
         pubkey: PublicKey;
         account: AccountInfo<Buffer>;
       }> = [];
-      
+
       try {
         // Filter server-side to just the RewardDistributor discriminator.
         // Without this filter the RPC returns every account from the program
@@ -75,7 +75,7 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
       for (const account of accounts) {
         try {
           const data = account.account.data;
-          
+
           // Ensure minimum size
           if (data.length < 41) {
             continue;
@@ -85,7 +85,7 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
           if (!Buffer.isBuffer(data)) {
             continue;
           }
-          
+
           let pos = 8; // Skip discriminator
 
           // Read super_admin (32 bytes)
@@ -112,7 +112,7 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
           if (adminsLength > 1000 || adminsLength < 0) {
             continue;
           }
-          
+
           const admins: PublicKey[] = [];
           for (let i = 0; i < adminsLength; i++) {
             if (data.length < pos + 32) {
@@ -133,7 +133,7 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
           if (whitelistLength > 10000 || whitelistLength < 0) {
             continue;
           }
-          
+
           const whitelist: PublicKey[] = [];
           for (let i = 0; i < whitelistLength; i++) {
             if (data.length < pos + 32) {
@@ -144,8 +144,12 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
           }
 
           // Check if user is admin or whitelisted
-          const isAdmin = superAdmin.equals(userPublicKey) || admins.some(admin => admin.equals(userPublicKey));
-          const isWhitelisted = whitelist.some(addr => addr.equals(userPublicKey));
+          const isAdmin =
+            superAdmin.equals(userPublicKey) ||
+            admins.some((admin) => admin.equals(userPublicKey));
+          const isWhitelisted = whitelist.some((addr) =>
+            addr.equals(userPublicKey),
+          );
 
           if (isAdmin || isWhitelisted) {
             discovered.push({
@@ -166,13 +170,15 @@ export const useDiscoverDistributors = (userPublicKey: PublicKey | null) => {
       // Sort by: admin first, then whitelisted, then by address
       discovered.sort((a, b) => {
         if (a.isAdmin !== b.isAdmin) return b.isAdmin ? 1 : -1;
-        if (a.isWhitelisted !== b.isWhitelisted) return b.isWhitelisted ? 1 : -1;
+        if (a.isWhitelisted !== b.isWhitelisted)
+          return b.isWhitelisted ? 1 : -1;
         return a.publicKey.toString().localeCompare(b.publicKey.toString());
       });
 
       setDistributors(discovered);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to discover distributors";
+      const message =
+        err instanceof Error ? err.message : "Failed to discover distributors";
       console.error("Error discovering distributors:", err);
       setError(message);
     } finally {
