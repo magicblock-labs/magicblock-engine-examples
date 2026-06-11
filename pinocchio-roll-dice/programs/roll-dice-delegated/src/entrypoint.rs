@@ -5,7 +5,7 @@ use crate::processor::{
 use core::{mem::MaybeUninit, slice::from_raw_parts};
 use pinocchio::{
     entrypoint::deserialize, error::ProgramError, no_allocator, nostd_panic_handler, AccountView,
-    ProgramResult, MAX_TX_ACCOUNTS, SUCCESS,
+    Address, ProgramResult, MAX_TX_ACCOUNTS, SUCCESS,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -61,10 +61,11 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
     const UNINIT: MaybeUninit<AccountView> = MaybeUninit::<AccountView>::uninit();
     let mut accounts = [UNINIT; { MAX_TX_ACCOUNTS }];
 
-    let (_program_id, count, instruction_data) =
+    let (program_id, count, instruction_data) =
         deserialize::<MAX_TX_ACCOUNTS>(input, &mut accounts);
 
     match process_instruction(
+        program_id,
         from_raw_parts(accounts.as_ptr() as _, count),
         instruction_data,
     ) {
@@ -82,7 +83,11 @@ fn log_error(_error: &ProgramError) {
 
 /// Process an instruction.
 #[inline(always)]
-pub fn process_instruction(accounts: &[AccountView], instruction_data: &[u8]) -> ProgramResult {
+pub fn process_instruction(
+    program_id: &Address,
+    accounts: &[AccountView],
+    instruction_data: &[u8],
+) -> ProgramResult {
     if instruction_data.len() < 8 {
         return Err(ProgramError::InvalidInstructionData);
     }
@@ -96,10 +101,10 @@ pub fn process_instruction(accounts: &[AccountView], instruction_data: &[u8]) ->
     log_instruction(discriminator);
 
     match discriminator {
-        InstructionDiscriminator::Initialize => process_initialize(accounts),
+        InstructionDiscriminator::Initialize => process_initialize(program_id, accounts),
         InstructionDiscriminator::RollDice => {
             let client_seed = read_u8(payload)?;
-            process_roll_dice(accounts, client_seed)
+            process_roll_dice(program_id, accounts, client_seed)
         }
         InstructionDiscriminator::CallbackRollDice => {
             if payload.len() < 33 {
@@ -111,10 +116,12 @@ pub fn process_instruction(accounts: &[AccountView], instruction_data: &[u8]) ->
             let client_seed = read_u8(&payload[32..])?;
             process_callback_roll_dice(accounts, randomness, client_seed)
         }
-        InstructionDiscriminator::DelegatePlayer => process_delegate_player(accounts),
-        InstructionDiscriminator::UndelegatePlayer => process_undelegate_player(accounts),
+        InstructionDiscriminator::DelegatePlayer => process_delegate_player(program_id, accounts),
+        InstructionDiscriminator::UndelegatePlayer => {
+            process_undelegate_player(program_id, accounts)
+        }
         InstructionDiscriminator::CallbackUndelegatePlayer => {
-            process_callback_undelegate_player(accounts, payload)
+            process_callback_undelegate_player(program_id, accounts, payload)
         }
     }
     .inspect_err(log_error)
