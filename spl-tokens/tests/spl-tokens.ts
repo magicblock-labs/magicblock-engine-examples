@@ -16,15 +16,15 @@ import {
   MINT_SIZE,
   getMinimumBalanceForRentExemptMint,
   createMintToInstruction,
-  createTransferInstruction,
 } from "@solana/spl-token";
 import { SplTokens } from "../target/types/spl_tokens";
 import {
   delegateSpl,
   deriveRentPda,
   GetCommitmentSignature,
+  transferSpl,
   undelegateIx,
-  withdrawSplIx,
+  withdrawSpl,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { assert } from "chai";
 
@@ -189,105 +189,101 @@ describe("spl-tokens", () => {
       mint.publicKey,
       recipientA.publicKey,
     );
-
     const ataB = getAssociatedTokenAddressSync(
       mint.publicKey,
       recipientB.publicKey,
     );
 
-    let acctA = await getAccount(connection, ataA);
-    let acctB = await getAccount(connection, ataB);
+    assert((await getAccount(connection, ataA)).amount == 1000n);
+    assert((await getAccount(connection, ataB)).amount == 1000n);
 
-    assert(acctA.amount == 1000n);
-    assert(acctB.amount == 1000n);
-
-    // Legacy vault flow — must match undelegateIx/withdrawSplIx below (SDK default
-    // idempotent shuttle path uses a different account layout).
+    // Legacy vault flow — must match undelegateIx/withdrawSpl below (the SDK's
+    // default idempotent shuttle path uses a different account layout).
     const delegateOpts = {
       validator,
       idempotent: false as const,
       payer: admin.publicKey,
     };
-    const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 50n, {
-      ...delegateOpts,
-      initVaultIfMissing: true,
-    });
-    const tx = new anchor.web3.Transaction();
-    ixs.forEach((ix) => tx.add(ix));
-    await provider.sendAndConfirm(tx, [recipientA, admin], {
-      commitment: "confirmed",
-      skipPreflight: true,
-    });
 
-    // Delegate 10 tokens for recipientB
-    const ixs2 = await delegateSpl(recipientB.publicKey, mint.publicKey, 10n, {
-      ...delegateOpts,
-    });
-    const tx2 = new anchor.web3.Transaction();
-    ixs2.forEach((ix) => tx2.add(ix));
+    // A's delegation creates the shared vault for this mint; B reuses it.
+    const delegations: [Keypair, bigint, boolean][] = [
+      [recipientA, 50n, true],
+      [recipientB, 10n, false],
+    ];
+    for (const [owner, amount, initVaultIfMissing] of delegations) {
+      const ixs = await delegateSpl(owner.publicKey, mint.publicKey, amount, {
+        ...delegateOpts,
+        initVaultIfMissing,
+      });
+      await provider.sendAndConfirm(
+        new anchor.web3.Transaction().add(...ixs),
+        [owner, admin],
+        { commitment: "confirmed", skipPreflight: true },
+      );
+    }
 
-    await provider.sendAndConfirm(tx2, [recipientB, admin], {
-      commitment: "confirmed",
-      skipPreflight: true,
-    });
-
-    /// Transfer some tokens in the ER
-    const amountToTransfer = 2;
-    const ixTransfer = createTransferInstruction(
-      ataA, // source
-      ataB, // destination
+    // Transfer 2 tokens A -> B inside the ER via the SDK helper.
+    const transferIxs = await transferSpl(
       recipientA.publicKey,
-      amountToTransfer,
-      [],
-      TOKEN_PROGRAM_ID,
+      recipientB.publicKey,
+      mint.publicKey,
+      2n,
+      { visibility: "public", fromBalance: "ephemeral", toBalance: "ephemeral" },
     );
-    let sgn = await providerEphemeralRollup.sendAndConfirm(
-      new anchor.web3.Transaction().add(ixTransfer),
+    const sgnTransfer = await providerEphemeralRollup.sendAndConfirm(
+      new anchor.web3.Transaction().add(...transferIxs),
       [recipientA],
       { commitment: "confirmed", skipPreflight: true },
     );
-    console.log(`\nTransfer signature: ${sgn}`);
+    console.log(`\nTransfer signature: ${sgnTransfer}`);
 
     // Check balances in the ER
-    acctA = await getAccount(ephemeralConnection, ataA);
-    acctB = await getAccount(ephemeralConnection, ataB);
+    const acctA = await getAccount(ephemeralConnection, ataA);
+    const acctB = await getAccount(ephemeralConnection, ataB);
     assert(acctA.amount == 48n);
     assert(acctB.amount == 12n);
 
-    // Undelegate ER balance (one owner per tx — combined undelegates are flaky in CI)
-    const ixUndelegateA = undelegateIx(recipientA.publicKey, mint.publicKey);
-    const ixUndelegateB = undelegateIx(recipientB.publicKey, mint.publicKey);
-    sgn = await providerEphemeralRollup.sendAndConfirm(
-      new anchor.web3.Transaction().add(ixUndelegateA),
-      [recipientA],
-      { commitment: "confirmed", skipPreflight: true },
+    // Undelegate each owner in the ER (one per tx — combined undelegates are flaky
+    // in CI). Withdraw runs on the base layer and requires each ephemeral ATA to be
+    // owned by the SDK program again, which only happens once that owner's
+    // undelegation has committed back to base — so wait for BOTH commits before
+    // withdrawing (waiting for one races the other's withdraw → InvalidAccountOwner).
+    const commits: string[] = [];
+    for (const owner of [recipientA, recipientB]) {
+      const sgn = await providerEphemeralRollup.sendAndConfirm(
+        new anchor.web3.Transaction().add(
+          undelegateIx(owner.publicKey, mint.publicKey),
+        ),
+        [owner],
+        { commitment: "confirmed", skipPreflight: true },
+      );
+      console.log(`Undelegate ${owner.publicKey.toBase58()} signature: ${sgn}`);
+      commits.push(
+        await GetCommitmentSignature(sgn, providerEphemeralRollup.connection),
+      );
+    }
+    await Promise.all(
+      commits.map((c) => connection.confirmTransaction(c, "confirmed")),
     );
-    console.log(`Undelegate A signature: ${sgn}`);
-    sgn = await providerEphemeralRollup.sendAndConfirm(
-      new anchor.web3.Transaction().add(ixUndelegateB),
-      [recipientB],
-      { commitment: "confirmed", skipPreflight: true },
-    );
-    console.log(`Undelegate B signature: ${sgn}`);
-    const txCommitSgn = await GetCommitmentSignature(
-      sgn,
-      providerEphemeralRollup.connection,
-    );
-    await connection.confirmTransaction(txCommitSgn, "confirmed");
 
-    // Withdraw from both accounts
-    const tx3 = new anchor.web3.Transaction();
-    tx3.add(withdrawSplIx(recipientA.publicKey, mint.publicKey, acctA.amount));
-    tx3.add(withdrawSplIx(recipientB.publicKey, mint.publicKey, acctB.amount));
-    await provider.sendAndConfirm(tx3, [recipientA, recipientB], {
-      commitment: "confirmed",
-    });
+    // Withdraw both balances back to their base-layer ATAs via the SDK helper.
+    const withdrawIxs = [
+      ...(await withdrawSpl(recipientA.publicKey, mint.publicKey, acctA.amount, {
+        idempotent: false,
+      })),
+      ...(await withdrawSpl(recipientB.publicKey, mint.publicKey, acctB.amount, {
+        idempotent: false,
+      })),
+    ];
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(...withdrawIxs),
+      [recipientA, recipientB],
+      { commitment: "confirmed" },
+    );
 
     // Check balances
-    acctA = await getAccount(connection, ataA);
-    acctB = await getAccount(connection, ataB);
-    assert(acctA.amount == 998n);
-    assert(acctB.amount == 1002n);
+    assert((await getAccount(connection, ataA)).amount == 998n);
+    assert((await getAccount(connection, ataB)).amount == 1002n);
   });
 
   const program = anchor.workspace.SplTokens as Program<SplTokens>;
