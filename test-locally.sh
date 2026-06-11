@@ -200,7 +200,7 @@ run_test() {
 
     spinner_idx=$(( (spinner_idx + 1) % 10 ))
     dots_idx=$(( (dots_idx + 1) % 3 ))
-    sleep 0.5
+    sleep 5
   done
   
   # Wait for completion and capture exit code as the primary failure signal.
@@ -528,7 +528,7 @@ EOF
       break
     fi
     printf '\033[2K\r  Building... %d/%d done' "$build_done" "$build_total"
-    sleep 1
+    sleep 5
   done
   printf '\033[2K\r'
 

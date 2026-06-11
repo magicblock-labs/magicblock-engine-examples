@@ -21,6 +21,7 @@ import {
 import { SplTokens } from "../target/types/spl_tokens";
 import {
   delegateSpl,
+  deriveRentPda,
   GetCommitmentSignature,
   undelegateIx,
   withdrawSplIx,
@@ -71,9 +72,7 @@ describe("spl-tokens", () => {
     recipientA = Keypair.generate();
     recipientB = Keypair.generate();
     /// We need to fund the sponsor PDA to pay for the rent of the shuttles
-    const sponsorPda = new PublicKey(
-      "4RvdEGaUyChj3AketeBZoY1EotNtPveMFUXL8DVetrAp",
-    );
+    const [sponsorPda] = deriveRentPda();
 
     // fund recipients from payer wallet (avoids faucet rate limits / 429s)
     const fundTx = new anchor.web3.Transaction();
@@ -160,6 +159,7 @@ describe("spl-tokens", () => {
   });
 
   it("Delegate SPL tokens, do a transfer and undelegate", async () => {
+    const admin = (provider.wallet as anchor.Wallet).payer;
     console.log("\nUser1: ", recipientA.publicKey.toBase58());
     console.log("User2: ", recipientB.publicKey.toBase58());
     const ataA = getAssociatedTokenAddressSync(
@@ -178,28 +178,32 @@ describe("spl-tokens", () => {
     assert(acctA.amount == 1000n);
     assert(acctB.amount == 1000n);
 
-    // Delegate 50 tokens for recipientA
-    // multiply amount if decimals > 0: * (10n ** BigInt(decimals))
-    // initVaultIfMissing=true: vault PDA must be created the first time a mint is delegated
+    // Legacy vault flow — must match undelegateIx/withdrawSplIx below (SDK default
+    // idempotent shuttle path uses a different account layout).
+    const delegateOpts = {
+      validator,
+      idempotent: false as const,
+      payer: admin.publicKey,
+    };
     const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 50n, {
-      validator: validator,
+      ...delegateOpts,
       initVaultIfMissing: true,
     });
     const tx = new anchor.web3.Transaction();
     ixs.forEach((ix) => tx.add(ix));
-    await provider.sendAndConfirm(tx, [recipientA], {
+    await provider.sendAndConfirm(tx, [recipientA, admin], {
       commitment: "confirmed",
       skipPreflight: true,
     });
 
     // Delegate 10 tokens for recipientB
     const ixs2 = await delegateSpl(recipientB.publicKey, mint.publicKey, 10n, {
-      validator: validator,
+      ...delegateOpts,
     });
     const tx2 = new anchor.web3.Transaction();
     ixs2.forEach((ix) => tx2.add(ix));
 
-    await provider.sendAndConfirm(tx2, [recipientB], {
+    await provider.sendAndConfirm(tx2, [recipientB, admin], {
       commitment: "confirmed",
       skipPreflight: true,
     });
@@ -227,23 +231,21 @@ describe("spl-tokens", () => {
     assert(acctA.amount == 48n);
     assert(acctB.amount == 12n);
 
-    // Undelegate ER balance
+    // Undelegate ER balance (one owner per tx — combined undelegates are flaky in CI)
     const ixUndelegateA = undelegateIx(recipientA.publicKey, mint.publicKey);
     const ixUndelegateB = undelegateIx(recipientB.publicKey, mint.publicKey);
-    try {
-      sgn = await providerEphemeralRollup.sendAndConfirm(
-        new anchor.web3.Transaction().add(ixUndelegateA).add(ixUndelegateB),
-        [recipientA, recipientB],
-        { commitment: "confirmed", skipPreflight: false },
-      );
-    } catch (e: any) {
-      console.error("Undelegate failed. Raw error:", e);
-      if (e?.getLogs)
-        console.error("Program logs:", await e.getLogs(ephemeralConnection));
-      if (e?.logs) console.error("Logs:", e.logs);
-      throw e;
-    }
-    console.log(`Undelegate signature: ${sgn}`);
+    sgn = await providerEphemeralRollup.sendAndConfirm(
+      new anchor.web3.Transaction().add(ixUndelegateA),
+      [recipientA],
+      { commitment: "confirmed", skipPreflight: true },
+    );
+    console.log(`Undelegate A signature: ${sgn}`);
+    sgn = await providerEphemeralRollup.sendAndConfirm(
+      new anchor.web3.Transaction().add(ixUndelegateB),
+      [recipientB],
+      { commitment: "confirmed", skipPreflight: true },
+    );
+    console.log(`Undelegate B signature: ${sgn}`);
     const txCommitSgn = await GetCommitmentSignature(
       sgn,
       providerEphemeralRollup.connection,
@@ -268,6 +270,12 @@ describe("spl-tokens", () => {
   const program = anchor.workspace.SplTokens as Program<SplTokens>;
 
   it("Delegate SPL tokens and do a transfer through a program", async () => {
+    const admin = (provider.wallet as anchor.Wallet).payer;
+    const delegateOpts = {
+      validator,
+      idempotent: false as const,
+      payer: admin.publicKey,
+    };
     const ataA = getAssociatedTokenAddressSync(
       mint.publicKey,
       recipientA.publicKey,
@@ -284,22 +292,22 @@ describe("spl-tokens", () => {
     // Delegate 10 tokens for recipientA
     // multiply amount if decimals > 0: * (10n ** BigInt(decimals))
     const ixs = await delegateSpl(recipientA.publicKey, mint.publicKey, 10n, {
-      validator: validator,
+      ...delegateOpts,
     });
     const tx = new anchor.web3.Transaction();
     ixs.forEach((ix) => tx.add(ix));
-    await provider.sendAndConfirm(tx, [recipientA], {
+    await provider.sendAndConfirm(tx, [recipientA, admin], {
       commitment: "confirmed",
     });
 
     // Delegate 10 tokens for recipientB
     const ixs2 = await delegateSpl(recipientB.publicKey, mint.publicKey, 10n, {
-      validator: validator,
+      ...delegateOpts,
     });
     const tx2 = new anchor.web3.Transaction();
     ixs2.forEach((ix) => tx2.add(ix));
 
-    await provider.sendAndConfirm(tx2, [recipientB], {
+    await provider.sendAndConfirm(tx2, [recipientB, admin], {
       commitment: "confirmed",
     });
 
