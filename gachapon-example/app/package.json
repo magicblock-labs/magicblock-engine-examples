@@ -6,11 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit --incremental false"
   },
   "dependencies": {
     "@react-three/drei": "10.7.7",
     "@react-three/fiber": "9.6.1",
+    "@solana/web3.js": "^1.98.4",
+    "buffer": "^6.0.3",
     "lucide-react": "1.17.0",
     "next": "16.2.7",
     "react": "19.2.7",

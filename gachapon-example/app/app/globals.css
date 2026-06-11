@@ -354,6 +354,166 @@ h2 {
   line-height: 1.4;
 }
 
+.spinIcon {
+  animation: spin 900ms linear infinite;
+}
+
+.stepList {
+  display: grid;
+  gap: 9px;
+}
+
+.stepRow {
+  align-items: start;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  padding: 11px;
+}
+
+.stepRow.done {
+  border-color: #9fd8c4;
+}
+
+.stepRow.active {
+  border-color: #83bad9;
+}
+
+.stepRow.error {
+  border-color: #e09aaa;
+}
+
+.stepStatus {
+  align-items: center;
+  background: #f5eee5;
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.stepRow.done .stepStatus {
+  background: #dff4ec;
+  color: var(--green);
+}
+
+.stepRow.active .stepStatus {
+  background: #e0f0f8;
+  color: var(--blue);
+}
+
+.stepRow.error .stepStatus {
+  background: #fde8ed;
+  color: var(--red-dark);
+}
+
+.stepBody,
+.stepCopy {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.stepCopy strong {
+  font-size: 0.9rem;
+}
+
+.stepCopy span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.linkGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.linkGrid a,
+.reportList dd a {
+  align-items: center;
+  color: var(--blue);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 5px;
+  min-width: 0;
+  text-decoration: none;
+}
+
+.linkGrid a {
+  background: #edf6fb;
+  border: 1px solid #b9d8e8;
+  border-radius: 999px;
+  padding: 6px 8px;
+}
+
+.linkGrid a:hover,
+.reportList dd a:hover {
+  color: #155e8d;
+  text-decoration: underline;
+}
+
+.staticLinks {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.rewardList {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  overflow: hidden;
+}
+
+.rewardRow {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 46px 44px;
+  padding: 10px 12px;
+}
+
+.rewardRow + .rewardRow {
+  border-top: 1px solid #ece3d9;
+}
+
+.rewardRow.active {
+  background: #fff7d7;
+}
+
+.rewardRow div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rewardRow strong {
+  font-size: 0.85rem;
+}
+
+.rewardRow span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.rewardRow > span {
+  color: var(--ink);
+  text-align: right;
+}
+
 .mockStats {
   display: grid;
   gap: 10px;
@@ -380,6 +540,12 @@ h2 {
   font-size: 1.1rem;
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 900px) {
   .testerShell {
     grid-template-columns: 1fr;
@@ -403,8 +569,16 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .controlGroup {
+    grid-template-columns: 1fr 1fr 44px;
+  }
+
   .reportList div {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .rewardRow {
+    grid-template-columns: minmax(0, 1fr) 38px 36px;
   }
 }

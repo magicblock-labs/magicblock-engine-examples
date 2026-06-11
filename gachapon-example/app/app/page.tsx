@@ -1,5 +1,6 @@
 "use client";
 
+import { Buffer } from "buffer";
 import {
   type MutableRefObject,
   useCallback,
@@ -13,13 +14,42 @@ import {
   Check,
   Circle,
   Copy,
+  ExternalLink,
   Gift,
+  Loader2,
   Play,
-  RotateCcw,
   RefreshCw,
+  RotateCcw,
   RotateCw,
   Shuffle,
+  Wallet,
 } from "lucide-react";
+import type { PublicKey } from "@solana/web3.js";
+import {
+  BrowserWallet,
+  CoreAssetAccount,
+  DEFAULT_VRF_QUEUE,
+  GachaponAccounts,
+  MachineAccount,
+  MPL_CORE_PROGRAM_ID,
+  PROGRAM_ID,
+  PendingPullAccount,
+  REWARDS,
+  VRF_PROGRAM_ID,
+  buildInitInstruction,
+  buildPullInstruction,
+  buildUploadConfigInstruction,
+  decodeCoreAsset,
+  decodeMachine,
+  decodePendingPull,
+  devnetConnection,
+  explorerAddress,
+  explorerTx,
+  findGachaponAccounts,
+  isSettled,
+  sendWalletTransaction,
+  shortKey,
+} from "@/lib/gachapon-devnet";
 import {
   AnimationState,
   defaultDropPathSettings,
@@ -28,6 +58,12 @@ import {
   KnobAxis,
   ModelReport,
 } from "@/components/gachapon-scene";
+
+declare global {
+  interface Window {
+    solana?: BrowserWallet;
+  }
+}
 
 const states: AnimationState[] = [
   "idle",
@@ -47,15 +83,22 @@ const stateIcons = {
   revealed: Gift,
 };
 
-const mockRewards = [
-  "Common Capsule",
-  "Rare Capsule",
-  "Epic Capsule",
-  "Legendary Capsule",
-];
-
 type DropPathPointKey = keyof DropPathSettings;
 type DropPathAxis = keyof DropPathSettings["inside"];
+type StepStatus = "idle" | "active" | "done" | "error";
+
+type VerifyLink = {
+  label: string;
+  href: string;
+};
+
+type VerifyStep = {
+  id: "init" | "config" | "request" | "settlement" | "asset";
+  label: string;
+  status: StepStatus;
+  detail: string;
+  links: VerifyLink[];
+};
 
 const dropPathPoints: { key: DropPathPointKey; label: string }[] = [
   { key: "inside", label: "Inside" },
@@ -76,16 +119,67 @@ const initialReport: ModelReport = {
   error: null,
 };
 
+const initialSteps: VerifyStep[] = [
+  {
+    id: "init",
+    label: "Init",
+    status: "idle",
+    detail: "Machine not created",
+    links: [],
+  },
+  {
+    id: "config",
+    label: "Config",
+    status: "idle",
+    detail: "Templates not uploaded",
+    links: [],
+  },
+  {
+    id: "request",
+    label: "VRF Request",
+    status: "idle",
+    detail: "Pull not requested",
+    links: [],
+  },
+  {
+    id: "settlement",
+    label: "Settlement",
+    status: "idle",
+    detail: "Callback not observed",
+    links: [],
+  },
+  {
+    id: "asset",
+    label: "Core Asset",
+    status: "idle",
+    detail: "Asset not minted",
+    links: [],
+  },
+];
+
 export default function GachaponTester() {
+  const connection = useMemo(() => devnetConnection(), []);
   const [animationState, setAnimationState] = useState<AnimationState>("idle");
   const [knobAxis, setKnobAxis] = useState<KnobAxis>("z");
   const [refreshKey, setRefreshKey] = useState(0);
   const [report, setReport] = useState<ModelReport>(initialReport);
-  const [mockPulling, setMockPulling] = useState(false);
-  const [pullCount, setPullCount] = useState(0);
-  const [reward, setReward] = useState(mockRewards[0]);
   const [dropPath, setDropPath] = useState(defaultDropPathSettings);
   const [cameraResetKey, setCameraResetKey] = useState(0);
+  const [wallet, setWallet] = useState<BrowserWallet | null>(null);
+  const [walletKey, setWalletKey] = useState<PublicKey | null>(null);
+  const [accounts, setAccounts] = useState<GachaponAccounts | null>(null);
+  const [machineAccount, setMachineAccount] = useState<MachineAccount | null>(
+    null,
+  );
+  const [pendingPull, setPendingPull] = useState<PendingPullAccount | null>(
+    null,
+  );
+  const [coreAsset, setCoreAsset] = useState<CoreAssetAccount | null>(null);
+  const [assetOwner, setAssetOwner] = useState<PublicKey | null>(null);
+  const [steps, setSteps] = useState<VerifyStep[]>(initialSteps);
+  const [flowError, setFlowError] = useState<string | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [pullCount, setPullCount] = useState(0);
   const alignmentResolveRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -100,7 +194,23 @@ export default function GachaponTester() {
     if (["x", "y", "z"].includes(requestedAxis ?? "")) {
       setKnobAxis(requestedAxis as KnobAxis);
     }
+
+    if (window.solana?.publicKey) {
+      setWallet(window.solana);
+      setWalletKey(window.solana.publicKey);
+    }
   }, []);
+
+  const selectedReward = useMemo(() => {
+    if (!pendingPull || pendingPull.rewardId >= REWARDS.length) {
+      return null;
+    }
+
+    return REWARDS[pendingPull.rewardId];
+  }, [pendingPull]);
+
+  const activeRewardName =
+    coreAsset?.name ?? selectedReward?.name ?? "Awaiting pull";
 
   const reportRows = useMemo(
     () => [
@@ -114,34 +224,257 @@ export default function GachaponTester() {
     [report],
   );
 
-  const runMockPull = useCallback(async () => {
-    if (mockPulling) {
+  const staticLinks = useMemo(
+    () => [
+      { label: "Program", href: explorerAddress(PROGRAM_ID) },
+      { label: "Metaplex Core", href: explorerAddress(MPL_CORE_PROGRAM_ID) },
+      { label: "VRF Program", href: explorerAddress(VRF_PROGRAM_ID) },
+      { label: "VRF Queue", href: explorerAddress(DEFAULT_VRF_QUEUE) },
+    ],
+    [],
+  );
+
+  const connectWallet = useCallback(async () => {
+    const browserWallet = window.solana;
+    if (!browserWallet) {
+      setFlowError("No Solana browser wallet was found.");
+      return null;
+    }
+
+    const { publicKey } = await browserWallet.connect();
+    setWallet(browserWallet);
+    setWalletKey(publicKey);
+    setFlowError(null);
+    return { browserWallet, publicKey };
+  }, []);
+
+  const findSettlementSignature = useCallback(
+    async (asset: PublicKey, requestSignature: string) => {
+      const signatures = await connection.getSignaturesForAddress(asset, {
+        limit: 8,
+      });
+
+      return (
+        signatures.find((signature) => signature.signature !== requestSignature)
+          ?.signature ?? signatures[0]?.signature
+      );
+    },
+    [connection],
+  );
+
+  const waitForSettlement = useCallback(
+    async (
+      nextAccounts: GachaponAccounts,
+      requestSignature: string,
+      onPoll: (pull: PendingPullAccount) => void,
+    ) => {
+      const startedAt = Date.now();
+
+      while (Date.now() - startedAt < 180_000) {
+        const pull = await fetchPendingPull(connection, nextAccounts.pendingPull);
+        onPoll(pull);
+
+        if (isSettled(pull)) {
+          const assetAccount = await connection.getAccountInfo(
+            nextAccounts.asset,
+            "confirmed",
+          );
+
+          if (!assetAccount) {
+            throw new Error("Pull settled but Core asset account was not found");
+          }
+
+          const coreAsset = decodeCoreAsset(Buffer.from(assetAccount.data));
+          const settlementSignature = await findSettlementSignature(
+            nextAccounts.asset,
+            requestSignature,
+          );
+
+          return { pull, assetAccount, coreAsset, settlementSignature };
+        }
+
+        await wait(3_000);
+      }
+
+      throw new Error("Timed out waiting for the VRF callback");
+    },
+    [connection, findSettlementSignature],
+  );
+
+  const runDevnetPull = useCallback(async () => {
+    if (isRunning) {
       return;
     }
 
-    setMockPulling(true);
+    const connected =
+      wallet && walletKey ? { browserWallet: wallet, publicKey: walletKey } : await connectWallet();
+
+    if (!connected) {
+      return;
+    }
+
+    const { browserWallet, publicKey } = connected;
+    const nextAccounts = findGachaponAccounts(publicKey);
+    const clientSeed = window.crypto.getRandomValues(new Uint8Array(1))[0];
+
+    setIsRunning(true);
+    setFlowError(null);
+    setAccounts(nextAccounts);
+    setMachineAccount(null);
+    setPendingPull(null);
+    setCoreAsset(null);
+    setAssetOwner(null);
+    setSteps(initialSteps);
     setPullCount((value) => value + 1);
-    setReward(mockRewards[Math.floor(Math.random() * mockRewards.length)]);
     setCameraResetKey((value) => value + 1);
 
-    const alignmentPromise = waitForMachineAlignment(alignmentResolveRef);
-    setAnimationState("aligning");
-    await alignmentPromise;
-    await wait(500);
-    setAnimationState("turning");
-    await wait(2750);
-    setAnimationState("dropping");
-    await wait(9000);
-    setMockPulling(false);
-  }, [mockPulling]);
+    try {
+      updateStep("init", {
+        status: "active",
+        detail: `Creating ${shortKey(nextAccounts.machine)}`,
+        links: accountLinks(nextAccounts, publicKey),
+      });
 
-  const revealReward = useCallback(() => {
-    if (mockPulling || animationState !== "dropping") {
-      return;
+      const initSignature = await sendWalletTransaction(
+        connection,
+        browserWallet,
+        publicKey,
+        buildInitInstruction(publicKey, nextAccounts),
+      );
+      const initMachine = await fetchMachine(connection, nextAccounts.machine);
+      setMachineAccount(initMachine);
+      updateStep("init", {
+        status: "done",
+        detail: "Machine created",
+        links: [
+          txLink("Init tx", initSignature),
+          addressLink("Machine", nextAccounts.machine),
+          addressLink("Treasury", nextAccounts.treasury),
+          addressLink("Update authority", nextAccounts.updateAuthority),
+        ],
+      });
+
+      updateStep("config", {
+        status: "active",
+        detail: "Uploading placeholder templates",
+        links: [addressLink("Machine", nextAccounts.machine)],
+      });
+
+      const configSignature = await sendWalletTransaction(
+        connection,
+        browserWallet,
+        publicKey,
+        buildUploadConfigInstruction(publicKey, nextAccounts),
+      );
+      const configuredMachine = await fetchMachine(
+        connection,
+        nextAccounts.machine,
+      );
+      setMachineAccount(configuredMachine);
+      updateStep("config", {
+        status: "done",
+        detail: `${configuredMachine.totalWeight} total weight`,
+        links: [
+          txLink("Config tx", configSignature),
+          addressLink("Machine", nextAccounts.machine),
+        ],
+      });
+
+      const alignmentPromise = waitForMachineAlignment(alignmentResolveRef);
+      setAnimationState("aligning");
+      await alignmentPromise;
+      setAnimationState("turning");
+
+      updateStep("request", {
+        status: "active",
+        detail: "Submitting VRF request",
+        links: [
+          addressLink("Pending pull", nextAccounts.pendingPull),
+          addressLink("Asset PDA", nextAccounts.asset),
+          addressLink("VRF queue", DEFAULT_VRF_QUEUE),
+        ],
+      });
+
+      const requestSignature = await sendWalletTransaction(
+        connection,
+        browserWallet,
+        publicKey,
+        buildPullInstruction(publicKey, nextAccounts, clientSeed),
+      );
+      const requestedPull = await fetchPendingPull(
+        connection,
+        nextAccounts.pendingPull,
+      );
+      setPendingPull(requestedPull);
+      updateStep("request", {
+        status: "done",
+        detail: `Pending pull ${requestedPull.pullId.toString()}`,
+        links: [
+          txLink("Request tx", requestSignature),
+          addressLink("Pending pull", nextAccounts.pendingPull),
+          addressLink("Asset PDA", nextAccounts.asset),
+          addressLink("VRF program", VRF_PROGRAM_ID),
+        ],
+      });
+
+      await wait(900);
+      setAnimationState("dropping");
+      updateStep("settlement", {
+        status: "active",
+        detail: "Waiting for callback",
+        links: [addressLink("Pending pull", nextAccounts.pendingPull)],
+      });
+
+      const settled = await waitForSettlement(
+        nextAccounts,
+        requestSignature,
+        (pull) => {
+          setPendingPull(pull);
+          updateStep("settlement", {
+            status: "active",
+            detail: `Status ${pull.status}`,
+            links: [addressLink("Pending pull", nextAccounts.pendingPull)],
+          });
+        },
+      );
+
+      setPendingPull(settled.pull);
+      setCoreAsset(settled.coreAsset);
+      setAssetOwner(settled.assetAccount.owner);
+      setMachineAccount(await fetchMachine(connection, nextAccounts.machine));
+      setAnimationState("revealed");
+
+      updateStep("settlement", {
+        status: "done",
+        detail: "Callback settled",
+        links: [
+          ...(settled.settlementSignature
+            ? [txLink("Callback tx", settled.settlementSignature)]
+            : []),
+          addressLink("Pending pull", nextAccounts.pendingPull),
+        ],
+      });
+      updateStep("asset", {
+        status: "done",
+        detail: settled.coreAsset.name,
+        links: [
+          addressLink("Core asset", nextAccounts.asset),
+          addressLink("Owner", settled.coreAsset.owner),
+          ...(settled.coreAsset.updateAuthority
+            ? [addressLink("Update authority", settled.coreAsset.updateAuthority)]
+            : []),
+          addressLink("Core program", settled.assetAccount.owner),
+        ],
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setFlowError(message);
+      setAnimationState("idle");
+      markActiveStepFailed(message);
+    } finally {
+      setIsRunning(false);
     }
-
-    setAnimationState("revealed");
-  }, [animationState, mockPulling]);
+  }, [connectWallet, connection, isRunning, wallet, walletKey]);
 
   const handleMachineAligned = useCallback(() => {
     alignmentResolveRef.current?.();
@@ -194,11 +527,11 @@ export default function GachaponTester() {
 
       <aside className="controlPanel">
         <div className="titleBlock">
-          <span className="eyebrow">Gachapon Example</span>
-          <h1>Animation Tester</h1>
+          <span className="eyebrow">Devnet Gachapon</span>
+          <h1>Pull Console</h1>
           <div className="stateReadout">
             <span>{animationState}</span>
-            <span>{reward}</span>
+            <span>{activeRewardName}</span>
           </div>
         </div>
 
@@ -206,20 +539,20 @@ export default function GachaponTester() {
           <button
             className="primaryButton"
             type="button"
-            disabled={mockPulling}
-            onClick={runMockPull}
+            disabled={isRunning}
+            onClick={runDevnetPull}
           >
-            <Play size={18} />
-            Mock Pull
+            {isRunning ? <Loader2 className="spinIcon" size={18} /> : <Play size={18} />}
+            Devnet Pull
           </button>
           <button
             className="secondaryButton"
             type="button"
-            disabled={mockPulling || animationState !== "dropping"}
-            onClick={revealReward}
+            disabled={isRunning}
+            onClick={connectWallet}
           >
-            <Gift size={18} />
-            Reveal
+            <Wallet size={18} />
+            {walletKey ? shortKey(walletKey) : "Connect"}
           </button>
           <button
             className="iconButton"
@@ -230,6 +563,103 @@ export default function GachaponTester() {
             <RefreshCw size={18} />
           </button>
         </div>
+
+        {flowError ? <p className="errorText">{flowError}</p> : null}
+
+        <div className="sectionBlock">
+          <h2>Verification</h2>
+          <div className="stepList">
+            {steps.map((step) => (
+              <div className={`stepRow ${step.status}`} key={step.id}>
+                <div className="stepStatus" aria-hidden="true">
+                  {step.status === "done" ? (
+                    <Check size={15} />
+                  ) : step.status === "active" ? (
+                    <Loader2 className="spinIcon" size={15} />
+                  ) : (
+                    <Circle size={15} />
+                  )}
+                </div>
+                <div className="stepBody">
+                  <div className="stepCopy">
+                    <strong>{step.label}</strong>
+                    <span>{step.detail}</span>
+                  </div>
+                  {step.links.length > 0 ? (
+                    <div className="linkGrid">
+                      {step.links.map((link) => (
+                        <ExplorerAnchor key={`${step.id}-${link.label}`} link={link} />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="sectionBlock">
+          <h2>Live Accounts</h2>
+          <dl className="reportList">
+            <AccountRow label="Wallet" value={walletKey} />
+            <AccountRow label="Machine" value={accounts?.machine ?? null} />
+            <AccountRow label="Pending" value={accounts?.pendingPull ?? null} />
+            <AccountRow label="Asset" value={accounts?.asset ?? null} />
+            <AccountRow label="Owner" value={assetOwner} />
+          </dl>
+        </div>
+
+        <div className="sectionBlock">
+          <h2>Reward Templates</h2>
+          <div className="rewardList">
+            {REWARDS.map((reward, index) => {
+              const mintedCount = machineAccount?.rewards[index]?.mintedCount ?? 0n;
+              const active = pendingPull?.rewardId === index && pendingPull.status === 1;
+
+              return (
+                <div className={active ? "rewardRow active" : "rewardRow"} key={reward.name}>
+                  <div>
+                    <strong>{reward.name}</strong>
+                    <span>{reward.uri}</span>
+                  </div>
+                  <span>{reward.weight}%</span>
+                  <span>{mintedCount.toString()}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="sectionBlock">
+          <h2>Static Links</h2>
+          <div className="linkGrid staticLinks">
+            {staticLinks.map((link) => (
+              <ExplorerAnchor key={link.label} link={link} />
+            ))}
+          </div>
+        </div>
+
+        {coreAsset ? (
+          <div className="sectionBlock">
+            <h2>Minted Asset</h2>
+            <dl className="reportList">
+              <TextRow label="Name" value={coreAsset.name} />
+              <TextRow label="URI" value={coreAsset.uri} />
+              <TextRow
+                label="Machine"
+                value={coreAsset.attributes.get("machine") ?? "Missing"}
+              />
+              <TextRow
+                label="Pull ID"
+                value={coreAsset.attributes.get("pull_id") ?? "Missing"}
+              />
+              <TextRow
+                label="Reward ID"
+                value={coreAsset.attributes.get("reward_id") ?? "Missing"}
+              />
+            </dl>
+          </div>
+        ) : null}
 
         <div className="sectionBlock">
           <h2>Animation State</h2>
@@ -243,7 +673,7 @@ export default function GachaponTester() {
                   key={state}
                   className={active ? "stateButton active" : "stateButton"}
                   type="button"
-                  disabled={mockPulling}
+                  disabled={isRunning}
                   onClick={() => setAnimationState(state)}
                 >
                   <Icon size={16} />
@@ -333,10 +763,7 @@ export default function GachaponTester() {
           <h2>Model Objects</h2>
           <dl className="reportList">
             {reportRows.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
+              <TextRow key={label} label={label} value={value} />
             ))}
           </dl>
           {report.error ? <p className="errorText">{report.error}</p> : null}
@@ -344,23 +771,114 @@ export default function GachaponTester() {
 
         <div className="mockStats">
           <div>
-            <span>Mock pulls</span>
+            <span>Devnet pulls</span>
             <strong>{pullCount}</strong>
           </div>
           <div>
             <span>Status</span>
-            <strong>
-              {mockPulling
-                ? "Running"
-                : animationState === "dropping"
-                  ? "Reveal"
-                  : "Ready"}
-            </strong>
+            <strong>{isRunning ? "Running" : pendingPull?.status === 1 ? "Settled" : "Ready"}</strong>
           </div>
         </div>
       </aside>
     </main>
   );
+
+  function updateStep(
+    id: VerifyStep["id"],
+    patch: Pick<VerifyStep, "status" | "detail" | "links">,
+  ) {
+    setSteps((current) =>
+      current.map((step) => (step.id === id ? { ...step, ...patch } : step)),
+    );
+  }
+
+  function markActiveStepFailed(message: string) {
+    setSteps((current) =>
+      current.map((step) =>
+        step.status === "active"
+          ? { ...step, status: "error", detail: message }
+          : step,
+      ),
+    );
+  }
+}
+
+function AccountRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: PublicKey | null | undefined;
+}) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>
+        {value ? (
+          <a href={explorerAddress(value)} target="_blank" rel="noreferrer">
+            {value.toBase58()}
+          </a>
+        ) : (
+          "Pending"
+        )}
+      </dd>
+    </div>
+  );
+}
+
+function TextRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+function ExplorerAnchor({ link }: { link: VerifyLink }) {
+  return (
+    <a href={link.href} target="_blank" rel="noreferrer">
+      <ExternalLink size={13} />
+      {link.label}
+    </a>
+  );
+}
+
+function accountLinks(accounts: GachaponAccounts, player: PublicKey) {
+  return [
+    addressLink("Wallet", player),
+    addressLink("Machine", accounts.machine),
+    addressLink("Treasury", accounts.treasury),
+  ];
+}
+
+function txLink(label: string, signature: string): VerifyLink {
+  return { label, href: explorerTx(signature) };
+}
+
+function addressLink(label: string, address: PublicKey): VerifyLink {
+  return { label, href: explorerAddress(address) };
+}
+
+async function fetchMachine(connection: ReturnType<typeof devnetConnection>, address: PublicKey) {
+  const account = await connection.getAccountInfo(address, "confirmed");
+  if (!account) {
+    throw new Error("Machine account was not found");
+  }
+
+  return decodeMachine(Buffer.from(account.data));
+}
+
+async function fetchPendingPull(
+  connection: ReturnType<typeof devnetConnection>,
+  address: PublicKey,
+) {
+  const account = await connection.getAccountInfo(address, "confirmed");
+  if (!account) {
+    throw new Error("Pending pull account was not found");
+  }
+
+  return decodePendingPull(Buffer.from(account.data));
 }
 
 function wait(ms: number) {
