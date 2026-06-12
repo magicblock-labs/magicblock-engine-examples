@@ -6,4 +6,4 @@ resolver = "2"
 pinocchio = { version = "0.10", features = ["cpi", "copy"] }
 pinocchio-log = { version = "0.5" }
 pinocchio-system = { version = "0.5" }
-ephemeral-rollups-pinocchio = { git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git", rev = "4bf5e8c" }
+ephemeral-rollups-pinocchio = "0.15.4"
