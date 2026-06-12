@@ -25,6 +25,14 @@ rustup install 1.89.0
 avm use 1.0.2
 ```
 
+## Frontend
+
+A playable web UI lives in [`app/`](app/README.md) — solo mode against a robot, plus a two-player mode where a friend joins via link or QR code and the winner reveals the instant the last move lands:
+
+```bash
+cd app && yarn && yarn dev
+```
+
 ## Build and Test
 
 Install dependencies and build the program:
@@ -63,7 +71,8 @@ This is a TEE (Trusted Execution Environment) example: locally, ER calls route t
 3. **Both players make hidden choices** (Rock, Paper, or Scissors)
 4. **Choices are encrypted** in the ephemeral rollup
 5. **Winner is revealed** - game logic determines the winner
-6. **Results are finalized** on-chain
+6. **Rematch (optional)** - either player resets the game and replays on the same PDAs, entirely on the ER
+7. **Results are finalized** on-chain
 
 ### Example Test Output
 
@@ -102,13 +111,19 @@ Player choices are processed in MagicBlock's Ephemeral Rollups, which provides:
 - `create_permission` - Setup access control
 - `delegate_pda` - Delegate PDA to TEE validator
 - `reveal_winner` - Compute and store result
+- `reset_game` - Rematch: either player resets a revealed game on the ER and replays with the same PDAs (choices/result cleared, permissions flipped back to private — no new accounts, no new rent)
+- `undelegate_all` - Commit + undelegate game and both choices back to the base layer
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `EPHEMERAL_PROVIDER_ENDPOINT` | `https://tee.magicblock.app` | Ephemeral rollup RPC endpoint |
-| `EPHEMERAL_WS_ENDPOINT` | `wss://tee.magicblock.app` | WebSocket endpoint for subscriptions |
+| `PROVIDER_ENDPOINT` | `https://rpc.magicblock.app/devnet` | Base layer RPC endpoint |
+| `TEE_PROVIDER_ENDPOINT` | `https://devnet-tee.magicblock.app` | TEE ephemeral rollup RPC endpoint |
+| `TEE_WS_ENDPOINT` | `wss://devnet-tee.magicblock.app` | WebSocket endpoint for subscriptions |
+| `VALIDATOR` | `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo` | TEE ER validator to delegate to |
+
+On mainnet the TEE endpoints are `https://mainnet-tee.magicblock.app` / `wss://mainnet-tee.magicblock.app`. `scripts/local-env.sh` overrides all of these to target the local cluster.
 
 ## References
 

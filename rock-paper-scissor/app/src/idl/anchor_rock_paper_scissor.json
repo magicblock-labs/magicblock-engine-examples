@@ -1,0 +1,892 @@
+{
+  "address": "J7Zmxm5U7PJzqLJvGcwJr38d6L2NyrgjjGf8bQVTLZ8H",
+  "metadata": {
+    "name": "anchor_rock_paper_scissor",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "create_game",
+      "discriminator": [124, 69, 75, 66, 184, 220, 72, 206],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 97, 109, 101]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player_choice",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112, 108, 97, 121, 101, 114, 95, 99, 104, 111, 105, 99, 101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              },
+              {
+                "kind": "account",
+                "path": "player1"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player1",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "game_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "delegate_pda",
+      "docs": [
+        "Delegate account to the delegation program based on account type",
+        "Set specific validator based on ER, see https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup"
+      ],
+      "discriminator": [248, 217, 193, 46, 124, 191, 64, 135],
+      "accounts": [
+        {
+          "name": "buffer_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [98, 117, 102, 102, 101, 114]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                254, 69, 56, 189, 16, 182, 35, 230, 243, 202, 197, 86, 175, 90,
+                87, 136, 50, 188, 215, 248, 5, 146, 80, 229, 66, 8, 8, 161, 42,
+                66, 171, 254
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [100, 101, 108, 101, 103, 97, 116, 105, 111, 110]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100, 101, 108, 101, 103, 97, 116, 105, 111, 110, 45, 109, 101,
+                  116, 97, 100, 97, 116, 97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "pda",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "signer": true
+        },
+        {
+          "name": "validator",
+          "optional": true
+        },
+        {
+          "name": "owner_program",
+          "address": "J7Zmxm5U7PJzqLJvGcwJr38d6L2NyrgjjGf8bQVTLZ8H"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_type",
+          "type": {
+            "defined": {
+              "name": "AccountType"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "init_permission",
+      "docs": [
+        "Create an ephemeral permission for a delegated account directly on the ER.",
+        "The `permissioned_account` PDA is both `payer` and `permissioned_account` —",
+        "it covers its own rent from the lamports pre-funded at `create_game` /",
+        "`join_game` time, and signs the CPI via its seeds derived from `account_type`.",
+        "Idempotent: skips if the permission already exists. `members = Some(vec)` →",
+        "private with that member list; `members = None` → public."
+      ],
+      "discriminator": [66, 14, 153, 250, 187, 36, 179, 236],
+      "accounts": [
+        {
+          "name": "permissioned_account",
+          "docs": [
+            "rent and signs the CPI via the seeds derived from `account_type`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "permission",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "permission_program",
+          "address": "ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1"
+        },
+        {
+          "name": "ephemeral_vault",
+          "writable": true,
+          "address": "MagicVau1t999999999999999999999999999999999"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_type",
+          "type": {
+            "defined": {
+              "name": "AccountType"
+            }
+          }
+        },
+        {
+          "name": "members",
+          "type": {
+            "option": {
+              "vec": {
+                "defined": {
+                  "name": "Member"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "join_game",
+      "discriminator": [107, 112, 18, 38, 56, 173, 60, 128],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 97, 109, 101]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player_choice",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112, 108, 97, 121, 101, 114, 95, 99, 104, 111, 105, 99, 101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "game_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "make_choice",
+      "discriminator": [207, 18, 251, 32, 135, 122, 160, 77],
+      "accounts": [
+        {
+          "name": "player_choice",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112, 108, 97, 121, 101, 114, 95, 99, 104, 111, 105, 99, 101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "_game_id",
+          "type": "u64"
+        },
+        {
+          "name": "choice",
+          "type": {
+            "defined": {
+              "name": "Choice"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [196, 28, 41, 206, 48, 37, 51, 167],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer"
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reset_game",
+      "discriminator": [97, 146, 71, 156, 110, 206, 124, 224],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 97, 109, 101]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player1_choice",
+          "docs": ["Player1's choice PDA (derived automatically)"],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112, 108, 97, 121, 101, 114, 95, 99, 104, 111, 105, 99, 101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.player1",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player2_choice",
+          "docs": ["Player2's choice PDA (derived automatically)"],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112, 108, 97, 121, 101, 114, 95, 99, 104, 111, 105, 99, 101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.player2",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "permission_game",
+          "writable": true
+        },
+        {
+          "name": "permission1",
+          "writable": true
+        },
+        {
+          "name": "permission2",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": ["Must be one of the two players (checked in the handler)"],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "permission_program",
+          "address": "ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1"
+        },
+        {
+          "name": "ephemeral_vault",
+          "writable": true,
+          "address": "MagicVau1t999999999999999999999999999999999"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "reveal_winner",
+      "discriminator": [234, 209, 237, 109, 16, 196, 64, 254],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 97, 109, 101]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player1_choice",
+          "docs": ["Player1's choice PDA (derived automatically)"],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112, 108, 97, 121, 101, 114, 95, 99, 104, 111, 105, 99, 101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.player1",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player2_choice",
+          "docs": ["Player2's choice PDA (derived automatically)"],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112, 108, 97, 121, 101, 114, 95, 99, 104, 111, 105, 99, 101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.player2",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "permission_game",
+          "writable": true
+        },
+        {
+          "name": "permission1",
+          "writable": true
+        },
+        {
+          "name": "permission2",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": ["Anyone can trigger this"],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "permission_program",
+          "address": "ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1"
+        },
+        {
+          "name": "ephemeral_vault",
+          "writable": true,
+          "address": "MagicVau1t999999999999999999999999999999999"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "undelegate_all",
+      "docs": [
+        "Commit + undelegate game + both player_choices in a single magic-intent",
+        "bundle. Bring the whole game state back to the base layer at once and",
+        "release all three PDAs from the ER."
+      ],
+      "discriminator": [85, 123, 97, 145, 66, 22, 252, 69],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 97, 109, 101]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player1_choice",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112, 108, 97, 121, 101, 114, 95, 99, 104, 111, 105, 99, 101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.player1",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player2_choice",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112, 108, 97, 121, 101, 114, 95, 99, 104, 111, 105, 99, 101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.player2",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Game",
+      "discriminator": [27, 90, 166, 125, 74, 100, 121, 18]
+    },
+    {
+      "name": "PlayerChoice",
+      "discriminator": [116, 20, 210, 159, 85, 200, 132, 149]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "AlreadyChose",
+      "msg": "You already made your choice."
+    },
+    {
+      "code": 6001,
+      "name": "CannotJoinOwnGame",
+      "msg": "You cannot join your own game."
+    },
+    {
+      "code": 6002,
+      "name": "MissingChoice",
+      "msg": "Both players must make a choice first."
+    },
+    {
+      "code": 6003,
+      "name": "MissingOpponent",
+      "msg": "Opponent not found."
+    },
+    {
+      "code": 6004,
+      "name": "GameFull",
+      "msg": "Game is already full."
+    },
+    {
+      "code": 6005,
+      "name": "NotRevealed",
+      "msg": "The winner has not been revealed yet."
+    },
+    {
+      "code": 6006,
+      "name": "NotAPlayer",
+      "msg": "Only a player of this game can do this."
+    }
+  ],
+  "types": [
+    {
+      "name": "AccountType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Game",
+            "fields": [
+              {
+                "name": "game_id",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "PlayerChoice",
+            "fields": [
+              {
+                "name": "game_id",
+                "type": "u64"
+              },
+              {
+                "name": "player",
+                "type": "pubkey"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Choice",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Rock"
+          },
+          {
+            "name": "Paper"
+          },
+          {
+            "name": "Scissors"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Game",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_id",
+            "type": "u64"
+          },
+          {
+            "name": "player1",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "player2",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "player1_choice",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "Choice"
+                }
+              }
+            }
+          },
+          {
+            "name": "player2_choice",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "Choice"
+                }
+              }
+            }
+          },
+          {
+            "name": "result",
+            "type": {
+              "defined": {
+                "name": "GameResult"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameResult",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Winner",
+            "fields": ["pubkey"]
+          },
+          {
+            "name": "Tie"
+          },
+          {
+            "name": "None"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Member",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "flags",
+            "type": "u8"
+          },
+          {
+            "name": "pubkey",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlayerChoice",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_id",
+            "type": "u64"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "choice",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "Choice"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

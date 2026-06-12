@@ -4,14 +4,14 @@ use ephemeral_rollups_sdk::access_control::instructions::{
     CreateEphemeralPermissionCpi, UpdateEphemeralPermissionCpi,
 };
 use ephemeral_rollups_sdk::access_control::structs::{
-    EphemeralMembersArgs, EphemeralPermission, Member,
+    EphemeralMembersArgs, EphemeralPermission, Member, AUTHORITY_FLAG, TX_LOGS_FLAG,
 };
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::consts::{EPHEMERAL_VAULT_ID, MAGIC_PROGRAM_ID, PERMISSION_PROGRAM_ID};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
-declare_id!("4AEU8Dhg5dRXyfPCdPUibbhQvQVrqs9ZGPvft6wyDBvE");
+declare_id!("J7Zmxm5U7PJzqLJvGcwJr38d6L2NyrgjjGf8bQVTLZ8H");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";
@@ -186,11 +186,7 @@ pub mod anchor_rock_paper_scissor {
             authority_is_signer: false,
             args: public_args(),
         }
-        .invoke_signed(&[&[
-            GAME_SEED,
-            &game.game_id.to_le_bytes(),
-            &[ctx.bumps.game],
-        ]])?;
+        .invoke_signed(&[&[GAME_SEED, &game.game_id.to_le_bytes(), &[ctx.bumps.game]]])?;
 
         UpdateEphemeralPermissionCpi {
             payer: player1_choice.to_account_info(),
@@ -235,6 +231,105 @@ pub mod anchor_rock_paper_scissor {
         // Note: undelegation is intentionally NOT done here. Call `undelegate_all`
         // afterwards to commit + undelegate game + both player_choices in one ix.
 
+        Ok(())
+    }
+
+    // 5️⃣ Rematch: after the winner is revealed, either player can reset the
+    // game while it is still delegated to the ER and play another round with
+    // the SAME PDAs — no new accounts, no new rent, no base-layer round-trip.
+    // Clears both choices + the result and flips all three ephemeral
+    // permissions back to private (game: [p1, p2], each choice: its owner
+    // only). The rent each permission needs to grow back is exactly the refund
+    // its PDA received when `reveal_winner` shrank it to public, so the PDAs
+    // stay solvent across unlimited rounds.
+    pub fn reset_game(ctx: Context<ResetGame>) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+        let player1_choice = &mut ctx.accounts.player1_choice;
+        let player2_choice = &mut ctx.accounts.player2_choice;
+        let permission_program = ctx.accounts.permission_program.to_account_info();
+        let permission_game = ctx.accounts.permission_game.to_account_info();
+        let permission1 = ctx.accounts.permission1.to_account_info();
+        let permission2 = ctx.accounts.permission2.to_account_info();
+        let ephemeral_vault = ctx.accounts.ephemeral_vault.to_account_info();
+        let magic_program = ctx.accounts.magic_program.to_account_info();
+
+        // 1️⃣ Only between rounds: the previous round must be revealed,
+        // otherwise a losing-streak player could wipe a round in flight.
+        require!(game.result != GameResult::None, GameError::NotRevealed);
+
+        // 2️⃣ Either player can trigger the rematch — but only a player.
+        let player1 = game.player1.ok_or(GameError::MissingOpponent)?;
+        let player2 = game.player2.ok_or(GameError::MissingOpponent)?;
+        let payer = ctx.accounts.payer.key();
+        require!(payer == player1 || payer == player2, GameError::NotAPlayer);
+
+        // 3️⃣ Clear the round state
+        game.player1_choice = None;
+        game.player2_choice = None;
+        game.result = GameResult::None;
+        player1_choice.choice = None;
+        player2_choice.choice = None;
+
+        // 4️⃣ Flip permissions back to private, mirroring the initial setup.
+        let member = |pubkey: Pubkey| Member {
+            flags: AUTHORITY_FLAG | TX_LOGS_FLAG,
+            pubkey,
+        };
+        let private_args = |members: Vec<Member>| EphemeralMembersArgs {
+            is_private: true,
+            members,
+        };
+
+        UpdateEphemeralPermissionCpi {
+            payer: game.to_account_info(),
+            permissioned_account: game.to_account_info(),
+            permission: permission_game,
+            vault: ephemeral_vault.clone(),
+            magic_program: magic_program.clone(),
+            permission_program: permission_program.clone(),
+            authority: game.to_account_info(),
+            authority_is_signer: false,
+            args: private_args(vec![member(player1), member(player2)]),
+        }
+        .invoke_signed(&[&[GAME_SEED, &game.game_id.to_le_bytes(), &[ctx.bumps.game]]])?;
+
+        UpdateEphemeralPermissionCpi {
+            payer: player1_choice.to_account_info(),
+            permissioned_account: player1_choice.to_account_info(),
+            permission: permission1,
+            vault: ephemeral_vault.clone(),
+            magic_program: magic_program.clone(),
+            permission_program: permission_program.clone(),
+            authority: player1_choice.to_account_info(),
+            authority_is_signer: false,
+            args: private_args(vec![member(player1)]),
+        }
+        .invoke_signed(&[&[
+            PLAYER_CHOICE_SEED,
+            &player1_choice.game_id.to_le_bytes(),
+            player1_choice.player.as_ref(),
+            &[ctx.bumps.player1_choice],
+        ]])?;
+
+        UpdateEphemeralPermissionCpi {
+            payer: player2_choice.to_account_info(),
+            permissioned_account: player2_choice.to_account_info(),
+            permission: permission2,
+            vault: ephemeral_vault.clone(),
+            magic_program: magic_program.clone(),
+            permission_program: permission_program.clone(),
+            authority: player2_choice.to_account_info(),
+            authority_is_signer: false,
+            args: private_args(vec![member(player2)]),
+        }
+        .invoke_signed(&[&[
+            PLAYER_CHOICE_SEED,
+            &player2_choice.game_id.to_le_bytes(),
+            player2_choice.player.as_ref(),
+            &[ctx.bumps.player2_choice],
+        ]])?;
+
+        msg!("Game {} reset for a rematch by {}", game.game_id, payer);
         Ok(())
     }
 
@@ -428,6 +523,52 @@ pub struct RevealWinner<'info> {
     pub magic_program: UncheckedAccount<'info>,
 }
 
+/// Context for `reset_game` — same account set as `RevealWinner`: the game,
+/// both choice PDAs (re-derived from the players stored on the game) and their
+/// permission accounts, which get flipped back to private for the next round.
+#[derive(Accounts)]
+pub struct ResetGame<'info> {
+    #[account(mut, seeds = [GAME_SEED, &game.game_id.to_le_bytes()], bump)]
+    pub game: Account<'info, Game>,
+
+    /// Player1's choice PDA (derived automatically)
+    #[account(
+        mut,
+        seeds = [PLAYER_CHOICE_SEED, &game.game_id.to_le_bytes(), game.player1.unwrap().as_ref()],
+        bump
+    )]
+    pub player1_choice: Account<'info, PlayerChoice>,
+
+    /// Player2's choice PDA (derived automatically)
+    #[account(
+        mut,
+        seeds = [PLAYER_CHOICE_SEED, &game.game_id.to_le_bytes(), game.player2.unwrap().as_ref()],
+        bump
+    )]
+    pub player2_choice: Account<'info, PlayerChoice>,
+    /// CHECK: Checked by the permission program
+    #[account(mut)]
+    pub permission_game: UncheckedAccount<'info>,
+    /// CHECK: Checked by the permission program
+    #[account(mut)]
+    pub permission1: UncheckedAccount<'info>,
+    /// CHECK: Checked by the permission program
+    #[account(mut)]
+    pub permission2: UncheckedAccount<'info>,
+    /// Must be one of the two players (checked in the handler)
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    /// CHECK: PERMISSION PROGRAM
+    #[account(address = PERMISSION_PROGRAM_ID)]
+    pub permission_program: UncheckedAccount<'info>,
+    /// CHECK: verified by magic program
+    #[account(mut, address = EPHEMERAL_VAULT_ID)]
+    pub ephemeral_vault: UncheckedAccount<'info>,
+    /// CHECK: Magic Program
+    #[account(address = MAGIC_PROGRAM_ID)]
+    pub magic_program: UncheckedAccount<'info>,
+}
+
 /// Context for `undelegate_all` — commits + undelegates game + both player_choice
 /// PDAs in a single magic-intent bundle. `#[commit]` auto-adds `magic_context` and
 /// `magic_program`. Player addresses are derived from the game's stored state.
@@ -542,6 +683,10 @@ pub enum GameError {
     MissingOpponent,
     #[msg("Game is already full.")]
     GameFull,
+    #[msg("The winner has not been revealed yet.")]
+    NotRevealed,
+    #[msg("Only a player of this game can do this.")]
+    NotAPlayer,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]

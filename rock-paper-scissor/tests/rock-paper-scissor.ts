@@ -22,8 +22,11 @@ const VAULT_ID = new anchor.web3.PublicKey(
 );
 
 describe("anchor-rock-paper-scissor", () => {
-  // Configure the client
-  let provider = anchor.AnchorProvider.local();
+  // Configure the client. Falls back to devnet when PROVIDER_ENDPOINT is not
+  // set (scripts/local-env.sh points it at the local cluster).
+  let provider = anchor.AnchorProvider.local(
+    process.env.PROVIDER_ENDPOINT || "https://rpc.magicblock.app/devnet",
+  );
   anchor.setProvider(provider);
 
   let program = anchor.workspace
@@ -36,9 +39,13 @@ describe("anchor-rock-paper-scissor", () => {
   const player1 = provider.wallet.payer;
   const player2 = anchor.web3.Keypair.generate();
 
+  // TEE endpoints per network: devnet → devnet-tee.magicblock.app (default,
+  // matching the devnet base-layer fallback), mainnet → mainnet-tee.magicblock.app.
+  // scripts/local-env.sh overrides these to route through the local QFS.
   const teeUrl =
-    process.env.TEE_PROVIDER_ENDPOINT || "https://tee.magicblock.app";
-  const teeWsUrl = process.env.TEE_WS_ENDPOINT || "wss://tee.magicblock.app";
+    process.env.TEE_PROVIDER_ENDPOINT || "https://devnet-tee.magicblock.app";
+  const teeWsUrl =
+    process.env.TEE_WS_ENDPOINT || "wss://devnet-tee.magicblock.app";
   const providerEphemeralRollup = new anchor.AnchorProvider(
     new anchor.web3.Connection(teeUrl, {
       wsEndpoint: teeWsUrl,
@@ -538,6 +545,133 @@ describe("anchor-rock-paper-scissor", () => {
     console.log("✅ Reveal Winner TX Sent:", txHash);
     // const txBase = await GetCommitmentSignature(txHash, providerTeePlayer1.connection)
     // console.log("✅ Winner Revealed:", txBase)
+
+    const accountInfo =
+      await providerTeePlayer1.connection.getAccountInfo(gamePda);
+    const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
+    printGameResult(gameAccount);
+  });
+
+  // Rematch: either player can reset a revealed game and replay with the SAME
+  // PDAs — no new accounts, no extra rent. reset_game clears both choices +
+  // the result and flips all three permissions back to private.
+  it("Reset Game for a rematch (Player 2)", async () => {
+    const tx = await program.methods
+      .resetGame()
+      .accountsPartial({
+        game: gamePda,
+        player1Choice: player1ChoicePda,
+        player2Choice: player2ChoicePda,
+        permissionGame: permissionForGame,
+        permission1: permissionForPlayer1Choice,
+        permission2: permissionForPlayer2Choice,
+        payer: player2.publicKey,
+        permissionProgram: PERMISSION_PROGRAM_ID,
+        ephemeralVault: VAULT_ID,
+        magicProgram: MAGIC_PROGRAM_ID,
+      })
+      .transaction();
+    tx.feePayer = player2.publicKey;
+    tx.recentBlockhash = (
+      await providerTeePlayer2.connection.getLatestBlockhash()
+    ).blockhash;
+    const txHash = await sendAndConfirmTransaction(
+      providerTeePlayer2.connection,
+      tx,
+      [player2],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
+    console.log("🔄 Game reset for rematch:", txHash);
+
+    const accountInfo =
+      await providerTeePlayer2.connection.getAccountInfo(gamePda);
+    const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
+    if (!("none" in gameAccount.result)) {
+      throw new Error("❌ Game result was not cleared by reset_game");
+    }
+    if (gameAccount.player1Choice || gameAccount.player2Choice) {
+      throw new Error("❌ Choices were not cleared by reset_game");
+    }
+    console.log("✅ Round state cleared — same PDAs ready for round 2");
+  });
+
+  it("Round 2: both players make a choice", async () => {
+    for (const [player, choicePda, teeProvider] of [
+      [player1, player1ChoicePda, providerTeePlayer1],
+      [player2, player2ChoicePda, providerTeePlayer2],
+    ] as const) {
+      const choice = getRandomChoice();
+      const ix = await program.methods
+        .makeChoice(gameId, choice)
+        .accounts({
+          // @ts-ignore
+          playerChoice: choicePda,
+          player: player.publicKey,
+        })
+        .instruction();
+      const tx = new anchor.web3.Transaction().add(ix);
+      tx.feePayer = player.publicKey;
+      tx.recentBlockhash = (
+        await teeProvider.connection.getLatestBlockhash()
+      ).blockhash;
+      const txHash = await sendAndConfirmTransaction(
+        teeProvider.connection,
+        tx,
+        [player],
+        {
+          skipPreflight: true,
+          commitment: "confirmed",
+        },
+      );
+      console.log(
+        `✅ Round 2: ${player.publicKey} chose ${JSON.stringify(choice)}: ${txHash}`,
+      );
+    }
+  });
+
+  it("Round 2: Sneak Player 2 Choice (private again after reset)", async () => {
+    const accountInfo =
+      await providerTeePlayer1.connection.getAccountInfo(player2ChoicePda);
+    if (accountInfo === null) {
+      console.log(
+        "✅ Player 2 choice hidden from Player 1 again — reset re-privatized it.",
+      );
+      return;
+    }
+    throw new Error("❌ Player 2 choice readable after reset!");
+  });
+
+  it("Round 2: Reveal Winner", async () => {
+    const tx = await program.methods
+      .revealWinner()
+      .accountsPartial({
+        //@ts-ignore
+        game: gamePda,
+        player1Choice: player1ChoicePda,
+        player2Choice: player2ChoicePda,
+        permissionGame: permissionForGame,
+        permission1: permissionForPlayer1Choice,
+        permission2: permissionForPlayer2Choice,
+        payer: player1.publicKey,
+        permissionProgram: PERMISSION_PROGRAM_ID,
+        ephemeralVault: VAULT_ID,
+        magicProgram: MAGIC_PROGRAM_ID,
+      })
+      .transaction();
+    tx.feePayer = player1.publicKey;
+    const txHash = await sendAndConfirmTransaction(
+      providerTeePlayer1.connection,
+      tx,
+      [player1],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
+    console.log("✅ Round 2 Reveal Winner TX Sent:", txHash);
 
     const accountInfo =
       await providerTeePlayer1.connection.getAccountInfo(gamePda);
