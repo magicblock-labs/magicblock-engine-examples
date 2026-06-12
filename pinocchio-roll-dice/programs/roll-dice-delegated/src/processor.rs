@@ -95,7 +95,7 @@ pub fn process_roll_dice(
             caller_seed: [client_seed; 32],
             callback_discriminator: &InstructionDiscriminator::CallbackRollDice.to_bytes(),
             callback_args: &[client_seed],
-            callback_program_id: *program_id,
+            callback_program_id: program_id,
             callback_accounts_metas: &[InstructionAccount {
                 address: player.address(),
                 is_signer: false,
