@@ -44,7 +44,8 @@ export default function Arena({
 }: Props) {
   const opponentName = role === "solo" ? "Robot 🤖" : "Challenger";
   const revealing = phase === "revealing";
-  const done = phase === "done";
+  // "round-over" shows the just-finished round's hands, like the final screen.
+  const done = phase === "done" || phase === "round-over";
 
   const [beat, setBeat] = useState(0);
   useEffect(() => {

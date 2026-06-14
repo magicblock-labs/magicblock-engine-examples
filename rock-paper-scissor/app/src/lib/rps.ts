@@ -31,6 +31,7 @@ import {
   VAULT_ID,
   GAME_SEED,
   PLAYER_CHOICE_SEED,
+  VAULT_SEED,
 } from "./config";
 
 export type ChoiceName = "rock" | "paper" | "scissors";
@@ -46,20 +47,37 @@ export interface GameAccount {
   player2: PublicKey | null;
   player1Choice: Record<string, object> | null;
   player2Choice: Record<string, object> | null;
-  result: Record<string, unknown>;
+  roundResult: Record<string, unknown>;
+  stake: BN;
+  paid: boolean;
+  targetWins: number;
+  player1Wins: number;
+  player2Wins: number;
+  round: number;
 }
+
+export const matchWinnerKey = (game: GameAccount): PublicKey | null => {
+  if (game.player1Wins >= game.targetWins) return game.player1;
+  if (game.player2Wins >= game.targetWins) return game.player2;
+  return null;
+};
+
+export const matchDecided = (game: GameAccount | null): boolean =>
+  !!game && matchWinnerKey(game) !== null;
 
 export const choiceName = (
   c: Record<string, object> | null,
 ): ChoiceName | null => (c ? (Object.keys(c)[0] as ChoiceName) : null);
 
 export const resultIsSet = (game: GameAccount | null): boolean =>
-  !!game && !!game.result && !("none" in game.result);
+  !!game && !!game.roundResult && !("none" in game.roundResult);
 
 export const winnerKey = (game: GameAccount): PublicKey | null => {
-  if (!game.result || !("winner" in game.result)) return null;
+  if (!game.roundResult || !("winner" in game.roundResult)) return null;
   // Anchor decodes `Winner(Pubkey)` as { winner: { "0": PublicKey } }
-  return (game.result as { winner: Record<string, PublicKey> }).winner["0"];
+  return (game.roundResult as { winner: Record<string, PublicKey> }).winner[
+    "0"
+  ];
 };
 
 // Patch the IDL address so an env-var override takes effect everywhere.
@@ -114,6 +132,13 @@ export class RpsClient {
         gameId.toArrayLike(Buffer, "le", 8),
         player.toBuffer(),
       ],
+      this.program.programId,
+    )[0];
+  }
+
+  vaultPda(gameId: BN): PublicKey {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from(VAULT_SEED), gameId.toArrayLike(Buffer, "le", 8)],
       this.program.programId,
     )[0];
   }
@@ -193,12 +218,17 @@ export class RpsClient {
   // ---------- game flow (mirrors tests/rock-paper-scissor.ts) ----------
 
   /** Base layer: create the game (auto-join as player 1) + delegate p1's choice PDA. */
-  async createGameAndDelegate(gameId: BN): Promise<string> {
+  async createGameAndDelegate(
+    gameId: BN,
+    stakeLamports: BN,
+    targetWins: number,
+  ): Promise<string> {
     const createIx = await this.program.methods
-      .createGame(gameId)
+      .createGame(gameId, stakeLamports, targetWins)
       .accountsPartial({
         game: this.gamePda(gameId),
         playerChoice: this.choicePda(gameId, this.publicKey),
+        vault: this.vaultPda(gameId),
         player1: this.publicKey,
       })
       .instruction();
@@ -220,6 +250,7 @@ export class RpsClient {
       .accountsPartial({
         game: this.gamePda(gameId),
         playerChoice: this.choicePda(gameId, this.publicKey),
+        vault: this.vaultPda(gameId),
         player: this.publicKey,
       })
       .instruction();
@@ -336,6 +367,19 @@ export class RpsClient {
     return this.fetchGameBase(gameId).catch(() => null);
   }
 
+  /** Lamports currently escrowed in the game vault (the pot). */
+  async vaultBalance(gameId: BN): Promise<number> {
+    return this.baseConnection.getBalance(this.vaultPda(gameId)).catch(() => 0);
+  }
+
+  /** Is the game back on the base layer (undelegated)? */
+  async isOnBase(gameId: BN): Promise<boolean> {
+    const info = await this.baseConnection
+      .getAccountInfo(this.gamePda(gameId))
+      .catch(() => null);
+    return !!info && info.owner.equals(this.program.programId);
+  }
+
   /** My own choice — readable only through my authenticated TEE connection. */
   async fetchMyChoiceEr(gameId: BN): Promise<ChoiceName | null> {
     const conn = await this.teeConn();
@@ -361,7 +405,7 @@ export class RpsClient {
     const p1Choice = this.choicePda(gameId, player1);
     const p2Choice = this.choicePda(gameId, player2);
     return this.program.methods
-      .revealWinner()
+      .revealRound()
       .accountsPartial({
         game: gamePda,
         player1Choice: p1Choice,
@@ -398,8 +442,8 @@ export class RpsClient {
     });
   }
 
-  /** ER: rematch on the same PDAs — clears the round, re-privatizes permissions. */
-  async resetGame(
+  /** ER: advance the match — clears the round (or starts a new match), re-privatizes. */
+  async nextRound(
     gameId: BN,
     player1: PublicKey,
     player2: PublicKey,
@@ -408,7 +452,7 @@ export class RpsClient {
     const p1Choice = this.choicePda(gameId, player1);
     const p2Choice = this.choicePda(gameId, player2);
     const ix = await this.program.methods
-      .resetGame()
+      .nextRound()
       .accountsPartial({
         game: gamePda,
         player1Choice: p1Choice,
@@ -441,5 +485,37 @@ export class RpsClient {
       })
       .instruction();
     return this.sendEr([ix]);
+  }
+
+  /** Base layer (after undelegate): pay the winner / refund a tie. Idempotent. */
+  async claimPot(
+    gameId: BN,
+    player1: PublicKey,
+    player2: PublicKey,
+  ): Promise<string> {
+    const ix = await this.program.methods
+      .claimPot()
+      .accountsPartial({
+        game: this.gamePda(gameId),
+        vault: this.vaultPda(gameId),
+        player1,
+        player2,
+        payer: this.publicKey,
+      })
+      .instruction();
+    return this.sendBase([ix]);
+  }
+
+  /** Base layer: refund the creator's stake when nobody joined. */
+  async cancelGame(gameId: BN): Promise<string> {
+    const ix = await this.program.methods
+      .cancelGame()
+      .accountsPartial({
+        game: this.gamePda(gameId),
+        vault: this.vaultPda(gameId),
+        player1: this.publicKey,
+      })
+      .instruction();
+    return this.sendBase([ix]);
   }
 }

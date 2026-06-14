@@ -66,13 +66,13 @@ This is a TEE (Trusted Execution Environment) example: locally, ER calls route t
 
 ### Game Flow
 
-1. **Player 1 creates a game** with a unique game ID
-2. **Player 2 joins** the same game
+1. **Player 1 creates a match** with a unique game ID, a best-of-N length, and a SOL wager (or free play)
+2. **Player 2 joins** the same game and matches the wager
 3. **Both players make hidden choices** (Rock, Paper, or Scissors)
 4. **Choices are encrypted** in the ephemeral rollup
-5. **Winner is revealed** - game logic determines the winner
-6. **Rematch (optional)** - either player resets the game and replays on the same PDAs, entirely on the ER
-7. **Results are finalized** on-chain
+5. **Round winner is revealed** and the score updated (tied rounds replay)
+6. **Next round** plays on the same PDAs until a player reaches the win target — all on the ER
+7. **Results are finalized** on-chain and the **match winner claims the pot**
 
 ### Example Test Output
 
@@ -97,22 +97,41 @@ Player choices are processed in MagicBlock's Ephemeral Rollups, which provides:
 - **Privacy**: Other players cannot see choices until revealed
 - **Finality**: Results are committed to Solana mainnet
 
+### Matches (best-of-N)
+
+A game is a **match** of best-of-N rounds, set at creation via `target_wins` (round-wins needed; `1` = single round, `2` = best of 3, `3` = best of 5):
+
+- `reveal_winner` decides each round and tallies `player1_wins` / `player2_wins`. A **tied round counts for neither side and is replayed**, so a match always resolves to a winner.
+- While the match is undecided, `reset_game` **advances to the next round** on the same PDAs, keeping the score (re-privatizes the choice accounts). Once the match is decided, `reset_game` on a *free* game starts a brand-new match (score reset); a staked match must be settled + claimed first.
+- `undelegate_all` is gated on the **match** being decided (not just a round), so the game can't be pulled back to the base layer mid-match.
+
+### Wagering
+
+Games can carry a SOL wager (default `0.1`, customizable at creation; `0` for free play):
+
+- **Player 1 stakes** at `create_game`, **Player 2 stakes the same amount** at `join_game` — both deposits go into a per-game **vault PDA** (`["vault", game_id]`), a system-owned SOL escrow that is never delegated, so the pot stays put on the base layer while the match runs on the ER.
+- After the match is decided and undelegated, `claim_pot` pays the **match winner the whole pot**. It is idempotent (`paid` flag) and the funds can only go to the two recorded players.
+- `cancel_game` refunds the creator if no one ever joins.
+
 ### Program Accounts
 
-- **Game Account**: Stores game state and result
+- **Game Account**: Stores game state, current-round result, match score (`target_wins`/`player1_wins`/`player2_wins`/`round`), stake, and payout flag
 - **PlayerChoice Account**: Stores a player's encrypted choice (PDAs)
 - **Permission Account**: Controls access to encrypted data
+- **Vault Account**: System-owned PDA escrow holding the pot
 
 ### Anchor Instructions
 
-- `create_game` - Initialize a new game
-- `join_game` - Add the second player
+- `create_game` - Initialize a match, set the wager and best-of length (`create_game(game_id, stake, target_wins)`)
+- `join_game` - Add the second player and match the wager
 - `make_choice` - Submit encrypted choice
 - `create_permission` - Setup access control
 - `delegate_pda` - Delegate PDA to TEE validator
-- `reveal_winner` - Compute and store result
-- `reset_game` - Rematch: either player resets a revealed game on the ER and replays with the same PDAs (choices/result cleared, permissions flipped back to private — no new accounts, no new rent)
-- `undelegate_all` - Commit + undelegate game and both choices back to the base layer
+- `reveal_winner` - Decide the round and tally the match score
+- `reset_game` - Advance to the next round (score kept), or start a fresh match once decided (free games); same PDAs, no new rent
+- `undelegate_all` - Commit + undelegate game and both choices back to the base layer (only once the match is decided)
+- `claim_pot` - Pay the match winner from the vault (base layer, after undelegate)
+- `cancel_game` - Refund the creator if nobody joined
 
 ## Environment Variables
 

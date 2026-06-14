@@ -61,40 +61,75 @@ body {
   font-family: inherit;
   font-size: 1rem;
   font-weight: 600;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 14px;
   padding: 12px 22px;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     transform 0.12s ease,
     box-shadow 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease,
     opacity 0.12s;
 }
 .btn:hover {
-  transform: translateY(-2px) scale(1.02);
+  transform: translateY(-2px);
 }
 .btn:active {
   transform: translateY(0) scale(0.98);
 }
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 .btn-primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: white;
-  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.4);
+  box-shadow: 0 8px 22px rgba(168, 85, 247, 0.38);
+}
+.btn-primary:hover {
+  box-shadow: 0 12px 30px rgba(236, 72, 153, 0.45);
 }
 .btn-secondary {
   background: var(--card);
-  border: 1px solid var(--card-border);
+  border-color: var(--card-border);
   color: var(--text);
+}
+.btn-secondary:hover {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.09);
 }
 .btn-ghost {
   background: transparent;
   color: var(--text-dim);
 }
+.btn-ghost:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+/* Action rows: centered, wrap gracefully, primary action visually leads. */
 .btn-row {
   display: flex;
   gap: 12px;
   justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
   margin-top: 18px;
+}
+.btn-row .btn {
+  flex: 0 1 auto;
 }
 
 /* ---------- cards ---------- */
@@ -253,6 +288,151 @@ body {
 }
 .footer a {
   color: #c4b5fd;
+}
+
+/* ---------- stake chooser ---------- */
+.stake-card {
+  max-width: 420px;
+  text-align: center;
+}
+.stake-sub {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  margin: 0 0 16px;
+}
+/* Separate the match-length and wager groups with a clear gap + divider. */
+.stake-section + .stake-section {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--card-border);
+}
+.stake-presets {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.stake-preset {
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--card);
+  border: 2px solid var(--card-border);
+  border-radius: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    transform 0.12s;
+}
+.stake-preset:hover {
+  transform: translateY(-2px);
+}
+.stake-preset.selected {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 16px rgba(236, 72, 153, 0.35);
+}
+.stake-custom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.stake-custom input {
+  font-family: inherit;
+  font-size: 1rem;
+  width: 140px;
+  text-align: center;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.stake-pot {
+  font-size: 1rem;
+  margin: 6px 0 4px;
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: #c4b5fd;
+  font-family: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-bottom: 6px;
+}
+
+/* ---------- pot banner ---------- */
+.pot-banner {
+  margin-top: 14px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  color: #fde68a;
+  border-radius: 999px;
+  padding: 8px 20px;
+  font-size: 0.9rem;
+}
+
+/* ---------- score banner ---------- */
+.score-banner {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  padding: 8px 20px;
+  font-size: 0.9rem;
+}
+.score-label {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.score-nums strong {
+  color: var(--accent-2);
+  font-size: 1.05rem;
+}
+.score-round {
+  color: var(--text-dim);
+}
+
+/* ---------- wallet area + withdraw ---------- */
+.wallet-area {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.withdraw-link {
+  font-size: 0.8rem;
+  padding: 8px 10px;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.withdraw-card {
+  max-width: 420px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ---------- game page ---------- */
@@ -595,12 +775,22 @@ body {
 }
 
 /* ---------- wallet top-up ---------- */
+.topup {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
 .topup-row {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 14px;
   flex-wrap: wrap;
+}
+/* Action button sits directly under the amount field, full width. */
+.topup-go {
+  width: 100%;
 }
 /* blend the wallet-adapter button into the theme */
 .wallet-adapter-button {
@@ -733,5 +923,36 @@ a.log-sig:hover {
   .outcome {
     font-size: 1.1rem;
     white-space: normal;
+  }
+
+  /* Action rows stack full-width with the primary action on top. */
+  .btn-row {
+    width: 100%;
+    gap: 10px;
+  }
+  .btn-row .btn {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .btn-row .btn-primary {
+    order: -1;
+  }
+
+  /* Header: keep it on one tidy line, let the game id drop if needed. */
+  .game-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .game-meta {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .topup-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .topup-row .btn,
+  .wallet-adapter-button {
+    width: 100% !important;
   }
 }

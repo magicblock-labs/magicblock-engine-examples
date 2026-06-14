@@ -62,13 +62,23 @@ describe("anchor-rock-paper-scissor", () => {
   const gameId = new BN(Date.now());
   console.log("Game ID (u64):", gameId.toString());
 
+  // Per-player wager held in the game vault; winner takes the pot.
+  const STAKE = new BN(0.05 * anchor.web3.LAMPORTS_PER_SOL);
+  // Best-of-3 match: first to 2 round-wins takes the pot.
+  const TARGET_WINS = 2;
+
   // PDA seeds
   const GAME_SEED = Buffer.from("game");
   const PLAYER_CHOICE_SEED = Buffer.from("player_choice");
+  const VAULT_SEED = Buffer.from("vault");
 
   // Derived PDAs
   let [gamePda] = anchor.web3.PublicKey.findProgramAddressSync(
     [GAME_SEED, gameId.toArrayLike(Buffer, "le", 8)],
+    program.programId,
+  );
+  let [vaultPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [VAULT_SEED, gameId.toArrayLike(Buffer, "le", 8)],
     program.programId,
   );
   let [player1ChoicePda] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -132,7 +142,8 @@ describe("anchor-rock-paper-scissor", () => {
       anchor.web3.SystemProgram.transfer({
         fromPubkey: player1.publicKey,
         toPubkey: player2.publicKey,
-        lamports: 0.05 * anchor.web3.LAMPORTS_PER_SOL, // send 0.05 SOL
+        // enough for the stake + choice rent + delegation fees
+        lamports: 0.12 * anchor.web3.LAMPORTS_PER_SOL,
       }),
     );
 
@@ -194,11 +205,11 @@ describe("anchor-rock-paper-scissor", () => {
     // rent. We delegate p1_choice now, but the game stays on base until player 2
     // joins — join_game needs the game to still be owned by our program.
     const createGameIx = await program.methods
-      .createGame(gameId)
-      .accounts({
-        //@ts-ignore
+      .createGame(gameId, STAKE, TARGET_WINS)
+      .accountsPartial({
         game: gamePda,
         playerChoice: player1ChoicePda,
+        vault: vaultPda,
         player1: player1.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -283,10 +294,10 @@ describe("anchor-rock-paper-scissor", () => {
   it("Join Game (Player 2) — base: join + delegate game + delegate p2_choice", async () => {
     const joinGameIx = await program.methods
       .joinGame(gameId)
-      .accounts({
-        //@ts-ignore
+      .accountsPartial({
         game: gamePda,
         playerChoice: player2ChoicePda,
+        vault: vaultPda,
         player: player2.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -402,8 +413,10 @@ describe("anchor-rock-paper-scissor", () => {
     );
   });
 
-  it("Player 1 Makes Choice", async () => {
-    const choice = getRandomChoice();
+  // Deterministic best-of-3 match: Player 1 throws Rock, Player 2 Scissors,
+  // so Player 1 wins every round and takes the match 2-0.
+  it("Round 1: Player 1 Makes Choice (Rock)", async () => {
+    const choice: Choice = { rock: {} };
     const makeChoice1Ix = await program.methods
       .makeChoice(gameId, choice)
       .accounts({
@@ -434,8 +447,8 @@ describe("anchor-rock-paper-scissor", () => {
     );
   });
 
-  it("Player 2 Makes Choice", async () => {
-    const choice = getRandomChoice();
+  it("Round 1: Player 2 Makes Choice (Scissors)", async () => {
+    const choice: Choice = { scissors: {} };
     const makeChoice2Ix = await program.methods
       .makeChoice(gameId, choice)
       .accounts({
@@ -515,9 +528,9 @@ describe("anchor-rock-paper-scissor", () => {
     throw new Error("❌ Player 2 choice account exists unexpectedly!");
   });
 
-  it("Reveal Winner", async () => {
+  it("Round 1: Reveal Winner (Player 1 leads 1-0)", async () => {
     let tx = await program.methods
-      .revealWinner()
+      .revealRound()
       .accountsPartial({
         //@ts-ignore
         game: gamePda,
@@ -542,22 +555,27 @@ describe("anchor-rock-paper-scissor", () => {
         commitment: "confirmed",
       },
     );
-    console.log("✅ Reveal Winner TX Sent:", txHash);
-    // const txBase = await GetCommitmentSignature(txHash, providerTeePlayer1.connection)
-    // console.log("✅ Winner Revealed:", txBase)
+    console.log("✅ Round 1 Reveal TX Sent:", txHash);
 
     const accountInfo =
       await providerTeePlayer1.connection.getAccountInfo(gamePda);
     const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
     printGameResult(gameAccount);
+    if (gameAccount.player1Wins !== 1 || gameAccount.player2Wins !== 0) {
+      throw new Error(
+        `❌ Expected score 1-0, got ${gameAccount.player1Wins}-${gameAccount.player2Wins}`,
+      );
+    }
+    console.log(
+      `🏅 Score: ${gameAccount.player1Wins}-${gameAccount.player2Wins} (match in progress)`,
+    );
   });
 
-  // Rematch: either player can reset a revealed game and replay with the SAME
-  // PDAs — no new accounts, no extra rent. reset_game clears both choices +
-  // the result and flips all three permissions back to private.
-  it("Reset Game for a rematch (Player 2)", async () => {
+  // Best-of-3 isn't decided at 1-0, so reset_game ADVANCES to round 2 and
+  // keeps the score (no new accounts, no extra rent).
+  it("Advance to Round 2 (score carries over)", async () => {
     const tx = await program.methods
-      .resetGame()
+      .nextRound()
       .accountsPartial({
         game: gamePda,
         player1Choice: player1ChoicePda,
@@ -584,26 +602,33 @@ describe("anchor-rock-paper-scissor", () => {
         commitment: "confirmed",
       },
     );
-    console.log("🔄 Game reset for rematch:", txHash);
+    console.log("➡️  Advanced to round 2:", txHash);
 
     const accountInfo =
       await providerTeePlayer2.connection.getAccountInfo(gamePda);
     const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
-    if (!("none" in gameAccount.result)) {
-      throw new Error("❌ Game result was not cleared by reset_game");
+    if (!("none" in gameAccount.roundResult)) {
+      throw new Error("❌ Round result was not cleared");
     }
-    if (gameAccount.player1Choice || gameAccount.player2Choice) {
-      throw new Error("❌ Choices were not cleared by reset_game");
+    if (gameAccount.round !== 2) {
+      throw new Error(`❌ Expected round 2, got ${gameAccount.round}`);
     }
-    console.log("✅ Round state cleared — same PDAs ready for round 2");
+    if (gameAccount.player1Wins !== 1) {
+      throw new Error("❌ Score should carry over to round 2");
+    }
+    console.log("✅ Round 2 ready, score preserved at 1-0");
   });
 
-  it("Round 2: both players make a choice", async () => {
-    for (const [player, choicePda, teeProvider] of [
-      [player1, player1ChoicePda, providerTeePlayer1],
-      [player2, player2ChoicePda, providerTeePlayer2],
+  it("Round 2: both players make a choice (P1 Rock, P2 Scissors)", async () => {
+    const choices: Record<string, Choice> = {
+      p1: { rock: {} },
+      p2: { scissors: {} },
+    };
+    for (const [player, choicePda, teeProvider, key] of [
+      [player1, player1ChoicePda, providerTeePlayer1, "p1"],
+      [player2, player2ChoicePda, providerTeePlayer2, "p2"],
     ] as const) {
-      const choice = getRandomChoice();
+      const choice = choices[key];
       const ix = await program.methods
         .makeChoice(gameId, choice)
         .accounts({
@@ -644,9 +669,9 @@ describe("anchor-rock-paper-scissor", () => {
     throw new Error("❌ Player 2 choice readable after reset!");
   });
 
-  it("Round 2: Reveal Winner", async () => {
+  it("Round 2: Reveal Winner (Player 1 wins the match 2-0)", async () => {
     const tx = await program.methods
-      .revealWinner()
+      .revealRound()
       .accountsPartial({
         //@ts-ignore
         game: gamePda,
@@ -677,6 +702,14 @@ describe("anchor-rock-paper-scissor", () => {
       await providerTeePlayer1.connection.getAccountInfo(gamePda);
     const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
     printGameResult(gameAccount);
+    if (gameAccount.player1Wins !== 2) {
+      throw new Error(
+        `❌ Expected Player 1 at 2 wins, got ${gameAccount.player1Wins}`,
+      );
+    }
+    console.log(
+      `🏆 Match decided ${gameAccount.player1Wins}-${gameAccount.player2Wins} after ${gameAccount.round} rounds`,
+    );
   });
 
   // Cleanup: commit + undelegate game + both player_choices in a single ix so
@@ -703,6 +736,76 @@ describe("anchor-rock-paper-scissor", () => {
       },
     );
     console.log(`🧹 All three PDAs committed + undelegated: ${txHash}`);
+  });
+
+  // Pay out the pot on the base layer once the game is back from the ER.
+  it("Claim Pot (winner takes the stake)", async () => {
+    // Wait for the game to land back on the base layer (owned by our program).
+    let onBase = false;
+    for (let i = 0; i < 30; i++) {
+      const info = await provider.connection.getAccountInfo(gamePda);
+      if (info && info.owner.equals(program.programId)) {
+        onBase = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (!onBase) throw new Error("❌ Game never came back to the base layer");
+
+    const game = program.coder.accounts.decode(
+      "game",
+      (await provider.connection.getAccountInfo(gamePda)).data,
+    );
+    const vaultBefore = await provider.connection.getBalance(vaultPda);
+    console.log(
+      `🏦 Vault holds ${vaultBefore / anchor.web3.LAMPORTS_PER_SOL} SOL (pot)`,
+    );
+
+    const winner =
+      "winner" in game.roundResult
+        ? (game.roundResult.winner["0"] as anchor.web3.PublicKey)
+        : null;
+    const recipient = winner ?? player1.publicKey;
+    const balBefore = await provider.connection.getBalance(recipient);
+
+    const tx = await program.methods
+      .claimPot()
+      .accountsPartial({
+        game: gamePda,
+        vault: vaultPda,
+        player1: player1.publicKey,
+        player2: player2.publicKey,
+        payer: player1.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .transaction();
+    tx.feePayer = player1.publicKey;
+    const txHash = await sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [player1],
+      { skipPreflight: true, commitment: "confirmed" },
+    );
+    console.log("💰 Pot claimed:", txHash);
+
+    const vaultAfter = await provider.connection.getBalance(vaultPda);
+    const balAfter = await provider.connection.getBalance(recipient);
+    const settled = program.coder.accounts.decode(
+      "game",
+      (await provider.connection.getAccountInfo(gamePda)).data,
+    );
+
+    if (vaultAfter !== 0) throw new Error("❌ Vault not fully drained");
+    if (!settled.paid) throw new Error("❌ Game not marked paid");
+    if (winner) {
+      // winner gains ~2*STAKE (minus the fee they paid as the claim payer)
+      const gained = balAfter - balBefore;
+      console.log(
+        `🏆 Winner net change: ${gained / anchor.web3.LAMPORTS_PER_SOL} SOL`,
+      );
+      if (gained <= 0) throw new Error("❌ Winner did not receive the pot");
+    }
+    console.log("✅ Pot paid out and game settled");
   });
 });
 
@@ -765,6 +868,6 @@ function printGameResult(game: any) {
   console.log(
     `│ 👤  Player 2: ${p2.toBase58()}  →  ${fmtChoice(game.player2Choice)}`,
   );
-  console.log(`│ Result:  ${fmtResult(game.result, p1, p2)}`);
+  console.log(`│ Result:  ${fmtResult(game.roundResult, p1, p2)}`);
   console.log("└─────────────────────────────────────────────");
 }

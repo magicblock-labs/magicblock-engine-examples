@@ -8,16 +8,26 @@ import {
 } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { TOPUP_SOL, TOPUP_ENDPOINT, TOPUP_NETWORK_LABEL } from "../lib/config";
+import { TOPUP_ENDPOINT, TOPUP_NETWORK_LABEL } from "../lib/config";
 
 /**
  * Top up the burner from a connected wallet. The wallet only SIGNS — we
  * broadcast through TOPUP_ENDPOINT ourselves, because a wallet that
  * broadcasts via its own RPC would send on whatever network it has active.
+ *
+ * `defaultSol` is the amount this game still needs (play costs + wager), so the
+ * one-tap top-up covers exactly what's required to start playing.
  */
-export default function TopUp({ address }: { address: string }) {
+export default function TopUp({
+  address,
+  defaultSol,
+}: {
+  address: string;
+  defaultSol: number;
+}) {
   const { publicKey, signTransaction, sendTransaction, connected } =
     useWallet();
+  const [amount, setAmount] = useState(defaultSol);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -27,7 +37,7 @@ export default function TopUp({ address }: { address: string }) {
   );
 
   const send = async () => {
-    if (!publicKey || busy) return;
+    if (!publicKey || busy || amount <= 0) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -35,7 +45,7 @@ export default function TopUp({ address }: { address: string }) {
         SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: new PublicKey(address),
-          lamports: Math.round(TOPUP_SOL * LAMPORTS_PER_SOL),
+          lamports: Math.round(amount * LAMPORTS_PER_SOL),
         }),
       );
       tx.feePayer = publicKey;
@@ -57,7 +67,7 @@ export default function TopUp({ address }: { address: string }) {
         "confirmed",
       );
       setMsg(
-        `Topped up ${TOPUP_SOL} SOL on ${TOPUP_NETWORK_LABEL} ✅ — the game continues automatically.`,
+        `Topped up ${amount} SOL on ${TOPUP_NETWORK_LABEL} ✅ — the game continues automatically.`,
       );
     } catch (e) {
       const text = e instanceof Error ? e.message : String(e);
@@ -74,15 +84,34 @@ export default function TopUp({ address }: { address: string }) {
     <div className="topup">
       <div className="topup-row">
         <WalletMultiButton />
-        {connected && (
-          <button className="btn btn-primary" onClick={send} disabled={busy}>
-            {busy ? "Sending…" : `Top up ${TOPUP_SOL} SOL 💸`}
-          </button>
-        )}
       </div>
+      {connected && (
+        <>
+          <label className="stake-custom">
+            Amount (SOL)
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={amount}
+              onChange={(e) =>
+                setAmount(Math.max(0, Number(e.target.value) || 0))
+              }
+            />
+          </label>
+          <button
+            className="btn btn-primary topup-go"
+            onClick={send}
+            disabled={busy || amount <= 0}
+          >
+            {busy ? "Sending…" : `Top up ${amount} SOL 💸`}
+          </button>
+        </>
+      )}
       <p className="fund-msg topup-network">
-        Always submits on <strong>{TOPUP_NETWORK_LABEL}</strong> — safe to
-        approve even if your wallet warns.
+        Covers this game's needs. Always submits on{" "}
+        <strong>{TOPUP_NETWORK_LABEL}</strong> — safe to approve even if your
+        wallet warns.
       </p>
       {msg && <p className="fund-msg">{msg}</p>}
     </div>

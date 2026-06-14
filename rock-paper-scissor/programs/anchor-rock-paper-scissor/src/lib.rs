@@ -15,6 +15,7 @@ declare_id!("J7Zmxm5U7PJzqLJvGcwJr38d6L2NyrgjjGf8bQVTLZ8H");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";
+pub const VAULT_SEED: &[u8] = b"vault";
 
 #[ephemeral]
 #[program]
@@ -28,7 +29,12 @@ pub mod anchor_rock_paper_scissor {
     // member). After delegation those lamports flow with the PDAs onto the ER,
     // where each PDA PDA-signs its CreateEphemeralPermission CPI and pays its
     // own rent — no external account needs lamports on the ER.
-    pub fn create_game(ctx: Context<CreateGame>, game_id: u64) -> Result<()> {
+    pub fn create_game(
+        ctx: Context<CreateGame>,
+        game_id: u64,
+        stake: u64,
+        target_wins: u8,
+    ) -> Result<()> {
         // Rent for the game's ephemeral permission (2 members: p1 + p2)
         transfer(
             CpiContext::new(
@@ -52,16 +58,40 @@ pub mod anchor_rock_paper_scissor {
             ephemeral_rollups_sdk::ephemeral_accounts::rent(EphemeralPermission::size_of(1) as u32),
         )?;
 
+        // Player 1's wager into the game vault — a base-layer SOL escrow PDA that
+        // is never delegated, so the pot stays put while the game runs on the ER.
+        if stake > 0 {
+            transfer(
+                CpiContext::new(
+                    ctx.accounts.system_program.key(),
+                    Transfer {
+                        from: ctx.accounts.player1.to_account_info(),
+                        to: ctx.accounts.vault.to_account_info(),
+                    },
+                ),
+                stake,
+            )?;
+        }
+
         let game = &mut ctx.accounts.game;
         let player1 = ctx.accounts.player1.key();
 
         game.game_id = game_id;
         game.player1 = Some(player1);
         game.player2 = None;
-        game.result = GameResult::None;
+        game.round_result = RoundResult::None;
+        game.stake = stake;
+        game.paid = false;
+        // First to `target_wins` round-wins takes the match (min 1).
+        game.target_wins = target_wins.max(1);
+        game.player1_wins = 0;
+        game.player2_wins = 0;
+        game.round = 1;
 
         msg!("Game ID: {}", game_id);
         msg!("Player 1 PDA: {}", player1);
+        msg!("Stake per player: {} lamports", stake);
+        msg!("Match: first to {} round-wins", game.target_wins);
 
         // initialize PlayerChoice for player 1
         let player_choice = &mut ctx.accounts.player_choice;
@@ -91,8 +121,23 @@ pub mod anchor_rock_paper_scissor {
         let game = &mut ctx.accounts.game;
         let player = ctx.accounts.player.key();
 
+        require!(!game.paid, GameError::GameSettled);
         require!(game.player1 != Some(player), GameError::CannotJoinOwnGame);
         require!(game.player2.is_none(), GameError::GameFull);
+
+        // Player 2 matches Player 1's wager into the vault.
+        if game.stake > 0 {
+            transfer(
+                CpiContext::new(
+                    ctx.accounts.system_program.key(),
+                    Transfer {
+                        from: ctx.accounts.player.to_account_info(),
+                        to: ctx.accounts.vault.to_account_info(),
+                    },
+                ),
+                game.stake,
+            )?;
+        }
 
         game.player2 = Some(player);
 
@@ -121,10 +166,11 @@ pub mod anchor_rock_paper_scissor {
         Ok(())
     }
 
-    // 4️⃣ Reveal and record the winner. Flips all three ephemeral permissions to
-    // public (members = []) so anyone can read the committed state, then commits
-    // and undelegates the game so the result lives on the base layer.
-    pub fn reveal_winner(ctx: Context<RevealWinner>) -> Result<()> {
+    // 4️⃣ Decide THIS ROUND and tally the match score. Flips all three ephemeral
+    // permissions to public (members = []) so the round's choices become
+    // readable, and records the round result in `game.round_result`. The match
+    // winner is derived from the score (see `match_winner`), not stored here.
+    pub fn reveal_round(ctx: Context<RevealRound>) -> Result<()> {
         let game = &mut ctx.accounts.game;
         let player1_choice = &ctx.accounts.player1_choice;
         let player2_choice = &ctx.accounts.player2_choice;
@@ -153,18 +199,32 @@ pub mod anchor_rock_paper_scissor {
             .clone()
             .ok_or(GameError::MissingChoice)?;
 
-        // 4️⃣ Determine winner based on choices
-        game.result = match (choice1, choice2) {
+        // 4️⃣ Determine this round's winner based on choices, and tally the
+        // match score. A tied round counts for neither side and is replayed.
+        game.round_result = match (choice1, choice2) {
             (Choice::Rock, Choice::Scissors)
             | (Choice::Paper, Choice::Rock)
-            | (Choice::Scissors, Choice::Paper) => GameResult::Winner(player1),
+            | (Choice::Scissors, Choice::Paper) => {
+                game.player1_wins += 1;
+                RoundResult::Winner(player1)
+            }
 
             (Choice::Rock, Choice::Paper)
             | (Choice::Paper, Choice::Scissors)
-            | (Choice::Scissors, Choice::Rock) => GameResult::Winner(player2),
+            | (Choice::Scissors, Choice::Rock) => {
+                game.player2_wins += 1;
+                RoundResult::Winner(player2)
+            }
 
-            _ => GameResult::Tie,
+            _ => RoundResult::Tie,
         };
+        msg!(
+            "Round {} result: {:?} — score {} : {}",
+            game.round,
+            game.round_result,
+            game.player1_wins,
+            game.player2_wins
+        );
 
         // 5️⃣ Make game + both player_choice permissions public via UpdateEphemeralPermission.
         // is_private=false with empty members ⇒ anyone with a valid TEE auth token can read.
@@ -224,7 +284,7 @@ pub mod anchor_rock_paper_scissor {
             &[ctx.bumps.player2_choice],
         ]])?;
 
-        msg!("Result: {:?}", &game.result);
+        msg!("Result: {:?}", &game.round_result);
 
         game.exit(&crate::ID)?;
 
@@ -234,15 +294,15 @@ pub mod anchor_rock_paper_scissor {
         Ok(())
     }
 
-    // 5️⃣ Rematch: after the winner is revealed, either player can reset the
-    // game while it is still delegated to the ER and play another round with
-    // the SAME PDAs — no new accounts, no new rent, no base-layer round-trip.
-    // Clears both choices + the result and flips all three ephemeral
-    // permissions back to private (game: [p1, p2], each choice: its owner
-    // only). The rent each permission needs to grow back is exactly the refund
-    // its PDA received when `reveal_winner` shrank it to public, so the PDAs
-    // stay solvent across unlimited rounds.
-    pub fn reset_game(ctx: Context<ResetGame>) -> Result<()> {
+    // 5️⃣ Advance the match after a round is revealed: either player clears the
+    // round on the SAME PDAs and plays on — no new accounts, no new rent, no
+    // base-layer round-trip. Clears both choices + `round_result` and flips the
+    // permissions back to private (game: [p1, p2], each choice: its owner only).
+    // If the match is still going it bumps `round`; if it's already decided
+    // (free games only) it starts a fresh match with the score reset. The rent
+    // each permission needs to grow back is exactly the refund its PDA received
+    // when `reveal_round` shrank it to public, so the PDAs stay solvent.
+    pub fn next_round(ctx: Context<NextRound>) -> Result<()> {
         let game = &mut ctx.accounts.game;
         let player1_choice = &mut ctx.accounts.player1_choice;
         let player2_choice = &mut ctx.accounts.player2_choice;
@@ -253,20 +313,33 @@ pub mod anchor_rock_paper_scissor {
         let ephemeral_vault = ctx.accounts.ephemeral_vault.to_account_info();
         let magic_program = ctx.accounts.magic_program.to_account_info();
 
-        // 1️⃣ Only between rounds: the previous round must be revealed,
-        // otherwise a losing-streak player could wipe a round in flight.
-        require!(game.result != GameResult::None, GameError::NotRevealed);
+        // 1️⃣ The current round must be revealed before clearing it.
+        require!(game.round_result != RoundResult::None, GameError::NotRevealed);
 
-        // 2️⃣ Either player can trigger the rematch — but only a player.
+        // 2️⃣ Either player can trigger this — but only a player.
         let player1 = game.player1.ok_or(GameError::MissingOpponent)?;
         let player2 = game.player2.ok_or(GameError::MissingOpponent)?;
         let payer = ctx.accounts.payer.key();
         require!(payer == player1 || payer == player2, GameError::NotAPlayer);
 
-        // 3️⃣ Clear the round state
+        // 3️⃣ Advance the match, or start a fresh one:
+        //   - match still going → next round, keep the score.
+        //   - match decided → a brand-new match (rematch). Only for free games;
+        //     a staked match must be settled + claimed first (so the pot can't
+        //     be replayed for).
+        if game.is_match_decided() {
+            require!(game.stake == 0, GameError::MustClaimFirst);
+            game.player1_wins = 0;
+            game.player2_wins = 0;
+            game.round = 1;
+        } else {
+            game.round += 1;
+        }
+
+        // 4️⃣ Clear the round state
         game.player1_choice = None;
         game.player2_choice = None;
-        game.result = GameResult::None;
+        game.round_result = RoundResult::None;
         player1_choice.choice = None;
         player2_choice.choice = None;
 
@@ -329,14 +402,27 @@ pub mod anchor_rock_paper_scissor {
             &[ctx.bumps.player2_choice],
         ]])?;
 
-        msg!("Game {} reset for a rematch by {}", game.game_id, payer);
+        msg!(
+            "Game {} advanced to round {} by {}",
+            game.game_id,
+            game.round,
+            payer
+        );
         Ok(())
     }
 
     /// Commit + undelegate game + both player_choices in a single magic-intent
     /// bundle. Bring the whole game state back to the base layer at once and
     /// release all three PDAs from the ER.
+    ///
+    /// Only allowed once the MATCH is decided (someone reached `target_wins`):
+    /// undelegating mid-match would strand the game on the base layer where
+    /// `reveal_round` (ER-only) can no longer run, leaving the pot unclaimable.
     pub fn undelegate_all(ctx: Context<UndelegateAll>) -> Result<()> {
+        require!(
+            ctx.accounts.game.is_match_decided(),
+            GameError::MatchNotDecided
+        );
         MagicIntentBundleBuilder::new(
             ctx.accounts.payer.to_account_info(),
             ctx.accounts.magic_context.to_account_info(),
@@ -348,6 +434,86 @@ pub mod anchor_rock_paper_scissor {
             ctx.accounts.player2_choice.to_account_info(),
         ])
         .build_and_invoke()?;
+        Ok(())
+    }
+
+    // 6️⃣ Pay out the pot. Runs on the BASE layer after `undelegate_all` has
+    // brought the decided match back from the ER. The match winner (first to
+    // `target_wins` round-wins) takes the whole pot. The vault is a system-owned
+    // PDA, so it signs its own outgoing transfer via seeds. Idempotent via
+    // `paid`. Anyone can trigger it — the funds only ever go to the players
+    // recorded on the game.
+    pub fn claim_pot(ctx: Context<ClaimPot>) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+        let winner = game.match_winner().ok_or(GameError::MatchNotDecided)?;
+        require!(!game.paid, GameError::AlreadyPaid);
+
+        let player1 = game.player1.ok_or(GameError::MissingOpponent)?;
+        let player2 = game.player2.ok_or(GameError::MissingOpponent)?;
+        require!(
+            ctx.accounts.player1.key() == player1,
+            GameError::WrongPlayerAccount
+        );
+        require!(
+            ctx.accounts.player2.key() == player2,
+            GameError::WrongPlayerAccount
+        );
+
+        game.paid = true;
+
+        // Nothing staked → nothing to pay out.
+        if game.stake == 0 {
+            return Ok(());
+        }
+
+        let game_id_bytes = game.game_id.to_le_bytes();
+        let signer_seeds: &[&[&[u8]]] = &[&[VAULT_SEED, &game_id_bytes, &[ctx.bumps.vault]]];
+
+        let to = if winner == player1 {
+            ctx.accounts.player1.to_account_info()
+        } else {
+            ctx.accounts.player2.to_account_info()
+        };
+        let pot = game.stake.checked_mul(2).ok_or(GameError::MathOverflow)?;
+        pay_from_vault(
+            &ctx.accounts.vault,
+            &to,
+            pot,
+            &ctx.accounts.system_program,
+            signer_seeds,
+        )?;
+        msg!("Paid pot of {} lamports to match winner {}", pot, winner);
+
+        Ok(())
+    }
+
+    // Refund the creator if nobody ever joined. Base layer; only callable by
+    // player1 while player2 is still empty. Marks the game settled so it can't
+    // be joined or refunded twice.
+    pub fn cancel_game(ctx: Context<CancelGame>) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+        let player1 = game.player1.ok_or(GameError::MissingOpponent)?;
+        require!(
+            ctx.accounts.player1.key() == player1,
+            GameError::WrongPlayerAccount
+        );
+        require!(game.player2.is_none(), GameError::CannotCancelStarted);
+        require!(!game.paid, GameError::AlreadyPaid);
+
+        game.paid = true;
+
+        if game.stake > 0 {
+            let game_id_bytes = game.game_id.to_le_bytes();
+            let signer_seeds: &[&[&[u8]]] = &[&[VAULT_SEED, &game_id_bytes, &[ctx.bumps.vault]]];
+            pay_from_vault(
+                &ctx.accounts.vault,
+                &ctx.accounts.player1.to_account_info(),
+                game.stake,
+                &ctx.accounts.system_program,
+                signer_seeds,
+            )?;
+        }
+        msg!("Game {} cancelled, stake refunded to creator", game.game_id);
         Ok(())
     }
 
@@ -437,6 +603,10 @@ pub struct CreateGame<'info> {
     )]
     pub player_choice: Account<'info, PlayerChoice>,
 
+    /// CHECK: SOL escrow PDA, system-owned, holds the pot. Validated by seeds.
+    #[account(mut, seeds = [VAULT_SEED, &game_id.to_le_bytes()], bump)]
+    pub vault: SystemAccount<'info>,
+
     #[account(mut)]
     pub player1: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -461,6 +631,10 @@ pub struct JoinGame<'info> {
     )]
     pub player_choice: Account<'info, PlayerChoice>,
 
+    /// CHECK: SOL escrow PDA, system-owned, holds the pot. Validated by seeds.
+    #[account(mut, seeds = [VAULT_SEED, &game_id.to_le_bytes()], bump)]
+    pub vault: SystemAccount<'info>,
+
     #[account(mut)]
     pub player: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -481,7 +655,7 @@ pub struct MakeChoice<'info> {
 }
 
 #[derive(Accounts)]
-pub struct RevealWinner<'info> {
+pub struct RevealRound<'info> {
     #[account(mut, seeds = [GAME_SEED, &game.game_id.to_le_bytes()], bump)]
     pub game: Account<'info, Game>,
 
@@ -523,11 +697,11 @@ pub struct RevealWinner<'info> {
     pub magic_program: UncheckedAccount<'info>,
 }
 
-/// Context for `reset_game` — same account set as `RevealWinner`: the game,
+/// Context for `next_round` — same account set as `RevealRound`: the game,
 /// both choice PDAs (re-derived from the players stored on the game) and their
 /// permission accounts, which get flipped back to private for the next round.
 #[derive(Accounts)]
-pub struct ResetGame<'info> {
+pub struct NextRound<'info> {
     #[account(mut, seeds = [GAME_SEED, &game.game_id.to_le_bytes()], bump)]
     pub game: Account<'info, Game>,
 
@@ -593,6 +767,43 @@ pub struct UndelegateAll<'info> {
     pub player2_choice: Account<'info, PlayerChoice>,
 }
 
+/// Context for `claim_pot` — base layer, after the game is undelegated. The
+/// vault signs its own payout via seeds; both player accounts are passed so the
+/// winner (or both, on a tie) can be paid.
+#[derive(Accounts)]
+pub struct ClaimPot<'info> {
+    #[account(mut, seeds = [GAME_SEED, &game.game_id.to_le_bytes()], bump)]
+    pub game: Account<'info, Game>,
+    /// CHECK: SOL escrow PDA, system-owned. Validated by seeds.
+    #[account(mut, seeds = [VAULT_SEED, &game.game_id.to_le_bytes()], bump)]
+    pub vault: SystemAccount<'info>,
+    /// CHECK: payout recipient, verified against game.player1 in the handler.
+    #[account(mut)]
+    pub player1: UncheckedAccount<'info>,
+    /// CHECK: payout recipient, verified against game.player2 in the handler.
+    #[account(mut)]
+    pub player2: UncheckedAccount<'info>,
+    /// Anyone can trigger the payout.
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Context for `cancel_game` — base layer refund of the creator's stake when
+/// no one joined.
+#[derive(Accounts)]
+pub struct CancelGame<'info> {
+    #[account(mut, seeds = [GAME_SEED, &game.game_id.to_le_bytes()], bump)]
+    pub game: Account<'info, Game>,
+    /// CHECK: SOL escrow PDA, system-owned. Validated by seeds.
+    #[account(mut, seeds = [VAULT_SEED, &game.game_id.to_le_bytes()], bump)]
+    pub vault: SystemAccount<'info>,
+    /// Only the creator can cancel; refund goes back to them.
+    #[account(mut)]
+    pub player1: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 /// Unified delegate PDA context
 #[delegate]
 #[derive(Accounts)]
@@ -638,17 +849,42 @@ pub struct Game {
     pub player2: Option<Pubkey>,
     pub player1_choice: Option<Choice>,
     pub player2_choice: Option<Choice>,
-    pub result: GameResult,
+    pub round_result: RoundResult, // the CURRENT round's result
+    pub stake: u64,         // per-player wager in lamports (0 = free game)
+    pub paid: bool,         // pot claimed / game cancelled
+    pub target_wins: u8,    // round-wins needed to take the match (best-of-N)
+    pub player1_wins: u8,   // match score
+    pub player2_wins: u8,
+    pub round: u8, // current round number, 1-based
 }
 impl Game {
     pub const LEN: usize = 8                // game_id
         + (32 + 1) * 2                       // player1, player2
         + (1 + 1) * 2                        // player1_choice, player2_choice
-        + (1 + 32); // result (1 byte tag + 32 bytes pubkey for Winner variant)
+        + (1 + 32)                           // result (1 byte tag + 32 bytes pubkey for Winner variant)
+        + 8                                  // stake
+        + 1                                  // paid
+        + 1 * 4; // target_wins, player1_wins, player2_wins, round
+
+    /// The match is over once a player reaches `target_wins` round-wins.
+    pub fn is_match_decided(&self) -> bool {
+        self.player1_wins >= self.target_wins || self.player2_wins >= self.target_wins
+    }
+
+    /// Pubkey of the match winner, or None if the match is still in progress.
+    pub fn match_winner(&self) -> Option<Pubkey> {
+        if self.player1_wins >= self.target_wins {
+            self.player1
+        } else if self.player2_wins >= self.target_wins {
+            self.player2
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, Debug)]
-pub enum GameResult {
+pub enum RoundResult {
     Winner(Pubkey),
     Tie,
     None,
@@ -687,12 +923,48 @@ pub enum GameError {
     NotRevealed,
     #[msg("Only a player of this game can do this.")]
     NotAPlayer,
+    #[msg("The pot has already been paid out.")]
+    AlreadyPaid,
+    #[msg("This game has already been settled.")]
+    GameSettled,
+    #[msg("Wrong player account for this game.")]
+    WrongPlayerAccount,
+    #[msg("Cannot cancel a game that already has two players.")]
+    CannotCancelStarted,
+    #[msg("Arithmetic overflow.")]
+    MathOverflow,
+    #[msg("The match is not decided yet.")]
+    MatchNotDecided,
+    #[msg("Settle and claim the pot before starting a new match.")]
+    MustClaimFirst,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub enum AccountType {
     Game { game_id: u64 },
     PlayerChoice { game_id: u64, player: Pubkey },
+}
+
+/// Transfer `amount` lamports out of the system-owned vault PDA, which signs
+/// for itself via `signer_seeds`.
+fn pay_from_vault<'info>(
+    vault: &SystemAccount<'info>,
+    to: &AccountInfo<'info>,
+    amount: u64,
+    system_program: &Program<'info, System>,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    transfer(
+        CpiContext::new_with_signer(
+            system_program.key(),
+            Transfer {
+                from: vault.to_account_info(),
+                to: to.clone(),
+            },
+            signer_seeds,
+        ),
+        amount,
+    )
 }
 
 fn derive_seeds_from_account_type(account_type: &AccountType) -> Vec<Vec<u8>> {

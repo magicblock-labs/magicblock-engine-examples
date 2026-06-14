@@ -5,6 +5,7 @@ import ChoicePicker from "./ChoicePicker";
 import ShareCard from "./ShareCard";
 import ActivityLog from "./ActivityLog";
 import TopUp from "./TopUp";
+import Withdraw from "./Withdraw";
 import { shortKey } from "../lib/wallet";
 
 interface Props {
@@ -16,6 +17,18 @@ interface Props {
 export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
   const m = useGameMachine(mode);
   const [airdropMsg, setAirdropMsg] = useState<string | null>(null);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const staked = m.stakeSol > 0;
+  const bestOf = m.targetWins * 2 - 1;
+  const isMatch = m.targetWins > 1;
+
+  // Default top-up = what this game still needs (play costs + wager) over the
+  // current balance, plus a little fee headroom, rounded up to 0.001 SOL.
+  const shortfall = Math.max(0, m.fundNeededSol - (m.balance ?? 0));
+  const topUpDefault = Math.max(
+    0.01,
+    Math.ceil((shortfall + 0.005) * 1000) / 1000,
+  );
 
   const confetti = useMemo(() => {
     if (m.phase !== "done" || m.result?.outcome !== "win") return null;
@@ -67,18 +80,54 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
           {m.gameIdStr && <span className="game-id">Game #{m.gameIdStr}</span>}
         </div>
         {m.myAddress && (
-          <button
-            className="wallet-badge"
-            onClick={copyAddress}
-            title={m.myAddress}
-          >
-            🔑 {shortKey(m.myAddress)}
-            {m.balance !== null && (
-              <span className="wallet-balance">{m.balance.toFixed(3)} SOL</span>
-            )}
-          </button>
+          <div className="wallet-area">
+            <button
+              className="wallet-badge"
+              onClick={copyAddress}
+              title={m.myAddress}
+            >
+              🔑 {shortKey(m.myAddress)}
+              {m.balance !== null && (
+                <span className="wallet-balance">
+                  {m.balance.toFixed(3)} SOL
+                </span>
+              )}
+            </button>
+            <button
+              className="btn btn-ghost withdraw-link"
+              onClick={() => setShowWithdraw(true)}
+            >
+              Withdraw 🏧
+            </button>
+          </div>
         )}
       </header>
+
+      {staked && m.gameIdStr && (
+        <div className="pot-banner">
+          💰 Wager <strong>{m.stakeSol} SOL</strong> each · Pot{" "}
+          <strong>{m.potSol.toFixed(3)} SOL</strong> · winner takes all
+        </div>
+      )}
+
+      {isMatch && m.gameIdStr && (
+        <div className="score-banner">
+          <span className="score-label">Best of {bestOf}</span>
+          <span className="score-nums">
+            You <strong>{m.myWins}</strong> — <strong>{m.theirWins}</strong>{" "}
+            {m.role === "solo" ? "Robot" : "Opp"}
+          </span>
+          {!m.matchOver && <span className="score-round">Round {m.round}</span>}
+        </div>
+      )}
+
+      {showWithdraw && (
+        <Withdraw
+          balance={m.balance}
+          onWithdraw={m.withdraw}
+          onClose={() => setShowWithdraw(false)}
+        />
+      )}
 
       <main className="game-main">
         {m.phase === "loading" && (
@@ -112,7 +161,9 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
             </div>
             {airdropMsg && <p className="fund-msg">{airdropMsg}</p>}
             <div className="fund-divider">or top up from your wallet</div>
-            {m.myAddress && <TopUp address={m.myAddress} />}
+            {m.myAddress && (
+              <TopUp address={m.myAddress} defaultSol={topUpDefault} />
+            )}
             <p className="fund-msg">
               The game continues automatically once funds arrive.
             </p>
@@ -140,6 +191,7 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
           "submitting",
           "waiting",
           "revealing",
+          "round-over",
           "done",
         ].includes(m.phase) && (
           <>
@@ -176,16 +228,36 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
               </p>
             )}
 
+            {m.phase === "round-over" && (
+              <p className="status-line pulse">
+                {m.result?.outcome === "win"
+                  ? "You took that round! "
+                  : m.result?.outcome === "lose"
+                    ? "Lost that round. "
+                    : "Tied round — replaying. "}
+                Next round starting…
+              </p>
+            )}
+
             {m.phase === "done" && (
               <>
                 <div className="btn-row">
                   {!m.settled ? (
                     <>
-                      <button className="btn btn-primary" onClick={m.rematch}>
-                        Rematch ⚡
-                      </button>
-                      <button className="btn btn-secondary" onClick={m.settle}>
-                        Settle to Solana 🏁
+                      {/* Free games can rematch on the same PDAs; with a wager
+                          on the line, each game settles decisively. */}
+                      {!staked && (
+                        <button className="btn btn-primary" onClick={m.rematch}>
+                          Rematch ⚡
+                        </button>
+                      )}
+                      <button
+                        className={`btn ${staked ? "btn-primary" : "btn-secondary"}`}
+                        onClick={m.settle}
+                      >
+                        {staked
+                          ? "Settle & claim pot 💰"
+                          : "Settle to Solana 🏁"}
                       </button>
                     </>
                   ) : (
@@ -199,8 +271,16 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
                 </div>
                 <p className="status-line">
                   {m.settled
-                    ? "Result is settled on Solana ✓"
-                    : "Rematch reuses the same accounts — no new rent ⚡"}
+                    ? staked
+                      ? m.result?.outcome === "win"
+                        ? "You won the pot! Withdraw it to your wallet 🏧"
+                        : m.result?.outcome === "tie"
+                          ? "Tie — stakes refunded, settled on Solana ✓"
+                          : "Settled on Solana ✓"
+                      : "Result is settled on Solana ✓"
+                    : staked
+                      ? "Settle to pay out the pot to the winner 💰"
+                      : "Rematch reuses the same accounts — no new rent ⚡"}
                 </p>
               </>
             )}

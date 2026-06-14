@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BN } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import {
   RpsClient,
   randomChoice,
   choiceName,
   resultIsSet,
   winnerKey,
+  matchDecided,
   type ChoiceName,
   type GameAccount,
 } from "../lib/rps";
@@ -25,11 +26,12 @@ import {
   BOT_FUND_SOL,
   POLL_INTERVAL_MS,
   erExplorerTxUrl,
+  targetWinsForBestOf,
 } from "../lib/config";
 
 export type GameMode =
-  | { kind: "solo" }
-  | { kind: "host" }
+  | { kind: "solo"; stakeSol: number; bestOf: number }
+  | { kind: "host"; stakeSol: number; bestOf: number }
   | { kind: "url"; gameId: string; join: boolean };
 
 export type Phase =
@@ -40,6 +42,7 @@ export type Phase =
   | "submitting"
   | "waiting"
   | "revealing"
+  | "round-over"
   | "done"
   | "error";
 
@@ -64,6 +67,7 @@ export interface ResultView {
 export type Role = "solo" | "host" | "joiner";
 
 const REVEAL_ANIM_MS = 2800;
+const ROUND_INTERLUDE_MS = 2200; // pause on the score between rounds
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface Cancelled {
@@ -86,6 +90,13 @@ export function useGameMachine(mode: GameMode) {
   const [myChoice, setMyChoice] = useState<ChoiceName | null>(null);
   const [result, setResult] = useState<ResultView | null>(null);
   const [settled, setSettled] = useState(false);
+  const [stakeSol, setStakeSol] = useState(0);
+  const [fundNeededSol, setFundNeededSol] = useState(0);
+  const [targetWins, setTargetWins] = useState(1);
+  const [myWins, setMyWins] = useState(0);
+  const [theirWins, setTheirWins] = useState(0);
+  const [round, setRound] = useState(1);
+  const [matchOver, setMatchOver] = useState(false);
 
   const clientRef = useRef<RpsClient | null>(null);
   const gameIdRef = useRef<BN | null>(null);
@@ -93,6 +104,9 @@ export function useGameMachine(mode: GameMode) {
   const botRef = useRef<RpsClient | null>(null);
   const tokenRef = useRef<Cancelled>({ cancelled: false });
   const logIdRef = useRef(0);
+
+  const stakeLamports = (sol: number) =>
+    new BN(Math.round(sol * LAMPORTS_PER_SOL));
 
   // ----- log helpers -----
   const pushLog = useCallback((text: string, layer: LogLayer): number => {
@@ -126,6 +140,7 @@ export function useGameMachine(mode: GameMode) {
   // ----- funding -----
   const ensureFunds = useCallback(
     async (client: RpsClient, token: Cancelled, minSol: number) => {
+      setFundNeededSol(minSol);
       let bal = await getSolBalance(client.baseConnection, client.publicKey);
       setBalance(bal);
       if (bal >= minSol) return;
@@ -163,6 +178,67 @@ export function useGameMachine(mode: GameMode) {
     setBalance(await getSolBalance(client.baseConnection, client.publicKey));
   }, []);
 
+  // Cash out: move SOL from the active burner back to the player's real wallet.
+  const withdraw = useCallback(
+    async (to: PublicKey, sol: number): Promise<string> => {
+      const client = clientRef.current;
+      if (!client) throw new Error("No active wallet");
+      const sig = await transferSol(
+        client.baseConnection,
+        client.keypair,
+        to,
+        sol,
+      );
+      setBalance(
+        await getSolBalance(client.baseConnection, client.publicKey).catch(
+          () => null,
+        ),
+      );
+      return sig;
+    },
+    [],
+  );
+
+  // The robot secretly picks for the current round.
+  const botPick = useCallback(
+    async (gameId: BN) => {
+      const bot = botRef.current;
+      if (!bot) return;
+      setOpponentLocked(false);
+      await sleep(500);
+      await step("🤖 Robot locked in a secret choice", "tee", () =>
+        bot.makeChoice(gameId, randomChoice()),
+      );
+      setOpponentLocked(true);
+    },
+    [step],
+  );
+
+  // Between rounds of an undecided match: clear the round on-chain (re-privatize
+  // choices) and return to the picker. Both clients call this; whoever lands
+  // the reset first wins, the other's no-ops — then both poll until the round
+  // is cleared and pick again.
+  const advanceRound = useCallback(
+    async (client: RpsClient, gameId: BN, token: Cancelled) => {
+      const players = playersRef.current;
+      if (!players) return;
+      await sleep(ROUND_INTERLUDE_MS);
+      if (token.cancelled) return;
+      await client.nextRound(gameId, players.p1, players.p2).catch(() => {});
+      for (let i = 0; i < 30 && !token.cancelled; i++) {
+        const g = await client.fetchGameEr(gameId).catch(() => null);
+        if (g && !resultIsSet(g)) break;
+        await sleep(800);
+      }
+      if (token.cancelled) return;
+      setMyChoice(null);
+      setResult(null);
+      setPhase("pick");
+      if (botRef.current) botPick(gameId).catch(() => undefined);
+    },
+    [botPick],
+  );
+
   // ----- finish / reveal -----
   const finish = useCallback(
     (
@@ -176,24 +252,39 @@ export function useGameMachine(mode: GameMode) {
       const them = choiceName(meIsP1 ? game.player2Choice : game.player1Choice);
       const w = winnerKey(game);
       const outcome: Outcome =
-        "tie" in game.result
+        "tie" in game.roundResult
           ? "tie"
           : w?.equals(client.publicKey)
             ? "win"
             : "lose";
       if (me && them) setResult({ me, them, outcome });
       setMyChoice(me);
+      setMyWins(meIsP1 ? game.player1Wins : game.player2Wins);
+      setTheirWins(meIsP1 ? game.player2Wins : game.player1Wins);
+      setRound(game.round);
       if (game.player1 && game.player2) {
         playersRef.current = { p1: game.player1, p2: game.player2 };
       }
-      // A game on the base layer is already undelegated — no rematch.
-      setSettled(source === "base");
+
+      const decided = matchDecided(game);
+      setMatchOver(decided);
+      // A decided match found on base is already settled.
+      setSettled(decided && source === "base");
       setPhase("revealing");
       window.setTimeout(() => {
-        if (!token.cancelled) setPhase("done");
+        if (token.cancelled) return;
+        if (decided) {
+          setPhase("done");
+        } else {
+          // round over, match continues → show the score, then next round
+          setPhase("round-over");
+          advanceRound(client, gameIdRef.current!, token).catch(
+            () => undefined,
+          );
+        }
       }, REVEAL_ANIM_MS);
     },
-    [],
+    [advanceRound],
   );
 
   const revealLoop = useCallback(
@@ -258,6 +349,8 @@ export function useGameMachine(mode: GameMode) {
   );
 
   // ----- rematch / settle -----
+  // Rematch = a brand-new match on the same PDAs (free games only, after a
+  // match is decided). reset_game zeroes the score on-chain.
   const rematch = useCallback(async () => {
     const client = clientRef.current;
     const gameId = gameIdRef.current;
@@ -266,76 +359,121 @@ export function useGameMachine(mode: GameMode) {
     if (!client || !gameId || !players || phase !== "done" || settled) return;
     setPhase("setting-up");
     try {
-      await step("Rematch — same accounts, choices private again", "tee", () =>
-        client.resetGame(gameId, players.p1, players.p2),
+      await step("Rematch — new match, score reset", "tee", () =>
+        client.nextRound(gameId, players.p1, players.p2),
       );
       if (token.cancelled) return;
       setMyChoice(null);
       setResult(null);
+      setMyWins(0);
+      setTheirWins(0);
+      setRound(1);
+      setMatchOver(false);
       setOpponentLocked(false);
       setPhase("pick");
-      if (role === "solo" && botRef.current) {
-        (async () => {
-          await sleep(600);
-          await step("🤖 Robot locked in a secret choice", "tee", () =>
-            botRef.current!.makeChoice(gameId, randomChoice()),
-          );
-          setOpponentLocked(true);
-        })().catch(() => undefined);
-      }
+      if (botRef.current) botPick(gameId).catch(() => undefined);
     } catch (e) {
       if (token.cancelled) return;
       setError(errMsg(e));
       setPhase("error");
     }
-  }, [phase, settled, role, step]);
+  }, [phase, settled, step, botPick]);
 
   const settle = useCallback(async () => {
     const client = clientRef.current;
     const gameId = gameIdRef.current;
     const players = playersRef.current;
+    const token = tokenRef.current;
     if (!client || !gameId || !players || settled) return;
     try {
-      await step("Commit & undelegate to Solana", "settle", () =>
-        client.undelegateAll(gameId, players.p1, players.p2),
-      );
-      setSettled(true);
-    } catch {
-      // the log entry is already marked err; the other player may have settled
+      // 1️⃣ commit + undelegate back to base (no-op if already done by the other player)
+      if (!(await client.isOnBase(gameId))) {
+        await step("Commit & undelegate to Solana", "settle", () =>
+          client.undelegateAll(gameId, players.p1, players.p2),
+        );
+      }
+      // 2️⃣ wait for the game (with its result) to land on base
+      for (let i = 0; i < 30 && !(await client.isOnBase(gameId)); i++) {
+        await sleep(1000);
+      }
+      // 3️⃣ pay out the pot (winner takes all, tie refunds) — idempotent on-chain
       const game = await client.fetchGameBase(gameId).catch(() => null);
-      if (resultIsSet(game)) setSettled(true);
+      const hasStake = !!game && game.stake.gtn(0);
+      if (hasStake && !game!.paid) {
+        await step("Pay out the pot 💰", "base", () =>
+          client.claimPot(gameId, players.p1, players.p2),
+        );
+      }
+      // 4️⃣ solo: sweep the robot's burner back to you so you never lose to yourself
+      if (role === "solo" && botRef.current) {
+        const bot = botRef.current;
+        const botBal = await getSolBalance(bot.baseConnection, bot.publicKey);
+        const reserve = 0.001;
+        if (botBal > reserve) {
+          await step("Return the robot's balance to you", "base", () =>
+            transferSol(
+              bot.baseConnection,
+              bot.keypair,
+              client.publicKey,
+              botBal - reserve,
+            ),
+          );
+        }
+      }
+      if (!token.cancelled) setSettled(true);
+    } catch (e) {
+      // the other player may have already settled+claimed
+      const game = await client.fetchGameBase(gameId).catch(() => null);
+      if (game?.paid || (game && game.stake.isZero() && resultIsSet(game))) {
+        setSettled(true);
+      } else if (!token.cancelled) {
+        setError(errMsg(e));
+      }
     }
-  }, [settled, step]);
+  }, [settled, role, step]);
 
-  // On the result screen, detect an opponent-initiated rematch.
+  // On the match-over screen of a 2-player free game, detect an opponent
+  // starting a new match (score reset, round cleared) and follow them in.
   useEffect(() => {
-    if (phase !== "done" || role === "solo" || settled) return;
+    if (phase !== "done" || !matchOver || role === "solo" || settled) return;
     const token = tokenRef.current;
     const t = window.setInterval(async () => {
       const client = clientRef.current;
       const gameId = gameIdRef.current;
       if (!client || !gameId) return;
       const game = await client.fetchGameEr(gameId).catch(() => null);
-      if (game && !resultIsSet(game) && !token.cancelled) {
+      if (
+        game &&
+        !resultIsSet(game) &&
+        !matchDecided(game) &&
+        !token.cancelled
+      ) {
         window.clearInterval(t);
-        const id = pushLog("Opponent called a rematch 🔄", "tee");
+        const id = pushLog("Opponent started a new match 🔄", "tee");
         settleLog(id, "ok");
         setMyChoice(null);
         setResult(null);
+        setMyWins(0);
+        setTheirWins(0);
+        setRound(1);
+        setMatchOver(false);
         setPhase("pick");
       }
     }, POLL_INTERVAL_MS);
     return () => window.clearInterval(t);
-  }, [phase, role, settled, pushLog, settleLog]);
+  }, [phase, matchOver, role, settled, pushLog, settleLog]);
 
   // ----- flows -----
   const runSolo = useCallback(
-    async (token: Cancelled) => {
+    async (token: Cancelled, stake: number, target: number) => {
       setRole("solo");
+      setStakeSol(stake);
+      setTargetWins(target);
       const player = new RpsClient(loadOrCreateKeypair(PLAYER_STORAGE_KEY));
       clientRef.current = player;
       setMyAddress(player.publicKey.toBase58());
-      await ensureFunds(player, token, MIN_PLAY_SOL + BOT_FUND_SOL);
+      // You front both stakes in solo (yours + the robot's), plus play costs.
+      await ensureFunds(player, token, MIN_PLAY_SOL + BOT_FUND_SOL + stake * 2);
       if (token.cancelled) return;
 
       setPhase("setting-up");
@@ -344,7 +482,7 @@ export function useGameMachine(mode: GameMode) {
       setGameIdStr(gameId.toString());
 
       await step("Create game & delegate to the TEE", "base", () =>
-        player.createGameAndDelegate(gameId),
+        player.createGameAndDelegate(gameId, stakeLamports(stake), target),
       );
       await step("Make your choice readable by you alone", "tee", () =>
         player.initOwnChoicePermission(gameId),
@@ -357,14 +495,15 @@ export function useGameMachine(mode: GameMode) {
         const bot = new RpsClient(loadOrCreateKeypair(BOT_STORAGE_KEY));
         botRef.current = bot;
         setOpponent(bot.publicKey);
+        const botNeeds = BOT_FUND_SOL + stake;
         const botBal = await getSolBalance(bot.baseConnection, bot.publicKey);
-        if (botBal < BOT_FUND_SOL) {
+        if (botBal < botNeeds) {
           await step("Fund the robot", "base", () =>
             transferSol(
               player.baseConnection,
               player.keypair,
               bot.publicKey,
-              BOT_FUND_SOL,
+              botNeeds - botBal,
             ),
           );
         }
@@ -389,12 +528,14 @@ export function useGameMachine(mode: GameMode) {
   );
 
   const runHost = useCallback(
-    async (token: Cancelled) => {
+    async (token: Cancelled, stake: number, target: number) => {
       setRole("host");
+      setStakeSol(stake);
+      setTargetWins(target);
       const player = new RpsClient(loadOrCreateKeypair(PLAYER_STORAGE_KEY));
       clientRef.current = player;
       setMyAddress(player.publicKey.toBase58());
-      await ensureFunds(player, token, MIN_PLAY_SOL);
+      await ensureFunds(player, token, MIN_PLAY_SOL + stake);
       if (token.cancelled) return;
 
       setPhase("setting-up");
@@ -403,7 +544,7 @@ export function useGameMachine(mode: GameMode) {
       setGameIdStr(gameId.toString());
 
       await step("Create game & delegate to the TEE", "base", () =>
-        player.createGameAndDelegate(gameId),
+        player.createGameAndDelegate(gameId, stakeLamports(stake), target),
       );
       await step("Make your choice readable by you alone", "tee", () =>
         player.initOwnChoicePermission(gameId),
@@ -447,6 +588,11 @@ export function useGameMachine(mode: GameMode) {
         return;
       }
 
+      const stake = game.stake.toNumber() / LAMPORTS_PER_SOL;
+      setStakeSol(stake);
+      setTargetWins(game.targetWins);
+      const joinerNeeds = MIN_PLAY_SOL + stake;
+
       const me = playerKp.publicKey;
       let resumingHost = false;
       let needsJoin = false;
@@ -461,12 +607,12 @@ export function useGameMachine(mode: GameMode) {
             guestKp.publicKey,
           );
           const hostBal = await getSolBalance(client.baseConnection, me);
-          if (guestBal < MIN_PLAY_SOL && hostBal > MIN_PLAY_SOL * 2) {
+          if (guestBal < joinerNeeds && hostBal > joinerNeeds + MIN_PLAY_SOL) {
             await transferSol(
               client.baseConnection,
               playerKp,
               guestKp.publicKey,
-              MIN_PLAY_SOL,
+              joinerNeeds - guestBal,
             ).catch(() => undefined);
           }
           needsJoin = true;
@@ -491,6 +637,10 @@ export function useGameMachine(mode: GameMode) {
       clientRef.current = client;
       setRole(resumingHost ? "host" : "joiner");
       setMyAddress(client.publicKey.toBase58());
+      const meIsP1Resume = !!game.player1?.equals(client.publicKey);
+      setMyWins(meIsP1Resume ? game.player1Wins : game.player2Wins);
+      setTheirWins(meIsP1Resume ? game.player2Wins : game.player1Wins);
+      setRound(game.round);
       const opp = resumingHost ? game.player2 : game.player1;
       if (opp) setOpponent(opp);
       if (resumingHost) {
@@ -512,11 +662,15 @@ export function useGameMachine(mode: GameMode) {
       }
 
       if (needsJoin) {
-        await ensureFunds(client, token, MIN_PLAY_SOL);
+        await ensureFunds(client, token, joinerNeeds);
         if (token.cancelled) return;
         setPhase("setting-up");
-        await step("Join game & delegate to the TEE", "base", () =>
-          client.joinGameAndDelegate(gameId),
+        await step(
+          stake > 0
+            ? `Join game & stake ${stake} SOL — delegate to the TEE`
+            : "Join game & delegate to the TEE",
+          "base",
+          () => client.joinGameAndDelegate(gameId),
         );
         await step("Game shared by both, your choice private", "tee", () =>
           client.initGameAndOwnChoicePermissions(gameId, game.player1!),
@@ -563,12 +717,21 @@ export function useGameMachine(mode: GameMode) {
     setOpponentLocked(false);
     setShareUrl(null);
     setSettled(false);
+    setStakeSol(0);
+    setFundNeededSol(0);
+    setTargetWins(1);
+    setMyWins(0);
+    setTheirWins(0);
+    setRound(1);
+    setMatchOver(false);
     playersRef.current = null;
     botRef.current = null;
 
     const run = async () => {
-      if (mode.kind === "solo") await runSolo(token);
-      else if (mode.kind === "host") await runHost(token);
+      const target = mode.kind === "url" ? 1 : targetWinsForBestOf(mode.bestOf);
+      if (mode.kind === "solo") await runSolo(token, mode.stakeSol, target);
+      else if (mode.kind === "host")
+        await runHost(token, mode.stakeSol, target);
       else await runUrl(mode.gameId, mode.join, token);
     };
     run().catch((e) => {
@@ -611,10 +774,19 @@ export function useGameMachine(mode: GameMode) {
     myChoice,
     result,
     settled,
+    stakeSol,
+    potSol: stakeSol * 2,
+    fundNeededSol,
+    targetWins,
+    myWins,
+    theirWins,
+    round,
+    matchOver,
     pick,
     rematch,
     settle,
     airdrop,
+    withdraw,
     erExplorerUrl,
   };
 }

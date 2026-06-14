@@ -8,6 +8,116 @@
   },
   "instructions": [
     {
+      "name": "cancel_game",
+      "discriminator": [121, 194, 154, 118, 103, 235, 149, 52],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 97, 109, 101]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [118, 97, 117, 108, 116]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player1",
+          "docs": ["Only the creator can cancel; refund goes back to them."],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_pot",
+      "discriminator": [210, 85, 35, 217, 204, 65, 38, 17],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 97, 109, 101]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [118, 97, 117, 108, 116]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player1",
+          "writable": true
+        },
+        {
+          "name": "player2",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": ["Anyone can trigger the payout."],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "create_game",
       "discriminator": [124, 69, 75, 66, 184, 220, 72, 206],
       "accounts": [
@@ -50,6 +160,22 @@
           }
         },
         {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [118, 97, 117, 108, 116]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
           "name": "player1",
           "writable": true,
           "signer": true
@@ -63,6 +189,14 @@
         {
           "name": "game_id",
           "type": "u64"
+        },
+        {
+          "name": "stake",
+          "type": "u64"
+        },
+        {
+          "name": "target_wins",
+          "type": "u8"
         }
       ]
     },
@@ -285,6 +419,22 @@
           }
         },
         {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [118, 97, 117, 108, 116]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
           "name": "player",
           "writable": true,
           "signer": true
@@ -349,36 +499,8 @@
       ]
     },
     {
-      "name": "process_undelegation",
-      "discriminator": [196, 28, 41, 206, 48, 37, 51, 167],
-      "accounts": [
-        {
-          "name": "base_account",
-          "writable": true
-        },
-        {
-          "name": "buffer"
-        },
-        {
-          "name": "payer",
-          "writable": true
-        },
-        {
-          "name": "system_program"
-        }
-      ],
-      "args": [
-        {
-          "name": "account_seeds",
-          "type": {
-            "vec": "bytes"
-          }
-        }
-      ]
-    },
-    {
-      "name": "reset_game",
-      "discriminator": [97, 146, 71, 156, 110, 206, 124, 224],
+      "name": "next_round",
+      "discriminator": [71, 165, 58, 85, 228, 54, 16, 73],
       "accounts": [
         {
           "name": "game",
@@ -482,8 +604,36 @@
       "args": []
     },
     {
-      "name": "reveal_winner",
-      "discriminator": [234, 209, 237, 109, 16, 196, 64, 254],
+      "name": "process_undelegation",
+      "discriminator": [196, 28, 41, 206, 48, 37, 51, 167],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer"
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reveal_round",
+      "discriminator": [146, 249, 2, 210, 169, 145, 120, 6],
       "accounts": [
         {
           "name": "game",
@@ -591,7 +741,11 @@
       "docs": [
         "Commit + undelegate game + both player_choices in a single magic-intent",
         "bundle. Bring the whole game state back to the base layer at once and",
-        "release all three PDAs from the ER."
+        "release all three PDAs from the ER.",
+        "",
+        "Only allowed once the MATCH is decided (someone reached `target_wins`):",
+        "undelegating mid-match would strand the game on the base layer where",
+        "`reveal_round` (ER-only) can no longer run, leaving the pot unclaimable."
       ],
       "discriminator": [85, 123, 97, 145, 66, 22, 252, 69],
       "accounts": [
@@ -723,6 +877,41 @@
       "code": 6006,
       "name": "NotAPlayer",
       "msg": "Only a player of this game can do this."
+    },
+    {
+      "code": 6007,
+      "name": "AlreadyPaid",
+      "msg": "The pot has already been paid out."
+    },
+    {
+      "code": 6008,
+      "name": "GameSettled",
+      "msg": "This game has already been settled."
+    },
+    {
+      "code": 6009,
+      "name": "WrongPlayerAccount",
+      "msg": "Wrong player account for this game."
+    },
+    {
+      "code": 6010,
+      "name": "CannotCancelStarted",
+      "msg": "Cannot cancel a game that already has two players."
+    },
+    {
+      "code": 6011,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow."
+    },
+    {
+      "code": 6012,
+      "name": "MatchNotDecided",
+      "msg": "The match is not decided yet."
+    },
+    {
+      "code": 6013,
+      "name": "MustClaimFirst",
+      "msg": "Settle and claim the pot before starting a new match."
     }
   ],
   "types": [
@@ -815,30 +1004,36 @@
             }
           },
           {
-            "name": "result",
+            "name": "round_result",
             "type": {
               "defined": {
-                "name": "GameResult"
+                "name": "RoundResult"
               }
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "GameResult",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Winner",
-            "fields": ["pubkey"]
           },
           {
-            "name": "Tie"
+            "name": "stake",
+            "type": "u64"
           },
           {
-            "name": "None"
+            "name": "paid",
+            "type": "bool"
+          },
+          {
+            "name": "target_wins",
+            "type": "u8"
+          },
+          {
+            "name": "player1_wins",
+            "type": "u8"
+          },
+          {
+            "name": "player2_wins",
+            "type": "u8"
+          },
+          {
+            "name": "round",
+            "type": "u8"
           }
         ]
       }
@@ -884,6 +1079,24 @@
                 }
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoundResult",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Winner",
+            "fields": ["pubkey"]
+          },
+          {
+            "name": "Tie"
+          },
+          {
+            "name": "None"
           }
         ]
       }

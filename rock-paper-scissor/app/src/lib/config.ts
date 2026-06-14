@@ -24,6 +24,7 @@ export const VAULT_ID = new PublicKey(
 
 export const GAME_SEED = "game";
 export const PLAYER_CHOICE_SEED = "player_choice";
+export const VAULT_SEED = "vault";
 
 // Burner wallets in localStorage (same pattern as the roll-dice app).
 export const PLAYER_STORAGE_KEY = "rps-player-keypair";
@@ -33,9 +34,19 @@ export const BOT_STORAGE_KEY = "rps-bot-keypair"; // single-player robot opponen
 export const MIN_PLAY_SOL = 0.02;
 export const AIRDROP_SOL = 0.2;
 export const BOT_FUND_SOL = 0.02;
-// One-click top-up from a connected wallet — enough for a solo game
-// (player + robot funding) with headroom for several two-player games.
-export const TOPUP_SOL = 0.05;
+
+// Wager presets (SOL). Default free; 0.1 as the quick alternative, else custom.
+// Match winner takes the whole pot.
+export const DEFAULT_STAKE_SOL = 0;
+export const STAKE_PRESETS_SOL = [0, 0.1];
+
+// Match-length presets, shown as "Best of N" → wins needed = ceil(N/2).
+// Default single round; Best of 3 as the alternative, anything else via custom.
+export const BEST_OF_PRESETS = [1, 3];
+export const DEFAULT_BEST_OF = 1;
+export const targetWinsForBestOf = (bestOf: number) => Math.ceil(bestOf / 2);
+// Keep a little SOL back from withdrawals for the next tx fee.
+export const WITHDRAW_RESERVE_SOL = 0.003;
 
 // Endpoint the top-up submits through. Wallets derive the chain from the URL
 // and FALL BACK TO MAINNET for unrecognized ones — so only reuse the base
