@@ -1,5 +1,6 @@
 {
   "license": "ISC",
+  "type": "module",
   "scripts": {
     "test": "yarn test:local",
     "build": "anchor keys sync && anchor build",

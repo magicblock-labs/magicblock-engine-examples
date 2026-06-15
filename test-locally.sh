@@ -825,6 +825,7 @@ if [ "${SETUP_ONLY:-0}" = "1" ]; then
   echo "SETUP_ONLY: validators are up and running."
   echo "  Base Layer : ${PROVIDER_ENDPOINT:-http://localhost:8899}"
   echo "  ER         : ${EPHEMERAL_PROVIDER_ENDPOINT:-http://localhost:7799}"
+  echo "  QFS        : ${QFS_ENDPOINT:-http://localhost:6699}"
   echo "========================================"
   echo "Press any key to stop the validators and exit..."
   # Read one key from the controlling tty (the test command pipeline may have

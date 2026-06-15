@@ -22,6 +22,7 @@ describe("roll-dice", () => {
   console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
   console.log(`Current SOL Public Key: ${provider.publicKey}`);
   console.log("Player PDA: ", playerPda.toString());
+  console.log("Program ID: ", program.programId.toString());
 
   it("Initialized player!", async () => {
     const tx = await program.methods
