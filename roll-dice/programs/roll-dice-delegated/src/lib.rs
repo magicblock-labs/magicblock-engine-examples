@@ -139,12 +139,9 @@ pub struct DoRollDiceDelegatedCtx<'info> {
     pub oracle_queue: UncheckedAccount<'info>,
 }
 
+#[vrf_callback]
 #[derive(Accounts)]
 pub struct CallbackRollDiceCtx<'info> {
-    /// This check ensure that the vrf_program_identity (which is a PDA) is a singer
-    /// enforcing the callback is executed by the VRF program trough CPI
-    #[account(address = vrf::consts::VRF_PROGRAM_IDENTITY)]
-    pub vrf_program_identity: Signer<'info>,
     #[account(mut)]
     pub player: Account<'info, Player>,
 }
@@ -152,10 +149,6 @@ pub struct CallbackRollDiceCtx<'info> {
 #[vrf_callback]
 #[derive(Accounts)]
 pub struct CallbackRollDiceSimpleCtx<'info> {
-    /// This check ensure that the vrf_program_identity (which is a PDA) is a singer
-    /// enforcing the callback is executed by the VRF program trough CPI
-    #[account(address = vrf::consts::VRF_PROGRAM_IDENTITY)]
-    pub vrf_program_identity: Signer<'info>,
     #[account(mut)]
     pub player: Account<'info, Player>,
 }

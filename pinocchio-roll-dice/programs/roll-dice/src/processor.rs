@@ -1,5 +1,6 @@
 use ephemeral_rollups_pinocchio::vrf::{
-    program_identity_pda, random_u8_with_range, RequestRandomness, VRF_PROGRAM_IDENTITY,
+    program_identity_pda, random_u8_with_range, scoped_vrf_identity, RequestRandomness,
+    VRF_PROGRAM_IDENTITY,
 };
 use ephemeral_rollups_pinocchio::vrf::{RequestRandomnessCpi, IDENTITY_SEED};
 use pinocchio::cpi::Seed;
@@ -104,7 +105,7 @@ pub fn process_roll_dice(
 
 /// Delegate the player account to the delegation program.
 pub fn process_callback_roll_dice(
-    _program_id: &Address,
+    program_id: &Address,
     accounts: &[AccountView],
     randomness: [u8; 32],
     client_seed: u8,
@@ -113,7 +114,7 @@ pub fn process_callback_roll_dice(
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    if program_identity.address() != &VRF_PROGRAM_IDENTITY {
+    if program_identity.address() != &scoped_vrf_identity(program_id).0 {
         return Err(ProgramError::InvalidSeeds);
     }
 

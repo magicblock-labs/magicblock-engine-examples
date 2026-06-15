@@ -45,6 +45,7 @@ describe("roll-dice-delegated", () => {
     providerEphemeralRollup.connection.rpcEndpoint,
   );
   console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`);
+  console.log("Delegated Program ID: ", program.programId.toString());
   console.log("Player PDA: ", playerPda.toString());
   // Annotate the queue source so a wrong queue is obvious from the test log
   // (devnet/mainnet should be the SDK default; local needs the test queue).
