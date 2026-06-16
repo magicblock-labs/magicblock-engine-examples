@@ -54,6 +54,14 @@ const fn ephemeral_rent(data_len: u32) -> u64 {
     (data_len as u64 + EPHEMERAL_ACCOUNT_OVERHEAD as u64) * EPHEMERAL_RENT_PER_BYTE
 }
 
+#[inline]
+fn require_authority_signer(authority: &AccountView) -> ProgramResult {
+    if !authority.is_signer() {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+    Ok(())
+}
+
 /// Derive the counter PDA from the caller-provided bump.
 fn counter_address_from_bump(
     program_id: &Address,
@@ -96,6 +104,8 @@ pub fn process_initialize_counter(
     let [authority_account, counter_account, _system_program, ..] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
+
+    require_authority_signer(authority_account)?;
 
     let bump_seed = [bump];
     let counter_pda = counter_address_from_bump(program_id, authority_account.address(), bump)?;
@@ -159,6 +169,8 @@ pub fn process_increase_counter(
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
+    require_authority_signer(authority_account)?;
+
     let counter_pda = counter_address_from_bump(program_id, authority_account.address(), bump)?;
     if counter_pda != *counter_account.address() {
         return Err(ProgramError::InvalidArgument);
@@ -193,6 +205,8 @@ pub fn process_delegate(
         }
         *account.address()
     });
+
+    require_authority_signer(authority)?;
 
     let counter_pda =
         counter_address_from_bump(owner_program.address(), authority.address(), bump)?;
@@ -236,6 +250,8 @@ pub fn process_init_permission(
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
+
+    require_authority_signer(authority)?;
 
     let counter_pda = counter_address_from_bump(program_id, authority.address(), bump)?;
     if counter_pda != *counter_account.address() {
@@ -290,6 +306,8 @@ pub fn process_set_privacy(
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
+
+    require_authority_signer(authority)?;
 
     let counter_pda = counter_address_from_bump(program_id, authority.address(), bump)?;
     if counter_pda != *counter_account.address() {
@@ -386,9 +404,7 @@ pub fn process_commit(_program_id: &Address, accounts: &[AccountView]) -> Progra
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    if !authority.is_signer() {
-        return Err(ProgramError::MissingRequiredSignature);
-    }
+    require_authority_signer(authority)?;
 
     let mut intent_bundle_data = [0u8; INTENT_BUNDLE_DATA_BUF_SIZE];
     MagicIntentBundleBuilder::new(*authority, *magic_context, *magic_program)
@@ -408,9 +424,7 @@ pub fn process_commit_and_undelegate(
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    if !authority.is_signer() {
-        return Err(ProgramError::MissingRequiredSignature);
-    }
+    require_authority_signer(authority)?;
 
     let (counter_pda, _bump_seed) =
         Address::find_program_address(&[b"counter", authority.address().as_ref()], program_id);
@@ -436,6 +450,8 @@ pub fn process_increment_commit(
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
+    require_authority_signer(authority)?;
+
     let counter_pda = counter_address_from_bump(program_id, authority.address(), bump)?;
     if counter_pda != *counter_account.address() {
         return Err(ProgramError::InvalidArgument);
@@ -448,10 +464,6 @@ pub fn process_increment_commit(
             .count
             .checked_add(increase_by)
             .ok_or(ProgramError::ArithmeticOverflow)?;
-    }
-
-    if !authority.is_signer() {
-        return Err(ProgramError::MissingRequiredSignature);
     }
 
     let mut intent_bundle_data = [0u8; INTENT_BUNDLE_DATA_BUF_SIZE];
@@ -472,6 +484,8 @@ pub fn process_increment_undelegate(
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
+    require_authority_signer(authority)?;
+
     let counter_pda = counter_address_from_bump(program_id, authority.address(), bump)?;
     if counter_pda != *counter_account.address() {
         return Err(ProgramError::InvalidArgument);
@@ -484,10 +498,6 @@ pub fn process_increment_undelegate(
             .count
             .checked_add(increase_by)
             .ok_or(ProgramError::ArithmeticOverflow)?;
-    }
-
-    if !authority.is_signer() {
-        return Err(ProgramError::MissingRequiredSignature);
     }
 
     let mut intent_bundle_data = [0u8; INTENT_BUNDLE_DATA_BUF_SIZE];
