@@ -17,7 +17,7 @@ impl Counter {
 
     pub fn load_mut(data: &mut [u8]) -> Result<&mut Self, ProgramError> {
         if data.len() < Self::SIZE {
-            return Err(ProgramError::InvalidArgument);
+            return Err(ProgramError::InvalidAccountData);
         }
         let ptr = data.as_mut_ptr() as *mut Self;
         #[allow(clippy::manual_is_multiple_of)]
@@ -30,7 +30,7 @@ impl Counter {
 
     pub fn load(data: &[u8]) -> Result<&Self, ProgramError> {
         if data.len() < Self::SIZE {
-            return Err(ProgramError::InvalidArgument);
+            return Err(ProgramError::InvalidAccountData);
         }
         let ptr = data.as_ptr() as *const Self;
         #[allow(clippy::manual_is_multiple_of)]
