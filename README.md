@@ -4,7 +4,7 @@ Scaling solution for performant, composable games and applications.
 
 ## ✨Overview
 
-This repository contains examples of how to use the different features  available in an Ephemeral Rollup (ER).
+This repository contains examples of how to use the different features available in an Ephemeral Rollup (ER).
 Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRollups/ephemeral_rollups).
 
 > To view integrated demos for specific usecases, please look at [MagicBlock Starter Kits](https://github.com/magicblock-labs/starter-kits).
@@ -197,6 +197,7 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 To run local tests for any example project, use the following steps:
 
 1. **Install Dependencies (Local nodes + example directory):**
+
    ```bash
    npm install -g @magicblock-labs/ephemeral-validator@latest
    cd <example-directory>
@@ -204,6 +205,7 @@ To run local tests for any example project, use the following steps:
    ```
 
 2. **Setup local nodes:**
+
    ```bash
    yarn setup
    ```
@@ -213,9 +215,8 @@ To run local tests for any example project, use the following steps:
    yarn test:local
    ```
 
-
-
 **Example:** To test the `pinocchio-roll-dice` example:
+
 ```bash
 cd pinocchio-roll-dice
 yarn build
@@ -225,6 +226,7 @@ yarn test:local
 ### Local nodes
 
 Setting up local nodes:
+
 - A Solana Test Validator preloaded with all the needed programs to work with ER.
 - A local Ephemeral Rollup.
 - The Query Filtering Service that replicates the privacy logic happening on TEE nodes, without hardware attestation.
