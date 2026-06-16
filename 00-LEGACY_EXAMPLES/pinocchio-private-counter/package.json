@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run tests/",
-    "test:local": ". ../scripts/local-env.sh && npx vitest run tests/kit/",
+    "test:local": ". ../../scripts/local-env.sh && npx vitest run tests/kit/",
     "setup": "cd ../.. && SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-private-counter",
     "test:web3js": "vitest run tests/web3js/",
     "test:watch": "vitest watch tests/",
@@ -13,9 +13,9 @@
     "build:release": "cargo build --release",
     "build:dev": "cargo build",
     "check": "cargo check",
-    "lint": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
-    "lint:fix": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
-  },
+    "lint": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
+    "lint:fix": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
+},
   "keywords": [
     "solana",
     "pinocchio",
