@@ -114,7 +114,7 @@ pub fn process_instruction(
                 .try_into()
                 .map_err(|_| ProgramError::InvalidInstructionData)?;
             let client_seed = read_u8(&payload[32..])?;
-            process_callback_roll_dice(accounts, randomness, client_seed)
+            process_callback_roll_dice(program_id, accounts, randomness, client_seed)
         }
         InstructionDiscriminator::DelegatePlayer => process_delegate_player(program_id, accounts),
         InstructionDiscriminator::UndelegatePlayer => {
