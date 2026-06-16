@@ -18,10 +18,14 @@ FAILED_TESTS_NAMES=()
 FAILED_TESTS_ERRORS=()
 TEST_COUNT=0
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
 # Optional first arg: substring filter for test names.
-#   bash test-locally.sh                           # runs everything
-#   bash test-locally.sh ephemeral-account-chats   # only that one
-#   bash test-locally.sh pinocchio                 # matches both pinocchio-* examples
+#   bash scripts/test-locally.sh                           # runs everything
+#   bash scripts/test-locally.sh ephemeral-account-chats   # only that one
+#   bash scripts/test-locally.sh pinocchio                 # matches both pinocchio-* examples
 #
 # Optional env flags:
 #   SKIP_REGULAR_TESTS=1  skips regular local tests
@@ -422,9 +426,8 @@ fi
 # passed to run_test). Each project exposes `yarn build` (compile only) and
 # `yarn test:local` (the local test subset).
 # ------------------------------------------------------------------------------
-PROJECTS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/projects.sh
-. "$PROJECTS_SCRIPT_DIR/scripts/projects.sh"
+. "$SCRIPT_DIR/projects.sh"
 
 # Set of projects to build = everything the enabled test phases will run, honoring
 # the same TEST_FILTER substring the tests use.
@@ -859,9 +862,8 @@ echo ""
 # test process sees them. The ER endpoint points at the local Query Filtering Service
 # (QFS), which routes to the ephemeral validator (7799) and on to the base validator:
 #   client -> QFS (6699) -> ER validator (7799) -> solana validator (8899)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/local-env.sh
-. "$SCRIPT_DIR/scripts/local-env.sh"
+. "$SCRIPT_DIR/local-env.sh"
 
 # ------------------------------------------------------------------------------
 # Regular tests

@@ -17,7 +17,7 @@
   },
   "scripts": {
     "test:local": ". ../scripts/local-env.sh && npx vitest run ./tests/kit/oncurve-delegation.test.ts",
-    "setup": "cd .. && SETUP_ONLY=1 ./test-locally.sh oncurve-delegation",
+    "setup": "cd .. && SETUP_ONLY=1 ./scripts/test-locally.sh oncurve-delegation",
     "test": "yarn test:local",
     "test:web3js": "npx vitest run ./tests/web3js",
     "build": "echo \"No program to build — SDK integration tests only\"",

@@ -9,3 +9,5 @@ build/
 *.log
 .vscode
 .idea
+.pnp.cjs
+.pnp.loader.mjs

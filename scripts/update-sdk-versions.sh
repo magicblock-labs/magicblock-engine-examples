@@ -1,5 +1,9 @@
 #!/bin/bash
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
 VERSION="0.14.3"
 PACKAGES=("ephemeral-rollups-sdk" "ephemeral-rollups-kit" "ephemeral-rollups-pinocchio")
 MIN_NODE_VERSION="20.19.0"

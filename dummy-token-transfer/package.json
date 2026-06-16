@@ -4,7 +4,7 @@
     "lint": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
     "build": "anchor keys sync && anchor build",
     "test:local": ". ../scripts/local-env.sh && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/dummy-transfer-local.ts",
-    "setup": "cd .. && SETUP_ONLY=1 ./test-locally.sh dummy-token-transfer",
+    "setup": "cd .. && SETUP_ONLY=1 ./scripts/test-locally.sh dummy-token-transfer",
     "test": "yarn test:local"
   },
   "dependencies": {

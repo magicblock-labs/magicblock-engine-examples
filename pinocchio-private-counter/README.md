@@ -1,8 +1,8 @@
-# 🔒 Pinocchio Private Counter
+# Pinocchio Private Counter
 
-Pinocchio counter variant that exercises private state on the Ephemeral Rollup.
+A minimal Solana counter program built with [Pinocchio](https://github.com/anza-xyz/pinocchio) and MagicBlock Ephemeral Rollups. The example shows how to initialize a counter PDA, delegate it to an Ephemeral Rollup, protect it with ephemeral permissions, and commit the final state back to the base layer.
 
-This is a port of the Rust Counter program to use Pinocchio instead of Borsh for serialization, eliminating the need for Vec types. It demonstrates confidential counter state on a MagicBlock TEE without the Anchor framework.
+The program is `no_std`, does not use Borsh, and keeps account data in a fixed-size `Counter` struct.
 
 ## Software Packages
 
@@ -32,7 +32,7 @@ This example runs against a **local MagicBlock cluster** — a base Solana valid
 yarn setup
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./test-locally.sh pinocchio-private-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-private-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
 
 Then, in a second terminal, run this example's tests against that cluster:
 
@@ -40,42 +40,47 @@ Then, in a second terminal, run this example's tests against that cluster:
 yarn test:local
 ```
 
-`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet). Use `yarn test:watch` to re-run the suite on file changes.
 
-> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./test-locally.sh` directly.
+The test initializes the counter on the base layer, delegates it to the Ephemeral Rollup, increments it on both layers, creates/updates/closes a permission account, and commits the delegated state back to the base layer.
 
-This is a TEE (Trusted Execution Environment) example: locally, ER calls route through the QFS via the `TEE_*` endpoints. The full devnet/TEE path additionally requires a funded devnet keypair, so in CI these tests are skipped unless a `DEVNET_KEYPAIR_JSON` secret is set (the repo sets `SKIP_TEE_TESTS=1` without it).
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
 
-## Key Differences from Rust Counter
+## Program Model
 
-- **No Borsh**: Uses manual serialization with `to_le_bytes()` and `from_le_bytes()` for simplicity
-- **No Vec**: All types use fixed-size arrays or primitives
-- **Pinocchio Framework**: Leverages Pinocchio's lightweight instruction handling
-- **Direct State Management**: Simple `Counter` struct with manual serialization
+The counter PDA is derived with:
+
+```text
+["counter", id]
+```
+
+where `id` is a 32-byte client-provided public key. The account stores:
+
+| Field   | Size     | Description                       |
+| ------- | -------- | --------------------------------- |
+| `id`    | 32 bytes | Identifier used in the PDA seeds  |
+| `count` | 8 bytes  | Little-endian `u64` counter value |
+| `bump`  | 1 byte   | PDA bump                          |
+| `_pad`  | 7 bytes  | Alignment padding                 |
+
+Total size: 48 bytes.
 
 ## Instructions
 
-### 0: InitializeCounter
-Initialize a counter PDA to 0. Payload: `bump` (u8).
+Each instruction starts with an 8-byte little-endian discriminator.
 
-### 1: IncreaseCounter
-Increase the counter by a specified amount. Payload: `bump` (u8) + `increase_by` (u64).
+| Discriminator | Instruction           | Payload               | Description                                                            |
+| ------------- | --------------------- | --------------------- | ---------------------------------------------------------------------- |
+| `0`           | `InitializeCounter`   | `id` (`[u8; 32]`)     | Creates the counter PDA and initializes `count` to `0`.                |
+| `1`           | `IncreaseCounter`     | `increase_by` (`u64`) | Adds `increase_by` to the counter with overflow checking.              |
+| `2`           | `Delegate`            | None                  | Delegates the counter PDA to the Ephemeral Rollups delegation program. |
+| `3`           | `CommitAndUndelegate` | None                  | Commits the counter state and undelegates it back to the base layer.   |
+| `4`           | `CreatePermission`    | None                  | Creates a private ephemeral permission for the counter.                |
+| `5`           | `UpdatePermission`    | None                  | Updates the counter permission membership.                             |
+| `6`           | `ClosePermission`     | None                  | Closes the counter permission account.                                 |
 
-### 2: Delegate
-Delegate the counter account to the Ephemeral Rollups delegation program. Payload: `bump` (u8).
+The delegation program also invokes the undelegation callback discriminator:
 
-### 3: CommitAndUndelegate
-Commit changes and undelegate the counter account.
-
-### 4: Commit
-Commit changes to the base layer.
-
-### 5: IncrementAndCommit
-Increment counter and commit in one instruction. Payload: `bump` (u8) + `increase_by` (u64).
-
-### 6: IncrementAndUndelegate
-Increment counter and undelegate in one instruction. Payload: `bump` (u8) + `increase_by` (u64).
-
-## Account Structure
-
-- **Counter**: 8 bytes (u64 count value)
+```text
+[196, 28, 41, 206, 48, 37, 51, 167]
+```

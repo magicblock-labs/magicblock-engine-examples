@@ -34,7 +34,7 @@ This example runs against a **local MagicBlock cluster** — a base Solana valid
 yarn setup
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./test-locally.sh session-keys` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh session-keys` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
 
 Then, in a second terminal, run this example's tests against that cluster:
 
@@ -44,7 +44,7 @@ yarn test:local
 
 `test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
 
-> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./test-locally.sh` directly.
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
 
 ## 🔑 Session Keys
 

@@ -1,20 +1,21 @@
 {
-  "name": "pinocchio-counter-client",
+  "name": "pinocchio-private-counter-client",
   "version": "0.1.0",
-  "description": "Client tests for pinocchio-counter program",
+  "description": "Client tests for pinocchio-private-counter program",
   "main": "index.js",
   "scripts": {
     "test": "vitest run tests/",
-    "test:local": ". ../scripts/local-env.sh && npx vitest run tests/kit/",
-    "setup": "cd .. && SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-counter",
+    "test:local": ". ../../scripts/local-env.sh && npx vitest run tests/kit/",
+    "setup": "cd ../.. && SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-private-counter",
+    "test:web3js": "vitest run tests/web3js/",
     "test:watch": "vitest watch tests/",
     "build": "cargo build-sbf --features logging",
     "build:release": "cargo build --release",
     "build:dev": "cargo build",
     "check": "cargo check",
-    "lint": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
-    "lint:fix": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
-  },
+    "lint": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
+    "lint:fix": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
+},
   "keywords": [
     "solana",
     "pinocchio",
@@ -37,7 +38,8 @@
     "@solana/kit": "^5.4.0",
     "@solana/web3.js": "^1.93.0",
     "borsh": "^0.7.0",
-    "dotenv": "^16.0.0"
+    "dotenv": "^16.0.0",
+    "tweetnacl": "^1.0.3"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

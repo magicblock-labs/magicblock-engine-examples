@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$ROOT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
 YARN_MUTEX="${YARN_MUTEX:-file:/tmp/.yarn-install-mutex}"
 FIX=0
@@ -113,7 +114,7 @@ if [ "${#FAILED[@]}" -gt 0 ]; then
   if [ "$FIX" = "1" ]; then
     echo "Run 'yarn lint:fix' in the failing example."
   else
-    echo "Run 'bash check-prettier.sh --fix' or 'yarn lint:fix' in the failing example."
+    echo "Run 'bash scripts/check-prettier.sh --fix' or 'yarn lint:fix' in the failing example."
   fi
   exit 1
 fi

@@ -58,4 +58,4 @@ esac
 export EXACT_MATCH=1
 
 echo "Running single example '$EXAMPLE' (phase: $phase)"
-exec bash "$REPO_ROOT/test-locally.sh" "$EXAMPLE"
+exec bash "$SCRIPT_DIR/test-locally.sh" "$EXAMPLE"

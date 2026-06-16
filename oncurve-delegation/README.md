@@ -42,7 +42,7 @@ The tests run against a **local MagicBlock cluster** — a base Solana validator
 yarn setup
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./test-locally.sh oncurve-delegation` from the repo root: it boots the validators and holds them until you press a key.
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh oncurve-delegation` from the repo root: it boots the validators and holds them until you press a key.
 
 Then, in a second terminal, run the tests against that cluster:
 
