@@ -1,4 +1,4 @@
-# Pinocchio Ephemeral Permission Counter
+# Pinocchio Private Counter
 
 A minimal Solana counter program built with [Pinocchio](https://github.com/anza-xyz/pinocchio) and MagicBlock Ephemeral Rollups. The example shows how to initialize a counter PDA, delegate it to an Ephemeral Rollup, protect it with ephemeral permissions, and commit the final state back to the base layer.
 
@@ -32,7 +32,7 @@ This example runs against a **local MagicBlock cluster** — a base Solana valid
 yarn setup
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-ephemeral-permission-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-private-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
 
 Then, in a second terminal, run this example's tests against that cluster:
 
