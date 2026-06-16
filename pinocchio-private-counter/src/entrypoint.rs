@@ -104,9 +104,7 @@ pub(crate) fn inner_process_instruction(
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
     let discriminator = InstructionDiscriminator::from_bytes(discriminator)?;
-    let payload = instruction_data
-        .get(8..)
-        .ok_or(ProgramError::InvalidInstructionData)?;
+    let payload = &instruction_data[8..];
 
     #[cfg(feature = "logging")]
     log_instruction(discriminator);
