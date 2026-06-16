@@ -92,7 +92,7 @@ pub fn process_instruction(
 /// Process an instruction.
 #[inline(always)]
 pub(crate) fn inner_process_instruction(
-    _program_id: &Address,
+    program_id: &Address,
     accounts: &[AccountView],
     instruction_data: &[u8],
 ) -> ProgramResult {
@@ -120,19 +120,25 @@ pub(crate) fn inner_process_instruction(
                     .try_into()
                     .map_err(|_| ProgramError::InvalidInstructionData)?,
             );
-            process_initialize_counter(accounts, &id)
+            process_initialize_counter(program_id, accounts, &id)
         }
         InstructionDiscriminator::IncreaseCounter => {
             let increase_by = read_u64(payload)?;
-            process_increase_counter(accounts, increase_by)
+            process_increase_counter(program_id, accounts, increase_by)
         }
-        InstructionDiscriminator::Delegate => process_delegate(accounts),
-        InstructionDiscriminator::CommitAndUndelegate => process_commit_and_undelegate(accounts),
-        InstructionDiscriminator::CreatePermission => process_create_permission(accounts),
-        InstructionDiscriminator::UpdatePermission => process_update_permission(accounts),
-        InstructionDiscriminator::ClosePermission => process_close_permission(accounts),
+        InstructionDiscriminator::Delegate => process_delegate(program_id, accounts),
+        InstructionDiscriminator::CommitAndUndelegate => {
+            process_commit_and_undelegate(program_id, accounts)
+        }
+        InstructionDiscriminator::CreatePermission => {
+            process_create_permission(program_id, accounts)
+        }
+        InstructionDiscriminator::UpdatePermission => {
+            process_update_permission(program_id, accounts)
+        }
+        InstructionDiscriminator::ClosePermission => process_close_permission(program_id, accounts),
         InstructionDiscriminator::UndelegationCallback => {
-            process_undelegation_callback(accounts, payload)
+            process_undelegation_callback(program_id, accounts, payload)
         }
     }
 }

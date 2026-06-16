@@ -30,10 +30,25 @@ dotenv.config();
 
 const VAULT = new PublicKey("MagicVau1t999999999999999999999999999999999");
 const PROGRAM_ID = new PublicKey(
-  "AAWCg4eJHpdmUtM8Wz6Thm8FDi6C3vnMksf1pt2vfxhf",
+  Keypair.fromSecretKey(
+    Uint8Array.from(
+      JSON.parse(
+        fs.readFileSync(
+          path.join(
+            __dirname,
+            "..",
+            "target",
+            "deploy",
+            "pinocchio_private_counter-keypair.json",
+          ),
+          "utf8",
+        ),
+      ),
+    ),
+  ).publicKey,
 );
 
-describe("pinocchio-ephemeral-permission-counter", async () => {
+describe("pinocchio-private-counter", async () => {
   // Open user keypair from private key or default location
   const KEYPAIR =
     process.env.PRIVATE_KEY ||

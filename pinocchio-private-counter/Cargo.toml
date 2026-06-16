@@ -1,5 +1,5 @@
 [package]
-name = "pinocchio-ephemeral-permission-counter"
+name = "pinocchio-private-counter"
 version = "0.1.0"
 edition = "2021"
 

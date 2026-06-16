@@ -36,12 +36,16 @@ impl Counter {
         Ok(unsafe { &mut *ptr })
     }
 
-    pub fn find_pda(id: &Address) -> (Address, u8) {
-        Address::find_program_address(&[b"counter", id.as_ref()], &crate::ID)
+    pub fn find_pda(program_id: &Address, id: &Address) -> (Address, u8) {
+        Address::find_program_address(&[b"counter", id.as_ref()], program_id)
     }
 
-    pub fn derive_pda(id: &Address, bump: &[u8]) -> Result<Address, ProgramError> {
-        Address::create_program_address(&[b"counter", id.as_ref(), bump], &crate::ID)
+    pub fn derive_pda(
+        program_id: &Address,
+        id: &Address,
+        bump: &[u8],
+    ) -> Result<Address, ProgramError> {
+        Address::create_program_address(&[b"counter", id.as_ref(), bump], program_id)
             .map_err(|_| ProgramError::InvalidSeeds)
     }
 }

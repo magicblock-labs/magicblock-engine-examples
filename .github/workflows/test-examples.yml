@@ -29,7 +29,7 @@ jobs:
           corepack prepare yarn@1.22.22 --activate
 
       - name: Check formatting
-        run: bash check-prettier.sh
+        run: bash scripts/check-prettier.sh
 
   # Emit the list of examples as a JSON array so the test job can fan out one
   # runner per example via a matrix. Single source of truth: scripts/projects.sh.

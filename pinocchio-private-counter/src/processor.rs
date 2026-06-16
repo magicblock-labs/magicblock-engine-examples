@@ -23,17 +23,21 @@ fn rent_for(size: u64) -> u64 {
 }
 
 /// Create and initialize the counter PDA for the initializer.
-pub fn process_initialize_counter(accounts: &[AccountView], id: &Address) -> ProgramResult {
+pub fn process_initialize_counter(
+    program_id: &Address,
+    accounts: &[AccountView],
+    id: &Address,
+) -> ProgramResult {
     let [payer_info, counter_info, _system_program] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    let (counter_pda, bump) = Counter::find_pda(id);
+    let (counter_pda, bump) = Counter::find_pda(program_id, id);
     if &counter_pda != counter_info.address() {
         return Err(ProgramError::InvalidSeeds);
     }
 
-    if counter_info.lamports() != 0 && counter_info.owned_by(&crate::ID) {
+    if counter_info.lamports() != 0 && counter_info.owned_by(program_id) {
         // Idempotent
         return Ok(());
     }
@@ -60,7 +64,7 @@ pub fn process_initialize_counter(accounts: &[AccountView], id: &Address) -> Pro
         to: counter_info,
         lamports: rent_exempt_lamports + ephemeral_rent,
         space: Counter::SIZE as u64,
-        owner: &crate::ID,
+        owner: program_id,
     }
     .invoke_signed(core::slice::from_ref(&signer))?;
     log!("Counter created successfully");
@@ -76,18 +80,22 @@ pub fn process_initialize_counter(accounts: &[AccountView], id: &Address) -> Pro
 }
 
 /// Increase the counter PDA by the requested amount.
-pub fn process_increase_counter(accounts: &[AccountView], increase_by: u64) -> ProgramResult {
+pub fn process_increase_counter(
+    program_id: &Address,
+    accounts: &[AccountView],
+    increase_by: u64,
+) -> ProgramResult {
     let [counter_info] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    if !counter_info.owned_by(&crate::ID) {
+    if !counter_info.owned_by(program_id) {
         return Err(ProgramError::IllegalOwner);
     }
 
     let mut data = counter_info.try_borrow_mut()?;
     let counter_data = Counter::load_mut(&mut data)?;
-    let counter_pda = Counter::derive_pda(&counter_data.id, &[counter_data.bump])?;
+    let counter_pda = Counter::derive_pda(program_id, &counter_data.id, &[counter_data.bump])?;
 
     if &counter_pda != counter_info.address() {
         return Err(ProgramError::InvalidSeeds);
@@ -102,7 +110,7 @@ pub fn process_increase_counter(accounts: &[AccountView], increase_by: u64) -> P
 }
 
 /// Delegate the counter PDA to the delegation program.
-pub fn process_delegate(accounts: &[AccountView]) -> ProgramResult {
+pub fn process_delegate(program_id: &Address, accounts: &[AccountView]) -> ProgramResult {
     let [payer_info, counter_info, owner_program, delegation_buffer, delegation_record, delegation_metadata, _delegation_program, system_program, rest @ ..] =
         accounts
     else {
@@ -110,7 +118,7 @@ pub fn process_delegate(accounts: &[AccountView]) -> ProgramResult {
     };
     let validator = rest.first().map(|account| *account.address());
 
-    let (bump, id) = load_and_verify_counter(counter_info)?;
+    let (bump, id) = load_and_verify_counter(program_id, counter_info)?;
 
     let seed_1 = b"counter";
     let seed_2 = id.as_ref();
@@ -140,7 +148,10 @@ pub fn process_delegate(accounts: &[AccountView]) -> ProgramResult {
 }
 
 /// Commit the counter PDA state and undelegate it.
-pub fn process_commit_and_undelegate(accounts: &[AccountView]) -> ProgramResult {
+pub fn process_commit_and_undelegate(
+    program_id: &Address,
+    accounts: &[AccountView],
+) -> ProgramResult {
     let [payer_info, counter_info, magic_program, magic_context] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
@@ -149,7 +160,7 @@ pub fn process_commit_and_undelegate(accounts: &[AccountView]) -> ProgramResult 
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    load_and_verify_counter(counter_info)?;
+    load_and_verify_counter(program_id, counter_info)?;
 
     commit_and_undelegate_accounts(
         payer_info,
@@ -164,14 +175,14 @@ pub fn process_commit_and_undelegate(accounts: &[AccountView]) -> ProgramResult 
 }
 
 /// Create a new permission for the counter PDA.
-pub fn process_create_permission(accounts: &[AccountView]) -> ProgramResult {
+pub fn process_create_permission(program_id: &Address, accounts: &[AccountView]) -> ProgramResult {
     let [authority_info, counter_info, permission_program, permission_info, magic_program, vault_info] =
         accounts
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    let (bump, id) = load_and_verify_counter(counter_info)?;
+    let (bump, id) = load_and_verify_counter(program_id, counter_info)?;
 
     let bump_seed = [bump];
     let seeds = [
@@ -204,14 +215,14 @@ pub fn process_create_permission(accounts: &[AccountView]) -> ProgramResult {
 }
 
 /// Update the permission for the counter PDA.
-pub fn process_update_permission(accounts: &[AccountView]) -> ProgramResult {
+pub fn process_update_permission(program_id: &Address, accounts: &[AccountView]) -> ProgramResult {
     let [payer_info, counter_info, permission_program, permission, magic_program, vault_info] =
         accounts
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    let (bump, id) = load_and_verify_counter(counter_info)?;
+    let (bump, id) = load_and_verify_counter(program_id, counter_info)?;
 
     let bump_seed = [bump];
     let seeds = [
@@ -241,14 +252,14 @@ pub fn process_update_permission(accounts: &[AccountView]) -> ProgramResult {
 }
 
 /// Close the permission for the counter PDA.
-pub fn process_close_permission(accounts: &[AccountView]) -> ProgramResult {
+pub fn process_close_permission(program_id: &Address, accounts: &[AccountView]) -> ProgramResult {
     let [payer_info, counter_info, permission_program, permission, magic_program, vault_info] =
         accounts
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    let (bump, id) = load_and_verify_counter(counter_info)?;
+    let (bump, id) = load_and_verify_counter(program_id, counter_info)?;
 
     let bump_seed = [bump];
     let seeds = [
@@ -274,23 +285,30 @@ pub fn process_close_permission(accounts: &[AccountView]) -> ProgramResult {
 }
 
 /// Handle the callback emitted by the delegation program on undelegation.
-pub fn process_undelegation_callback(accounts: &[AccountView], ix_data: &[u8]) -> ProgramResult {
+pub fn process_undelegation_callback(
+    program_id: &Address,
+    accounts: &[AccountView],
+    ix_data: &[u8],
+) -> ProgramResult {
     let [counter_info, buffer_acc, payer_info, _system_program, ..] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
-    undelegate(counter_info, &crate::ID, buffer_acc, payer_info, ix_data)?;
+    undelegate(counter_info, program_id, buffer_acc, payer_info, ix_data)?;
     Ok(())
 }
 
 /// Borrow `counter_info`, validate it is the PDA derived from its own state,
 /// and return (bump, id).
-fn load_and_verify_counter(counter_info: &AccountView) -> Result<(u8, Address), ProgramError> {
-    if !counter_info.owned_by(&crate::ID) {
+fn load_and_verify_counter(
+    program_id: &Address,
+    counter_info: &AccountView,
+) -> Result<(u8, Address), ProgramError> {
+    if !counter_info.owned_by(program_id) {
         return Err(ProgramError::IllegalOwner);
     }
     let data = counter_info.try_borrow()?;
     let counter = Counter::load(&data)?;
-    let pda = Counter::derive_pda(&counter.id, &[counter.bump])?;
+    let pda = Counter::derive_pda(program_id, &counter.id, &[counter.bump])?;
     if &pda != counter_info.address() {
         return Err(ProgramError::InvalidSeeds);
     }
