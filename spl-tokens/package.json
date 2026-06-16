@@ -5,7 +5,7 @@
     "test": "yarn test:local",
     "build": "anchor keys sync && anchor build",
     "test:local": ". ../scripts/local-env.sh && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts",
-    "setup": "cd .. && SETUP_ONLY=1 ./test-locally.sh spl-tokens"
+    "setup": "cd .. && SETUP_ONLY=1 ./scripts/test-locally.sh spl-tokens"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",

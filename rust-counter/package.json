@@ -17,7 +17,7 @@
   },
   "scripts": {
     "test:local": ". ../scripts/local-env.sh && npx vitest run ./tests/kit/rust-counter.test.ts",
-    "setup": "cd .. && SETUP_ONLY=1 ./test-locally.sh rust-counter",
+    "setup": "cd .. && SETUP_ONLY=1 ./scripts/test-locally.sh rust-counter",
     "test": "npx vitest run ./tests/kit",
     "test:web3js": "npx vitest run ./tests/web3js",
     "build": "cargo build-sbf",

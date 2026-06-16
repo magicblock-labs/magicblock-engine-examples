@@ -1,8 +1,8 @@
-# ➕ Pinocchio Counter
+# 🔒 Pinocchio Private Counter
 
-Simple counter program using Pinocchio and Ephemeral Rollups.
+Pinocchio counter variant that exercises private state on the Ephemeral Rollup.
 
-This is a port of the Rust Counter program to use Pinocchio instead of Borsh for serialization, eliminating the need for Vec types.
+This is a port of the Rust Counter program to use Pinocchio instead of Borsh for serialization, eliminating the need for Vec types. It demonstrates confidential counter state on a MagicBlock TEE without the Anchor framework.
 
 ## Software Packages
 
@@ -32,7 +32,7 @@ This example runs against a **local MagicBlock cluster** — a base Solana valid
 yarn setup
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-private-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
 
 Then, in a second terminal, run this example's tests against that cluster:
 
@@ -40,9 +40,11 @@ Then, in a second terminal, run this example's tests against that cluster:
 yarn test:local
 ```
 
-`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet). Use `yarn test:watch` to re-run the suite on file changes.
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
 
 > Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
+
+This is a TEE (Trusted Execution Environment) example: locally, ER calls route through the QFS via the `TEE_*` endpoints. The full devnet/TEE path additionally requires a funded devnet keypair, so in CI these tests are skipped unless a `DEVNET_KEYPAIR_JSON` secret is set (the repo sets `SKIP_TEE_TESTS=1` without it).
 
 ## Key Differences from Rust Counter
 

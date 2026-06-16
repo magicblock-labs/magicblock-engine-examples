@@ -5,7 +5,7 @@
 # and `yarn test:local` (the local test subset).
 #
 # Sourced by:
-#   - test-locally.sh        (full suite, runs every phase)
+#   - scripts/test-locally.sh (full suite, runs every phase)
 #   - scripts/test-example.sh (one example per invocation — CI matrix entry point)
 #   - the CI matrix generator (reads projects_json to fan out one runner per example)
 #

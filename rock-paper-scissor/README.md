@@ -48,7 +48,7 @@ This example runs against a **local MagicBlock cluster** — a base Solana valid
 yarn setup
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./test-locally.sh rock-paper-scissor` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh rock-paper-scissor` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
 
 Then, in a second terminal, run this example's tests against that cluster:
 
@@ -58,7 +58,7 @@ yarn test:local
 
 `test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
 
-> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./test-locally.sh` directly.
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
 
 This is a TEE (Trusted Execution Environment) example: locally, ER calls route through the QFS via the `TEE_*` endpoints. The full devnet/TEE path additionally requires a funded devnet keypair, so in CI these tests are skipped unless a `DEVNET_KEYPAIR_JSON` secret is set (the repo sets `SKIP_TEE_TESTS=1` without it).
 

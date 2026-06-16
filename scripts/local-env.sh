@@ -5,7 +5,7 @@
 # Why this file exists: the example tests fall back to devnet when these vars are
 # unset (e.g. `process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com"`).
 # Sourcing this points the SDK at the local cluster brought up by `yarn setup`
-# (SETUP_ONLY=1 ./test-locally.sh) instead. Source it, don't execute it:
+# (SETUP_ONLY=1 ./scripts/test-locally.sh) instead. Source it, don't execute it:
 #   . ../scripts/local-env.sh && yarn test:local
 #
 # Request flow for local tests:
