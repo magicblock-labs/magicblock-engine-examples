@@ -13,7 +13,7 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 
 ### 🧱 Basic Examples
 
-Core counter, dice, and token programs — the place to start.
+Core feature demos like delegation, randomness and privacy - the place to start.
 
 <table>
 <tr>
@@ -113,7 +113,7 @@ Core counter, dice, and token programs — the place to start.
 
 ### 🧩 Feature Examples
 
-Focused demos of individual ER capabilities — delegation, actions, cranks, sessions.
+Focused demos of individual capabilities — on-curve delegation, actions, ephemeral accounts, cranks, sessions.
 
 <table>
 <tr>
