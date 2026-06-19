@@ -1,0 +1,11 @@
+{
+  "name": "test-utils",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447",
+  "dependencies": {
+    "@solana/kit": "^6.10.0",
+    "@solana/web3.js": "^3.0.0-rc.1",
+    "legacy-web3js": "npm:@solana/web3.js@^1.98.0"
+  }
+}
