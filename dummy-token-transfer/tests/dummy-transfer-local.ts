@@ -61,7 +61,10 @@ describe("dummy-transfer-local", () => {
   )[0];
 
   console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
-  console.log("Ephemeral Rollup Connection: ", providerEphemeralRollup.connection.rpcEndpoint);
+  console.log(
+    "Ephemeral Rollup Connection: ",
+    providerEphemeralRollup.connection.rpcEndpoint,
+  );
   console.log("Program ID: ", program.programId.toBase58());
   console.log("Andy: ", provider.wallet.publicKey.toBase58());
   console.log("Bob: ", bob.publicKey.toBase58());
@@ -98,7 +101,9 @@ describe("dummy-transfer-local", () => {
         .accounts({ user: bob.publicKey })
         .instruction();
       const tx = new web3.Transaction().add(transferIx).add(initIx);
-      const sig = await provider.sendAndConfirm(tx, [bob], { skipPreflight: true });
+      const sig = await provider.sendAndConfirm(tx, [bob], {
+        skipPreflight: true,
+      });
       console.log("✅ Initialized Bob Balance PDA. Sig:", sig);
     }
     await printBalances(program, andyBalancePda, bobBalancePda);
@@ -138,7 +143,9 @@ describe("dummy-transfer-local", () => {
           .instruction(),
       ])
       .transaction();
-    const sig = await provider.sendAndConfirm(tx, [bob], { skipPreflight: true });
+    const sig = await provider.sendAndConfirm(tx, [bob], {
+      skipPreflight: true,
+    });
     await new Promise((r) => setTimeout(r, 3000));
     console.log("✅ Delegated. Sig:", sig);
   });
@@ -154,8 +161,12 @@ describe("dummy-transfer-local", () => {
       .accounts({ payer: provider.wallet.publicKey, receiver: bob.publicKey })
       .transaction();
     tx1.feePayer = provider.wallet.publicKey;
-    tx1.recentBlockhash = (await providerEphemeralRollup.connection.getLatestBlockhash()).blockhash;
-    const sig1 = await providerEphemeralRollup.sendAndConfirm(tx1, [], { skipPreflight: true });
+    tx1.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    const sig1 = await providerEphemeralRollup.sendAndConfirm(tx1, [], {
+      skipPreflight: true,
+    });
     console.log("✅ Transferred 5 (ER). Sig:", sig1);
 
     const tx2 = await program.methods
@@ -163,13 +174,18 @@ describe("dummy-transfer-local", () => {
       .accounts({ payer: bob.publicKey, receiver: provider.wallet.publicKey })
       .transaction();
     tx2.feePayer = bob.publicKey;
-    tx2.recentBlockhash = (await providerEphemeralRollup.connection.getLatestBlockhash()).blockhash;
+    tx2.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
     tx2.partialSign(bob);
     const sig2 = await providerEphemeralRollup.connection.sendRawTransaction(
       tx2.serialize(),
       { skipPreflight: true },
     );
-    await providerEphemeralRollup.connection.confirmTransaction(sig2, "confirmed");
+    await providerEphemeralRollup.connection.confirmTransaction(
+      sig2,
+      "confirmed",
+    );
     console.log("✅ Transferred 15 (ER). Sig:", sig2);
   });
 
@@ -184,21 +200,30 @@ describe("dummy-transfer-local", () => {
       .accounts({ payer: provider.wallet.publicKey })
       .transaction();
     tx1.feePayer = provider.wallet.publicKey;
-    tx1.recentBlockhash = (await providerEphemeralRollup.connection.getLatestBlockhash()).blockhash;
-    const sig1 = await providerEphemeralRollup.sendAndConfirm(tx1, [], { skipPreflight: true });
+    tx1.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
+    const sig1 = await providerEphemeralRollup.sendAndConfirm(tx1, [], {
+      skipPreflight: true,
+    });
 
     const tx2 = await program.methods
       .undelegate()
       .accounts({ payer: bob.publicKey })
       .transaction();
     tx2.feePayer = bob.publicKey;
-    tx2.recentBlockhash = (await providerEphemeralRollup.connection.getLatestBlockhash()).blockhash;
+    tx2.recentBlockhash = (
+      await providerEphemeralRollup.connection.getLatestBlockhash()
+    ).blockhash;
     tx2.partialSign(bob);
     const sig2 = await providerEphemeralRollup.connection.sendRawTransaction(
       tx2.serialize(),
       { skipPreflight: true },
     );
-    await providerEphemeralRollup.connection.confirmTransaction(sig2, "confirmed");
+    await providerEphemeralRollup.connection.confirmTransaction(
+      sig2,
+      "confirmed",
+    );
 
     await new Promise((r) => setTimeout(r, 5000));
     console.log("✅ Undelegated. Sigs:", sig1, sig2);

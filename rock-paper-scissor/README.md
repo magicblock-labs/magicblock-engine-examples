@@ -10,152 +10,69 @@ This project showcases:
 - **On-chain Game Logic**: Automated winner determination with transparent results
 - **Permission System**: Fine-grained access control via the ephemeral rollups SDK
 
-## Versioning
+## Software Packages
 
-The following software packages may be required, other versions may also be compatible:
+| Software   | Version | Installation Guide                                              |
+| ---------- | ------- | --------------------------------------------------------------- |
+| **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)             |
+| **Rust**   | 1.89.0  | [Install Rust](https://www.rust-lang.org/tools/install)         |
+| **Anchor** | 1.0.2   | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
+| **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)          |
 
-| Software | Version | Installation Guide |
-|----------|---------|-------------------|
-| Solana | 3.1.9 | [Install Solana](https://docs.solana.com/cli/install-solana-cli-tools) |
-| Rust | 1.89.0 | [Install Rust](https://www.rust-lang.org/tools/install) |
-| Anchor | 1.0.2 | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
-| Node | 24.10.0 | [Install Node](https://nodejs.org/) |
-
-## Prerequisites
-
-- **Rust**: 1.89.0
-- **Node.js**: 24.10.0
-- **Solana CLI**: 3.1.9
-- **Anchor CLI**: 1.0.2
-- **Yarn**: Package manager (or npm)
-
-### Installation
-
-1. Install Rust:
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-2. Install Solana CLI:
-```bash
-sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.9/install)"
-```
-
-3. Install Anchor:
-```bash
-cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-avm install 1.0.2
+```sh
+agave-install init 3.1.9
+rustup install 1.89.0
 avm use 1.0.2
 ```
 
-4. Configure Solana (optional, for devnet):
-```bash
-solana config set --url devnet
-```
+## Frontend
 
-## Project Structure
-
-```
-rock-paper-scissor/
-├── programs/
-│   └── anchor-rock-paper-scissor/
-│       ├── src/
-│       │   └── lib.rs                 # Program logic
-│       └── Cargo.toml
-├── tests/
-│   └── rock-paper-scissor.ts          # Test suite
-├── Anchor.toml                        # Anchor configuration
-├── Cargo.toml                         # Workspace configuration
-└── package.json                       # Node dependencies
-```
-
-## Build
-
-Build the Solana program:
+A playable web UI lives in [`app/`](app/README.md) — solo mode against a robot, plus a two-player mode where a friend joins via link or QR code and the winner reveals the instant the last move lands:
 
 ```bash
-anchor build
+cd app && yarn && yarn dev
 ```
 
-This will:
-- Compile the Rust program
-- Generate TypeScript IDL (Interface Definition Language)
-- Output artifacts to the `target/` directory
+## Build and Test
 
-## Deployment
-
-### Deploy to Devnet
-
-1. Set your wallet (if not already configured):
-```bash
-solana config set --keypair ~/.config/solana/id.json
-```
-
-2. Update `Anchor.toml` with your program ID (after first deployment)
-
-3. Deploy:
-```bash
-anchor deploy --provider.cluster devnet
-```
-
-The deployment will output your program ID. Update `Anchor.toml` and redeploy with the correct ID.
-
-### Deploy to Localnet
-
-Start a local Solana validator:
-```bash
-solana-test-validator
-```
-
-In another terminal, deploy:
-```bash
-anchor deploy --provider.cluster localnet
-```
-
-## Testing
-
-### Install Dependencies
+Install dependencies and build the program:
 
 ```bash
-yarn install
+yarn
+yarn build
 ```
 
-### Run Tests
-
-Run the full test suite:
+This example runs against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
 
 ```bash
-yarn test
+yarn setup
 ```
 
-The test suite includes:
-1. **Airdrop SOL** - Fund test players
-2. **Create Game** - Player 1 initiates a game
-3. **Join Game** - Player 2 joins the game
-4. **Make Choices** - Both players privately make their choices
-5. **Verify Privacy** - Confirm choices remain hidden from opponent
-6. **Reveal Winner** - Determine and announce the game winner
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh rock-paper-scissor` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
 
-### Custom Test Endpoint
-
-To test against a custom ephemeral rollup endpoint:
+Then, in a second terminal, run this example's tests against that cluster:
 
 ```bash
-EPHEMERAL_PROVIDER_ENDPOINT=http://your-endpoint:port \
-EPHEMERAL_WS_ENDPOINT=ws://your-endpoint:port \
-yarn test
+yarn test:local
 ```
+
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
+
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
+
+This is a TEE (Trusted Execution Environment) example: locally, ER calls route through the QFS via the `TEE_*` endpoints. The full devnet/TEE path additionally requires a funded devnet keypair, so in CI these tests are skipped unless a `DEVNET_KEYPAIR_JSON` secret is set (the repo sets `SKIP_TEE_TESTS=1` without it).
 
 ## Usage
 
 ### Game Flow
 
-1. **Player 1 creates a game** with a unique game ID
-2. **Player 2 joins** the same game
+1. **Player 1 creates a match** with a unique game ID, a best-of-N length, and a SOL wager (or free play)
+2. **Player 2 joins** the same game and matches the wager
 3. **Both players make hidden choices** (Rock, Paper, or Scissors)
 4. **Choices are encrypted** in the ephemeral rollup
-5. **Winner is revealed** - game logic determines the winner
-6. **Results are finalized** on-chain
+5. **Round winner is revealed** and the score updated (tied rounds replay)
+6. **Next round** plays on the same PDAs until a player reaches the win target — all on the ER
+7. **Results are finalized** on-chain and the **match winner claims the pot**
 
 ### Example Test Output
 
@@ -180,70 +97,52 @@ Player choices are processed in MagicBlock's Ephemeral Rollups, which provides:
 - **Privacy**: Other players cannot see choices until revealed
 - **Finality**: Results are committed to Solana mainnet
 
+### Matches (best-of-N)
+
+A game is a **match** of best-of-N rounds, set at creation via `target_wins` (round-wins needed; `1` = single round, `2` = best of 3, `3` = best of 5):
+
+- `reveal_winner` decides each round and tallies `player1_wins` / `player2_wins`. A **tied round counts for neither side and is replayed**, so a match always resolves to a winner.
+- While the match is undecided, `reset_game` **advances to the next round** on the same PDAs, keeping the score (re-privatizes the choice accounts). Once the match is decided, `reset_game` on a *free* game starts a brand-new match (score reset); a staked match must be settled + claimed first.
+- `undelegate_all` is gated on the **match** being decided (not just a round), so the game can't be pulled back to the base layer mid-match.
+
+### Wagering
+
+Games can carry a SOL wager (default `0.1`, customizable at creation; `0` for free play):
+
+- **Player 1 stakes** at `create_game`, **Player 2 stakes the same amount** at `join_game` — both deposits go into a per-game **vault PDA** (`["vault", game_id]`), a system-owned SOL escrow that is never delegated, so the pot stays put on the base layer while the match runs on the ER.
+- After the match is decided and undelegated, `claim_pot` pays the **match winner the whole pot**. It is idempotent (`paid` flag) and the funds can only go to the two recorded players.
+- `cancel_game` refunds the creator if no one ever joins.
+
 ### Program Accounts
 
-- **Game Account**: Stores game state and result
+- **Game Account**: Stores game state, current-round result, match score (`target_wins`/`player1_wins`/`player2_wins`/`round`), stake, and payout flag
 - **PlayerChoice Account**: Stores a player's encrypted choice (PDAs)
 - **Permission Account**: Controls access to encrypted data
+- **Vault Account**: System-owned PDA escrow holding the pot
 
 ### Anchor Instructions
 
-- `create_game` - Initialize a new game
-- `join_game` - Add the second player
+- `create_game` - Initialize a match, set the wager and best-of length (`create_game(game_id, stake, target_wins)`)
+- `join_game` - Add the second player and match the wager
 - `make_choice` - Submit encrypted choice
 - `create_permission` - Setup access control
 - `delegate_pda` - Delegate PDA to TEE validator
-- `reveal_winner` - Compute and store result
+- `reveal_winner` - Decide the round and tally the match score
+- `reset_game` - Advance to the next round (score kept), or start a fresh match once decided (free games); same PDAs, no new rent
+- `undelegate_all` - Commit + undelegate game and both choices back to the base layer (only once the match is decided)
+- `claim_pot` - Pay the match winner from the vault (base layer, after undelegate)
+- `cancel_game` - Refund the creator if nobody joined
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `EPHEMERAL_PROVIDER_ENDPOINT` | `https://tee.magicblock.app` | Ephemeral rollup RPC endpoint |
-| `EPHEMERAL_WS_ENDPOINT` | `wss://tee.magicblock.app` | WebSocket endpoint for subscriptions |
+| `PROVIDER_ENDPOINT` | `https://rpc.magicblock.app/devnet` | Base layer RPC endpoint |
+| `TEE_PROVIDER_ENDPOINT` | `https://devnet-tee.magicblock.app` | TEE ephemeral rollup RPC endpoint |
+| `TEE_WS_ENDPOINT` | `wss://devnet-tee.magicblock.app` | WebSocket endpoint for subscriptions |
+| `VALIDATOR` | `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo` | TEE ER validator to delegate to |
 
-## Troubleshooting
-
-### Build Errors
-
-**Error: "anchor-lang not found"**
-- Run: `cargo update`
-- Ensure Rust is up to date: `rustup update`
-
-### Deployment Issues
-
-**Error: "Account does not have enough SOL"**
-- Airdrop SOL: `solana airdrop 10 <your-address> --url devnet`
-
-### Test Failures
-
-**Tests timeout or fail to connect**
-- Verify the ephemeral endpoint is reachable
-- Check your internet connection
-- Ensure the Solana cluster is available
-
-**Permission denied errors**
-- Ensure wallet has sufficient SOL for transaction fees
-- Check permission setup in test (game and choice PDAs)
-
-## Development
-
-### Modify Program Logic
-
-Edit `programs/anchor-rock-paper-scissor/src/lib.rs`:
-
-1. Update instruction handlers
-2. Run `anchor build` to compile
-3. Run `yarn test` to validate changes
-
-### Generate New Types
-
-After program changes:
-```bash
-anchor build --skip-lint
-```
-
-This regenerates TypeScript types in `target/types/`.
+On mainnet the TEE endpoints are `https://mainnet-tee.magicblock.app` / `wss://mainnet-tee.magicblock.app`. `scripts/local-env.sh` overrides all of these to target the local cluster.
 
 ## References
 
@@ -251,15 +150,3 @@ This regenerates TypeScript types in `target/types/`.
 - [Solana Documentation](https://docs.solana.com/)
 - [MagicBlock Ephemeral Rollups SDK](https://github.com/magicblock-labs/ephemeral-rollups-sdk)
 - [Solana Web3.js](https://github.com/solana-labs/solana-web3.js)
-
-## License
-
-MIT
-
-## Support
-
-For issues or questions:
-1. Check existing GitHub issues
-2. Review test logs for error details
-3. Ensure all prerequisites are installed
-4. Verify network connectivity to Solana endpoints

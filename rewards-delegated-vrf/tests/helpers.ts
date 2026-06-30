@@ -11,7 +11,6 @@ import {
 import { MPL_TOKEN_AUTH_RULES_PROGRAM_ID } from "@metaplex-foundation/mpl-token-auth-rules";
 import { SYSVAR_INSTRUCTIONS_PUBKEY } from "@solana/web3.js";
 import {
-  REWARD_LIST_SEED,
   MPL_TOKEN_METADATA_PROGRAM_ID,
   BPF_UPGRADEABLE_LOADER,
 } from "./constants";
@@ -23,21 +22,21 @@ export async function getOrCreateDistributorTokenAccount(
   provider: anchor.AnchorProvider,
   tokenMint: PublicKey,
   rewardDistributorPda: PublicKey,
-  payer: anchor.web3.Keypair
+  payer: anchor.web3.Keypair,
 ): Promise<PublicKey> {
   const distributorTokenAccount = getAssociatedTokenAddressSync(
     tokenMint,
     rewardDistributorPda,
-    true // allowOffCurve - allows PDAs
+    true, // allowOffCurve - allows PDAs
   );
 
   console.log(
     "Derived token account address for distributor PDA:",
-    distributorTokenAccount.toString()
+    distributorTokenAccount.toString(),
   );
 
   const accountInfo = await provider.connection.getAccountInfo(
-    distributorTokenAccount
+    distributorTokenAccount,
   );
 
   if (!accountInfo) {
@@ -50,8 +49,8 @@ export async function getOrCreateDistributorTokenAccount(
         rewardDistributorPda, // owner
         tokenMint, // mint
         TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      )
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
     );
 
     const createAccountSig = await provider.sendAndConfirm(createAccountTx);
@@ -69,7 +68,7 @@ export async function getOrCreateDistributorTokenAccount(
 export function getProgramDataPda(programId: PublicKey): PublicKey {
   const [programData] = anchor.web3.PublicKey.findProgramAddressSync(
     [programId.toBuffer()],
-    BPF_UPGRADEABLE_LOADER
+    BPF_UPGRADEABLE_LOADER,
   );
   return programData;
 }
@@ -97,17 +96,17 @@ export async function logRewardListDetails(
   program: Program<RewardsDelegatedVrf>,
   ephemeralProgram: Program<RewardsDelegatedVrf>,
   rewardListAddress: PublicKey,
-  useEphemeral: boolean = false
+  useEphemeral: boolean = false,
 ): Promise<void> {
   try {
     const programToUse = useEphemeral ? ephemeralProgram : program;
     const rewardListAccount = await programToUse.account.rewardsList.fetch(
-      rewardListAddress
+      rewardListAddress,
     );
 
     // Fetch distributor details
     const distributorAccount = await program.account.rewardDistributor.fetch(
-      rewardListAccount.rewardDistributor
+      rewardListAccount.rewardDistributor,
     );
 
     console.log("\n=== Distributor Details ===");
@@ -116,7 +115,7 @@ export async function logRewardListDetails(
     if (distributorAccount.admins.length > 0) {
       console.log(
         "Admins:",
-        distributorAccount.admins.map((a) => a.toString()).join(", ")
+        distributorAccount.admins.map((a) => a.toString()).join(", "),
       );
     }
 
@@ -126,15 +125,15 @@ export async function logRewardListDetails(
       "Start Timestamp:",
       rewardListAccount.startTimestamp.toNumber(),
       `(${new Date(
-        rewardListAccount.startTimestamp.toNumber() * 1000
-      ).toISOString()})`
+        rewardListAccount.startTimestamp.toNumber() * 1000,
+      ).toISOString()})`,
     );
     console.log(
       "End Timestamp:",
       rewardListAccount.endTimestamp.toNumber(),
       `(${new Date(
-        rewardListAccount.endTimestamp.toNumber() * 1000
-      ).toISOString()})`
+        rewardListAccount.endTimestamp.toNumber() * 1000,
+      ).toISOString()})`,
     );
     console.log("Global Range Min:", rewardListAccount.globalRangeMin);
     console.log("Global Range Max:", rewardListAccount.globalRangeMax);
@@ -157,42 +156,18 @@ export async function logRewardListDetails(
 
       console.log(`\nReward ${index + 1}: ${reward.name}`);
       console.log(
-        `  Draw Range: ${reward.drawRangeMin} - ${reward.drawRangeMax}`
+        `  Draw Range: ${reward.drawRangeMin} - ${reward.drawRangeMax}`,
       );
       console.log(`  Reward Type: ${Object.keys(reward.rewardType)[0]}`);
       console.log(
-        `  Mints: ${reward.rewardMints.map((m) => m.toString()).join(", ")}`
+        `  Mints: ${reward.rewardMints.map((m) => m.toString()).join(", ")}`,
       );
       console.log(`  Amount: ${amount}`);
-      console.log(
-        `  Redemption Count: ${redemptionCount}/${redemptionLimit}`
-      );
+      console.log(`  Redemption Count: ${redemptionCount}/${redemptionLimit}`);
     });
   } catch (err) {
-    console.log(
-      "Could not fetch reward list details:",
-      (err as Error).message
-    );
+    console.log("Could not fetch reward list details:", (err as Error).message);
   }
-}
-
-/**
- * Get validator account for localhost testing
- */
-export function getValidatorAccounts(rpcEndpoint: string): any[] {
-  if (
-    rpcEndpoint.includes("localhost") ||
-    rpcEndpoint.includes("127.0.0.1")
-  ) {
-    return [
-      {
-        pubkey: new web3.PublicKey(process.env.VALIDATOR || "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"),
-        isSigner: false,
-        isWritable: false,
-      },
-    ];
-  }
-  return [];
 }
 
 /**
@@ -204,7 +179,7 @@ export function logTestEnvironment(
   adminKey: PublicKey,
   userKey: PublicKey,
   rewardDistributorPda: PublicKey,
-  rewardListPda: PublicKey
+  rewardListPda: PublicKey,
 ): void {
   console.log("Base Layer Connection: ", basLayerEndpoint);
   console.log("Ephemeral Rollup Connection: ", ephemeralEndpoint);

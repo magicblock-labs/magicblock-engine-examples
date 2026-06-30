@@ -5,7 +5,7 @@ use ephemeral_rollups_sdk::ephem::{MagicIntentBundleBuilder};
 
 use session_keys::{session_auth_or, Session, SessionError, SessionTokenV2};
 
-declare_id!("2YEUPs3Jfai1MUt7pBzZt5CdjniEkG6jYf3jzru6nNgP");
+declare_id!("DX9zogRDKEpuVVocvXWG9U7RD6RrSqLqdkhwoQVz3MBd");
 
 const COUNTER_SEED: &[u8] = b"counter";
 

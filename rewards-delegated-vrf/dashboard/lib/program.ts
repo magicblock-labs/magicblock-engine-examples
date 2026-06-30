@@ -10,7 +10,11 @@ const getSolanaEndpoint = (endpoint: string): string => {
     return CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint;
   }
   // Check for mainnet (mainnet, as.magicblock.app, us.magicblock.app, etc)
-  else if (endpoint.includes("mainnet") || endpoint.includes("as.magicblock.app") || endpoint.includes("us.magicblock.app")) {
+  else if (
+    endpoint.includes("mainnet") ||
+    endpoint.includes("as.magicblock.app") ||
+    endpoint.includes("us.magicblock.app")
+  ) {
     return CLUSTER_CONFIG["https://rpc.magicblock.app/mainnet"].endpoint;
   }
   // Default to devnet
@@ -25,7 +29,10 @@ export class ProgramClient {
   private solanaConnection: Connection;
 
   constructor(rpcUrl?: string) {
-    this.rpcUrl = rpcUrl || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || clusterApiUrl("devnet");
+    this.rpcUrl =
+      rpcUrl ||
+      process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+      clusterApiUrl("devnet");
     this.connection = new Connection(this.rpcUrl, "confirmed");
     // Create a separate connection to Solana endpoint for delegation status
     const solanaEndpoint = getSolanaEndpoint(this.rpcUrl);
@@ -35,7 +42,10 @@ export class ProgramClient {
   /**
    * Read a string from Borsh format (4-byte length prefix + utf-8 data)
    */
-  private readString(data: Buffer, pos: number): { value: string; newPos: number } {
+  private readString(
+    data: Buffer,
+    pos: number,
+  ): { value: string; newPos: number } {
     const length = data.readUInt32LE(pos);
     pos += 4;
     const value = data.toString("utf-8", pos, pos + length);
@@ -49,7 +59,11 @@ export class ProgramClient {
     let pos = 8; // Skip discriminator
 
     if (data.length < pos + 32) {
-      throw new Error(`Buffer too short for RewardDistributor. Expected at least ${pos + 32} bytes, got ${data.length}`);
+      throw new Error(
+        `Buffer too short for RewardDistributor. Expected at least ${
+          pos + 32
+        } bytes, got ${data.length}`,
+      );
     }
 
     // super_admin (pubkey = 32 bytes)
@@ -88,7 +102,11 @@ export class ProgramClient {
     let pos = 8; // Skip discriminator
 
     if (data.length < pos + 32) {
-      throw new Error(`Buffer too short for RewardsList. Expected at least ${pos + 32} bytes, got ${data.length}`);
+      throw new Error(
+        `Buffer too short for RewardsList. Expected at least ${
+          pos + 32
+        } bytes, got ${data.length}`,
+      );
     }
 
     // reward_distributor (pubkey = 32 bytes)
@@ -121,7 +139,13 @@ export class ProgramClient {
       // reward_type (enum, 1 byte)
       const rewardTypeValue = data[pos];
       pos += 1;
-      const rewardTypes = ["splToken", "legacyNft", "programmableNft", "splToken2022", "compressedNft"];
+      const rewardTypes = [
+        "splToken",
+        "legacyNft",
+        "programmableNft",
+        "splToken2022",
+        "compressedNft",
+      ];
       const rewardType = { [rewardTypes[rewardTypeValue]]: {} };
 
       // reward_mints (vec of pubkeys)
@@ -197,10 +221,12 @@ export class ProgramClient {
   /**
    * Fetch reward distributor account using manual Borsh deserialization
    */
-  async fetchRewardDistributor(pda: PublicKey): Promise<RewardDistributor | null> {
+  async fetchRewardDistributor(
+    pda: PublicKey,
+  ): Promise<RewardDistributor | null> {
     try {
       const accountInfo = await this.connection.getAccountInfo(pda);
-      
+
       // Fetch delegation status from Solana endpoint
       let delegationAccountInfo: any = null;
       try {
@@ -208,7 +234,7 @@ export class ProgramClient {
       } catch {
         // Ignore delegation lookup failures and continue with base data.
       }
-      
+
       if (!accountInfo) {
         return null;
       }
@@ -222,7 +248,8 @@ export class ProgramClient {
       const decoded = this.deserializeRewardDistributor(accountInfo.data);
 
       // Check if account is delegated by comparing owner with delegation program on Solana
-      const isDelegated = delegationAccountInfo?.owner.equals(DELEGATION_PROGRAM_ID) || false;
+      const isDelegated =
+        delegationAccountInfo?.owner.equals(DELEGATION_PROGRAM_ID) || false;
 
       return {
         superAdmin: decoded.superAdmin as PublicKey,
@@ -232,7 +259,10 @@ export class ProgramClient {
         delegated: isDelegated,
       };
     } catch (error) {
-      console.error("Error fetching reward distributor:", error instanceof Error ? error.message : error);
+      console.error(
+        "Error fetching reward distributor:",
+        error instanceof Error ? error.message : error,
+      );
       return null;
     }
   }
@@ -242,16 +272,16 @@ export class ProgramClient {
    */
   async fetchRewardsList(pda: PublicKey): Promise<RewardsList | null> {
     try {
-       const accountInfo = await this.connection.getAccountInfo(pda);
-       
-       // Fetch delegation status from Solana endpoint
-       let delegationAccountInfo: any = null;
-       try {
-         delegationAccountInfo = await this.solanaConnection.getAccountInfo(pda);
-       } catch {
-         // Ignore delegation lookup failures and continue with base data.
-       }
-      
+      const accountInfo = await this.connection.getAccountInfo(pda);
+
+      // Fetch delegation status from Solana endpoint
+      let delegationAccountInfo: any = null;
+      try {
+        delegationAccountInfo = await this.solanaConnection.getAccountInfo(pda);
+      } catch {
+        // Ignore delegation lookup failures and continue with base data.
+      }
+
       if (!accountInfo) {
         return null;
       }
@@ -265,7 +295,8 @@ export class ProgramClient {
       const decoded = this.deserializeRewardsList(accountInfo.data);
 
       // Check if account is delegated by comparing owner with delegation program on Solana
-      const isDelegated = delegationAccountInfo?.owner.equals(DELEGATION_PROGRAM_ID) || false;
+      const isDelegated =
+        delegationAccountInfo?.owner.equals(DELEGATION_PROGRAM_ID) || false;
 
       return {
         rewardDistributor: decoded.rewardDistributor as PublicKey,
@@ -278,7 +309,10 @@ export class ProgramClient {
         delegated: isDelegated,
       };
     } catch (error) {
-      console.error("Error fetching reward list:", error instanceof Error ? error.message : error);
+      console.error(
+        "Error fetching reward list:",
+        error instanceof Error ? error.message : error,
+      );
       return null;
     }
   }
@@ -286,10 +320,12 @@ export class ProgramClient {
   /**
    * Fetch transfer lookup table account
    */
-  async fetchTransferLookupTable(pda: PublicKey): Promise<TransferLookupTable | null> {
+  async fetchTransferLookupTable(
+    pda: PublicKey,
+  ): Promise<TransferLookupTable | null> {
     try {
       const accountInfo = await this.connection.getAccountInfo(pda);
-      
+
       if (!accountInfo) {
         return null;
       }
@@ -300,7 +336,10 @@ export class ProgramClient {
         lookupAccounts: [],
       };
     } catch (error) {
-      console.error("Error fetching transfer lookup table:", error instanceof Error ? error.message : error);
+      console.error(
+        "Error fetching transfer lookup table:",
+        error instanceof Error ? error.message : error,
+      );
       return null;
     }
   }

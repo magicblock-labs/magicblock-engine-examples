@@ -1,18 +1,24 @@
 use anchor_lang::prelude::*;
-use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
-use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
-use ephemeral_vrf_sdk::anchor::vrf;
-use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
-use ephemeral_vrf_sdk::types::SerializableAccountMeta;
+use ephemeral_rollups_sdk::{
+    anchor::{commit, delegate, ephemeral, vrf, vrf_callback},
+    cpi::DelegateConfig,
+    ephem::MagicIntentBundleBuilder,
+    vrf::{
+        self,
+        instructions::{create_request_scoped_randomness_ix, RequestRandomnessParams},
+        types::SerializableAccountMeta,
+    },
+};
 
-declare_id!("nkPMzRtKV4feTsDfst5P6sH8Rzf4VNe3p9Y1MzMiAme");
+declare_id!("3YAqv3GbcFzWwLcv1gZNjj2Nhr9FoxKkFaLDkfUCXXLj");
 
 pub const PLAYER_SEED: &[u8] = b"playerd2";
 
 #[ephemeral]
 #[program]
 pub mod random_dice_delegated {
+
+    use ephemeral_rollups_sdk::vrf;
 
     use super::*;
 
@@ -32,7 +38,7 @@ pub mod random_dice_delegated {
         client_seed: u8,
     ) -> Result<()> {
         msg!("Requesting randomness with client_seed={}", client_seed);
-        let ix = create_request_randomness_ix(RequestRandomnessParams {
+        let ix = create_request_scoped_randomness_ix(RequestRandomnessParams {
             payer: ctx.accounts.payer.key(),
             oracle_queue: ctx.accounts.oracle_queue.key(),
             callback_program_id: ID,
@@ -64,7 +70,7 @@ pub mod random_dice_delegated {
 
         // ---- Derive + apply ----
         let player = &mut ctx.accounts.player;
-        let rnd_u8 = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 6);
+        let rnd_u8 = vrf::rnd::random_u8_with_range(&randomness, 1, 6);
         player.last_result = rnd_u8;
         player.rollnum = player.rollnum.saturating_add(1);
         msg!("Roll result (1-6): {}", rnd_u8);
@@ -133,22 +139,16 @@ pub struct DoRollDiceDelegatedCtx<'info> {
     pub oracle_queue: UncheckedAccount<'info>,
 }
 
+#[vrf_callback]
 #[derive(Accounts)]
 pub struct CallbackRollDiceCtx<'info> {
-    /// This check ensure that the vrf_program_identity (which is a PDA) is a singer
-    /// enforcing the callback is executed by the VRF program trough CPI
-    #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
-    pub vrf_program_identity: Signer<'info>,
     #[account(mut)]
     pub player: Account<'info, Player>,
 }
 
+#[vrf_callback]
 #[derive(Accounts)]
 pub struct CallbackRollDiceSimpleCtx<'info> {
-    /// This check ensure that the vrf_program_identity (which is a PDA) is a singer
-    /// enforcing the callback is executed by the VRF program trough CPI
-    #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
-    pub vrf_program_identity: Signer<'info>,
     #[account(mut)]
     pub player: Account<'info, Player>,
 }

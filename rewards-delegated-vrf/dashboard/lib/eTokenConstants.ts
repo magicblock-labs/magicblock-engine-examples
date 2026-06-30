@@ -3,11 +3,11 @@ import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 // E-token (Ephemeral SPL) program — fixed on-chain address
 export const E_TOKEN_PROGRAM_ID = new PublicKey(
-  "SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2"
+  "SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2",
 );
 
 export const E_TOKEN_DELEGATION_PROGRAM_ID = new PublicKey(
-  DELEGATION_PROGRAM_ID.toString()
+  DELEGATION_PROGRAM_ID.toString(),
 );
 
 // Seeds
@@ -29,7 +29,7 @@ export const SPONSORED_LAMPORTS_TRANSFER_SETUP_LAMPORTS = 300_000n;
 export function deriveRentPda(): PublicKey {
   return PublicKey.findProgramAddressSync(
     [RENT_PDA_SEED],
-    E_TOKEN_PROGRAM_ID
+    E_TOKEN_PROGRAM_ID,
   )[0];
 }
 
@@ -39,11 +39,11 @@ export function deriveRentPda(): PublicKey {
 export function deriveLamportsPda(
   payer: PublicKey,
   destination: PublicKey,
-  salt: Uint8Array
+  salt: Uint8Array,
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [LAMPORTS_PDA_SEED, payer.toBuffer(), destination.toBuffer(), salt],
-    E_TOKEN_PROGRAM_ID
+    E_TOKEN_PROGRAM_ID,
   );
 }
 
@@ -54,7 +54,7 @@ export function deriveLamportsPda(
 export function deriveDelegationBuffer(lamportsPda: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
     [BUFFER_SEED, lamportsPda.toBuffer()],
-    E_TOKEN_PROGRAM_ID
+    E_TOKEN_PROGRAM_ID,
   )[0];
 }
 
@@ -65,7 +65,7 @@ export function deriveDelegationBuffer(lamportsPda: PublicKey): PublicKey {
 export function deriveDelegationRecord(account: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
     [DELEGATION_RECORD_SEED, account.toBuffer()],
-    E_TOKEN_DELEGATION_PROGRAM_ID
+    E_TOKEN_DELEGATION_PROGRAM_ID,
   )[0];
 }
 
@@ -76,7 +76,7 @@ export function deriveDelegationRecord(account: PublicKey): PublicKey {
 export function deriveDelegationMetadata(account: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
     [DELEGATION_METADATA_SEED, account.toBuffer()],
-    E_TOKEN_DELEGATION_PROGRAM_ID
+    E_TOKEN_DELEGATION_PROGRAM_ID,
   )[0];
 }
 

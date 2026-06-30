@@ -1,7 +1,11 @@
 {
   "scripts": {
-    "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "lint:fix": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w",
+    "lint": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
+    "build": "anchor keys sync && anchor build",
+    "test:local": ". ../scripts/local-env.sh && anchor test --skip-build --skip-deploy --skip-local-validator --provider.cluster devnet",
+    "setup": "cd .. && SETUP_ONLY=1 ./scripts/test-locally.sh rock-paper-scissor",
+    "test": "yarn test:local"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",

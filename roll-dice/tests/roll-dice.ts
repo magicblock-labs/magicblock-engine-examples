@@ -1,6 +1,11 @@
 import * as anchor from "@coral-xyz/anchor";
-import {Program, web3} from "@coral-xyz/anchor";
+import { Program, web3 } from "@coral-xyz/anchor";
 import { RandomDice } from "../target/types/random_dice";
+import { PublicKey } from "@solana/web3.js";
+
+const DEFAULT_BASE_QUEUE = new PublicKey(
+  process.env.VRF_BASE_QUEUE || "Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh",
+);
 
 describe("roll-dice", () => {
   // Configure the client to use the local cluster.
@@ -17,6 +22,7 @@ describe("roll-dice", () => {
   console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
   console.log(`Current SOL Public Key: ${provider.publicKey}`);
   console.log("Player PDA: ", playerPda.toString());
+  console.log("Program ID: ", program.programId.toString());
 
   it("Initialized player!", async () => {
     const tx = await program.methods
@@ -34,7 +40,9 @@ describe("roll-dice", () => {
     // Pre-arm a one-shot promise that the onLogs handler resolves with the
     // matching signature. No polling — we just await it, racing a timeout.
     let resolveSig!: (sig: string) => void;
-    const sigPromise = new Promise<string>((r) => { resolveSig = r; });
+    const sigPromise = new Promise<string>((r) => {
+      resolveSig = r;
+    });
     const callbackSubId = provider.connection.onLogs(
       program.programId,
       (info) => {
@@ -52,6 +60,9 @@ describe("roll-dice", () => {
     try {
       const tx = await program.methods
         .rollDice(clientSeed)
+        .accounts({
+          oracleQueue: DEFAULT_BASE_QUEUE,
+        })
         .rpc({ skipPreflight: true, commitment: "confirmed" });
       console.log(`client_seed: ${clientSeed}`);
       console.log("rollDice tx:", tx);
@@ -63,9 +74,11 @@ describe("roll-dice", () => {
         new Promise<null>((r) => setTimeout(() => r(null), 10_000)),
       ]);
       if (sig) {
-        console.log(`callbackRollDice tx: ${sig} (after ${Date.now() - start}ms)`);
+        console.log(
+          `callbackRollDice tx: ${sig} (after ${Date.now() - start}ms)`,
+        );
       } else {
-        console.warn(`callbackRollDice not observed within 10s.`);
+        throw new Error(`callbackRollDice not observed within 10s.`);
       }
 
       const player = await program.account.player.fetch(playerPda, "processed");
@@ -74,5 +87,4 @@ describe("roll-dice", () => {
       await provider.connection.removeOnLogsListener(callbackSubId);
     }
   });
-
 });

@@ -31,11 +31,11 @@ describe("private-counter", () => {
   );
   anchor.setProvider(provider);
 
-  const teeUrl = process.env.TEE_PROVIDER_ENDPOINT || "https://devnet-tee.magicblock.app";
-  const teeWsUrl = process.env.TEE_WS_ENDPOINT || "wss://devnet-tee.magicblock.app";
-  const ephemeralRpcEndpoint = (
-    teeUrl
-  ).replace(/\/$/, "");
+  const teeUrl =
+    process.env.TEE_PROVIDER_ENDPOINT || "https://devnet-tee.magicblock.app";
+  const teeWsUrl =
+    process.env.TEE_WS_ENDPOINT || "wss://devnet-tee.magicblock.app";
+  const ephemeralRpcEndpoint = teeUrl.replace(/\/$/, "");
 
   let providerEphemeralRollup = new anchor.AnchorProvider(
     new anchor.web3.Connection(ephemeralRpcEndpoint, {
@@ -68,26 +68,24 @@ describe("private-counter", () => {
     }
 
     // Fetch auth token for the TEE endpoint and rebuild the ER provider with it
-    if (ephemeralRpcEndpoint.includes("tee")) {
-      const payer = (provider.wallet as anchor.Wallet).payer;
-      const authToken = await getAuthToken(
-        ephemeralRpcEndpoint,
-        payer.publicKey,
-        (message: Uint8Array) =>
-          Promise.resolve(nacl.sign.detached(message, payer.secretKey)),
-      );
-      console.log(
-        "TEE Explorer URL:",
-        `https://explorer.solana.com/?cluster=custom&customUrl=${teeUrl}?token=${authToken.token}`,
-      );
-      providerEphemeralRollup = new anchor.AnchorProvider(
-        new anchor.web3.Connection(`${teeUrl}?token=${authToken.token}`, {
-          wsEndpoint: `${teeWsUrl}?token=${authToken.token}`,
-          commitment: "confirmed",
-        }),
-        anchor.Wallet.local(),
-      );
-    }
+    const payer = (provider.wallet as anchor.Wallet).payer;
+    const authToken = await getAuthToken(
+      ephemeralRpcEndpoint,
+      payer.publicKey,
+      (message: Uint8Array) =>
+        Promise.resolve(nacl.sign.detached(message, payer.secretKey)),
+    );
+    console.log(
+      "TEE Explorer URL:",
+      `https://explorer.solana.com/?cluster=custom&customUrl=${teeUrl}?token=${authToken.token}`,
+    );
+    providerEphemeralRollup = new anchor.AnchorProvider(
+      new anchor.web3.Connection(`${teeUrl}?token=${authToken.token}`, {
+        wsEndpoint: `${teeWsUrl}?token=${authToken.token}`,
+        commitment: "confirmed",
+      }),
+      anchor.Wallet.local(),
+    );
   });
 
   const program = anchor.workspace.PrivateCounter as Program<PrivateCounter>;
@@ -159,7 +157,8 @@ describe("private-counter", () => {
         counter: counterPDA,
         // Pin to the TEE validator identity
         validator: new web3.PublicKey(
-          process.env.VALIDATOR || "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo",
+          process.env.VALIDATOR ||
+            "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo",
         ),
       })
       .transaction();
@@ -314,9 +313,7 @@ describe("private-counter", () => {
     ).blockhash;
     tx = await providerEphemeralRollup.wallet.signTransaction(tx);
     const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-    console.log(
-      `${Date.now() - start}ms (ER) Undelegate txHash: ${txHash}`,
-    );
+    console.log(`${Date.now() - start}ms (ER) Undelegate txHash: ${txHash}`);
 
     // Wait for counter undelegation to settle back on the base layer
     let retries = 10;

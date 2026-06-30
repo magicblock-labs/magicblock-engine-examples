@@ -1,7 +1,12 @@
 use anchor_lang::prelude::*;
-use ephemeral_vrf_sdk::anchor::vrf;
-use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
-use ephemeral_vrf_sdk::types::SerializableAccountMeta;
+use ephemeral_rollups_sdk::{
+    anchor::{vrf, vrf_callback},
+    vrf::{
+        self,
+        instructions::{create_request_scoped_randomness_ix, RequestRandomnessParams},
+        types::SerializableAccountMeta,
+    }
+};
 
 declare_id!("3iSNV84a4hp2AiZpczjeuJEy4PTVCSzZZyU533MR6tEU");
 
@@ -24,7 +29,7 @@ pub mod random_dice {
 
     pub fn roll_dice(ctx: Context<DoRollDiceCtx>, client_seed: u8) -> Result<()> {
         msg!("Requesting randomness with client_seed={}", client_seed);
-        let ix = create_request_randomness_ix(RequestRandomnessParams {
+        let ix = create_request_scoped_randomness_ix(RequestRandomnessParams {
             payer: ctx.accounts.payer.key(),
             oracle_queue: ctx.accounts.oracle_queue.key(),
             callback_program_id: ID,
@@ -51,7 +56,7 @@ pub mod random_dice {
     ) -> Result<()> {
         msg!("client_seed={}", client_seed);
         msg!("Randomness bytes: {:?}", randomness);
-        let rnd_u8 = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 6);
+        let rnd_u8 = vrf::rnd::random_u8_with_range(&randomness, 1, 6);
         msg!("Consuming random number: {:?}", rnd_u8);
         let player = &mut ctx.accounts.player;
         player.last_result = rnd_u8;
@@ -78,16 +83,18 @@ pub struct DoRollDiceCtx<'info> {
     #[account(seeds = [PLAYER, payer.key().to_bytes().as_slice()], bump)]
     pub player: Account<'info, Player>,
     /// CHECK: The oracle queue
-    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
+    #[account(
+        mut,
+        constraint = 
+            oracle_queue.key() == vrf::consts::DEFAULT_QUEUE || // Devnet
+            oracle_queue.key() == vrf::consts::DEFAULT_TEST_QUEUE // Local
+    )]
     pub oracle_queue: UncheckedAccount<'info>,
 }
 
+#[vrf_callback]
 #[derive(Accounts)]
 pub struct CallbackRollDiceCtx<'info> {
-    /// This check ensure that the vrf_program_identity (which is a PDA) is a singer
-    /// enforcing the callback is executed by the VRF program trough CPI
-    #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
-    pub vrf_program_identity: Signer<'info>,
     #[account(mut)]
     pub player: Account<'info, Player>,
 }

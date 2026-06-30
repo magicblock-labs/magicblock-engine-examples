@@ -1,41 +1,39 @@
 {
-  "name": "pinocchio-private-counter-client",
+  "name": "pinocchio-private-counter",
   "version": "0.1.0",
-  "description": "Client tests for pinocchio-private-counter program",
+  "description": "Tests for pinocchio-private-counter program",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run tests/",
-    "test:kit": "vitest run tests/kit/",
-    "test:web3js": "vitest run tests/web3js/",
+    "test:local": ". ../scripts/local-env.sh && npx vitest run tests/",
+    "setup": "cd .. && SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-private-counter",
+    "test": "yarn test:local",
     "test:watch": "vitest watch tests/",
-    "test:legacy": "ts-node tests/client.test.ts",
-    "build": "cargo build --release",
-    "build:dev": "cargo build",
-    "check": "cargo check"
+    "build": "cargo build-sbf",
+    "check": "cargo check",
+    "lint": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
+    "lint:fix": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
   },
   "keywords": [
     "solana",
     "pinocchio",
+    "permission",
     "counter",
     "program"
   ],
   "author": "",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "ts-node": "^10.9.0",
-    "typescript": "^5.0.0",
-    "vitest": "^0.34.0"
-  },
-  "dependencies": {
-    "@magicblock-labs/ephemeral-rollups-kit": "0.14.3",
-    "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
+    "@magicblock-labs/ephemeral-rollups-sdk": "^0.11.1",
     "@solana-program/system": "^0.10.0",
     "@solana/kit": "^5.4.0",
     "@solana/web3.js": "^1.93.0",
+    "@types/node": "^20.0.0",
     "borsh": "^0.7.0",
     "dotenv": "^16.0.0",
-    "tweetnacl": "^1.0.3"
-  },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+    "ts-node": "^10.9.0",
+    "tweetnacl": "^1.0.3",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0",
+    "prettier": "^3.5.3"
+  }
 }

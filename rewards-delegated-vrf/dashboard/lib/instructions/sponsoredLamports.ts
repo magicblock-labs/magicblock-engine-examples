@@ -25,7 +25,7 @@ import {
  */
 export async function checkRewardListDelegated(
   connection: Connection,
-  rewardListPda: PublicKey
+  rewardListPda: PublicKey,
 ): Promise<boolean> {
   const delegationRecord = deriveDelegationRecord(rewardListPda);
   const info = await connection.getAccountInfo(delegationRecord);
@@ -44,7 +44,7 @@ export async function checkRewardListDelegated(
 export function buildSponsoredLamportsTransfer(
   publicKey: PublicKey,
   rewardListPda: PublicKey,
-  amountLamports: bigint
+  amountLamports: bigint,
 ): { tx: Transaction; salt: Uint8Array } {
   const salt = generateSalt();
   const rentPda = deriveRentPda();
@@ -60,21 +60,29 @@ export function buildSponsoredLamportsTransfer(
   data.set(salt, 9);
 
   const accounts: AccountMeta[] = [
-    { pubkey: publicKey,                     isSigner: true,  isWritable: false }, // payer
-    { pubkey: rentPda,                       isSigner: false, isWritable: true  }, // rent_pda
-    { pubkey: lamportsPda,                   isSigner: false, isWritable: true  }, // lamports_pda
-    { pubkey: E_TOKEN_PROGRAM_ID,            isSigner: false, isWritable: false }, // owner_program
-    { pubkey: bufferPda,                     isSigner: false, isWritable: true  }, // buffer_acc
-    { pubkey: delegationRecord,              isSigner: false, isWritable: true  }, // delegation_record
-    { pubkey: delegationMetadata,            isSigner: false, isWritable: true  }, // delegation_metadata
-    { pubkey: E_TOKEN_DELEGATION_PROGRAM_ID, isSigner: false, isWritable: false }, // delegation_program
-    { pubkey: SystemProgram.programId,       isSigner: false, isWritable: false }, // system_program
-    { pubkey: rewardListPda,                 isSigner: false, isWritable: true  }, // destination
-    { pubkey: destinationDelegationRecord,   isSigner: false, isWritable: false }, // destination_delegation_record
+    { pubkey: publicKey, isSigner: true, isWritable: false }, // payer
+    { pubkey: rentPda, isSigner: false, isWritable: true }, // rent_pda
+    { pubkey: lamportsPda, isSigner: false, isWritable: true }, // lamports_pda
+    { pubkey: E_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // owner_program
+    { pubkey: bufferPda, isSigner: false, isWritable: true }, // buffer_acc
+    { pubkey: delegationRecord, isSigner: false, isWritable: true }, // delegation_record
+    { pubkey: delegationMetadata, isSigner: false, isWritable: true }, // delegation_metadata
+    {
+      pubkey: E_TOKEN_DELEGATION_PROGRAM_ID,
+      isSigner: false,
+      isWritable: false,
+    }, // delegation_program
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
+    { pubkey: rewardListPda, isSigner: false, isWritable: true }, // destination
+    { pubkey: destinationDelegationRecord, isSigner: false, isWritable: false }, // destination_delegation_record
   ];
 
   const tx = new Transaction().add(
-    new TransactionInstruction({ programId: E_TOKEN_PROGRAM_ID, keys: accounts, data })
+    new TransactionInstruction({
+      programId: E_TOKEN_PROGRAM_ID,
+      keys: accounts,
+      data,
+    }),
   );
 
   return { tx, salt };

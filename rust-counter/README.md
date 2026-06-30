@@ -4,44 +4,43 @@ Simple counter program using Rust Native and Ephemeral Rollups
 
 ## Software Packages
 
-This program has utilized the following software packages.
-
 | Software   | Version | Installation Guide                                      |
 | ---------- | ------- | ------------------------------------------------------- |
 | **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)     |
 | **Rust**   | 1.89.0  | [Install Rust](https://www.rust-lang.org/tools/install) |
 | **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)  |
 
-````sh
-# Check and initialize your Solana version
-agave-install list
+```sh
 agave-install init 3.1.9
-
-# Check and initialize your Rust version
-rustup show
 rustup install 1.89.0
-
-## ✨ Build and Test
-
-Build and deploy the program:
-
-```bash
-cargo build-sbf
-solana program deploy target/deploy/rust_counter.so
-````
-
-Add wallet (if not a new keypair will be generated) and RPC endpoints to the file `example.env` and update filename to `.env`:
-
-```bash
-PRIVATE_KEY=<YOUR-PRIVATE-KEY>
 ```
 
-Run the tests:
+## Build and Test
+
+Install dependencies and build the program:
 
 ```bash
-yarn install
-yarn test
+yarn
+yarn build
 ```
+
+This example runs against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
+
+```bash
+yarn setup
+```
+
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh rust-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+
+Then, in a second terminal, run this example's tests against that cluster:
+
+```bash
+yarn test:local
+```
+
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet). The `@solana/kit` suite is the default; `yarn test:web3js` runs the equivalent `@solana/web3.js` tests.
+
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
 
 ## 📤 Delegate an account
 

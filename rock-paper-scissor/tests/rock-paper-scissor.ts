@@ -3,7 +3,7 @@ import { sendAndConfirmTransaction } from "@solana/web3.js";
 import { Program } from "@coral-xyz/anchor";
 import { AnchorRockPaperScissor } from "../target/types/anchor_rock_paper_scissor";
 import BN from "bn.js";
-import * as nacl from 'tweetnacl';
+import * as nacl from "tweetnacl";
 
 import {
   permissionPdaFromAccount,
@@ -17,33 +17,39 @@ import {
   MAGIC_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 
-const VAULT_ID = new anchor.web3.PublicKey("MagicVau1t999999999999999999999999999999999");
+const VAULT_ID = new anchor.web3.PublicKey(
+  "MagicVau1t999999999999999999999999999999999",
+);
 
 describe("anchor-rock-paper-scissor", () => {
-  // Configure the client
-  let provider = anchor.AnchorProvider.env();
+  // Configure the client. Falls back to devnet when PROVIDER_ENDPOINT is not
+  // set (scripts/local-env.sh points it at the local cluster).
+  let provider = anchor.AnchorProvider.local(
+    process.env.PROVIDER_ENDPOINT || "https://rpc.magicblock.app/devnet",
+  );
   anchor.setProvider(provider);
 
   let program = anchor.workspace
     .AnchorRockPaperScissor as Program<AnchorRockPaperScissor>;
   console.log("Program ID: ", program.programId.toString());
 
-
-  const ER_VALIDATOR = new anchor.web3.PublicKey("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"); // TEE ER Validator
+  const ER_VALIDATOR = new anchor.web3.PublicKey(
+    process.env.VALIDATOR || "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo",
+  ); // TEE ER Validator
   const player1 = provider.wallet.payer;
   const player2 = anchor.web3.Keypair.generate();
 
-  const teeUrl = "https://tee.magicblock.app"
-  const teeWsUrl = "wss://tee.magicblock.app"
-  const ephemeralRpcEndpoint = (process.env.EPHEMERAL_PROVIDER_ENDPOINT || teeUrl).replace(/\/$/, "");
+  // TEE endpoints per network: devnet → devnet-tee.magicblock.app (default,
+  // matching the devnet base-layer fallback), mainnet → mainnet-tee.magicblock.app.
+  // scripts/local-env.sh overrides these to route through the local QFS.
+  const teeUrl =
+    process.env.TEE_PROVIDER_ENDPOINT || "https://devnet-tee.magicblock.app";
+  const teeWsUrl =
+    process.env.TEE_WS_ENDPOINT || "wss://devnet-tee.magicblock.app";
   const providerEphemeralRollup = new anchor.AnchorProvider(
-    new anchor.web3.Connection(
-      ephemeralRpcEndpoint,
-      {
-        wsEndpoint:
-          process.env.EPHEMERAL_WS_ENDPOINT || teeWsUrl,
-      },
-    ),
+    new anchor.web3.Connection(teeUrl, {
+      wsEndpoint: teeWsUrl,
+    }),
     anchor.Wallet.local(),
   );
   console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
@@ -56,23 +62,41 @@ describe("anchor-rock-paper-scissor", () => {
   const gameId = new BN(Date.now());
   console.log("Game ID (u64):", gameId.toString());
 
+  // Per-player wager held in the game vault; winner takes the pot.
+  const STAKE = new BN(0.05 * anchor.web3.LAMPORTS_PER_SOL);
+  // Best-of-3 match: first to 2 round-wins takes the pot.
+  const TARGET_WINS = 2;
+
   // PDA seeds
   const GAME_SEED = Buffer.from("game");
   const PLAYER_CHOICE_SEED = Buffer.from("player_choice");
+  const VAULT_SEED = Buffer.from("vault");
 
   // Derived PDAs
   let [gamePda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [GAME_SEED, gameId.toArrayLike(Buffer, "le", 8)],
-      program.programId
-    );
+    [GAME_SEED, gameId.toArrayLike(Buffer, "le", 8)],
+    program.programId,
+  );
+  let [vaultPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [VAULT_SEED, gameId.toArrayLike(Buffer, "le", 8)],
+    program.programId,
+  );
   let [player1ChoicePda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [PLAYER_CHOICE_SEED, gameId.toArrayLike(Buffer, "le", 8), player1.publicKey.toBuffer()],
-      program.programId
-    );
+    [
+      PLAYER_CHOICE_SEED,
+      gameId.toArrayLike(Buffer, "le", 8),
+      player1.publicKey.toBuffer(),
+    ],
+    program.programId,
+  );
   let [player2ChoicePda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [PLAYER_CHOICE_SEED, gameId.toArrayLike(Buffer, "le", 8), player2.publicKey.toBuffer()],
-      program.programId
-    );
+    [
+      PLAYER_CHOICE_SEED,
+      gameId.toArrayLike(Buffer, "le", 8),
+      player2.publicKey.toBuffer(),
+    ],
+    program.programId,
+  );
 
   const permissionForGame = permissionPdaFromAccount(gamePda);
   const permissionForPlayer1Choice = permissionPdaFromAccount(player1ChoicePda);
@@ -84,8 +108,14 @@ describe("anchor-rock-paper-scissor", () => {
   console.log("Player2:", player2.publicKey.toBase58());
   console.log("Player2Choice PDA:", player2ChoicePda.toBase58());
   console.log("Permission PDA for Game:", permissionForGame.toString());
-  console.log("Permission PDA for Player1 Choice:", permissionForPlayer1Choice.toString());
-  console.log("Permission PDA for Player2 Choice:", permissionForPlayer2Choice.toString());
+  console.log(
+    "Permission PDA for Player1 Choice:",
+    permissionForPlayer1Choice.toString(),
+  );
+  console.log(
+    "Permission PDA for Player2 Choice:",
+    permissionForPlayer2Choice.toString(),
+  );
 
   // Helper: wait for a delegated PDA to land on the ER before sending init_permission.
   const waitUntilOnEr = async (
@@ -108,49 +138,66 @@ describe("anchor-rock-paper-scissor", () => {
   let providerTeePlayer2: anchor.AnchorProvider;
 
   it("Airdrop SOL to Player 2", async () => {
-      const tx = new anchor.web3.Transaction().add(
-              anchor.web3.SystemProgram.transfer({
-              fromPubkey: player1.publicKey,
-              toPubkey: player2.publicKey,
-              lamports: 0.05 * anchor.web3.LAMPORTS_PER_SOL, // send 0.05 SOL
-              })
-          );
+    const tx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: player1.publicKey,
+        toPubkey: player2.publicKey,
+        // enough for the stake + choice rent + delegation fees
+        lamports: 0.12 * anchor.web3.LAMPORTS_PER_SOL,
+      }),
+    );
 
-      await provider.sendAndConfirm(tx, [player1]); // player1 is wallet
-      const balance1 = await provider.connection.getBalance(player1.publicKey)
-      const balance2 = await provider.connection.getBalance(player2.publicKey);
-      console.log("💸 Player 1 Balance:", balance1 / anchor.web3.LAMPORTS_PER_SOL, "SOL");
-      console.log("💸 Player 2 Balance:", balance2 / anchor.web3.LAMPORTS_PER_SOL, "SOL");
+    await provider.sendAndConfirm(tx, [player1]); // player1 is wallet
+    const balance1 = await provider.connection.getBalance(player1.publicKey);
+    const balance2 = await provider.connection.getBalance(player2.publicKey);
+    console.log(
+      "💸 Player 1 Balance:",
+      balance1 / anchor.web3.LAMPORTS_PER_SOL,
+      "SOL",
+    );
+    console.log(
+      "💸 Player 2 Balance:",
+      balance2 / anchor.web3.LAMPORTS_PER_SOL,
+      "SOL",
+    );
 
-      // Get Auth Tokens if using TEE
-        if (ephemeralRpcEndpoint.includes("tee")) {
-            authTokenPlayer1 = await getAuthToken(ephemeralRpcEndpoint, player1.publicKey, (message: Uint8Array) => Promise.resolve(nacl.sign.detached(message, player1.secretKey)));
-            console.log("Player 1 Explorer URL:", `https://solscan.io/?cluster=custom&customUrl=${teeUrl}?token=${authTokenPlayer1.token}`);
-            authTokenPlayer2 = await getAuthToken(ephemeralRpcEndpoint, player2.publicKey, (message: Uint8Array) => Promise.resolve(nacl.sign.detached(message, player2.secretKey)));
-            console.log("Player 2 Explorer URL:", `https://solscan.io/?cluster=custom&customUrl=${teeUrl}?token=${authTokenPlayer2.token}`);
-          // Always append ?token=… — EPHEMERAL_PROVIDER_ENDPOINT (set by CI /
-          // test-locally.sh) is the bare TEE base URL, not a pre-tokenized URL.
-          const teeBase = (process.env.EPHEMERAL_PROVIDER_ENDPOINT || teeUrl).replace(/\/$/, "");
-          const teeWsBase = (process.env.EPHEMERAL_WS_ENDPOINT || teeWsUrl).replace(/\/$/, "");
-          providerTeePlayer1 = new anchor.AnchorProvider(
-            new anchor.web3.Connection(
-              `${teeBase}?token=${authTokenPlayer1.token}`,
-              {
-                wsEndpoint: `${teeWsBase}?token=${authTokenPlayer1.token}`,
-              },
-            ),
-            anchor.Wallet.local(),
-          );
-          providerTeePlayer2 = new anchor.AnchorProvider(
-            new anchor.web3.Connection(
-              `${teeBase}?token=${authTokenPlayer2.token}`,
-              {
-                wsEndpoint: `${teeWsBase}?token=${authTokenPlayer2.token}`,
-              },
-            ),
-            anchor.Wallet.local(),
-          );
-      }
+    // Get Auth Tokens if using TEE
+    authTokenPlayer1 = await getAuthToken(
+      teeUrl,
+      player1.publicKey,
+      (message: Uint8Array) =>
+        Promise.resolve(nacl.sign.detached(message, player1.secretKey)),
+    );
+    console.log(
+      "Player 1 Explorer URL:",
+      `https://solscan.io/?cluster=custom&customUrl=${teeUrl}?token=${authTokenPlayer1.token}`,
+    );
+    authTokenPlayer2 = await getAuthToken(
+      teeUrl,
+      player2.publicKey,
+      (message: Uint8Array) =>
+        Promise.resolve(nacl.sign.detached(message, player2.secretKey)),
+    );
+    console.log(
+      "Player 2 Explorer URL:",
+      `https://solscan.io/?cluster=custom&customUrl=${teeUrl}?token=${authTokenPlayer2.token}`,
+    );
+    // Always append ?token=… — EPHEMERAL_PROVIDER_ENDPOINT (set by CI /
+    // test-locally.sh) is the bare TEE base URL, not a pre-tokenized URL.
+    const teeBase = teeUrl.replace(/\/$/, "");
+    const teeWsBase = teeWsUrl.replace(/\/$/, "");
+    providerTeePlayer1 = new anchor.AnchorProvider(
+      new anchor.web3.Connection(`${teeBase}?token=${authTokenPlayer1.token}`, {
+        wsEndpoint: `${teeWsBase}?token=${authTokenPlayer1.token}`,
+      }),
+      anchor.Wallet.local(),
+    );
+    providerTeePlayer2 = new anchor.AnchorProvider(
+      new anchor.web3.Connection(`${teeBase}?token=${authTokenPlayer2.token}`, {
+        wsEndpoint: `${teeWsBase}?token=${authTokenPlayer2.token}`,
+      }),
+      anchor.Wallet.local(),
+    );
   });
 
   it("Create Game by Player 1 (base: create + delegate p1_choice)", async () => {
@@ -158,11 +205,11 @@ describe("anchor-rock-paper-scissor", () => {
     // rent. We delegate p1_choice now, but the game stays on base until player 2
     // joins — join_game needs the game to still be owned by our program.
     const createGameIx = await program.methods
-      .createGame(gameId)
-      .accounts({
-        //@ts-ignore
+      .createGame(gameId, STAKE, TARGET_WINS)
+      .accountsPartial({
         game: gamePda,
         playerChoice: player1ChoicePda,
+        vault: vaultPda,
         player1: player1.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -177,24 +224,39 @@ describe("anchor-rock-paper-scissor", () => {
       })
       .instruction();
 
-    const tx = new anchor.web3.Transaction().add(createGameIx, delegatePlayer1ChoiceIx);
+    const tx = new anchor.web3.Transaction().add(
+      createGameIx,
+      delegatePlayer1ChoiceIx,
+    );
     tx.feePayer = provider.wallet.publicKey;
-    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
+    const txHash = await sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [provider.wallet.payer],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
     console.log("✅ Game Created + P1 Choice Delegated:", txHash);
   });
 
   it("Init ephemeral permission for Player 1 Choice (ER)", async () => {
-    await waitUntilOnEr(providerTeePlayer1.connection, player1ChoicePda, "player1_choice");
+    await waitUntilOnEr(
+      providerTeePlayer1.connection,
+      player1ChoicePda,
+      "player1_choice",
+    );
 
     // Player 1 Choice permission: private to [p1] only — p2 can't sneak a peek
     const p1Members: Member[] = [
       { flags: AUTHORITY_FLAG | TX_LOGS_FLAG, pubkey: player1.publicKey },
     ];
     const initP1ChoicePermissionIx = await program.methods
-      .initPermission({ playerChoice: { gameId, player: player1.publicKey } }, p1Members)
+      .initPermission(
+        { playerChoice: { gameId, player: player1.publicKey } },
+        p1Members,
+      )
       .accountsPartial({
         permissionedAccount: player1ChoicePda,
         permission: permissionForPlayer1Choice,
@@ -207,28 +269,39 @@ describe("anchor-rock-paper-scissor", () => {
 
     const tx = new anchor.web3.Transaction().add(initP1ChoicePermissionIx);
     tx.feePayer = player1.publicKey;
-    tx.recentBlockhash = (await providerTeePlayer1.connection.getLatestBlockhash()).blockhash;
-    const txHash = await sendAndConfirmTransaction(providerTeePlayer1.connection, tx, [player1], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
+    tx.recentBlockhash = (
+      await providerTeePlayer1.connection.getLatestBlockhash()
+    ).blockhash;
+    const txHash = await sendAndConfirmTransaction(
+      providerTeePlayer1.connection,
+      tx,
+      [player1],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
     console.log("✅ P1 Choice permission initialized:", txHash);
 
-    const p1Result = await waitUntilPermissionActive(ephemeralRpcEndpoint, player1ChoicePda);
-    console.log(p1Result ? "✅ Player 1 Choice permission active" : "❌ Player 1 Choice permission not active");
+    const p1Result = await waitUntilPermissionActive(teeUrl, player1ChoicePda);
+    console.log(
+      p1Result
+        ? "✅ Player 1 Choice permission active"
+        : "❌ Player 1 Choice permission not active",
+    );
   });
 
   it("Join Game (Player 2) — base: join + delegate game + delegate p2_choice", async () => {
-    const joinGameIx =  await program.methods
-        .joinGame(gameId)
-        .accounts({
-            //@ts-ignore
-            game: gamePda,
-            playerChoice: player2ChoicePda,
-            player: player2.publicKey,
-            systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .instruction();
+    const joinGameIx = await program.methods
+      .joinGame(gameId)
+      .accountsPartial({
+        game: gamePda,
+        playerChoice: player2ChoicePda,
+        vault: vaultPda,
+        player: player2.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .instruction();
 
     // Now that both players are recorded on the game, delegate the game itself.
     const delegateGameIx = await program.methods
@@ -241,26 +314,41 @@ describe("anchor-rock-paper-scissor", () => {
       .instruction();
 
     const delegatePlayer2ChoiceIx = await program.methods
-        .delegatePda({ playerChoice: { gameId, player: player2.publicKey } })
-        .accounts({
-            payer: player2.publicKey,
-            validator: ER_VALIDATOR,
-            pda: player2ChoicePda,
-        })
-        .instruction()
+      .delegatePda({ playerChoice: { gameId, player: player2.publicKey } })
+      .accounts({
+        payer: player2.publicKey,
+        validator: ER_VALIDATOR,
+        pda: player2ChoicePda,
+      })
+      .instruction();
 
-    const tx = new anchor.web3.Transaction().add(joinGameIx, delegateGameIx, delegatePlayer2ChoiceIx);
+    const tx = new anchor.web3.Transaction().add(
+      joinGameIx,
+      delegateGameIx,
+      delegatePlayer2ChoiceIx,
+    );
     tx.feePayer = player2.publicKey;
-    const txHash = await sendAndConfirmTransaction(provider.connection, tx, [player2], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
-    console.log(`✅ Player 2 joined game ${gameId} + delegated game + p2 choice: ${txHash}`);
+    const txHash = await sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [player2],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
+    console.log(
+      `✅ Player 2 joined game ${gameId} + delegated game + p2 choice: ${txHash}`,
+    );
   });
 
   it("Init ephemeral permissions for Game + Player 2 Choice (ER)", async () => {
     await waitUntilOnEr(providerTeePlayer2.connection, gamePda, "game");
-    await waitUntilOnEr(providerTeePlayer2.connection, player2ChoicePda, "player2_choice");
+    await waitUntilOnEr(
+      providerTeePlayer2.connection,
+      player2ChoicePda,
+      "player2_choice",
+    );
 
     // Game permission: private to [p1, p2] (both can see game state during play)
     const gameMembers: Member[] = [
@@ -284,7 +372,10 @@ describe("anchor-rock-paper-scissor", () => {
       { flags: AUTHORITY_FLAG | TX_LOGS_FLAG, pubkey: player2.publicKey },
     ];
     const initP2ChoicePermissionIx = await program.methods
-      .initPermission({ playerChoice: { gameId, player: player2.publicKey } }, p2Members)
+      .initPermission(
+        { playerChoice: { gameId, player: player2.publicKey } },
+        p2Members,
+      )
       .accountsPartial({
         permissionedAccount: player2ChoicePda,
         permission: permissionForPlayer2Choice,
@@ -295,21 +386,37 @@ describe("anchor-rock-paper-scissor", () => {
       })
       .instruction();
 
-    const tx = new anchor.web3.Transaction().add(initGamePermissionIx, initP2ChoicePermissionIx);
+    const tx = new anchor.web3.Transaction().add(
+      initGamePermissionIx,
+      initP2ChoicePermissionIx,
+    );
     tx.feePayer = player2.publicKey;
-    tx.recentBlockhash = (await providerTeePlayer2.connection.getLatestBlockhash()).blockhash;
-    const txHash = await sendAndConfirmTransaction(providerTeePlayer2.connection, tx, [player2], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
+    tx.recentBlockhash = (
+      await providerTeePlayer2.connection.getLatestBlockhash()
+    ).blockhash;
+    const txHash = await sendAndConfirmTransaction(
+      providerTeePlayer2.connection,
+      tx,
+      [player2],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
     console.log(`✅ Game + P2 Choice permissions initialized: ${txHash}`);
 
-    const result = await waitUntilPermissionActive(ephemeralRpcEndpoint, player2ChoicePda);
-    console.log(result ? "✅ Player 2 Choice permission active" : "❌ Player 2 Choice permission not active");
+    const result = await waitUntilPermissionActive(teeUrl, player2ChoicePda);
+    console.log(
+      result
+        ? "✅ Player 2 Choice permission active"
+        : "❌ Player 2 Choice permission not active",
+    );
   });
 
-  it("Player 1 Makes Choice", async () => {
-    const choice = getRandomChoice();
+  // Deterministic best-of-3 match: Player 1 throws Rock, Player 2 Scissors,
+  // so Player 1 wins every round and takes the match 2-0.
+  it("Round 1: Player 1 Makes Choice (Rock)", async () => {
+    const choice: Choice = { rock: {} };
     const makeChoice1Ix = await program.methods
       .makeChoice(gameId, choice)
       .accounts({
@@ -319,24 +426,29 @@ describe("anchor-rock-paper-scissor", () => {
       })
       .instruction();
 
-    let tx = new anchor.web3.Transaction().add(
-      makeChoice1Ix
-    );
+    let tx = new anchor.web3.Transaction().add(makeChoice1Ix);
 
     tx.feePayer = player1.publicKey;
     tx.recentBlockhash = (
-      await providerTeePlayer1.connection.getLatestBlockhash())
-    .blockhash;
-    const txHash = await sendAndConfirmTransaction(providerTeePlayer1.connection, tx, [player1], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
+      await providerTeePlayer1.connection.getLatestBlockhash()
+    ).blockhash;
+    const txHash = await sendAndConfirmTransaction(
+      providerTeePlayer1.connection,
+      tx,
+      [player1],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
 
-    console.log(`✅ Player 1 ${player1.publicKey} chose ${JSON.stringify(choice)}: ${txHash}`);
+    console.log(
+      `✅ Player 1 ${player1.publicKey} chose ${JSON.stringify(choice)}: ${txHash}`,
+    );
   });
 
-  it("Player 2 Makes Choice", async () => {
-    const choice = getRandomChoice();
+  it("Round 1: Player 2 Makes Choice (Scissors)", async () => {
+    const choice: Choice = { scissors: {} };
     const makeChoice2Ix = await program.methods
       .makeChoice(gameId, choice)
       .accounts({
@@ -346,36 +458,55 @@ describe("anchor-rock-paper-scissor", () => {
       })
       .instruction();
 
-    let tx = new anchor.web3.Transaction().add(
-      makeChoice2Ix
-    );
+    let tx = new anchor.web3.Transaction().add(makeChoice2Ix);
 
     tx.feePayer = player2.publicKey;
-    const txHash = await sendAndConfirmTransaction(providerTeePlayer2.connection, tx, [player2], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
+    tx.recentBlockhash = (
+      await providerTeePlayer2.connection.getLatestBlockhash()
+    ).blockhash;
+    const txHash = await sendAndConfirmTransaction(
+      providerTeePlayer2.connection,
+      tx,
+      [player2],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
 
-    console.log(`✅ Player 2 ${player2.publicKey} chose ${JSON.stringify(choice)}: ${txHash}`);
+    console.log(
+      `✅ Player 2 ${player2.publicKey} chose ${JSON.stringify(choice)}: ${txHash}`,
+    );
   });
 
   it("Player 1 checks own choice", async () => {
-    const accountInfo = await providerTeePlayer1.connection.getAccountInfo(player1ChoicePda);
+    const accountInfo =
+      await providerTeePlayer1.connection.getAccountInfo(player1ChoicePda);
     const player1ChoiceData = accountInfo.data;
-    const player1ChoiceAccount = program.account.playerChoice.coder.accounts.decode("playerChoice", player1ChoiceData);
+    const player1ChoiceAccount =
+      program.account.playerChoice.coder.accounts.decode(
+        "playerChoice",
+        player1ChoiceData,
+      );
     console.log(`👀 Check Player 1 own Choice:`, player1ChoiceAccount.choice);
   });
 
-    it("Player 2 check own choice", async () => {
-    const accountInfo = await providerTeePlayer2.connection.getAccountInfo(player2ChoicePda);
+  it("Player 2 check own choice", async () => {
+    const accountInfo =
+      await providerTeePlayer2.connection.getAccountInfo(player2ChoicePda);
     const player2ChoiceData = accountInfo.data;
-    const player2ChoiceAccount = program.account.playerChoice.coder.accounts.decode("playerChoice", player2ChoiceData);
+    const player2ChoiceAccount =
+      program.account.playerChoice.coder.accounts.decode(
+        "playerChoice",
+        player2ChoiceData,
+      );
     console.log(`👀 Check Player 2 own Choice:`, player2ChoiceAccount.choice);
   });
 
-  it("Sneak Player 1 Choice"  , async () => {
-    await getPermissionStatus(ephemeralRpcEndpoint, player1ChoicePda)
-    const accountInfo = await providerTeePlayer2.connection.getAccountInfo(player1ChoicePda);
+  it("Sneak Player 1 Choice", async () => {
+    await getPermissionStatus(teeUrl, player1ChoicePda);
+    const accountInfo =
+      await providerTeePlayer2.connection.getAccountInfo(player1ChoicePda);
     if (accountInfo === null) {
       console.log(`✅ Player 1 choice account not found — as expected.`);
       return; // test passes
@@ -384,9 +515,10 @@ describe("anchor-rock-paper-scissor", () => {
     throw new Error("❌ Player 1 choice account exists unexpectedly!");
   });
 
-  it("Sneak Player 2 Choice"  , async () => {
-    await getPermissionStatus(ephemeralRpcEndpoint, player2ChoicePda)
-    const accountInfo = await providerTeePlayer1.connection.getAccountInfo(player2ChoicePda);
+  it("Sneak Player 2 Choice", async () => {
+    await getPermissionStatus(teeUrl, player2ChoicePda);
+    const accountInfo =
+      await providerTeePlayer1.connection.getAccountInfo(player2ChoicePda);
     // Assert that accountInfo is null (account not found)
     if (accountInfo === null) {
       console.log("✅ Player 2 choice account not found — as expected.");
@@ -396,9 +528,9 @@ describe("anchor-rock-paper-scissor", () => {
     throw new Error("❌ Player 2 choice account exists unexpectedly!");
   });
 
-  it("Reveal Winner", async () => {
+  it("Round 1: Reveal Winner (Player 1 leads 1-0)", async () => {
     let tx = await program.methods
-      .revealWinner()
+      .revealRound()
       .accountsPartial({
         //@ts-ignore
         game: gamePda,
@@ -414,19 +546,171 @@ describe("anchor-rock-paper-scissor", () => {
       })
       .transaction();
     tx.feePayer = player1.publicKey;
-    const txHash = await sendAndConfirmTransaction(providerTeePlayer1.connection, tx, [player1], {
-      skipPreflight: true,
-      commitment: "confirmed"
-    });
-    console.log("✅ Reveal Winner TX Sent:", txHash);
-    // const txBase = await GetCommitmentSignature(txHash, providerTeePlayer1.connection)
-    // console.log("✅ Winner Revealed:", txBase)
+    const txHash = await sendAndConfirmTransaction(
+      providerTeePlayer1.connection,
+      tx,
+      [player1],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
+    console.log("✅ Round 1 Reveal TX Sent:", txHash);
 
-    const accountInfo = await providerTeePlayer1.connection.getAccountInfo(gamePda);
+    const accountInfo =
+      await providerTeePlayer1.connection.getAccountInfo(gamePda);
     const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
     printGameResult(gameAccount);
+    if (gameAccount.player1Wins !== 1 || gameAccount.player2Wins !== 0) {
+      throw new Error(
+        `❌ Expected score 1-0, got ${gameAccount.player1Wins}-${gameAccount.player2Wins}`,
+      );
+    }
+    console.log(
+      `🏅 Score: ${gameAccount.player1Wins}-${gameAccount.player2Wins} (match in progress)`,
+    );
+  });
 
-  })
+  // Best-of-3 isn't decided at 1-0, so reset_game ADVANCES to round 2 and
+  // keeps the score (no new accounts, no extra rent).
+  it("Advance to Round 2 (score carries over)", async () => {
+    const tx = await program.methods
+      .nextRound()
+      .accountsPartial({
+        game: gamePda,
+        player1Choice: player1ChoicePda,
+        player2Choice: player2ChoicePda,
+        permissionGame: permissionForGame,
+        permission1: permissionForPlayer1Choice,
+        permission2: permissionForPlayer2Choice,
+        payer: player2.publicKey,
+        permissionProgram: PERMISSION_PROGRAM_ID,
+        ephemeralVault: VAULT_ID,
+        magicProgram: MAGIC_PROGRAM_ID,
+      })
+      .transaction();
+    tx.feePayer = player2.publicKey;
+    tx.recentBlockhash = (
+      await providerTeePlayer2.connection.getLatestBlockhash()
+    ).blockhash;
+    const txHash = await sendAndConfirmTransaction(
+      providerTeePlayer2.connection,
+      tx,
+      [player2],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
+    console.log("➡️  Advanced to round 2:", txHash);
+
+    const accountInfo =
+      await providerTeePlayer2.connection.getAccountInfo(gamePda);
+    const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
+    if (!("none" in gameAccount.roundResult)) {
+      throw new Error("❌ Round result was not cleared");
+    }
+    if (gameAccount.round !== 2) {
+      throw new Error(`❌ Expected round 2, got ${gameAccount.round}`);
+    }
+    if (gameAccount.player1Wins !== 1) {
+      throw new Error("❌ Score should carry over to round 2");
+    }
+    console.log("✅ Round 2 ready, score preserved at 1-0");
+  });
+
+  it("Round 2: both players make a choice (P1 Rock, P2 Scissors)", async () => {
+    const choices: Record<string, Choice> = {
+      p1: { rock: {} },
+      p2: { scissors: {} },
+    };
+    for (const [player, choicePda, teeProvider, key] of [
+      [player1, player1ChoicePda, providerTeePlayer1, "p1"],
+      [player2, player2ChoicePda, providerTeePlayer2, "p2"],
+    ] as const) {
+      const choice = choices[key];
+      const ix = await program.methods
+        .makeChoice(gameId, choice)
+        .accounts({
+          // @ts-ignore
+          playerChoice: choicePda,
+          player: player.publicKey,
+        })
+        .instruction();
+      const tx = new anchor.web3.Transaction().add(ix);
+      tx.feePayer = player.publicKey;
+      tx.recentBlockhash = (
+        await teeProvider.connection.getLatestBlockhash()
+      ).blockhash;
+      const txHash = await sendAndConfirmTransaction(
+        teeProvider.connection,
+        tx,
+        [player],
+        {
+          skipPreflight: true,
+          commitment: "confirmed",
+        },
+      );
+      console.log(
+        `✅ Round 2: ${player.publicKey} chose ${JSON.stringify(choice)}: ${txHash}`,
+      );
+    }
+  });
+
+  it("Round 2: Sneak Player 2 Choice (private again after reset)", async () => {
+    const accountInfo =
+      await providerTeePlayer1.connection.getAccountInfo(player2ChoicePda);
+    if (accountInfo === null) {
+      console.log(
+        "✅ Player 2 choice hidden from Player 1 again — reset re-privatized it.",
+      );
+      return;
+    }
+    throw new Error("❌ Player 2 choice readable after reset!");
+  });
+
+  it("Round 2: Reveal Winner (Player 1 wins the match 2-0)", async () => {
+    const tx = await program.methods
+      .revealRound()
+      .accountsPartial({
+        //@ts-ignore
+        game: gamePda,
+        player1Choice: player1ChoicePda,
+        player2Choice: player2ChoicePda,
+        permissionGame: permissionForGame,
+        permission1: permissionForPlayer1Choice,
+        permission2: permissionForPlayer2Choice,
+        payer: player1.publicKey,
+        permissionProgram: PERMISSION_PROGRAM_ID,
+        ephemeralVault: VAULT_ID,
+        magicProgram: MAGIC_PROGRAM_ID,
+      })
+      .transaction();
+    tx.feePayer = player1.publicKey;
+    const txHash = await sendAndConfirmTransaction(
+      providerTeePlayer1.connection,
+      tx,
+      [player1],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
+    console.log("✅ Round 2 Reveal Winner TX Sent:", txHash);
+
+    const accountInfo =
+      await providerTeePlayer1.connection.getAccountInfo(gamePda);
+    const gameAccount = program.coder.accounts.decode("game", accountInfo.data);
+    printGameResult(gameAccount);
+    if (gameAccount.player1Wins !== 2) {
+      throw new Error(
+        `❌ Expected Player 1 at 2 wins, got ${gameAccount.player1Wins}`,
+      );
+    }
+    console.log(
+      `🏆 Match decided ${gameAccount.player1Wins}-${gameAccount.player2Wins} after ${gameAccount.round} rounds`,
+    );
+  });
 
   // Cleanup: commit + undelegate game + both player_choices in a single ix so
   // all three PDAs return to the base layer atomically and the test cycle can
@@ -442,25 +726,102 @@ describe("anchor-rock-paper-scissor", () => {
       })
       .transaction();
     tx.feePayer = player1.publicKey;
-    const txHash = await sendAndConfirmTransaction(providerTeePlayer1.connection, tx, [player1], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
+    const txHash = await sendAndConfirmTransaction(
+      providerTeePlayer1.connection,
+      tx,
+      [player1],
+      {
+        skipPreflight: true,
+        commitment: "confirmed",
+      },
+    );
     console.log(`🧹 All three PDAs committed + undelegated: ${txHash}`);
   });
 
+  // Pay out the pot on the base layer once the game is back from the ER.
+  it("Claim Pot (winner takes the stake)", async () => {
+    // Wait for the game to land back on the base layer (owned by our program).
+    let onBase = false;
+    for (let i = 0; i < 30; i++) {
+      const info = await provider.connection.getAccountInfo(gamePda);
+      if (info && info.owner.equals(program.programId)) {
+        onBase = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (!onBase) throw new Error("❌ Game never came back to the base layer");
+
+    const game = program.coder.accounts.decode(
+      "game",
+      (await provider.connection.getAccountInfo(gamePda)).data,
+    );
+    const vaultBefore = await provider.connection.getBalance(vaultPda);
+    console.log(
+      `🏦 Vault holds ${vaultBefore / anchor.web3.LAMPORTS_PER_SOL} SOL (pot)`,
+    );
+
+    const winner =
+      "winner" in game.roundResult
+        ? (game.roundResult.winner["0"] as anchor.web3.PublicKey)
+        : null;
+    const recipient = winner ?? player1.publicKey;
+    const balBefore = await provider.connection.getBalance(recipient);
+
+    const tx = await program.methods
+      .claimPot()
+      .accountsPartial({
+        game: gamePda,
+        vault: vaultPda,
+        player1: player1.publicKey,
+        player2: player2.publicKey,
+        payer: player1.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .transaction();
+    tx.feePayer = player1.publicKey;
+    const txHash = await sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [player1],
+      { skipPreflight: true, commitment: "confirmed" },
+    );
+    console.log("💰 Pot claimed:", txHash);
+
+    const vaultAfter = await provider.connection.getBalance(vaultPda);
+    const balAfter = await provider.connection.getBalance(recipient);
+    const settled = program.coder.accounts.decode(
+      "game",
+      (await provider.connection.getAccountInfo(gamePda)).data,
+    );
+
+    if (vaultAfter !== 0) throw new Error("❌ Vault not fully drained");
+    if (!settled.paid) throw new Error("❌ Game not marked paid");
+    if (winner) {
+      // winner gains ~2*STAKE (minus the fee they paid as the claim payer)
+      const gained = balAfter - balBefore;
+      console.log(
+        `🏆 Winner net change: ${gained / anchor.web3.LAMPORTS_PER_SOL} SOL`,
+      );
+      if (gained <= 0) throw new Error("❌ Winner did not receive the pot");
+    }
+    console.log("✅ Pot paid out and game settled");
+  });
 });
 
-
-type Choice = { rock: {}; } | { paper: {}; } | { scissors: {}; };
+type Choice = { rock: {} } | { paper: {} } | { scissors: {} };
 
 function getRandomChoice(): Choice {
   const random = Math.floor(Math.random() * 3);
   switch (random) {
-    case 0: return { rock: {} };
-    case 1: return { paper: {} };
-    case 2: return { scissors: {} };
-    default: throw new Error("Invalid random value");
+    case 0:
+      return { rock: {} };
+    case 1:
+      return { paper: {} };
+    case 2:
+      return { scissors: {} };
+    default:
+      throw new Error("Invalid random value");
   }
 }
 
@@ -476,13 +837,21 @@ function fmtChoice(c: any): string {
   return choiceEmoji[key] ?? key;
 }
 
-function fmtResult(result: any, p1: anchor.web3.PublicKey, p2: anchor.web3.PublicKey): string {
+function fmtResult(
+  result: any,
+  p1: anchor.web3.PublicKey,
+  p2: anchor.web3.PublicKey,
+): string {
   if (!result) return "—";
   if ("tie" in result) return "🤝 Tie";
   if ("none" in result) return "⏳ Not yet revealed";
   if ("winner" in result) {
     const winner: anchor.web3.PublicKey = result.winner["0"];
-    const label = winner.equals(p1) ? "Player 1" : winner.equals(p2) ? "Player 2" : "Unknown";
+    const label = winner.equals(p1)
+      ? "Player 1"
+      : winner.equals(p2)
+        ? "Player 2"
+        : "Unknown";
     return `🏆 ${label} (${winner.toBase58()})`;
   }
   return JSON.stringify(result);
@@ -493,8 +862,12 @@ function printGameResult(game: any) {
   const p2 = game.player2 as anchor.web3.PublicKey;
   console.log("┌─────────────────────────────────────────────");
   console.log(`│ 🎲  Game #${game.gameId.toString()}`);
-  console.log(`│ 👤  Player 1: ${p1.toBase58()}  →  ${fmtChoice(game.player1Choice)}`);
-  console.log(`│ 👤  Player 2: ${p2.toBase58()}  →  ${fmtChoice(game.player2Choice)}`);
-  console.log(`│ Result:  ${fmtResult(game.result, p1, p2)}`);
+  console.log(
+    `│ 👤  Player 1: ${p1.toBase58()}  →  ${fmtChoice(game.player1Choice)}`,
+  );
+  console.log(
+    `│ 👤  Player 2: ${p2.toBase58()}  →  ${fmtChoice(game.player2Choice)}`,
+  );
+  console.log(`│ Result:  ${fmtResult(game.roundResult, p1, p2)}`);
   console.log("└─────────────────────────────────────────────");
 }

@@ -1,0 +1,9 @@
+[workspace]
+members = ["programs/*"]
+resolver = "2"
+
+[workspace.dependencies]
+pinocchio = { version = "0.10", features = ["cpi", "copy"] }
+pinocchio-log = { version = "0.5" }
+pinocchio-system = { version = "0.5" }
+ephemeral-rollups-pinocchio = "0.15.4"

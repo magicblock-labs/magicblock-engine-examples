@@ -14,83 +14,59 @@ This program has utilized the following software packages.
 | **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)          |
 
 ```sh
-# Check and initialize your Solana version
-agave-install list
 agave-install init 3.1.9
-
-# Check and initialize your Rust version
-rustup show
 rustup install 1.89.0
-
-# Check and initialize your Anchor version
-avm list
 avm use 1.0.2
 ```
 
-## ✨ Build and Test
+## Build and Test
 
-The test script automatically detects the cluster from `Anchor.toml` and handles Ephemeral Rollup setup for localnet:
+Install dependencies and build the program:
 
 ```bash
 yarn
-anchor test --skip-deploy --skip-build --skip-local-validator
+yarn build
 ```
 
-Build, deploy and run the tests with new program (note: delete keypairs in `/target/deploy` folder):
+This example runs against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
 
 ```bash
-# Delete keypairs in the deploy folder
-rm -rf /target/deploy/*.keypair
-
-# Build, deploy and test program
-anchor test
+yarn setup
 ```
 
-## 🏠 Running Tests with a Local Ephemeral Rollup
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh crank-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
 
-> For more detailed local setup instructions, check out the [MagicBlock Local Development Guide](https://docs.magicblock.gg/pages/ephemeral-rollups-ers/how-to-guide/local-development).
-
-To run tests using a local ephemeral validator, follow these steps:
-
-### 1. Start the Solana Test Validator
-
-Start a Solana test validator with MagicBlock accounts preloaded:
+Then, in a second terminal, run this example's tests against that cluster:
 
 ```bash
-mb-test-validator --reset
+yarn test:local
 ```
 
-### 2. Start the MagicBlock Validator
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
 
-Clone and run the [MagicBlock Validator](https://github.com/magicblock-labs/magicblock-validator):
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
 
-```bash
-RUST_LOG=debug cargo run -- --remote http://localhost:8899 --listen 127.0.0.1:7799
-```
+## ⏱️ Scheduling a Crank
 
-### 3. Set Environment Variables
+This example schedules an instruction to run automatically on the Ephemeral Rollup. After delegating the counter PDA, the program's `schedule_increment` instruction CPIs into the MagicBlock magic program with a `ScheduleTask`, which repeatedly invokes `increment` on a fixed interval for a number of iterations — no client transaction needed per tick.
 
-Configure the environment variables for local development:
+```rust
+pub fn schedule_increment(
+    ctx: Context<ScheduleIncrement>,
+    args: ScheduleIncrementArgs, // task_id, execution_interval_millis, iterations
+) -> Result<()> {
+    let increment_ix = Instruction {
+        program_id: crate::ID,
+        accounts: vec![AccountMeta::new(ctx.accounts.counter.key(), false)],
+        data: anchor_lang::InstructionData::data(&crate::instruction::Increment {}),
+    };
 
-```bash
-export EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799
-export EPHEMERAL_WS_ENDPOINT=ws://localhost:7800
-export ANCHOR_WALLET="${HOME}/.config/solana/id.json"
-export ANCHOR_PROVIDER_URL="http://127.0.0.1:8899"
-```
-
-### 4. Deploy the Program
-
-Build and deploy the crank program to localnet:
-
-```bash
-anchor build && anchor deploy --provider.cluster localnet
-```
-
-### 5. Run Tests
-
-Execute the tests with the local setup:
-
-```bash
-anchor test --skip-deploy --skip-local-validator --skip-build
+    let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(ScheduleTaskArgs {
+        task_id: args.task_id,
+        execution_interval_millis: args.execution_interval_millis,
+        iterations: args.iterations,
+        instructions: vec![increment_ix],
+    }))?;
+    // ... CPI into MAGIC_PROGRAM_ID with the serialized ScheduleTask
+}
 ```

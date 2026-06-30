@@ -21,56 +21,39 @@ The test suite in `tests/private-counter.ts` walks through the full lifecycle: b
 | **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)          |
 
 ```sh
-# Check and initialize your Solana version
-agave-install list
 agave-install init 3.1.9
-
-# Check and initialize your Rust version
-rustup show
 rustup install 1.89.0
-
-# Check and initialize your Anchor version
-avm list
 avm use 1.0.2
 ```
 
-## Environment
-
-Copy `.env.example` to `.env` and set endpoints as needed:
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Description |
-| -------- | ----------- |
-| `PROVIDER_ENDPOINT` | Base-layer RPC (default: devnet) |
-| `TEE_PROVIDER_ENDPOINT` | Ephemeral Rollup / TEE RPC (default: MagicBlock devnet TEE) |
-| `TEE_WS_ENDPOINT` | Optional WebSocket for the TEE connection |
-
-Fund the wallet in `Anchor.toml` (`~/.config/solana/id.json` by default) on the cluster you use.
-
 ## Build and Test
 
-Install dependencies and run tests against an already-deployed program (skips local validator and deploy):
+Install dependencies and build the program:
 
 ```bash
 yarn
-anchor test --skip-deploy --skip-build --skip-local-validator
+yarn build
 ```
 
-Build, deploy, and run the full test flow (regenerate program keypair if you need a fresh program id):
+This example runs against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
 
 ```bash
-rm -rf target/deploy/*.json
-anchor test
+yarn setup
 ```
 
-Or use the package script (same as above, skip deploy):
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh private-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+
+Then, in a second terminal, run this example's tests against that cluster:
 
 ```bash
-yarn test
+yarn test:local
 ```
+
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
+
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
+
+This is a TEE (Trusted Execution Environment) example: locally, ER calls route through the QFS via the `TEE_*` endpoints. The full devnet/TEE path additionally requires a funded devnet keypair, so in CI these tests are skipped unless a `DEVNET_KEYPAIR_JSON` secret is set (the repo sets `SKIP_TEE_TESTS=1` without it).
 
 ## Program Instructions
 

@@ -6,23 +6,43 @@ This is a port of the Rust Counter program to use Pinocchio instead of Borsh for
 
 ## Software Packages
 
-| Software | Version | Installation Guide |
-| -------- | ------- | ------------------- |
-| **Solana** | 2.3.13 | [Install Solana](https://docs.anza.xyz/cli/install) |
-| **Rust** | 1.85.0 | [Install Rust](https://www.rust-lang.org/tools/install) |
-| **Node** | 24.10.0 | [Install Node](https://nodejs.org/en/download/current) |
+| Software   | Version | Installation Guide                                      |
+| ---------- | ------- | ------------------------------------------------------- |
+| **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)     |
+| **Rust**   | 1.89.0  | [Install Rust](https://www.rust-lang.org/tools/install) |
+| **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)  |
 
-## Build
-
-```bash
-cargo build-sbf
+```sh
+agave-install init 3.1.9
+rustup install 1.89.0
 ```
 
-## Test
+## Build and Test
+
+Install dependencies and build the program:
 
 ```bash
-cargo test-sbf --features logging
+yarn
+yarn build
 ```
+
+This example runs against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
+
+```bash
+yarn setup
+```
+
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+
+Then, in a second terminal, run this example's tests against that cluster:
+
+```bash
+yarn test:local
+```
+
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet). Use `yarn test:watch` to re-run the suite on file changes.
+
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
 
 ## Key Differences from Rust Counter
 

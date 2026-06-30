@@ -26,11 +26,11 @@ export const DEFAULT_ESCROW_INDEX = 255;
  */
 export function deriveEphemeralBalancePda(
   authority: PublicKey,
-  index: number = DEFAULT_ESCROW_INDEX
+  index: number = DEFAULT_ESCROW_INDEX,
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [EPHEMERAL_BALANCE_TAG, authority.toBuffer(), Buffer.from([index])],
-    DELEGATION_PROGRAM_ID
+    DELEGATION_PROGRAM_ID,
   );
 }
 
@@ -53,7 +53,7 @@ export function buildTopUpEphemeralBalance(
   payer: PublicKey,
   authority: PublicKey,
   amountLamports: bigint,
-  index: number = DEFAULT_ESCROW_INDEX
+  index: number = DEFAULT_ESCROW_INDEX,
 ): Transaction {
   const [ephemeralBalancePda] = deriveEphemeralBalancePda(authority, index);
 
@@ -63,9 +63,9 @@ export function buildTopUpEphemeralBalance(
   data.writeUInt8(index, 16);
 
   const keys: AccountMeta[] = [
-    { pubkey: payer,                  isSigner: true,  isWritable: true  },
-    { pubkey: authority,              isSigner: false, isWritable: false },
-    { pubkey: ephemeralBalancePda,    isSigner: false, isWritable: true  },
+    { pubkey: payer, isSigner: true, isWritable: true },
+    { pubkey: authority, isSigner: false, isWritable: false },
+    { pubkey: ephemeralBalancePda, isSigner: false, isWritable: true },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
   ];
 
@@ -74,6 +74,6 @@ export function buildTopUpEphemeralBalance(
       programId: DELEGATION_PROGRAM_ID,
       keys,
       data,
-    })
+    }),
   );
 }

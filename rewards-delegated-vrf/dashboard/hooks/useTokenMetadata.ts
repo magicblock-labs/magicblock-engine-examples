@@ -7,10 +7,10 @@ import { ProgramClient } from "@/lib/program";
 
 export function useTokenMetadata(mints: PublicKey[]) {
   const [metadata, setMetadata] = useState<Map<string, TokenMetadata>>(
-    new Map()
+    new Map(),
   );
   const [nftMetadata, setNFTMetadata] = useState<Map<string, NFTMetadata>>(
-    new Map()
+    new Map(),
   );
   const [loading, setLoading] = useState(false);
 

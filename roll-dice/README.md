@@ -1,6 +1,10 @@
 # 🎲 Roll Dice
 
-Simple dice rolling application using Ephemeral Rollups to demonstrate using a verifiable random function (VRF) to generate random numbers.
+Simple dice rolling application using Ephemeral Rollups to demonstrate using MagicBlock's verifiable random function (VRF) to generate random numbers.
+
+## VRF Flow
+
+The dice account is delegated to the Ephemeral Rollup. On the ER, the program requests randomness from the VRF oracle with a client seed; the oracle fulfills the request by invoking the program's callback instruction (e.g. `CallbackRollDiceSimple`) with verified random bytes, which become the dice roll.
 
 # Demo
 
@@ -10,7 +14,7 @@ Simple dice rolling application using Ephemeral Rollups to demonstrate using a v
 
 ## Software Packages
 
-This program has utilized the following sofware packages.
+This program has utilized the following software packages.
 
 | Software   | Version | Installation Guide                                              |
 | ---------- | ------- | --------------------------------------------------------------- |
@@ -20,32 +24,37 @@ This program has utilized the following sofware packages.
 | **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)          |
 
 ```sh
-# Check and initialize your Solana version
-agave-install list
 agave-install init 3.1.9
-
-# Check and initialize your Rust version
-rustup show
 rustup install 1.89.0
-
-# Check and initialize your Anchor version
-avm list
 avm use 1.0.2
 ```
 
-## ✨ Build and Test
+## Build and Test
 
-Build the program:
-
-```bash
-anchor build
-```
-
-Run the tests:
+Install dependencies and build the program:
 
 ```bash
-anchor test --skip-deploy --skip-build --skip-local-validator
+yarn
+yarn build
 ```
+
+This example runs against a **local MagicBlock cluster** — a base Solana validator, an Ephemeral Rollup fronted by the Query Filtering Service, and a VRF oracle that fulfills randomness requests. Start it in one terminal and leave it running:
+
+```bash
+yarn setup
+```
+
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh roll-dice` from the repo root: it builds this example, boots the validators and VRF oracle, and holds them until you press a key.
+
+Then, in a second terminal, run this example's tests against that cluster:
+
+```bash
+yarn test:local
+```
+
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
+
+> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
 
 ## 🚀 Launch the Frontend
 

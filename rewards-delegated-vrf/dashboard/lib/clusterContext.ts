@@ -61,7 +61,8 @@ export const CLUSTER_CONFIG: Record<string, ClusterInfo> = {
 export function getClusterName(endpoint: string): string {
   const normalizedEndpoint = normalizeEndpoint(endpoint);
   const configEntry = Object.entries(CLUSTER_CONFIG).find(
-    ([configuredEndpoint]) => normalizeEndpoint(configuredEndpoint) === normalizedEndpoint
+    ([configuredEndpoint]) =>
+      normalizeEndpoint(configuredEndpoint) === normalizedEndpoint,
   );
   return configEntry?.[1].name || "Unknown Cluster";
 }
@@ -72,7 +73,7 @@ export function getClusterName(endpoint: string): string {
 export function getExplorerUrl(signature: string, endpoint: string): string {
   const baseUrl = "https://explorer.solana.com/tx/";
   const normalizedEndpoint = normalizeEndpoint(endpoint);
-  
+
   // Map endpoints to cluster query parameters
   if (normalizedEndpoint.includes("mainnet")) {
     return `${baseUrl}${signature}`;
@@ -83,10 +84,12 @@ export function getExplorerUrl(signature: string, endpoint: string): string {
   ) {
     return `${baseUrl}${signature}?cluster=devnet`;
   }
-  
+
   // For all custom endpoints (localhost, magicblock, or any other custom RPC), use custom cluster format
   // This handles: localhost, magicblock, or any other custom RPC endpoint
-  return `${baseUrl}${signature}?cluster=custom&customUrl=${encodeURIComponent(normalizedEndpoint)}`;
+  return `${baseUrl}${signature}?cluster=custom&customUrl=${encodeURIComponent(
+    normalizedEndpoint,
+  )}`;
 }
 
 /**
@@ -134,7 +137,7 @@ export function saveRpcEndpointPreference(endpoint: string): void {
   window.dispatchEvent(
     new CustomEvent(RPC_ENDPOINT_CHANGED_EVENT, {
       detail: { endpoint },
-    })
+    }),
   );
 }
 
@@ -161,17 +164,31 @@ export function getBaseLayerSolanaEndpoint(endpoint: string): string {
   const normalizedEndpoint = normalizeEndpoint(endpoint);
 
   if (
-    normalizedEndpoint === normalizeEndpoint(CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint) ||
-    normalizedEndpoint === normalizeEndpoint(CLUSTER_CONFIG["https://devnet-as.magicblock.app/"].endpoint) ||
-    normalizedEndpoint === normalizeEndpoint(CLUSTER_CONFIG["https://devnet-us.magicblock.app"].endpoint)
+    normalizedEndpoint ===
+      normalizeEndpoint(
+        CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint,
+      ) ||
+    normalizedEndpoint ===
+      normalizeEndpoint(
+        CLUSTER_CONFIG["https://devnet-as.magicblock.app/"].endpoint,
+      ) ||
+    normalizedEndpoint ===
+      normalizeEndpoint(
+        CLUSTER_CONFIG["https://devnet-us.magicblock.app"].endpoint,
+      )
   ) {
     return CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint;
   }
 
   if (
-    normalizedEndpoint === normalizeEndpoint(CLUSTER_CONFIG["https://rpc.magicblock.app/mainnet"].endpoint) ||
-    normalizedEndpoint === normalizeEndpoint(CLUSTER_CONFIG["https://as.magicblock.app"].endpoint) ||
-    normalizedEndpoint === normalizeEndpoint(CLUSTER_CONFIG["https://us.magicblock.app"].endpoint)
+    normalizedEndpoint ===
+      normalizeEndpoint(
+        CLUSTER_CONFIG["https://rpc.magicblock.app/mainnet"].endpoint,
+      ) ||
+    normalizedEndpoint ===
+      normalizeEndpoint(CLUSTER_CONFIG["https://as.magicblock.app"].endpoint) ||
+    normalizedEndpoint ===
+      normalizeEndpoint(CLUSTER_CONFIG["https://us.magicblock.app"].endpoint)
   ) {
     return CLUSTER_CONFIG["https://rpc.magicblock.app/mainnet"].endpoint;
   }

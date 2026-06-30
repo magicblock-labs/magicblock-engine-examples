@@ -27,3 +27,6 @@
 
 # Logs
 **/**.log
+
+# Query Filtering Service local Range risk cache
+**/range-risk-cache.db

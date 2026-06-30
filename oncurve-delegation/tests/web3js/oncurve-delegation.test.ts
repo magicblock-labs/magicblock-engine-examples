@@ -4,9 +4,13 @@ import {
   Transaction,
   Connection,
   sendAndConfirmTransaction,
-  Keypair
+  Keypair,
 } from "@solana/web3.js";
-import { initializeSolSignerKeypair, initializeFeePayer, airdropSolIfNeeded } from "./initializeKeypair";
+import {
+  initializeSolSignerKeypair,
+  initializeFeePayer,
+  airdropSolIfNeeded,
+} from "./initializeKeypair";
 import {
   createDelegateInstruction,
   createCommitInstruction,
@@ -25,10 +29,11 @@ describe("on-curve-delegation-web3js", async () => {
 
   // Set up connections
   const connectionBaseLayer = new Connection(
-    process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com"
+    process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
   );
   const ephemeralConnection = new Connection(
-    process.env.EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app"
+    process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
+      "https://devnet-as.magicblock.app",
   );
   console.log("Base Layer Connection: ", connectionBaseLayer.rpcEndpoint);
   console.log("Ephemeral Connection: ", ephemeralConnection.rpcEndpoint);
@@ -46,25 +51,25 @@ describe("on-curve-delegation-web3js", async () => {
 
   // The validator to delegate to
   const validator = new PublicKey(
-    process.env.VALIDATOR || "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"
+    process.env.VALIDATOR || "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57",
   );
   console.log("Validator:", validator.toString());
 
-    // Run this once before all tests
-  beforeAll(
-    async () => {
-      await airdropSolIfNeeded(
-        connectionBaseLayer,
-        userKeypair.publicKey,
-        2,
-        0.05
-      );
-      feePayerKeypair = await initializeFeePayer(connectionBaseLayer, userKeypair);
-      feePayerPubkey = feePayerKeypair.publicKey;
-      console.log("Fee Payer:", feePayerPubkey.toString());
-    },
-    TEST_TIMEOUT
-  );
+  // Run this once before all tests
+  beforeAll(async () => {
+    await airdropSolIfNeeded(
+      connectionBaseLayer,
+      userKeypair.publicKey,
+      2,
+      0.05,
+    );
+    feePayerKeypair = await initializeFeePayer(
+      connectionBaseLayer,
+      userKeypair,
+    );
+    feePayerPubkey = feePayerKeypair.publicKey;
+    console.log("Fee Payer:", feePayerPubkey.toString());
+  }, TEST_TIMEOUT);
 
   it(
     "Assign owner + Delegate on-curve account",
@@ -78,14 +83,12 @@ describe("on-curve-delegation-web3js", async () => {
       });
 
       // Create delegate instruction
-      const delegateInstruction = createDelegateInstruction(
-        {
-          payer: feePayerKeypair.publicKey,
-          delegatedAccount: userPubkey,
-          ownerProgram: ownerProgram,
-          validator: validator
-        }
-      );
+      const delegateInstruction = createDelegateInstruction({
+        payer: feePayerKeypair.publicKey,
+        delegatedAccount: userPubkey,
+        ownerProgram: ownerProgram,
+        validator: validator,
+      });
 
       // Create and send transaction (fee payer need to sign, on-curve account cannot be signer since delegated)
       const tx = new Transaction().add(assignInstruction, delegateInstruction);
@@ -93,16 +96,17 @@ describe("on-curve-delegation-web3js", async () => {
       const txSignature = await sendAndConfirmTransaction(
         connectionBaseLayer,
         tx,
-        [userKeypair, feePayerKeypair], {
-          skipPreflight: true
-        }
+        [userKeypair, feePayerKeypair],
+        {
+          skipPreflight: true,
+        },
       );
 
       const duration = Date.now() - start;
       console.log(`${duration}ms - Delegate Signature: ${txSignature}`);
       expect(txSignature).toBeDefined();
     },
-    TEST_TIMEOUT
+    TEST_TIMEOUT,
   );
 
   it(
@@ -110,26 +114,26 @@ describe("on-curve-delegation-web3js", async () => {
     async () => {
       const start = Date.now();
 
-      const commitInstruction = createCommitInstruction(
+      const commitInstruction = createCommitInstruction(userPubkey, [
         userPubkey,
-        [userPubkey]
-      );
+      ]);
 
       const tx = new Transaction().add(commitInstruction);
       tx.feePayer = feePayerKeypair.publicKey;
       const txSignature = await sendAndConfirmTransaction(
         ephemeralConnection,
         tx,
-        [userKeypair, feePayerKeypair], {
-          skipPreflight: true
-        }
+        [userKeypair, feePayerKeypair],
+        {
+          skipPreflight: true,
+        },
       );
 
       const duration = Date.now() - start;
       console.log(`${duration}ms - Commit Signature: ${txSignature}`);
       expect(txSignature).toBeDefined();
     },
-    TEST_TIMEOUT
+    TEST_TIMEOUT,
   );
 
   it(
@@ -148,17 +152,18 @@ describe("on-curve-delegation-web3js", async () => {
       const txSignature = await sendAndConfirmTransaction(
         ephemeralConnection,
         tx,
-        [userKeypair, feePayerKeypair], {
-          skipPreflight: true
-        }
+        [userKeypair, feePayerKeypair],
+        {
+          skipPreflight: true,
+        },
       );
 
       const duration = Date.now() - start;
       console.log(
-        `${duration}ms - CommitAndUndelegate Signature: ${txSignature}`
+        `${duration}ms - CommitAndUndelegate Signature: ${txSignature}`,
       );
       expect(txSignature).toBeDefined();
     },
-    TEST_TIMEOUT
+    TEST_TIMEOUT,
   );
 });

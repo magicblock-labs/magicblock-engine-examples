@@ -7,7 +7,7 @@ export async function buildDelegateRewardList(
   connection: Connection,
   publicKey: PublicKey,
   rewardDistributorPda: PublicKey,
-  validator?: PublicKey
+  validator?: PublicKey,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);
@@ -32,7 +32,7 @@ export async function buildDelegateRewardList(
 export async function buildUndelegateRewardList(
   connection: Connection,
   publicKey: PublicKey,
-  rewardDistributorPda: PublicKey
+  rewardDistributorPda: PublicKey,
 ): Promise<Transaction> {
   const provider = createReadonlyProvider(publicKey, connection);
   const program = await createProgram(provider);

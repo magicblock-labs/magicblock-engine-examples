@@ -3,7 +3,8 @@ export type AdminActionEndpointMode = "solana" | "magicblock";
 export const SOLANA_DEVNET_ENDPOINT = "https://rpc.magicblock.app/devnet";
 export const SOLANA_MAINNET_ENDPOINT = "https://rpc.magicblock.app/mainnet";
 export const MAGICBLOCK_DEVNET_ENDPOINT =
-  process.env.NEXT_PUBLIC_EPHEMERAL_PROVIDER_ENDPOINT || "https://devnet-as.magicblock.app/";
+  process.env.NEXT_PUBLIC_EPHEMERAL_PROVIDER_ENDPOINT ||
+  "https://devnet-as.magicblock.app/";
 export const MAGICBLOCK_MAINNET_ENDPOINT = "https://as.magicblock.app";
 export const MAGICBLOCK_DEVNET_US_ENDPOINT = "https://devnet-us.magicblock.app";
 export const MAGICBLOCK_MAINNET_US_ENDPOINT = "https://us.magicblock.app";
@@ -29,7 +30,9 @@ function isMagicBlockEndpoint(endpoint: string): boolean {
 }
 
 function isSolanaEndpoint(endpoint: string): boolean {
-  return endpoint === SOLANA_DEVNET_ENDPOINT || endpoint === SOLANA_MAINNET_ENDPOINT;
+  return (
+    endpoint === SOLANA_DEVNET_ENDPOINT || endpoint === SOLANA_MAINNET_ENDPOINT
+  );
 }
 
 export function isDevnetEndpoint(endpoint: string): boolean {
@@ -51,7 +54,7 @@ export function isMainnetEndpoint(endpoint: string): boolean {
  */
 export function resolveEndpoint(
   selectedEndpoint: string,
-  mode: AdminActionEndpointMode
+  mode: AdminActionEndpointMode,
 ): string {
   if (!selectedEndpoint || !isKnownPresetEndpoint(selectedEndpoint)) {
     return selectedEndpoint;

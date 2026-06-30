@@ -1,0 +1,37 @@
+{
+  "name": "rock-paper-scissor-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "sync-idl": "cp -f ../target/idl/anchor_rock_paper_scissor.json src/idl/ 2>/dev/null; cp -f ../target/types/anchor_rock_paper_scissor.ts src/idl/ 2>/dev/null; prettier --config ../../.prettierrc.json --write 'src/idl/*' >/dev/null 2>&1; true",
+    "dev": "yarn sync-idl && vite --host",
+    "build": "yarn sync-idl && tsc --noEmit && vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
+    "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@solana/wallet-adapter-react-ui": "^0.9.39",
+    "@solana/web3.js": "^1.98.0",
+    "bn.js": "^5.2.1",
+    "buffer": "^6.0.3",
+    "qrcode.react": "^4.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.6",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "prettier": "^3.5.3",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  },
+  "license": "MIT",
+  "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447"
+}

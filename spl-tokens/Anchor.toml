@@ -30,4 +30,4 @@ program = "tests/fixtures/dlp.so"
 upgradeable = false
 
 [scripts]
-test = "../fullstack-test.sh"
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts"
