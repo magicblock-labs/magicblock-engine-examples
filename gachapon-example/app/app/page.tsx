@@ -179,7 +179,13 @@ export default function GachaponTester() {
   const [steps, setSteps] = useState<VerifyStep[]>(initialSteps);
   const [flowError, setFlowError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [isAwaitingReveal, setIsAwaitingReveal] = useState(false);
+  const [simulatedRewardId, setSimulatedRewardId] = useState<number | null>(
+    null,
+  );
   const [pullCount, setPullCount] = useState(0);
+  const [simulationCount, setSimulationCount] = useState(0);
   const alignmentResolveRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -203,14 +209,17 @@ export default function GachaponTester() {
 
   const selectedReward = useMemo(() => {
     if (!pendingPull || pendingPull.rewardId >= REWARDS.length) {
-      return null;
+      return simulatedRewardId === null ? null : REWARDS[simulatedRewardId];
     }
 
     return REWARDS[pendingPull.rewardId];
-  }, [pendingPull]);
+  }, [pendingPull, simulatedRewardId]);
 
-  const activeRewardName =
-    coreAsset?.name ?? selectedReward?.name ?? "Awaiting pull";
+  const activeRewardName = isAwaitingReveal
+    ? "Tap capsule to reveal"
+    : isSimulating
+      ? "Simulating pull"
+      : coreAsset?.name ?? selectedReward?.name ?? "Awaiting pull";
 
   const reportRows = useMemo(
     () => [
@@ -302,7 +311,7 @@ export default function GachaponTester() {
   );
 
   const runDevnetPull = useCallback(async () => {
-    if (isRunning) {
+    if (isRunning || isSimulating || isAwaitingReveal) {
       return;
     }
 
@@ -324,6 +333,8 @@ export default function GachaponTester() {
     setPendingPull(null);
     setCoreAsset(null);
     setAssetOwner(null);
+    setIsAwaitingReveal(false);
+    setSimulatedRewardId(null);
     setSteps(initialSteps);
     setPullCount((value) => value + 1);
     setCameraResetKey((value) => value + 1);
@@ -400,6 +411,7 @@ export default function GachaponTester() {
         browserWallet,
         publicKey,
         buildPullInstruction(publicKey, nextAccounts, clientSeed),
+        { skipPreflight: true },
       );
       const requestedPull = await fetchPendingPull(
         connection,
@@ -474,12 +486,60 @@ export default function GachaponTester() {
     } finally {
       setIsRunning(false);
     }
-  }, [connectWallet, connection, isRunning, wallet, walletKey]);
+  }, [
+    connectWallet,
+    connection,
+    isAwaitingReveal,
+    isRunning,
+    isSimulating,
+    wallet,
+    walletKey,
+  ]);
+
+  const runSimulatedPull = useCallback(async () => {
+    if (isRunning || isSimulating || isAwaitingReveal) {
+      return;
+    }
+
+    setIsSimulating(true);
+    setFlowError(null);
+    setPendingPull(null);
+    setCoreAsset(null);
+    setAssetOwner(null);
+    setIsAwaitingReveal(false);
+    setSteps(initialSteps);
+    setSimulatedRewardId(null);
+    setSimulationCount((value) => value + 1);
+    setCameraResetKey((value) => value + 1);
+
+    try {
+      const alignmentPromise = waitForMachineAlignment(alignmentResolveRef);
+      setAnimationState("aligning");
+      await alignmentPromise;
+      setAnimationState("turning");
+      await wait(2_400);
+      setAnimationState("dropping");
+      await wait(6_900);
+      setIsAwaitingReveal(true);
+    } finally {
+      setIsSimulating(false);
+    }
+  }, [isAwaitingReveal, isRunning, isSimulating]);
 
   const handleMachineAligned = useCallback(() => {
     alignmentResolveRef.current?.();
     alignmentResolveRef.current = null;
   }, []);
+
+  const handleCapsulePress = useCallback(() => {
+    if (!isAwaitingReveal || animationState !== "dropping") {
+      return;
+    }
+
+    setSimulatedRewardId(pickWeightedRewardId());
+    setIsAwaitingReveal(false);
+    setAnimationState("revealed");
+  }, [animationState, isAwaitingReveal]);
 
   const dropPathCode = useMemo(
     () => JSON.stringify(dropPath, null, 2),
@@ -522,6 +582,7 @@ export default function GachaponTester() {
           cameraResetKey={cameraResetKey}
           onReport={setReport}
           onMachineAligned={handleMachineAligned}
+          onCapsulePress={handleCapsulePress}
         />
       </section>
 
@@ -536,19 +597,34 @@ export default function GachaponTester() {
         </div>
 
         <div className="controlGroup">
-          <button
-            className="primaryButton"
-            type="button"
-            disabled={isRunning}
-            onClick={runDevnetPull}
-          >
-            {isRunning ? <Loader2 className="spinIcon" size={18} /> : <Play size={18} />}
-            Devnet Pull
-          </button>
+          <div className="pullActionStack">
+            <button
+              className="primaryButton"
+              type="button"
+              disabled={isRunning || isSimulating || isAwaitingReveal}
+              onClick={runDevnetPull}
+            >
+              {isRunning ? <Loader2 className="spinIcon" size={18} /> : <Play size={18} />}
+              Devnet Pull
+            </button>
+            <button
+              className="simulateButton"
+              type="button"
+              disabled={isRunning || isSimulating || isAwaitingReveal}
+              onClick={runSimulatedPull}
+            >
+              {isSimulating ? (
+                <Loader2 className="spinIcon" size={18} />
+              ) : (
+                <Shuffle size={18} />
+              )}
+              Simulate Pull
+            </button>
+          </div>
           <button
             className="secondaryButton"
             type="button"
-            disabled={isRunning}
+            disabled={isRunning || isSimulating || isAwaitingReveal}
             onClick={connectWallet}
           >
             <Wallet size={18} />
@@ -614,7 +690,9 @@ export default function GachaponTester() {
           <div className="rewardList">
             {REWARDS.map((reward, index) => {
               const mintedCount = machineAccount?.rewards[index]?.mintedCount ?? 0n;
-              const active = pendingPull?.rewardId === index && pendingPull.status === 1;
+              const active =
+                (pendingPull?.rewardId === index && pendingPull.status === 1) ||
+                simulatedRewardId === index;
 
               return (
                 <div className={active ? "rewardRow active" : "rewardRow"} key={reward.name}>
@@ -673,7 +751,7 @@ export default function GachaponTester() {
                   key={state}
                   className={active ? "stateButton active" : "stateButton"}
                   type="button"
-                  disabled={isRunning}
+                  disabled={isRunning || isSimulating || isAwaitingReveal}
                   onClick={() => setAnimationState(state)}
                 >
                   <Icon size={16} />
@@ -775,8 +853,22 @@ export default function GachaponTester() {
             <strong>{pullCount}</strong>
           </div>
           <div>
+            <span>Simulations</span>
+            <strong>{simulationCount}</strong>
+          </div>
+          <div>
             <span>Status</span>
-            <strong>{isRunning ? "Running" : pendingPull?.status === 1 ? "Settled" : "Ready"}</strong>
+            <strong>
+              {isRunning
+                ? "Running"
+                : isSimulating
+                  ? "Simulating"
+                  : isAwaitingReveal
+                    ? "Tap capsule"
+                  : pendingPull?.status === 1
+                    ? "Settled"
+                    : "Ready"}
+            </strong>
           </div>
         </div>
       </aside>
@@ -883,6 +975,22 @@ async function fetchPendingPull(
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function pickWeightedRewardId() {
+  const totalWeight = REWARDS.reduce((total, reward) => total + reward.weight, 0);
+  const random = Math.floor(Math.random() * totalWeight);
+  let cursor = 0;
+
+  for (let index = 0; index < REWARDS.length; index += 1) {
+    cursor += REWARDS[index].weight;
+
+    if (random < cursor) {
+      return index;
+    }
+  }
+
+  return REWARDS.length - 1;
 }
 
 function waitForMachineAlignment(

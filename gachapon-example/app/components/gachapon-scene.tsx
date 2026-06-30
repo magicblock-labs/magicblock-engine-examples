@@ -13,6 +13,7 @@ import React, {
   useMemo,
   useRef,
   useEffect,
+  useState,
 } from "react";
 import * as THREE from "three";
 
@@ -59,13 +60,20 @@ const IDLE_TURN_SECONDS = 18;
 const ALIGN_TURN_SECONDS = 3;
 const KNOB_TURN_SECONDS = 2.75;
 const CAMERA_RESET_SECONDS = 1;
-const DEFAULT_CAMERA_POSITION = new THREE.Vector3(0, 1.4, 5.2);
-const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 0, 0);
+const DEFAULT_CAMERA_POSITION = new THREE.Vector3(0, 1.12, 6.35);
+const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, -0.1, 0.08);
+const FLOOR_TILE_COLUMNS = [
+  -2.7, -2.1, -1.5, -0.9, -0.3, 0.3, 0.9, 1.5, 2.1, 2.7,
+];
+const FLOOR_TILE_ROWS = [
+  -1.7, -1.05, -0.4, 0.25, 0.9, 1.55, 2.2, 2.85, 3.5,
+];
+const POSTER_URL = "/images/mb.png";
 
 export const defaultDropPathSettings: DropPathSettings = {
   inside: { x: -0.2, y: -0.3, z: -0.24 },
-  chute: { x: -0.3, y: -1.58, z: 0.72 },
-  curve: { x: -0.3, y: -1.32, z: 1.34 },
+  chute: { x: -0.2, y: -1.58, z: 0.72 },
+  curve: { x: -0.2, y: -1.32, z: 1.34 },
   front: { x: 0.03, y: 1.2, z: 3 },
 };
 
@@ -77,6 +85,7 @@ type SceneProps = {
   cameraResetKey: number;
   onReport: (report: ModelReport) => void;
   onMachineAligned: () => void;
+  onCapsulePress: () => void;
 };
 
 type ModelBoundaryProps = {
@@ -117,6 +126,7 @@ export function GachaponScene({
   cameraResetKey,
   onReport,
   onMachineAligned,
+  onCapsulePress,
 }: SceneProps) {
   const controlsRef = useRef<React.ElementRef<typeof OrbitControls>>(null);
   const fallback = (
@@ -125,6 +135,7 @@ export function GachaponScene({
       knobAxis={knobAxis}
       dropPath={dropPath}
       onMachineAligned={onMachineAligned}
+      onCapsulePress={onCapsulePress}
     />
   );
   const modelUrl = `${MODEL_URL}?v=${refreshKey}`;
@@ -133,24 +144,33 @@ export function GachaponScene({
     <Canvas
       dpr={[1, 2]}
       shadows
-      camera={{ position: [0, 1.4, 5.2], fov: 38 }}
+      camera={{ position: [0, 1.12, 6.35], fov: 34 }}
       gl={{ antialias: true, alpha: false }}
+      onCreated={({ gl }) => {
+        gl.toneMapping = THREE.ACESFilmicToneMapping;
+        gl.toneMappingExposure = 1.34;
+      }}
     >
       <CameraResetter resetKey={cameraResetKey} controlsRef={controlsRef} />
-      <color attach="background" args={["#f7efe5"]} />
-      <ambientLight intensity={0.7} />
+      <color attach="background" args={["#081211"]} />
+      <hemisphereLight args={["#b9fff3", "#241a35", 0.82]} />
+      <ambientLight intensity={0.46} />
       <directionalLight
         castShadow
-        intensity={2.4}
-        position={[3.5, 5, 4]}
-        shadow-mapSize={[1024, 1024]}
+        intensity={0.96}
+        position={[3.6, 4.8, 4.2]}
+        shadow-mapSize={[2048, 2048]}
       />
       <spotLight
-        intensity={1.8}
-        position={[-4, 3, 3]}
-        angle={0.45}
-        penumbra={0.7}
+        castShadow
+        color="#f6fbff"
+        intensity={2.85}
+        position={[0.4, 3.35, 2.7]}
+        angle={0.34}
+        penumbra={0.72}
+        distance={7}
       />
+      <ArcadeAlcove />
       <Suspense fallback={fallback}>
         <ModelBoundary
           key={refreshKey}
@@ -174,6 +194,7 @@ export function GachaponScene({
             modelUrl={modelUrl}
             onReport={onReport}
             onMachineAligned={onMachineAligned}
+            onCapsulePress={onCapsulePress}
           />
         </ModelBoundary>
       </Suspense>
@@ -182,15 +203,15 @@ export function GachaponScene({
         scale={7}
         blur={2.2}
         far={4}
-        position={[0, -1.82, 0]}
+        position={[0, -1.81, 0.05]}
       />
-      <Environment preset="city" />
+      <Environment preset="night" />
       <OrbitControls
         ref={controlsRef}
         enablePan={false}
         minDistance={2.4}
         maxDistance={8}
-        target={[0, 0, 0]}
+        target={[0, -0.1, 0.08]}
       />
     </Canvas>
   );
@@ -220,7 +241,7 @@ function CameraResetter({
     resetRef.current.elapsed = 0;
     resetRef.current.startPosition.copy(camera.position);
     resetRef.current.startTarget.copy(
-      controlsRef.current?.target ?? DEFAULT_CAMERA_TARGET,
+      controlsRef.current?.target ?? DEFAULT_CAMERA_TARGET
     );
   }, [camera, controlsRef, resetKey]);
 
@@ -255,6 +276,384 @@ function CameraResetter({
   return null;
 }
 
+function ArcadeAlcove() {
+  return (
+    <group>
+      <mesh
+        receiveShadow
+        position={[0, -1.86, 0.85]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <planeGeometry args={[6.2, 5.6]} />
+        <meshStandardMaterial
+          color="#181827"
+          roughness={0.72}
+          metalness={0.16}
+          emissive="#040810"
+        />
+      </mesh>
+
+      {FLOOR_TILE_COLUMNS.map((x) => (
+        <mesh
+          key={`floor-column-${x}`}
+          position={[x, -1.846, 0.85]}
+          receiveShadow
+        >
+          <boxGeometry args={[0.01, 0.012, 5.6]} />
+          <meshStandardMaterial
+            color="#355069"
+            roughness={0.55}
+            emissive="#08243a"
+            emissiveIntensity={0.42}
+          />
+        </mesh>
+      ))}
+      {FLOOR_TILE_ROWS.map((z) => (
+        <mesh key={`floor-row-${z}`} position={[0, -1.846, z]} receiveShadow>
+          <boxGeometry args={[6.2, 0.012, 0.01]} />
+          <meshStandardMaterial
+            color="#493d68"
+            roughness={0.55}
+            emissive="#1b1132"
+            emissiveIntensity={0.38}
+          />
+        </mesh>
+      ))}
+
+      <mesh castShadow receiveShadow position={[0, 0.12, -2.08]}>
+        <boxGeometry args={[4.9, 3.72, 0.16]} />
+        <meshStandardMaterial
+          color="#151927"
+          roughness={0.68}
+          metalness={0.06}
+          emissive="#050712"
+        />
+      </mesh>
+      <mesh castShadow receiveShadow position={[-2.54, 0.04, -0.22]}>
+        <boxGeometry args={[0.2, 3.58, 3.45]} />
+        <meshStandardMaterial
+          color="#102734"
+          roughness={0.8}
+          metalness={0.05}
+          emissive="#02131c"
+        />
+      </mesh>
+      <mesh castShadow receiveShadow position={[2.54, 0.04, -0.22]}>
+        <boxGeometry args={[0.2, 3.58, 3.45]} />
+        <meshStandardMaterial
+          color="#34162c"
+          roughness={0.8}
+          metalness={0.05}
+          emissive="#170512"
+        />
+      </mesh>
+      <mesh receiveShadow position={[0, 1.94, -0.24]}>
+        <boxGeometry args={[4.96, 0.14, 3.55]} />
+        <meshStandardMaterial
+          color="#11151f"
+          roughness={0.74}
+          metalness={0.1}
+          emissive="#03050c"
+        />
+      </mesh>
+
+      <BackWallDetail />
+      <MagicBlockPoster />
+
+      <mesh castShadow receiveShadow position={[0, -1.7, -0.03]}>
+        <boxGeometry args={[2.65, 0.2, 1.72]} />
+        <meshStandardMaterial
+          color="#1c1d2c"
+          roughness={0.54}
+          metalness={0.14}
+          emissive="#050816"
+        />
+      </mesh>
+      <mesh receiveShadow position={[0, -1.565, -0.03]}>
+        <boxGeometry args={[2.36, 0.06, 1.42]} />
+        <meshStandardMaterial
+          color="#372d5a"
+          roughness={0.36}
+          metalness={0.2}
+          emissive="#17103a"
+          emissiveIntensity={0.56}
+        />
+      </mesh>
+      <mesh position={[0, -1.525, 0.7]}>
+        <boxGeometry args={[2.44, 0.035, 0.055]} />
+        <meshStandardMaterial
+          color="#28f2ff"
+          emissive="#00d9ff"
+          emissiveIntensity={1.8}
+          roughness={0.28}
+        />
+      </mesh>
+
+      <SideLightFixture side="left" />
+      <SideLightFixture side="right" />
+
+      <rectAreaLight
+        color="#f7fbff"
+        intensity={4.8}
+        width={3.4}
+        height={1.7}
+        position={[0.16, 1.42, 2.0]}
+        rotation={[-0.38, 0.04, 0]}
+      />
+    </group>
+  );
+}
+
+function BackWallDetail() {
+  return (
+    <group>
+      <mesh receiveShadow position={[0, 0.38, -1.93]}>
+        <boxGeometry args={[3.72, 2.58, 0.035]} />
+        <meshStandardMaterial
+          color="#121a27"
+          emissive="#050a13"
+          emissiveIntensity={0.42}
+          roughness={0.62}
+          metalness={0.08}
+        />
+      </mesh>
+
+      {[-1.74, 1.74].map((x) => (
+        <mesh key={`wall-edge-${x}`} position={[x, 0.34, -1.875]}>
+          <boxGeometry args={[0.035, 2.48, 0.04]} />
+          <meshStandardMaterial
+            color={x < 0 ? "#29424b" : "#4a2441"}
+            emissive={x < 0 ? "#071f29" : "#250517"}
+            emissiveIntensity={0.62}
+            roughness={0.35}
+            metalness={0.18}
+          />
+        </mesh>
+      ))}
+
+      {[-0.98, 0.98].map((x) => (
+        <mesh key={`wall-seam-${x}`} position={[x, 0.1, -1.872]}>
+          <boxGeometry args={[0.018, 1.78, 0.032]} />
+          <meshStandardMaterial
+            color="#233241"
+            emissive="#060d17"
+            emissiveIntensity={0.42}
+            roughness={0.42}
+            metalness={0.12}
+          />
+        </mesh>
+      ))}
+
+      {[1.64, -0.88].map((y) => (
+        <mesh key={`wall-horizontal-${y}`} position={[0, y, -1.87]}>
+          <boxGeometry args={[3.52, 0.035, 0.04]} />
+          <meshStandardMaterial
+            color="#273441"
+            emissive="#070e17"
+            emissiveIntensity={0.38}
+            roughness={0.42}
+            metalness={0.14}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function SideLightFixture({ side }: { side: "left" | "right" }) {
+  const isLeft = side === "left";
+  const color = isLeft ? "#20e7ff" : "#ff3ea5";
+  const glow = isLeft ? "#00cfff" : "#ff168e";
+  const wallColor = isLeft ? "#102734" : "#34162c";
+  const x = isLeft ? -2.42 : 2.42;
+  const rotationY = isLeft ? Math.PI / 2 : -Math.PI / 2;
+
+  return (
+    <group position={[x, 0.08, 0.72]} rotation={[0, rotationY, 0]}>
+      <mesh castShadow receiveShadow position={[0, 0, -0.06]}>
+        <boxGeometry args={[0.86, 1.64, 0.08]} />
+        <meshStandardMaterial
+          color="#0d151d"
+          emissive={wallColor}
+          emissiveIntensity={0.5}
+          roughness={0.42}
+          metalness={0.18}
+        />
+      </mesh>
+
+      <mesh castShadow receiveShadow position={[0, 0, 0.01]}>
+        <boxGeometry args={[0.7, 1.4, 0.08]} />
+        <meshStandardMaterial
+          color="#17222d"
+          emissive="#040810"
+          emissiveIntensity={0.48}
+          roughness={0.34}
+          metalness={0.24}
+        />
+      </mesh>
+
+      <mesh position={[0, 0, 0.065]}>
+        <boxGeometry args={[0.52, 1.08, 0.035]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={glow}
+          emissiveIntensity={2.4}
+          roughness={0.18}
+          metalness={0.04}
+          transparent
+          opacity={0.92}
+        />
+      </mesh>
+
+      {[-0.24, 0.24].map((tubeX) => (
+        <mesh key={`fixture-tube-${side}-${tubeX}`} position={[tubeX, 0, 0.1]}>
+          <cylinderGeometry args={[0.026, 0.026, 1.18, 18]} />
+          <meshStandardMaterial
+            color={color}
+            emissive={glow}
+            emissiveIntensity={2.8}
+            roughness={0.12}
+          />
+        </mesh>
+      ))}
+
+      {[-0.43, 0.43].map((railX) => (
+        <mesh key={`fixture-side-rail-${side}-${railX}`} position={[railX, 0, 0.035]}>
+          <boxGeometry args={[0.055, 1.52, 0.12]} />
+          <meshStandardMaterial
+            color="#22303a"
+            emissive="#05080d"
+            emissiveIntensity={0.36}
+            roughness={0.36}
+            metalness={0.3}
+          />
+        </mesh>
+      ))}
+
+      {[-0.82, 0.82].map((railY) => (
+        <mesh key={`fixture-cap-${side}-${railY}`} position={[0, railY, 0.035]}>
+          <boxGeometry args={[0.88, 0.06, 0.12]} />
+          <meshStandardMaterial
+            color="#27333d"
+            emissive="#05080d"
+            emissiveIntensity={0.36}
+            roughness={0.36}
+            metalness={0.3}
+          />
+        </mesh>
+      ))}
+
+      <rectAreaLight
+        color={color}
+        intensity={4.2}
+        width={0.72}
+        height={1.22}
+        position={[0, 0, 0.16]}
+      />
+      <pointLight
+        color={color}
+        intensity={1.75}
+        distance={4.4}
+        position={[0, 0, 0.42]}
+      />
+    </group>
+  );
+}
+
+function MagicBlockPoster() {
+  const [posterTexture, setPosterTexture] = useState<THREE.Texture | null>(
+    null
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const loader = new THREE.TextureLoader();
+
+    loader.load(
+      POSTER_URL,
+      (texture) => {
+        if (cancelled) {
+          texture.dispose();
+          return;
+        }
+
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+        setPosterTexture(texture);
+      },
+      undefined,
+      () => {
+        if (!cancelled) {
+          setPosterTexture(null);
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <group position={[0, 0.95, -1.805]}>
+      <mesh castShadow receiveShadow position={[0, 0, -0.015]}>
+        <boxGeometry args={[1.58, 1.58, 0.055]} />
+        <meshStandardMaterial
+          color="#0d1420"
+          emissive="#050913"
+          emissiveIntensity={0.45}
+          roughness={0.36}
+          metalness={0.18}
+        />
+      </mesh>
+
+      {[-0.83, 0.83].map((y) => (
+        <mesh key={`poster-frame-horizontal-${y}`} position={[0, y, 0.035]}>
+          <boxGeometry args={[1.72, 0.05, 0.08]} />
+          <meshStandardMaterial
+            color="#222d37"
+            emissive="#050a10"
+            emissiveIntensity={0.42}
+            roughness={0.34}
+            metalness={0.28}
+          />
+        </mesh>
+      ))}
+
+      {[-0.83, 0.83].map((x) => (
+        <mesh key={`poster-frame-vertical-${x}`} position={[x, 0, 0.035]}>
+          <boxGeometry args={[0.05, 1.72, 0.08]} />
+          <meshStandardMaterial
+            color="#222d37"
+            emissive="#050a10"
+            emissiveIntensity={0.42}
+            roughness={0.34}
+            metalness={0.28}
+          />
+        </mesh>
+      ))}
+
+      <mesh position={[0, 0, 0.02]}>
+        <planeGeometry args={[1.42, 1.42]} />
+        {posterTexture ? (
+          <meshBasicMaterial
+            map={posterTexture}
+            transparent
+            toneMapped={false}
+          />
+        ) : (
+          <meshStandardMaterial
+            color="#111b27"
+            emissive="#07121d"
+            emissiveIntensity={0.62}
+            roughness={0.32}
+          />
+        )}
+      </mesh>
+    </group>
+  );
+}
+
 function LoadedGachapon({
   animationState,
   knobAxis,
@@ -262,6 +661,7 @@ function LoadedGachapon({
   modelUrl,
   onReport,
   onMachineAligned,
+  onCapsulePress,
 }: {
   animationState: AnimationState;
   knobAxis: KnobAxis;
@@ -269,6 +669,7 @@ function LoadedGachapon({
   modelUrl: string;
   onReport: (report: ModelReport) => void;
   onMachineAligned: () => void;
+  onCapsulePress: () => void;
 }) {
   const gltf = useGLTF(modelUrl);
   const model = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
@@ -304,6 +705,7 @@ function LoadedGachapon({
       if (child instanceof THREE.Mesh) {
         child.castShadow = true;
         child.receiveShadow = true;
+        enhanceModelMaterial(child);
       }
     });
     normalizeModel(model);
@@ -336,20 +738,25 @@ function LoadedGachapon({
   }, [model, onReport]);
 
   useFrame((state, delta) => {
-    const stageTime = updateStageClock(animationState, stageRef, stageTimeRef, delta);
+    const stageTime = updateStageClock(
+      animationState,
+      stageRef,
+      stageTimeRef,
+      delta
+    );
     const aligned = animateRoot(
       rootRef.current,
       baseRef.current.rootRotation,
       baseRef.current.rootPosition,
       animationState,
       stageTime,
-      state.clock.elapsedTime,
+      state.clock.elapsedTime
     );
     notifyMachineAligned(
       aligned,
       animationState,
       alignmentNotifiedRef,
-      onMachineAligned,
+      onMachineAligned
     );
     animateKnob(
       knobRef.current,
@@ -358,7 +765,7 @@ function LoadedGachapon({
       baseRef.current.knobCenterOffset,
       animationState,
       stageTime,
-      knobAxis,
+      knobAxis
     );
     animateModelBall(
       ballRef.current,
@@ -366,7 +773,7 @@ function LoadedGachapon({
       baseRef.current.ballRotation,
       animationState,
       stageTime,
-      state.clock.elapsedTime,
+      state.clock.elapsedTime
     );
     animateCapsule(
       capsuleRef.current,
@@ -375,14 +782,20 @@ function LoadedGachapon({
       prizeRef.current,
       animationState,
       stageTime,
-      dropPath,
+      dropPath
     );
   });
 
   return (
     <group ref={rootRef} position={[0, -0.2, 0]}>
       <primitive object={model} />
-      <Capsule ref={capsuleRef} topRef={capsuleTopRef} bottomRef={capsuleBottomRef} prizeRef={prizeRef} />
+      <Capsule
+        ref={capsuleRef}
+        topRef={capsuleTopRef}
+        bottomRef={capsuleBottomRef}
+        prizeRef={prizeRef}
+        onPress={onCapsulePress}
+      />
     </group>
   );
 }
@@ -392,11 +805,13 @@ function ProceduralGachapon({
   knobAxis,
   dropPath,
   onMachineAligned,
+  onCapsulePress,
 }: {
   animationState: AnimationState;
   knobAxis: KnobAxis;
   dropPath: DropPathSettings;
   onMachineAligned: () => void;
+  onCapsulePress: () => void;
 }) {
   const rootRef = useRef<THREE.Group>(null);
   const knobRef = useRef<THREE.Group>(null);
@@ -423,24 +838,29 @@ function ProceduralGachapon({
       { position: [-0.05, 0.12, 0.2], color: "#ffffff" },
       { position: [0.13, 0.72, -0.02], color: "#f47bd5" },
     ],
-    [],
+    []
   );
 
   useFrame((state, delta) => {
-    const stageTime = updateStageClock(animationState, stageRef, stageTimeRef, delta);
+    const stageTime = updateStageClock(
+      animationState,
+      stageRef,
+      stageTimeRef,
+      delta
+    );
     const aligned = animateRoot(
       rootRef.current,
       rootBaseRotation,
       rootBasePosition,
       animationState,
       stageTime,
-      state.clock.elapsedTime,
+      state.clock.elapsedTime
     );
     notifyMachineAligned(
       aligned,
       animationState,
       alignmentNotifiedRef,
-      onMachineAligned,
+      onMachineAligned
     );
     animateKnob(
       knobRef.current,
@@ -449,19 +869,19 @@ function ProceduralGachapon({
       knobCenterOffset,
       animationState,
       stageTime,
-      knobAxis,
+      knobAxis
     );
 
     if (ballsRef.current) {
       ballsRef.current.rotation.y = THREE.MathUtils.lerp(
         ballsRef.current.rotation.y,
         0,
-        0.08,
+        0.08
       );
       ballsRef.current.position.x = THREE.MathUtils.lerp(
         ballsRef.current.position.x,
         0,
-        0.08,
+        0.08
       );
     }
 
@@ -472,39 +892,76 @@ function ProceduralGachapon({
       prizeRef.current,
       animationState,
       stageTime,
-      dropPath,
+      dropPath
     );
   });
 
   return (
     <group ref={rootRef} position={[0, -0.05, 0]}>
-      <mesh castShadow receiveShadow position={[0, -0.85, 0]} scale={[1.18, 1, 0.78]}>
+      <mesh
+        castShadow
+        receiveShadow
+        position={[0, -0.85, 0]}
+        scale={[1.18, 1, 0.78]}
+      >
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#d83246" roughness={0.55} metalness={0.05} />
+        <meshStandardMaterial
+          color="#d83246"
+          roughness={0.55}
+          metalness={0.05}
+        />
       </mesh>
-      <mesh castShadow receiveShadow position={[0, -1.36, 0.05]} scale={[1.45, 0.35, 0.95]}>
+      <mesh
+        castShadow
+        receiveShadow
+        position={[0, -1.36, 0.05]}
+        scale={[1.45, 0.35, 0.95]}
+      >
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color="#1f2733" roughness={0.48} />
       </mesh>
-      <mesh castShadow receiveShadow position={[0, -0.5, 0.61]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh
+        castShadow
+        receiveShadow
+        position={[0, -0.5, 0.61]}
+        rotation={[Math.PI / 2, 0, 0]}
+      >
         <cylinderGeometry args={[0.28, 0.28, 0.18, 36]} />
-        <meshStandardMaterial color="#f4b942" roughness={0.32} metalness={0.2} />
+        <meshStandardMaterial
+          color="#f4b942"
+          roughness={0.32}
+          metalness={0.2}
+        />
       </mesh>
       <group ref={knobRef} position={[0, -0.5, 0.73]}>
         <mesh castShadow rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[0.18, 0.18, 0.16, 36]} />
-          <meshStandardMaterial color="#f9dc70" roughness={0.28} metalness={0.25} />
+          <meshStandardMaterial
+            color="#f9dc70"
+            roughness={0.28}
+            metalness={0.25}
+          />
         </mesh>
         <mesh castShadow position={[0.18, 0, 0.02]} scale={[0.22, 0.08, 0.08]}>
           <boxGeometry args={[1, 1, 1]} />
           <meshStandardMaterial color="#ffffff" roughness={0.35} />
         </mesh>
       </group>
-      <mesh castShadow receiveShadow position={[0, -1.0, 0.78]} rotation={[0, 0, -0.2]}>
+      <mesh
+        castShadow
+        receiveShadow
+        position={[0, -1.0, 0.78]}
+        rotation={[0, 0, -0.2]}
+      >
         <boxGeometry args={[0.56, 0.22, 0.28]} />
         <meshStandardMaterial color="#f7f0e8" roughness={0.42} />
       </mesh>
-      <mesh castShadow receiveShadow position={[0, 0.38, 0]} scale={[0.98, 0.98, 0.98]}>
+      <mesh
+        castShadow
+        receiveShadow
+        position={[0, 0.38, 0]}
+        scale={[0.98, 0.98, 0.98]}
+      >
         <sphereGeometry args={[0.9, 48, 32]} />
         <meshPhysicalMaterial
           color="#bfeaff"
@@ -528,7 +985,13 @@ function ProceduralGachapon({
           </mesh>
         ))}
       </group>
-      <Capsule ref={capsuleRef} topRef={capsuleTopRef} bottomRef={capsuleBottomRef} prizeRef={prizeRef} />
+      <Capsule
+        ref={capsuleRef}
+        topRef={capsuleTopRef}
+        bottomRef={capsuleBottomRef}
+        prizeRef={prizeRef}
+        onPress={onCapsulePress}
+      />
     </group>
   );
 }
@@ -539,25 +1002,47 @@ const Capsule = React.forwardRef<
     topRef: React.RefObject<THREE.Group | null>;
     bottomRef: React.RefObject<THREE.Group | null>;
     prizeRef: React.RefObject<THREE.Mesh | null>;
+    onPress: () => void;
   }
->(function Capsule({ topRef, bottomRef, prizeRef }, ref) {
+>(function Capsule({ topRef, bottomRef, prizeRef, onPress }, ref) {
   return (
-    <group ref={ref} visible={false}>
+    <group
+      ref={ref}
+      visible={false}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        onPress();
+      }}
+    >
       <group ref={topRef}>
         <mesh castShadow receiveShadow position={[0, -0.004, 0]}>
           <sphereGeometry args={[0.24, 36, 18, 0, TAU, 0, Math.PI / 2]} />
-          <meshStandardMaterial color="#93d7ff" roughness={0.28} metalness={0.03} />
+          <meshStandardMaterial
+            color="#93d7ff"
+            roughness={0.28}
+            metalness={0.03}
+          />
         </mesh>
       </group>
       <group ref={bottomRef}>
         <mesh castShadow receiveShadow position={[0, 0.004, 0]}>
-          <sphereGeometry args={[0.24, 36, 18, 0, TAU, Math.PI / 2, Math.PI / 2]} />
-          <meshStandardMaterial color="#4ab0ee" roughness={0.34} metalness={0.02} />
+          <sphereGeometry
+            args={[0.24, 36, 18, 0, TAU, Math.PI / 2, Math.PI / 2]}
+          />
+          <meshStandardMaterial
+            color="#4ab0ee"
+            roughness={0.34}
+            metalness={0.02}
+          />
         </mesh>
       </group>
       <mesh ref={prizeRef} castShadow visible={false} position={[0, 0, 0]}>
         <boxGeometry args={[0.16, 0.16, 0.16]} />
-        <meshStandardMaterial color="#ffce4a" roughness={0.22} metalness={0.08} />
+        <meshStandardMaterial
+          color="#ffce4a"
+          roughness={0.22}
+          metalness={0.08}
+        />
       </mesh>
     </group>
   );
@@ -600,6 +1085,50 @@ function getObjectCenterOffset(object: THREE.Object3D) {
   return center.applyMatrix4(inverseWorld);
 }
 
+function enhanceModelMaterial(mesh: THREE.Mesh) {
+  const materials = Array.isArray(mesh.material)
+    ? mesh.material
+    : [mesh.material];
+
+  materials.forEach((material) => {
+    if (!(material instanceof THREE.MeshStandardMaterial)) {
+      return;
+    }
+
+    const enhanced = material.clone();
+    const darkness =
+      enhanced.color.r * 0.2126 +
+      enhanced.color.g * 0.7152 +
+      enhanced.color.b * 0.0722;
+
+    enhanced.envMapIntensity = Math.max(enhanced.envMapIntensity ?? 1, 1.45);
+    enhanced.roughness = Math.min(Math.max(enhanced.roughness, 0.28), 0.52);
+    enhanced.metalness = Math.max(
+      enhanced.metalness,
+      darkness < 0.08 ? 0.22 : 0.08
+    );
+
+    if (darkness < 0.08) {
+      enhanced.color.lerp(new THREE.Color("#252c31"), 0.58);
+      enhanced.emissive = new THREE.Color("#06141a");
+      enhanced.emissiveIntensity = 0.16;
+    } else if (darkness < 0.18) {
+      enhanced.color.lerp(new THREE.Color("#26313a"), 0.28);
+      enhanced.emissive = new THREE.Color("#030b10");
+      enhanced.emissiveIntensity = Math.max(enhanced.emissiveIntensity, 0.06);
+    }
+
+    if (Array.isArray(mesh.material)) {
+      mesh.material = mesh.material.map((item) =>
+        item === material ? enhanced : item
+      );
+      return;
+    }
+
+    mesh.material = enhanced;
+  });
+}
+
 function normalizeModel(model: THREE.Object3D) {
   if (model.userData.gachaponNormalized) {
     return;
@@ -636,9 +1165,13 @@ function normalizeModel(model: THREE.Object3D) {
     return;
   }
 
-  const scale = 2.7 / maxDimension;
+  const scale = 2.42 / maxDimension;
   model.scale.setScalar(scale);
-  model.position.set(-center.x * scale, -center.y * scale - 0.05, -center.z * scale);
+  model.position.set(
+    -center.x * scale,
+    -center.y * scale - 0.12,
+    -center.z * scale
+  );
   model.userData.gachaponNormalized = true;
 }
 
@@ -646,7 +1179,7 @@ function updateStageClock(
   animationState: AnimationState,
   stageRef: React.MutableRefObject<AnimationState>,
   stageTimeRef: React.MutableRefObject<number>,
-  delta: number,
+  delta: number
 ) {
   if (stageRef.current !== animationState) {
     stageRef.current = animationState;
@@ -664,7 +1197,7 @@ function animateRoot(
   basePosition: THREE.Vector3,
   animationState: AnimationState,
   stageTime: number,
-  elapsedTime: number,
+  elapsedTime: number
 ) {
   if (!root) {
     return false;
@@ -684,7 +1217,11 @@ function animateRoot(
     root.rotation.y = baseRotation.y + idleSpin;
   } else if (animationState !== "aligning") {
     root.userData.alignToFront = null;
-    root.rotation.y = THREE.MathUtils.lerp(root.rotation.y, baseRotation.y, 0.08);
+    root.rotation.y = THREE.MathUtils.lerp(
+      root.rotation.y,
+      baseRotation.y,
+      0.08
+    );
   }
   root.rotation.z = shake
     ? baseRotation.z + Math.sin(elapsedTime * 18) * 0.018
@@ -703,7 +1240,7 @@ function animateRoot(
 function alignRootToFront(
   root: THREE.Object3D,
   baseRotationY: number,
-  stageTime: number,
+  stageTime: number
 ) {
   const data = getAlignmentData(root, baseRotationY);
 
@@ -716,7 +1253,7 @@ function alignRootToFront(
   root.rotation.y = THREE.MathUtils.lerp(
     data.startY,
     data.targetY,
-    easeInOutCubic(progress),
+    easeInOutCubic(progress)
   );
 
   if (progress >= 1) {
@@ -739,8 +1276,7 @@ function getAlignmentData(root: THREE.Object3D, baseRotationY: number) {
 
   const startY = root.rotation.y;
   const offset = positiveModulo(startY - baseRotationY, TAU);
-  const remaining =
-    offset < 0.02 || TAU - offset < 0.02 ? TAU : TAU - offset;
+  const remaining = offset < 0.02 || TAU - offset < 0.02 ? TAU : TAU - offset;
   const duration = remaining / (TAU / ALIGN_TURN_SECONDS);
   const data = {
     startY,
@@ -756,7 +1292,7 @@ function notifyMachineAligned(
   aligned: boolean,
   animationState: AnimationState,
   notifiedRef: React.MutableRefObject<boolean>,
-  onMachineAligned: () => void,
+  onMachineAligned: () => void
 ) {
   if (animationState !== "aligning") {
     notifiedRef.current = false;
@@ -778,7 +1314,7 @@ function animateKnob(
   centerOffset: THREE.Vector3,
   animationState: AnimationState,
   stageTime: number,
-  knobAxis: KnobAxis,
+  knobAxis: KnobAxis
 ) {
   if (!knob) {
     return;
@@ -791,17 +1327,23 @@ function animateKnob(
     animationState === "turning"
       ? easeOutCubic(Math.min(stageTime / KNOB_TURN_SECONDS, 1))
       : animationState === "shaking" ||
-          animationState === "dropping" ||
-          animationState === "revealed"
-        ? 1
-        : 0;
+        animationState === "dropping" ||
+        animationState === "revealed"
+      ? 1
+      : 0;
 
   const angle = progress * TAU * 0.72;
-  const baseCenter = centerOffset.clone().applyEuler(baseRotation).add(basePosition);
+  const baseCenter = centerOffset
+    .clone()
+    .applyEuler(baseRotation)
+    .add(basePosition);
 
   knob.rotation[knobAxis] += angle;
 
-  const rotatedCenter = centerOffset.clone().applyEuler(knob.rotation).add(basePosition);
+  const rotatedCenter = centerOffset
+    .clone()
+    .applyEuler(knob.rotation)
+    .add(basePosition);
   knob.position.copy(basePosition).add(baseCenter.sub(rotatedCenter));
 }
 
@@ -811,7 +1353,7 @@ function animateModelBall(
   baseRotation: THREE.Euler,
   animationState: AnimationState,
   stageTime: number,
-  elapsedTime: number,
+  elapsedTime: number
 ) {
   if (!ball) {
     return;
@@ -834,7 +1376,7 @@ function animateCapsule(
   prize: THREE.Mesh | null,
   animationState: AnimationState,
   stageTime: number,
-  dropPath: DropPathSettings,
+  dropPath: DropPathSettings
 ) {
   if (!capsule || !top || !bottom || !prize) {
     return;
@@ -864,8 +1406,8 @@ function animateCapsule(
     animationState === "revealed"
       ? 0.012
       : frontShake
-        ? Math.min((pathProgress - 0.58) / 0.22, 1)
-        : 0;
+      ? Math.min((pathProgress - 0.58) / 0.22, 1)
+      : 0;
 
   capsule.visible = true;
   capsule.position.copy(pathPosition);
@@ -921,7 +1463,7 @@ function pointToVector(point: DropPathPoint) {
 function getDropProgress(stageTime: number) {
   if (stageTime < DROP_FIRST_LEG_SECONDS) {
     const progress = easeOutCubic(
-      Math.min(stageTime / DROP_FIRST_LEG_SECONDS, 1),
+      Math.min(stageTime / DROP_FIRST_LEG_SECONDS, 1)
     );
 
     return progress * DROP_CHUTE_EXIT_PROGRESS;
@@ -934,13 +1476,10 @@ function getDropProgress(stageTime: number) {
   const secondLegTime =
     stageTime - DROP_FIRST_LEG_SECONDS - DROP_CHUTE_HOLD_SECONDS;
   const progress = easeInOutCubic(
-    Math.min(secondLegTime / DROP_SECOND_LEG_SECONDS, 1),
+    Math.min(secondLegTime / DROP_SECOND_LEG_SECONDS, 1)
   );
 
-  return (
-    DROP_CHUTE_EXIT_PROGRESS +
-    progress * (1 - DROP_CHUTE_EXIT_PROGRESS)
-  );
+  return DROP_CHUTE_EXIT_PROGRESS + progress * (1 - DROP_CHUTE_EXIT_PROGRESS);
 }
 
 function cubicBezier(
@@ -948,7 +1487,7 @@ function cubicBezier(
   b: THREE.Vector3,
   c: THREE.Vector3,
   d: THREE.Vector3,
-  t: number,
+  t: number
 ) {
   const oneMinusT = 1 - t;
 
@@ -964,7 +1503,7 @@ function cubicBezier(
     oneMinusT ** 3 * a.z +
       3 * oneMinusT ** 2 * t * b.z +
       3 * oneMinusT * t ** 2 * c.z +
-      t ** 3 * d.z,
+      t ** 3 * d.z
   );
 }
 

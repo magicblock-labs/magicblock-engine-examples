@@ -248,6 +248,7 @@ export async function sendWalletTransaction(
   wallet: BrowserWallet,
   payer: PublicKey,
   instruction: TransactionInstruction,
+  options: { skipPreflight?: boolean } = {},
 ) {
   const latestBlockhash = await connection.getLatestBlockhash("confirmed");
   const transaction = new Transaction({
@@ -256,28 +257,25 @@ export async function sendWalletTransaction(
     lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
   }).add(instruction);
 
-  if (wallet.signAndSendTransaction) {
-    const { signature } = await wallet.signAndSendTransaction(transaction);
-    await connection.confirmTransaction(
-      {
-        signature,
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-      },
-      "confirmed",
-    );
-    return signature;
-  }
+  let signature: string;
 
-  if (!wallet.signTransaction) {
+  if (wallet.signTransaction) {
+    const signedTransaction = await wallet.signTransaction(transaction);
+    signature = await connection.sendRawTransaction(
+      signedTransaction.serialize(),
+      {
+        skipPreflight: options.skipPreflight ?? false,
+        preflightCommitment: "confirmed",
+        maxRetries: 3,
+      },
+    );
+  } else if (wallet.signAndSendTransaction) {
+    const result = await wallet.signAndSendTransaction(transaction);
+    signature = result.signature;
+  } else {
     throw new Error("Wallet cannot sign transactions");
   }
 
-  const signedTransaction = await wallet.signTransaction(transaction);
-  const signature = await connection.sendRawTransaction(
-    signedTransaction.serialize(),
-    { skipPreflight: false },
-  );
   await connection.confirmTransaction(
     {
       signature,

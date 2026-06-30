@@ -111,6 +111,7 @@ h2 {
 }
 
 .primaryButton,
+.simulateButton,
 .secondaryButton,
 .iconButton,
 .stateButton,
@@ -128,6 +129,11 @@ h2 {
     transform 160ms ease;
 }
 
+.pullActionStack {
+  display: grid;
+  gap: 8px;
+}
+
 .primaryButton {
   background: var(--red);
   border-radius: 8px;
@@ -138,6 +144,21 @@ h2 {
 
 .primaryButton:hover:not(:disabled) {
   background: var(--red-dark);
+  transform: translateY(-1px);
+}
+
+.simulateButton {
+  background: #e0f0f8;
+  border-color: #83bad9;
+  border-radius: 8px;
+  color: #155e8d;
+  font-weight: 800;
+  gap: 9px;
+}
+
+.simulateButton:hover:not(:disabled) {
+  background: #d4ebf7;
+  border-color: var(--blue);
   transform: translateY(-1px);
 }
 
@@ -158,6 +179,7 @@ h2 {
 }
 
 .primaryButton:disabled,
+.simulateButton:disabled,
 .secondaryButton:disabled,
 .stateButton:disabled {
   cursor: not-allowed;
@@ -517,7 +539,7 @@ h2 {
 .mockStats {
   display: grid;
   gap: 10px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .mockStats div {
