@@ -219,6 +219,19 @@ End-to-end app templates you can fork and build on.
 </blockquote>
 </td>
 </tr>
+<tr>
+<td valign="top" width="33%">
+<blockquote>
+<p><strong><a href="./gachapon-example/">🪄 Magic Gachapon</a></strong></p>
+<p>
+<img src="https://img.shields.io/badge/Next.js-000000?style=flat-square&logo=next.js&logoColor=white" alt="Next.js"/>
+<img src="https://img.shields.io/badge/VRF-4f46e5?style=flat-square" alt="VRF"/>
+<img src="https://img.shields.io/badge/Metaplex%20Core-9945FF?style=flat-square" alt="Metaplex Core"/>
+</p>
+<p><em>MagicBlock VRF gachapon demo that mints a Metaplex Core NFT reward.</em></p>
+</blockquote>
+</td>
+</tr>
 </table>
 
 ## Testing
