@@ -1,5 +1,7 @@
 import {
   Connection,
+  Keypair,
+  LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -7,7 +9,9 @@ import {
 } from "@solana/web3.js";
 import { Buffer } from "buffer";
 
-export const DEVNET_RPC_URL = "https://api.devnet.solana.com";
+export const DEVNET_RPC_URL = "https://rpc.magicblock.app/devnet";
+export const LOCAL_WALLET_STORAGE_KEY = "solanaKeypair";
+const MIN_LOCAL_WALLET_SOL = 0.25;
 export const PROGRAM_ID = new PublicKey(
   "H7J1Ec8qibE13iajhAEK5jjRvgFxnZCUes7UjQqFiirj",
 );
@@ -91,16 +95,6 @@ export type CoreAssetAccount = {
   attributes: Map<string, string>;
 };
 
-export type BrowserWallet = {
-  isPhantom?: boolean;
-  publicKey?: PublicKey;
-  connect: () => Promise<{ publicKey: PublicKey }>;
-  signTransaction?: (transaction: Transaction) => Promise<Transaction>;
-  signAndSendTransaction?: (
-    transaction: Transaction,
-  ) => Promise<{ signature: string }>;
-};
-
 type Cursor = {
   offset: number;
 };
@@ -139,6 +133,49 @@ export function explorerTx(signature: string) {
 export function shortKey(value: PublicKey | string) {
   const text = value.toString();
   return `${text.slice(0, 4)}...${text.slice(-4)}`;
+}
+
+export function loadOrCreateLocalKeypair(
+  storageKey = LOCAL_WALLET_STORAGE_KEY,
+) {
+  if (typeof window === "undefined") {
+    return Keypair.generate();
+  }
+
+  const stored = window.localStorage.getItem(storageKey);
+  if (stored) {
+    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(stored)));
+  }
+
+  const generated = Keypair.generate();
+  window.localStorage.setItem(
+    storageKey,
+    JSON.stringify(Array.from(generated.secretKey)),
+  );
+  return generated;
+}
+
+export async function ensureLocalWalletFunds(
+  connection: Connection,
+  keypair: Keypair,
+) {
+  const balance = await connection.getBalance(keypair.publicKey, "confirmed");
+  const minBalance = MIN_LOCAL_WALLET_SOL * LAMPORTS_PER_SOL;
+
+  if (balance >= minBalance) {
+    return balance / LAMPORTS_PER_SOL;
+  }
+
+  const signature = await connection.requestAirdrop(
+    keypair.publicKey,
+    LAMPORTS_PER_SOL,
+  );
+  await connection.confirmTransaction(signature, "confirmed");
+
+  return (
+    (await connection.getBalance(keypair.publicKey, "confirmed")) /
+    LAMPORTS_PER_SOL
+  );
 }
 
 export function findGachaponAccounts(
@@ -243,38 +280,29 @@ export function buildPullInstruction(
   });
 }
 
-export async function sendWalletTransaction(
+export async function sendLocalWalletTransaction(
   connection: Connection,
-  wallet: BrowserWallet,
-  payer: PublicKey,
+  payer: Keypair,
   instruction: TransactionInstruction,
   options: { skipPreflight?: boolean } = {},
 ) {
   const latestBlockhash = await connection.getLatestBlockhash("confirmed");
   const transaction = new Transaction({
-    feePayer: payer,
+    feePayer: payer.publicKey,
     blockhash: latestBlockhash.blockhash,
     lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
   }).add(instruction);
 
-  let signature: string;
+  transaction.sign(payer);
 
-  if (wallet.signTransaction) {
-    const signedTransaction = await wallet.signTransaction(transaction);
-    signature = await connection.sendRawTransaction(
-      signedTransaction.serialize(),
-      {
-        skipPreflight: options.skipPreflight ?? false,
-        preflightCommitment: "confirmed",
-        maxRetries: 3,
-      },
-    );
-  } else if (wallet.signAndSendTransaction) {
-    const result = await wallet.signAndSendTransaction(transaction);
-    signature = result.signature;
-  } else {
-    throw new Error("Wallet cannot sign transactions");
-  }
+  const signature = await connection.sendRawTransaction(
+    transaction.serialize(),
+    {
+      skipPreflight: options.skipPreflight ?? false,
+      preflightCommitment: "confirmed",
+      maxRetries: 3,
+    },
+  );
 
   await connection.confirmTransaction(
     {

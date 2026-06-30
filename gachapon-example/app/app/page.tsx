@@ -24,10 +24,10 @@ import {
   Shuffle,
   Wallet,
 } from "lucide-react";
-import type { PublicKey } from "@solana/web3.js";
+import type { Keypair, PublicKey } from "@solana/web3.js";
 import {
-  BrowserWallet,
   CoreAssetAccount,
+  DEVNET_RPC_URL,
   DEFAULT_VRF_QUEUE,
   GachaponAccounts,
   MachineAccount,
@@ -43,11 +43,13 @@ import {
   decodeMachine,
   decodePendingPull,
   devnetConnection,
+  ensureLocalWalletFunds,
   explorerAddress,
   explorerTx,
   findGachaponAccounts,
   isSettled,
-  sendWalletTransaction,
+  loadOrCreateLocalKeypair,
+  sendLocalWalletTransaction,
   shortKey,
 } from "@/lib/gachapon-devnet";
 import {
@@ -58,12 +60,6 @@ import {
   KnobAxis,
   ModelReport,
 } from "@/components/gachapon-scene";
-
-declare global {
-  interface Window {
-    solana?: BrowserWallet;
-  }
-}
 
 const states: AnimationState[] = [
   "idle",
@@ -165,8 +161,9 @@ export default function GachaponTester() {
   const [report, setReport] = useState<ModelReport>(initialReport);
   const [dropPath, setDropPath] = useState(defaultDropPathSettings);
   const [cameraResetKey, setCameraResetKey] = useState(0);
-  const [wallet, setWallet] = useState<BrowserWallet | null>(null);
+  const [localWallet, setLocalWallet] = useState<Keypair | null>(null);
   const [walletKey, setWalletKey] = useState<PublicKey | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [accounts, setAccounts] = useState<GachaponAccounts | null>(null);
   const [machineAccount, setMachineAccount] = useState<MachineAccount | null>(
     null,
@@ -179,6 +176,7 @@ export default function GachaponTester() {
   const [steps, setSteps] = useState<VerifyStep[]>(initialSteps);
   const [flowError, setFlowError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [isFunding, setIsFunding] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
   const [isAwaitingReveal, setIsAwaitingReveal] = useState(false);
   const [simulatedRewardId, setSimulatedRewardId] = useState<number | null>(
@@ -201,10 +199,9 @@ export default function GachaponTester() {
       setKnobAxis(requestedAxis as KnobAxis);
     }
 
-    if (window.solana?.publicKey) {
-      setWallet(window.solana);
-      setWalletKey(window.solana.publicKey);
-    }
+    const keypair = loadOrCreateLocalKeypair();
+    setLocalWallet(keypair);
+    setWalletKey(keypair.publicKey);
   }, []);
 
   const selectedReward = useMemo(() => {
@@ -243,19 +240,29 @@ export default function GachaponTester() {
     [],
   );
 
-  const connectWallet = useCallback(async () => {
-    const browserWallet = window.solana;
-    if (!browserWallet) {
-      setFlowError("No Solana browser wallet was found.");
-      return null;
-    }
+  const prepareLocalWallet = useCallback(async () => {
+    const keypair = localWallet ?? loadOrCreateLocalKeypair();
+    setIsFunding(true);
 
-    const { publicKey } = await browserWallet.connect();
-    setWallet(browserWallet);
-    setWalletKey(publicKey);
-    setFlowError(null);
-    return { browserWallet, publicKey };
-  }, []);
+    try {
+      setLocalWallet(keypair);
+      setWalletKey(keypair.publicKey);
+      const balance = await ensureLocalWalletFunds(connection, keypair);
+      setWalletBalance(balance);
+      setFlowError(null);
+      return keypair;
+    } finally {
+      setIsFunding(false);
+    }
+  }, [connection, localWallet]);
+
+  const handlePrepareLocalWallet = useCallback(async () => {
+    try {
+      await prepareLocalWallet();
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : String(error));
+    }
+  }, [prepareLocalWallet]);
 
   const findSettlementSignature = useCallback(
     async (asset: PublicKey, requestSignature: string) => {
@@ -311,24 +318,12 @@ export default function GachaponTester() {
   );
 
   const runDevnetPull = useCallback(async () => {
-    if (isRunning || isSimulating || isAwaitingReveal) {
+    if (isRunning || isFunding || isSimulating || isAwaitingReveal) {
       return;
     }
-
-    const connected =
-      wallet && walletKey ? { browserWallet: wallet, publicKey: walletKey } : await connectWallet();
-
-    if (!connected) {
-      return;
-    }
-
-    const { browserWallet, publicKey } = connected;
-    const nextAccounts = findGachaponAccounts(publicKey);
-    const clientSeed = window.crypto.getRandomValues(new Uint8Array(1))[0];
 
     setIsRunning(true);
     setFlowError(null);
-    setAccounts(nextAccounts);
     setMachineAccount(null);
     setPendingPull(null);
     setCoreAsset(null);
@@ -336,20 +331,25 @@ export default function GachaponTester() {
     setIsAwaitingReveal(false);
     setSimulatedRewardId(null);
     setSteps(initialSteps);
-    setPullCount((value) => value + 1);
     setCameraResetKey((value) => value + 1);
 
     try {
+      const keypair = await prepareLocalWallet();
+      const publicKey = keypair.publicKey;
+      const nextAccounts = findGachaponAccounts(publicKey);
+      const clientSeed = window.crypto.getRandomValues(new Uint8Array(1))[0];
+
+      setAccounts(nextAccounts);
+      setPullCount((value) => value + 1);
       updateStep("init", {
         status: "active",
         detail: `Creating ${shortKey(nextAccounts.machine)}`,
         links: accountLinks(nextAccounts, publicKey),
       });
 
-      const initSignature = await sendWalletTransaction(
+      const initSignature = await sendLocalWalletTransaction(
         connection,
-        browserWallet,
-        publicKey,
+        keypair,
         buildInitInstruction(publicKey, nextAccounts),
       );
       const initMachine = await fetchMachine(connection, nextAccounts.machine);
@@ -371,10 +371,9 @@ export default function GachaponTester() {
         links: [addressLink("Machine", nextAccounts.machine)],
       });
 
-      const configSignature = await sendWalletTransaction(
+      const configSignature = await sendLocalWalletTransaction(
         connection,
-        browserWallet,
-        publicKey,
+        keypair,
         buildUploadConfigInstruction(publicKey, nextAccounts),
       );
       const configuredMachine = await fetchMachine(
@@ -406,10 +405,9 @@ export default function GachaponTester() {
         ],
       });
 
-      const requestSignature = await sendWalletTransaction(
+      const requestSignature = await sendLocalWalletTransaction(
         connection,
-        browserWallet,
-        publicKey,
+        keypair,
         buildPullInstruction(publicKey, nextAccounts, clientSeed),
         { skipPreflight: true },
       );
@@ -487,17 +485,16 @@ export default function GachaponTester() {
       setIsRunning(false);
     }
   }, [
-    connectWallet,
     connection,
+    isFunding,
     isAwaitingReveal,
     isRunning,
     isSimulating,
-    wallet,
-    walletKey,
+    prepareLocalWallet,
   ]);
 
   const runSimulatedPull = useCallback(async () => {
-    if (isRunning || isSimulating || isAwaitingReveal) {
+    if (isRunning || isFunding || isSimulating || isAwaitingReveal) {
       return;
     }
 
@@ -524,7 +521,7 @@ export default function GachaponTester() {
     } finally {
       setIsSimulating(false);
     }
-  }, [isAwaitingReveal, isRunning, isSimulating]);
+  }, [isAwaitingReveal, isFunding, isRunning, isSimulating]);
 
   const handleMachineAligned = useCallback(() => {
     alignmentResolveRef.current?.();
@@ -601,7 +598,7 @@ export default function GachaponTester() {
             <button
               className="primaryButton"
               type="button"
-              disabled={isRunning || isSimulating || isAwaitingReveal}
+              disabled={isRunning || isFunding || isSimulating || isAwaitingReveal}
               onClick={runDevnetPull}
             >
               {isRunning ? <Loader2 className="spinIcon" size={18} /> : <Play size={18} />}
@@ -610,7 +607,7 @@ export default function GachaponTester() {
             <button
               className="simulateButton"
               type="button"
-              disabled={isRunning || isSimulating || isAwaitingReveal}
+              disabled={isRunning || isFunding || isSimulating || isAwaitingReveal}
               onClick={runSimulatedPull}
             >
               {isSimulating ? (
@@ -624,11 +621,11 @@ export default function GachaponTester() {
           <button
             className="secondaryButton"
             type="button"
-            disabled={isRunning || isSimulating || isAwaitingReveal}
-            onClick={connectWallet}
+            disabled={isRunning || isFunding || isSimulating || isAwaitingReveal}
+            onClick={handlePrepareLocalWallet}
           >
-            <Wallet size={18} />
-            {walletKey ? shortKey(walletKey) : "Connect"}
+            {isFunding ? <Loader2 className="spinIcon" size={18} /> : <Wallet size={18} />}
+            {walletKey ? shortKey(walletKey) : "Local"}
           </button>
           <button
             className="iconButton"
@@ -678,6 +675,8 @@ export default function GachaponTester() {
           <h2>Live Accounts</h2>
           <dl className="reportList">
             <AccountRow label="Wallet" value={walletKey} />
+            <TextRow label="Balance" value={formatSolBalance(walletBalance)} />
+            <TextRow label="RPC" value={DEVNET_RPC_URL} />
             <AccountRow label="Machine" value={accounts?.machine ?? null} />
             <AccountRow label="Pending" value={accounts?.pendingPull ?? null} />
             <AccountRow label="Asset" value={accounts?.asset ?? null} />
@@ -751,7 +750,7 @@ export default function GachaponTester() {
                   key={state}
                   className={active ? "stateButton active" : "stateButton"}
                   type="button"
-                  disabled={isRunning || isSimulating || isAwaitingReveal}
+                  disabled={isRunning || isFunding || isSimulating || isAwaitingReveal}
                   onClick={() => setAnimationState(state)}
                 >
                   <Icon size={16} />
@@ -925,6 +924,10 @@ function TextRow({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   );
+}
+
+function formatSolBalance(value: number | null) {
+  return value === null ? "Not checked" : `${value.toFixed(3)} SOL`;
 }
 
 function ExplorerAnchor({ link }: { link: VerifyLink }) {
