@@ -24,6 +24,7 @@ export const VRF_PROGRAM_ID = new PublicKey(
 export const DEFAULT_VRF_QUEUE = new PublicKey(
   "Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh",
 );
+export const DEMO_MACHINE_ID = 1n;
 export const SLOT_HASHES = new PublicKey(
   "SysvarS1otHashes111111111111111111111111111",
 );
@@ -175,6 +176,15 @@ export async function ensureLocalWalletFunds(
   return (
     (await connection.getBalance(keypair.publicKey, "confirmed")) /
     LAMPORTS_PER_SOL
+  );
+}
+
+export async function getLocalWalletBalance(
+  connection: Connection,
+  publicKey: PublicKey,
+) {
+  return (
+    (await connection.getBalance(publicKey, "confirmed")) / LAMPORTS_PER_SOL
   );
 }
 

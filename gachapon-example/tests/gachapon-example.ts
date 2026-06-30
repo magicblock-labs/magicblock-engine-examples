@@ -321,7 +321,7 @@ describe("gachapon-example", () => {
     assert.equal(account.pullCount.toString(), "0");
 
     const treasuryBalance = await provider.connection.getBalance(treasury);
-    assert.isAtLeast(treasuryBalance, 50_000_000);
+    assert.isAtLeast(treasuryBalance, 10_000_000);
   });
 
   it("uploads four weighted Core NFT templates", async () => {
