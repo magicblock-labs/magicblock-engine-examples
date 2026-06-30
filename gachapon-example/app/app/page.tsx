@@ -29,7 +29,6 @@ import {
 import type { Keypair, PublicKey } from "@solana/web3.js";
 import {
   CoreAssetAccount,
-  DEMO_MACHINE_ID,
   DEVNET_RPC_URL,
   DEFAULT_VRF_QUEUE,
   GachaponAccounts,
@@ -480,7 +479,7 @@ export default function GachaponTester() {
       const animationPromise = runCapsuleDropAnimation();
       const keypair = await prepareLocalWallet();
       const publicKey = keypair.publicKey;
-      const setupAccounts = findGachaponAccounts(publicKey, DEMO_MACHINE_ID, 1n);
+      const setupAccounts = findGachaponAccounts(publicKey);
       const clientSeed = window.crypto.getRandomValues(new Uint8Array(1))[0];
 
       setAccounts(setupAccounts);
@@ -983,14 +982,6 @@ export default function GachaponTester() {
             <dl className="reportList">
               <TextRow label="Name" value={coreAsset.name} />
               <AccountRow label="NFT" value={accounts?.asset} compact />
-              <TextRow
-                label="Pull ID"
-                value={coreAsset.attributes.get("pull_id") ?? "Missing"}
-              />
-              <TextRow
-                label="Reward ID"
-                value={coreAsset.attributes.get("reward_id") ?? "Missing"}
-              />
             </dl>
           </div>
         ) : null}
@@ -1408,7 +1399,7 @@ async function findNextAvailablePullAccounts(
   let pullId = machine.pullCount + 1n;
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const accounts = findGachaponAccounts(player, DEMO_MACHINE_ID, pullId);
+    const accounts = findGachaponAccounts(player, machine.machineId, pullId);
     const [pendingPull, asset] = await connection.getMultipleAccountsInfo(
       [accounts.pendingPull, accounts.asset],
       "confirmed",

@@ -13,7 +13,7 @@ export const DEVNET_RPC_URL = "https://rpc.magicblock.app/devnet";
 export const LOCAL_WALLET_STORAGE_KEY = "solanaKeypair";
 const MIN_LOCAL_WALLET_SOL = 0.25;
 export const PROGRAM_ID = new PublicKey(
-  "H7J1Ec8qibE13iajhAEK5jjRvgFxnZCUes7UjQqFiirj",
+  "5q1a1rA56zJTmEUeNdceFGPR6QQRWYmFJjckucTadnDd",
 );
 export const MPL_CORE_PROGRAM_ID = new PublicKey(
   "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
@@ -24,7 +24,6 @@ export const VRF_PROGRAM_ID = new PublicKey(
 export const DEFAULT_VRF_QUEUE = new PublicKey(
   "Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh",
 );
-export const DEMO_MACHINE_ID = 1n;
 export const SLOT_HASHES = new PublicKey(
   "SysvarS1otHashes111111111111111111111111111",
 );
@@ -136,6 +135,17 @@ export function shortKey(value: PublicKey | string) {
   return `${text.slice(0, 4)}...${text.slice(-4)}`;
 }
 
+export function machineIdFromPublicKey(publicKey: PublicKey) {
+  const bytes = publicKey.toBytes();
+  let machineId = 0n;
+
+  for (let index = 0; index < 8; index += 1) {
+    machineId |= BigInt(bytes[index]) << BigInt(index * 8);
+  }
+
+  return machineId;
+}
+
 export function loadOrCreateLocalKeypair(
   storageKey = LOCAL_WALLET_STORAGE_KEY,
 ) {
@@ -190,7 +200,7 @@ export async function getLocalWalletBalance(
 
 export function findGachaponAccounts(
   player: PublicKey,
-  machineId = BigInt(Date.now()),
+  machineId = machineIdFromPublicKey(player),
   pullId = 1n,
 ): GachaponAccounts {
   const machine = findPda([

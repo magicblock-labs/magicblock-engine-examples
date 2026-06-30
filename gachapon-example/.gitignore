@@ -1,11 +1,14 @@
 .anchor
 .DS_Store
-target/*
+target/
 **/*.rs.bk
 node_modules
 test-ledger
 .yarn
 
-!target/deploy/
-target/deploy/*
-!target/deploy/gachapon_example-keypair.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*keypair*.json

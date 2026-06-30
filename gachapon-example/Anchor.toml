@@ -7,10 +7,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-gachapon_example = "H7J1Ec8qibE13iajhAEK5jjRvgFxnZCUes7UjQqFiirj"
+gachapon_example = "5q1a1rA56zJTmEUeNdceFGPR6QQRWYmFJjckucTadnDd"
 
 [programs.devnet]
-gachapon_example = "H7J1Ec8qibE13iajhAEK5jjRvgFxnZCUes7UjQqFiirj"
+gachapon_example = "5q1a1rA56zJTmEUeNdceFGPR6QQRWYmFJjckucTadnDd"
 
 [registry]
 url = "https://api.apr.dev"

@@ -7,7 +7,7 @@ use anchor_lang::solana_program::{
 use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::{Attribute, Attributes, Plugin, PluginAuthority, PluginAuthorityPair};
 
-declare_id!("H7J1Ec8qibE13iajhAEK5jjRvgFxnZCUes7UjQqFiirj");
+declare_id!("5q1a1rA56zJTmEUeNdceFGPR6QQRWYmFJjckucTadnDd");
 
 pub const MACHINE_SEED: &[u8] = b"machine";
 pub const TREASURY_SEED: &[u8] = b"treasury";
