@@ -145,6 +145,7 @@ pub mod binary_prediction {
     /// can be used again.
     pub fn initialize_bet(ctx: Context<InitializeBet>) -> Result<()> {
         let bet = &mut ctx.accounts.bet;
+        require!(!bet.is_open, ErrorCode::BetAlreadyOpen);
         bet.is_open = false;
         bet.stake = 0;
         bet.open_price = 0;
@@ -420,8 +421,7 @@ pub struct InitializeBet<'info> {
 pub struct DelegateBet<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    /// CHECK: user authority seed for the bet PDA.
-    pub user: UncheckedAccount<'info>,
+    pub user: Signer<'info>,
     #[account(mut, del, seeds = [BET_SEED, user.key().as_ref()], bump)]
     /// CHECK: deserialized by delegated instructions after delegation.
     pub bet: UncheckedAccount<'info>,
@@ -433,8 +433,7 @@ pub struct DelegateBet<'info> {
 pub struct UndelegateBet<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    /// CHECK: user authority seed for the bet PDA.
-    pub user: UncheckedAccount<'info>,
+    pub user: Signer<'info>,
     #[account(mut, seeds = [BET_SEED, user.key().as_ref()], bump)]
     pub bet: Account<'info, Bet>,
 }

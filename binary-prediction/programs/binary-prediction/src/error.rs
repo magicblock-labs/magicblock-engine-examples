@@ -6,8 +6,6 @@ pub enum ErrorCode {
     InvalidAmount,
     #[msg("token account is not owned by the expected authority")]
     InvalidTokenOwner,
-    #[msg("invalid pool authority")]
-    InvalidPoolAuthority,
     #[msg("invalid pool config")]
     InvalidPoolConfig,
     #[msg("token account mint mismatch")]

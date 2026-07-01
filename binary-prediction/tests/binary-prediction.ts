@@ -514,7 +514,7 @@ describe("binary-prediction", () => {
       .remainingAccounts([
         { pubkey: validator, isSigner: false, isWritable: false },
       ])
-      .signers([admin])
+      .signers([admin, user])
       .rpc({ skipPreflight: true });
 
     const delegateUserIxs = await delegateSpl(
