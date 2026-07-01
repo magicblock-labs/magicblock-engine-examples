@@ -15,9 +15,9 @@
   "devDependencies": {
     "@solana/spl-token": "^0.4.14",
     "@types/bn.js": "^5.1.0",
-    "@types/chai": "^5.2.2",
+    "@types/chai": "^4.3.20",
     "@types/mocha": "^10.0.10",
-    "chai": "^5.2.0",
+    "chai": "^4.5.0",
     "mocha": "^11.2.2",
     "prettier": "^3.5.3",
     "ts-mocha": "^11.1.0",

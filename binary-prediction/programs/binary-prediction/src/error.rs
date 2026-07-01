@@ -28,7 +28,7 @@ pub enum ErrorCode {
     BetNotExpired,
     #[msg("invalid price feed account")]
     InvalidPriceFeed,
-    #[msg("user token account has not delegated stake authority to the pool")]
+    #[msg("token account has not delegated authority to the pool")]
     InvalidTokenDelegate,
     #[msg("delegated token allowance is too small")]
     InsufficientDelegatedAmount,

@@ -8,7 +8,10 @@ pub struct Pool {
     pub mint: Pubkey,
     /// Real signer that owns the pool token custody.
     pub authority: Pubkey,
+    /// Oracle account accepted by betting and settlement instructions.
     pub price_feed: Pubkey,
+    /// Pyth feed id validated inside the oracle price update account.
+    pub price_feed_id: [u8; 32],
     /// How long a bet must stay open before it can be settled.
     pub bet_duration_seconds: i64,
     pub min_stake: u64,
@@ -18,7 +21,7 @@ pub struct Pool {
 }
 
 impl Pool {
-    pub const LEN: usize = 32 + 32 + 32 + 8 + 8 + 8 + 1;
+    pub const LEN: usize = 32 + 32 + 32 + 32 + 8 + 8 + 8 + 1;
 }
 
 /// Per-user prediction state.

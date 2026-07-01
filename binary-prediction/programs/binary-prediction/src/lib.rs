@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::program_option::COption;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer as SplTransfer};
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
@@ -42,6 +41,7 @@ pub mod binary_prediction {
     pub fn initialize(
         ctx: Context<Initialize>,
         price_feed: Pubkey,
+        price_feed_id: [u8; 32],
         seed_amount: u64,
         bet_duration_seconds: i64,
         min_stake: u64,
@@ -59,6 +59,7 @@ pub mod binary_prediction {
         pool.mint = ctx.accounts.mint.key();
         pool.authority = ctx.accounts.pool_authority.key();
         pool.price_feed = price_feed;
+        pool.price_feed_id = price_feed_id;
         pool.bet_duration_seconds = bet_duration_seconds;
         pool.min_stake = min_stake;
         pool.payout_bps = payout_bps;
@@ -203,20 +204,12 @@ pub mod binary_prediction {
         );
 
         let pool_key = ctx.accounts.pool.key();
-        match ctx.accounts.user_token_account.delegate {
-            COption::Some(delegate) => {
-                require_keys_eq!(delegate, pool_key, ErrorCode::InvalidTokenDelegate)
-            }
-            COption::None => return err!(ErrorCode::InvalidTokenDelegate),
-        }
-        require!(
-            ctx.accounts.user_token_account.delegated_amount >= stake,
-            ErrorCode::InsufficientDelegatedAmount
-        );
+        require_token_delegate(&ctx.accounts.user_token_account, pool_key, stake)?;
 
-        let open_price = read_price(&ctx.accounts.price_update)?;
+        let open_price = read_price(&ctx.accounts.price_update, &ctx.accounts.pool.price_feed_id)?;
         let now = Clock::get()?.unix_timestamp;
         let required_payout = checked_payout(stake, ctx.accounts.pool.payout_bps)?;
+        require_token_delegate(&ctx.accounts.pool_token_account, pool_key, required_payout)?;
         let pool_balance = ctx.accounts.pool_token_account.amount;
         require!(
             pool_balance >= required_payout,
@@ -258,7 +251,8 @@ pub mod binary_prediction {
         let now = Clock::get()?.unix_timestamp;
         require!(now >= ctx.accounts.bet.expiry_ts, ErrorCode::BetNotExpired);
 
-        let settle_price = read_price(&ctx.accounts.price_update)?;
+        let settle_price =
+            read_price(&ctx.accounts.price_update, &ctx.accounts.pool.price_feed_id)?;
         let win_payout = checked_payout(ctx.accounts.bet.stake, ctx.accounts.pool.payout_bps)?;
         let payout = if settle_price == ctx.accounts.bet.open_price {
             ctx.accounts.bet.stake
@@ -270,6 +264,11 @@ pub mod binary_prediction {
         };
 
         if payout > 0 {
+            require_token_delegate(
+                &ctx.accounts.pool_token_account,
+                ctx.accounts.pool.key(),
+                payout,
+            )?;
             pool_signed_transfer(
                 ctx.accounts.pool_token_account.to_account_info(),
                 ctx.accounts.user_token_account.to_account_info(),
@@ -296,6 +295,7 @@ pub mod binary_prediction {
 #[derive(Accounts)]
 #[instruction(
     price_feed: Pubkey,
+    price_feed_id: [u8; 32],
     seed_amount: u64,
     bet_duration_seconds: i64,
     min_stake: u64,

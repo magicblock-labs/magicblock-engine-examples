@@ -232,7 +232,7 @@ function updateData(symbol: string, feed: web3.PublicKey, price: number) {
     symbol,
     id: Array.from(feed.toBytes()),
     temporalNumericValue: {
-      timestampNs: new BN(Date.now()),
+      timestampNs: new BN(Date.now().toString()).mul(new BN(1_000_000)),
       quantizedValue: new BN(price),
     },
     publisherMerkleRoot: Array(32).fill(0),
@@ -347,6 +347,7 @@ describe("binary-prediction", () => {
   const poolAuthority = web3.Keypair.generate();
   const sessionKeypair = web3.Keypair.generate();
   const feed = priceFeed();
+  const feedId = Array.from(feed.toBytes());
   const [pool] = web3.PublicKey.findProgramAddressSync(
     [POOL_SEED],
     program.programId,
@@ -432,6 +433,7 @@ describe("binary-prediction", () => {
     await program.methods
       .initialize(
         feed,
+        feedId,
         POOL_SEED_AMOUNT,
         BET_DURATION_SECONDS,
         MIN_STAKE,
@@ -478,6 +480,9 @@ describe("binary-prediction", () => {
     const poolState = await program.account.pool.fetch(pool);
     expect(poolState.betDurationSeconds.toNumber()).to.equal(
       BET_DURATION_SECONDS.toNumber(),
+    );
+    expect(Buffer.from(poolState.priceFeedId)).to.deep.equal(
+      Buffer.from(feedId),
     );
     expect(poolState.minStake.toNumber()).to.equal(MIN_STAKE.toNumber());
     expect(poolState.payoutBps.toNumber()).to.equal(PAYOUT_BPS.toNumber());

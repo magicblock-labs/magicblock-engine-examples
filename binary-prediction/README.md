@@ -75,8 +75,9 @@ by the test wallet.
 
 ## Instruction Surface
 
-- `initialize(price_feed, seed_amount, bet_duration_seconds, min_stake, payout_bps)` — create the
-  singleton pool, store market config, seed LP liquidity, and delegate pool token custody.
+- `initialize(price_feed, price_feed_id, seed_amount, bet_duration_seconds, min_stake, payout_bps)`
+  — create the singleton pool, store market config, seed LP liquidity, and delegate pool token
+  custody.
 - `place_bet(direction, stake)` — session-authorized ER instruction that reads the feed and opens a
   per-user bet.
 - `settle()` — settle one open bet against the current feed price.

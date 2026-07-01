@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{
     instruction::{AccountMeta, Instruction},
     program::{invoke, invoke_signed},
+    program_option::COption,
 };
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer as SplTransfer};
@@ -16,15 +17,40 @@ use crate::{
 
 /// Reads a fresh price from the Pyth receiver account.
 /// This example rejects stale prices with a fixed max age.
-pub(crate) fn read_price(price_update_account: &UncheckedAccount) -> Result<i64> {
+pub(crate) fn read_price(
+    price_update_account: &UncheckedAccount,
+    feed_id: &[u8; 32],
+) -> Result<i64> {
     let price_update_info = price_update_account.to_account_info();
     let data_ref = price_update_info.data.borrow();
     let price_update = PriceUpdateV2::try_deserialize_unchecked(&mut data_ref.as_ref())
         .map_err(Into::<Error>::into)?;
-    let feed_id = price_update_account.key().to_bytes();
     let price =
-        price_update.get_price_no_older_than(&Clock::get()?, MAX_PRICE_AGE_SECONDS, &feed_id)?;
+        price_update.get_price_no_older_than(&Clock::get()?, MAX_PRICE_AGE_SECONDS, feed_id)?;
     Ok(price.price)
+}
+
+/// Confirms an SPL token account delegated enough allowance to the Pool PDA.
+pub(crate) fn require_token_delegate(
+    token_account: &Account<TokenAccount>,
+    delegate_authority: Pubkey,
+    amount: u64,
+) -> Result<()> {
+    match token_account.delegate {
+        COption::Some(delegate) => {
+            require_keys_eq!(
+                delegate,
+                delegate_authority,
+                ErrorCode::InvalidTokenDelegate
+            )
+        }
+        COption::None => return err!(ErrorCode::InvalidTokenDelegate),
+    }
+    require!(
+        token_account.delegated_amount >= amount,
+        ErrorCode::InsufficientDelegatedAmount
+    );
+    Ok(())
 }
 
 /// Calculates a payout from a stake and a basis-point multiplier.
