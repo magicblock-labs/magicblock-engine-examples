@@ -16,6 +16,13 @@
 !/bolt-counter/target/deploy/counter-keypair.json
 !/bolt-counter/target/deploy/increase-keypair.json
 
+# Gachapon example program keypair — kept so Anchor deploys the declared ID.
+!/gachapon-example/target/
+/gachapon-example/target/*
+!/gachapon-example/target/deploy/
+/gachapon-example/target/deploy/*
+!/gachapon-example/target/deploy/gachapon_example-keypair.json
+
 **/tests-kit
 
 # Logs
