@@ -180,6 +180,21 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 </blockquote>
 </td>
 </tr>
+<tr>
+<td valign="top" width="33%">
+<blockquote>
+<p><strong><a href="./binary-prediction/">📈 Binary Prediction</a></strong></p>
+<p>
+<img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
+<img src="https://img.shields.io/badge/Price%20Oracle-0891b2?style=flat-square" alt="Price Oracle"/>
+<img src="https://img.shields.io/badge/Session%20Keys-6366f1?style=flat-square" alt="Session Keys"/>
+</p>
+<p><em>Up/down SPL-token prediction flow using session keys and an ER price oracle.</em></p>
+</blockquote>
+</td>
+<td valign="top" width="33%"></td>
+<td valign="top" width="33%"></td>
+</tr>
 </table>
 
 ### 🎨 Templates
