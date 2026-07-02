@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-oracle-trading = "32M8Sk4TMrktcpCwW6638MvknQbmbW4yskLaVR4vruHC"
+oracle-priced-purchase = "32M8Sk4TMrktcpCwW6638MvknQbmbW4yskLaVR4vruHC"
 
 [programs.localnet]
-oracle-trading = "32M8Sk4TMrktcpCwW6638MvknQbmbW4yskLaVR4vruHC"
+oracle-priced-purchase = "32M8Sk4TMrktcpCwW6638MvknQbmbW4yskLaVR4vruHC"
 
 [registry]
 url = "https://api.apr.dev"
@@ -19,4 +19,4 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/oracle-trading.ts"
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/oracle-priced-purchase.ts"

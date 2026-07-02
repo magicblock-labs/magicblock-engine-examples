@@ -13,7 +13,7 @@ pub const USD_CENTS_PER_USD: u128 = 100;
 
 #[ephemeral]
 #[program]
-pub mod oracle_trading {
+pub mod oracle_priced_purchase {
     use super::*;
 
     pub fn initialize_store(

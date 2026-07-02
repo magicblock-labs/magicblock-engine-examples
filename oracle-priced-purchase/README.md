@@ -1,4 +1,4 @@
-# Oracle Trading
+# Oracle Priced Purchase
 
 Simple Anchor example that consumes the
 [real-time-pricing-oracle](https://github.com/magicblock-labs/real-time-pricing-oracle)
@@ -50,7 +50,7 @@ cluster in one terminal and leave it running:
 yarn setup
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh oracle-trading` from
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh oracle-priced-purchase` from
 the repo root: it builds this example, boots the validators, preloads the oracle
 fixtures, and holds them until you press a key.
 

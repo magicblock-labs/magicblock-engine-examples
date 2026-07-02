@@ -8,7 +8,7 @@ import {
   Transaction,
 } from "@solana/web3.js";
 import { assert } from "chai";
-import { OracleTrading } from "../target/types/oracle_trading";
+import { OraclePricedPurchase } from "../target/types/oracle_priced_purchase";
 
 const RECEIPT_SEED = "receipt";
 const STORE_SEED = "store";
@@ -19,7 +19,7 @@ const SOL_USD_50_PRICE = new PublicKey(
   "EpdAP2KHQAXPccREjM1WsLiyKVcchYj82pv9sWZhYUY1",
 );
 
-describe("oracle-trading", () => {
+describe("oracle-priced-purchase", () => {
   const provider = process.env.PROVIDER_ENDPOINT
     ? new anchor.AnchorProvider(
         new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT, {
@@ -32,7 +32,8 @@ describe("oracle-trading", () => {
 
   anchor.setProvider(provider);
 
-  const program = anchor.workspace.OracleTrading as Program<OracleTrading>;
+  const program = anchor.workspace
+    .OraclePricedPurchase as Program<OraclePricedPurchase>;
   const merchant = provider.wallet.publicKey;
   const buyer = Keypair.generate();
   const [store] = anchor.web3.PublicKey.findProgramAddressSync(
