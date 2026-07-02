@@ -1,8 +1,8 @@
 {
   "license": "ISC",
   "scripts": {
-    "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "lint:fix": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w",
+    "lint": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
     "test": "anchor test",
     "test:devnet:smoke": "RUN_VRF_CORE_SMOKE=1 anchor test --skip-local-validator --skip-deploy --provider.cluster devnet",
     "test:devnet:e2e": "RUN_VRF_CORE_E2E=1 anchor test --skip-local-validator --skip-deploy --provider.cluster devnet"

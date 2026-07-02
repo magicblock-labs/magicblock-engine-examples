@@ -11,16 +11,16 @@ const PULL_SEED = "pull";
 const ASSET_SEED = "asset";
 
 const MPL_CORE_PROGRAM_ID = new web3.PublicKey(
-  "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+  "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
 );
 const VRF_PROGRAM_ID = new web3.PublicKey(
-  "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+  "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz",
 );
 const DEFAULT_VRF_QUEUE = new web3.PublicKey(
-  "Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh"
+  "Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh",
 );
 const SLOT_HASHES = new web3.PublicKey(
-  "SysvarS1otHashes111111111111111111111111111"
+  "SysvarS1otHashes111111111111111111111111111",
 );
 
 const PULL_STATUS_SETTLED = 1;
@@ -78,7 +78,7 @@ function readU64(data: Buffer, cursor: Cursor): number {
 
 function readPubkey(data: Buffer, cursor: Cursor): web3.PublicKey {
   const value = new web3.PublicKey(
-    data.subarray(cursor.offset, cursor.offset + 32)
+    data.subarray(cursor.offset, cursor.offset + 32),
   );
   cursor.offset += 32;
   return value;
@@ -100,7 +100,7 @@ function readPluginAuthority(data: Buffer, cursor: Cursor): void {
 
 function readAttributesPlugin(
   data: Buffer,
-  offset: number
+  offset: number,
 ): Map<string, string> {
   const cursor = { offset };
   const pluginVariant = readU8(data, cursor);
@@ -167,38 +167,38 @@ function readCoreAsset(data: Buffer): CoreAsset {
 function machinePda(
   authority: web3.PublicKey,
   machineId: anchor.BN,
-  programId: web3.PublicKey
+  programId: web3.PublicKey,
 ): web3.PublicKey {
   return web3.PublicKey.findProgramAddressSync(
     [Buffer.from(MACHINE_SEED), authority.toBuffer(), u64Le(machineId)],
-    programId
+    programId,
   )[0];
 }
 
 function treasuryPda(
   machine: web3.PublicKey,
-  programId: web3.PublicKey
+  programId: web3.PublicKey,
 ): web3.PublicKey {
   return web3.PublicKey.findProgramAddressSync(
     [Buffer.from(TREASURY_SEED), machine.toBuffer()],
-    programId
+    programId,
   )[0];
 }
 
 function updateAuthorityPda(
   machine: web3.PublicKey,
-  programId: web3.PublicKey
+  programId: web3.PublicKey,
 ): web3.PublicKey {
   return web3.PublicKey.findProgramAddressSync(
     [Buffer.from(UPDATE_AUTHORITY_SEED), machine.toBuffer()],
-    programId
+    programId,
   )[0];
 }
 
 function callbackIdentityPda(programId: web3.PublicKey): web3.PublicKey {
   return web3.PublicKey.findProgramAddressSync(
     [Buffer.from(VRF_IDENTITY_SEED)],
-    programId
+    programId,
   )[0];
 }
 
@@ -206,7 +206,7 @@ function pullPda(
   machine: web3.PublicKey,
   player: web3.PublicKey,
   pullId: anchor.BN,
-  programId: web3.PublicKey
+  programId: web3.PublicKey,
 ): web3.PublicKey {
   return web3.PublicKey.findProgramAddressSync(
     [
@@ -215,7 +215,7 @@ function pullPda(
       player.toBuffer(),
       u64Le(pullId),
     ],
-    programId
+    programId,
   )[0];
 }
 
@@ -223,7 +223,7 @@ function assetPda(
   machine: web3.PublicKey,
   player: web3.PublicKey,
   pullId: anchor.BN,
-  programId: web3.PublicKey
+  programId: web3.PublicKey,
 ): web3.PublicKey {
   return web3.PublicKey.findProgramAddressSync(
     [
@@ -232,7 +232,7 @@ function assetPda(
       player.toBuffer(),
       u64Le(pullId),
     ],
-    programId
+    programId,
   )[0];
 }
 
@@ -240,7 +240,7 @@ async function waitForSettledPull(
   provider: anchor.AnchorProvider,
   program: Program<GachaponExample>,
   pendingPull: web3.PublicKey,
-  asset: web3.PublicKey
+  asset: web3.PublicKey,
 ) {
   const startedAt = Date.now();
   let lastStatus = "not fetched";
@@ -252,7 +252,7 @@ async function waitForSettledPull(
     if (pull.status === PULL_STATUS_SETTLED) {
       const assetAccount = await provider.connection.getAccountInfo(
         asset,
-        "confirmed"
+        "confirmed",
       );
       if (assetAccount) {
         return { pull, assetAccount };
@@ -264,7 +264,7 @@ async function waitForSettledPull(
   }
 
   throw new Error(
-    `VRF callback did not settle pull ${pendingPull.toBase58()} within ${VRF_SETTLEMENT_TIMEOUT_MS}ms; last status: ${lastStatus}`
+    `VRF callback did not settle pull ${pendingPull.toBase58()} within ${VRF_SETTLEMENT_TIMEOUT_MS}ms; last status: ${lastStatus}`,
   );
 }
 
@@ -353,8 +353,8 @@ describe("gachapon-example", () => {
           fromPubkey: authority,
           toPubkey: stranger.publicKey,
           lamports: web3.LAMPORTS_PER_SOL / 10,
-        })
-      )
+        }),
+      ),
     );
 
     try {
@@ -427,14 +427,14 @@ describe("gachapon-example", () => {
     const e2eTreasury = treasuryPda(e2eMachine, program.programId);
     const e2eUpdateAuthority = updateAuthorityPda(
       e2eMachine,
-      program.programId
+      program.programId,
     );
     const pullId = new anchor.BN(1);
     const pendingPull = pullPda(
       e2eMachine,
       authority,
       pullId,
-      program.programId
+      program.programId,
     );
     const asset = assetPda(e2eMachine, authority, pullId, program.programId);
 
@@ -481,7 +481,7 @@ describe("gachapon-example", () => {
       provider,
       program,
       pendingPull,
-      asset
+      asset,
     );
     const reward = rewards[pull.rewardId];
     const afterMachine = await program.account.machine.fetch(e2eMachine);
@@ -496,18 +496,18 @@ describe("gachapon-example", () => {
 
     assert.equal(
       afterMachine.pullCount.toString(),
-      beforeMachine.pullCount.addn(1).toString()
+      beforeMachine.pullCount.addn(1).toString(),
     );
     assert.equal(
       afterMachine.rewards[pull.rewardId].mintedCount.toString(),
-      beforeMachine.rewards[pull.rewardId].mintedCount.addn(1).toString()
+      beforeMachine.rewards[pull.rewardId].mintedCount.addn(1).toString(),
     );
 
     assert.equal(assetAccount.owner.toBase58(), MPL_CORE_PROGRAM_ID.toBase58());
     assert.equal(coreAsset.owner.toBase58(), authority.toBase58());
     assert.equal(
       coreAsset.updateAuthority?.toBase58(),
-      e2eUpdateAuthority.toBase58()
+      e2eUpdateAuthority.toBase58(),
     );
     assert.equal(coreAsset.name, reward.name);
     assert.equal(coreAsset.uri, reward.uri);
