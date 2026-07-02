@@ -594,6 +594,11 @@ if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
         echo "  WARNING: $so has no matching keypair ($(basename "$kp")); not preloaded."
       fi
     done
+    for account in "$p"/tests/fixtures/accounts/*.json; do
+      [ -e "$account" ] || continue
+      echo "  $account"
+      PRELOAD_ARGS+=(--account - "$account")
+    done
   done
 fi
 

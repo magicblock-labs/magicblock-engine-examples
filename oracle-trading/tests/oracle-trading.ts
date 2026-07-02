@@ -3,15 +3,21 @@ import { Program } from "@coral-xyz/anchor";
 import {
   Keypair,
   LAMPORTS_PER_SOL,
+  PublicKey,
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
 import { assert } from "chai";
 import { OracleTrading } from "../target/types/oracle_trading";
 
-const MOCK_PRICE_SEED = "mock_price";
 const RECEIPT_SEED = "receipt";
 const STORE_SEED = "store";
+const SOL_USD_100_PRICE = new PublicKey(
+  "B8vx8v7SwZsmFYz3fkSJphr7uq34LoiVr18pimLG5FJM",
+);
+const SOL_USD_50_PRICE = new PublicKey(
+  "EpdAP2KHQAXPccREjM1WsLiyKVcchYj82pv9sWZhYUY1",
+);
 
 describe("oracle-trading", () => {
   const provider = process.env.PROVIDER_ENDPOINT
@@ -37,10 +43,6 @@ describe("oracle-trading", () => {
     [Buffer.from(RECEIPT_SEED), buyer.publicKey.toBuffer()],
     program.programId,
   );
-  const [mockPrice] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from(MOCK_PRICE_SEED)],
-    program.programId,
-  );
 
   before(async () => {
     await provider.sendAndConfirm(
@@ -54,7 +56,7 @@ describe("oracle-trading", () => {
     );
 
     await program.methods
-      .initializeStore(new anchor.BN(2_500), mockPrice)
+      .initializeStore(new anchor.BN(2_500), SOL_USD_100_PRICE)
       .accountsPartial({
         store,
         merchant,
@@ -64,21 +66,13 @@ describe("oracle-trading", () => {
 
   it("uses the SOL/USD oracle price to charge a USD-priced token purchase", async () => {
     await program.methods
-      .upsertMockPrice(new anchor.BN(10_000), -2, new anchor.BN(10))
-      .accountsPartial({
-        payer: merchant,
-        priceUpdate: mockPrice,
-      })
-      .rpc({ commitment: "confirmed" });
-
-    await program.methods
       .buyToken(new anchor.BN(2), new anchor.BN(600_000_000))
       .accountsPartial({
         store,
         receipt,
         buyer: buyer.publicKey,
         merchant,
-        priceUpdate: mockPrice,
+        priceUpdate: SOL_USD_100_PRICE,
       })
       .signers([buyer])
       .rpc({ commitment: "confirmed" });
@@ -99,10 +93,10 @@ describe("oracle-trading", () => {
 
   it("rejects a purchase when the oracle-derived SOL cost exceeds max_lamports", async () => {
     await program.methods
-      .upsertMockPrice(new anchor.BN(5_000), -2, new anchor.BN(10))
+      .initializeStore(new anchor.BN(2_500), SOL_USD_50_PRICE)
       .accountsPartial({
-        payer: merchant,
-        priceUpdate: mockPrice,
+        store,
+        merchant,
       })
       .rpc({ commitment: "confirmed" });
 
@@ -114,7 +108,7 @@ describe("oracle-trading", () => {
           receipt,
           buyer: buyer.publicKey,
           merchant,
-          priceUpdate: mockPrice,
+          priceUpdate: SOL_USD_50_PRICE,
         })
         .signers([buyer])
         .rpc({ commitment: "confirmed" });

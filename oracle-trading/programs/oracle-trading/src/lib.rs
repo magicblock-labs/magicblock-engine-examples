@@ -1,15 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
 use ephemeral_rollups_sdk::anchor::ephemeral;
-use pyth_solana_receiver_sdk::price_update::{
-    Price, PriceFeedMessage, PriceUpdateV2, VerificationLevel,
-};
+use pyth_solana_receiver_sdk::price_update::{Price, PriceUpdateV2};
 
 declare_id!("32M8Sk4TMrktcpCwW6638MvknQbmbW4yskLaVR4vruHC");
 
 pub const STORE_SEED: &[u8] = b"store";
 pub const RECEIPT_SEED: &[u8] = b"receipt";
-pub const MOCK_PRICE_SEED: &[u8] = b"mock_price";
 pub const MAX_PRICE_AGE_SECONDS: u64 = 60;
 pub const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
 pub const USD_CENTS_PER_USD: u128 = 100;
@@ -109,40 +106,6 @@ pub mod oracle_trading {
         );
         Ok(())
     }
-
-    /// Local-test helper that writes a PriceUpdateV2-shaped account.
-    ///
-    /// Real integrations should pass a feed account maintained by the
-    /// real-time-pricing-oracle chain pusher instead.
-    pub fn upsert_mock_price(
-        ctx: Context<UpsertMockPrice>,
-        price: i64,
-        exponent: i32,
-        conf: u64,
-    ) -> Result<()> {
-        require!(price > 0, StoreError::InvalidOraclePrice);
-
-        let clock = Clock::get()?;
-        let price_update = PriceUpdateV2 {
-            write_authority: ctx.accounts.payer.key(),
-            verification_level: VerificationLevel::Full,
-            price_message: PriceFeedMessage {
-                feed_id: ctx.accounts.price_update.key().to_bytes(),
-                price,
-                conf,
-                exponent,
-                publish_time: clock.unix_timestamp,
-                prev_publish_time: clock.unix_timestamp,
-                ema_price: price,
-                ema_conf: conf,
-            },
-            posted_slot: clock.slot,
-        };
-
-        let mut data = ctx.accounts.price_update.try_borrow_mut_data()?;
-        price_update.try_serialize(&mut data.as_mut())?;
-        Ok(())
-    }
 }
 
 #[derive(Accounts)]
@@ -177,22 +140,6 @@ pub struct BuyToken<'info> {
     #[account(mut)]
     pub merchant: SystemAccount<'info>,
     /// CHECK: price feed bytes are validated by PriceUpdateV2 deserialization.
-    pub price_update: UncheckedAccount<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct UpsertMockPrice<'info> {
-    #[account(mut)]
-    pub payer: Signer<'info>,
-    /// CHECK: test-only account with PriceUpdateV2 layout and this program as owner.
-    #[account(
-        init_if_needed,
-        payer = payer,
-        space = PriceUpdateV2::LEN,
-        seeds = [MOCK_PRICE_SEED],
-        bump
-    )]
     pub price_update: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }

@@ -42,13 +42,29 @@ yarn
 yarn build
 ```
 
-This example includes `upsert_mock_price` so local tests can write a
-`PriceUpdateV2`-shaped SOL/USD account without running an external oracle
-pusher:
+This example runs against a **local MagicBlock cluster** with static
+`PriceUpdateV2` account fixtures preloaded by the repo test harness. Start the
+cluster in one terminal and leave it running:
+
+```bash
+yarn setup
+```
+
+`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh oracle-trading` from
+the repo root: it builds this example, boots the validators, preloads the oracle
+fixtures, and holds them until you press a key.
+
+Then, in a second terminal, run this example's tests against that cluster:
 
 ```bash
 yarn test:local
 ```
+
+`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster
+(without it the tests fall back to devnet).
+
+> Tip: to build and run **every** example end-to-end (what CI does), run the
+> repo-root `./scripts/test-locally.sh` directly.
 
 For a live MagicBlock feed, run the chain pusher from the oracle repository and
 pass the delegated SOL/USD price feed account to `initialize_store`:
