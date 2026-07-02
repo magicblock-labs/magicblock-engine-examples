@@ -1,0 +1,39 @@
+{
+  "name": "pinocchio-private-counter",
+  "version": "0.1.0",
+  "description": "Tests for pinocchio-private-counter program",
+  "main": "index.js",
+  "scripts": {
+    "test:local": ". ../../scripts/local-env.sh && npx vitest run tests/",
+    "setup": "cd ../.. && SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-private-counter",
+    "test": "yarn test:local",
+    "test:watch": "vitest watch tests/",
+    "build": "cargo build-sbf",
+    "check": "cargo check",
+    "lint": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
+    "lint:fix": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
+  },
+  "keywords": [
+    "solana",
+    "pinocchio",
+    "permission",
+    "counter",
+    "program"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@magicblock-labs/ephemeral-rollups-sdk": "^0.11.1",
+    "@solana-program/system": "^0.10.0",
+    "@solana/kit": "^5.4.0",
+    "@solana/web3.js": "^1.93.0",
+    "@types/node": "^20.0.0",
+    "borsh": "^0.7.0",
+    "dotenv": "^16.0.0",
+    "ts-node": "^10.9.0",
+    "tweetnacl": "^1.0.3",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0",
+    "prettier": "^3.5.3"
+  }
+}

@@ -57,5 +57,5 @@ esac
 # "pinocchio-private-counter"). EXACT_MATCH=1 makes it select only this project.
 export EXACT_MATCH=1
 
-echo "Running single example '$EXAMPLE' (phase: $phase)"
+echo "Running single example '$EXAMPLE' at $(project_dir "$EXAMPLE") (phase: $phase)"
 exec bash "$SCRIPT_DIR/test-locally.sh" "$EXAMPLE"
