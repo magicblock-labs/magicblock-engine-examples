@@ -1,20 +1,25 @@
-# Magic Gachapon
+# 🪄 Magic Gachapon
 
-Anchor and Next.js demo for a MagicBlock VRF-powered gachapon machine.
+MagicBlock VRF gachapon demo that mints a Metaplex Core NFT reward.
 
-The program keeps one machine PDA with exactly four configurable reward
-templates. `pull` requests VRF randomness and the `consume_pull` callback mints
-one Metaplex Core asset directly to the caller using the selected reward
+The Anchor program keeps one machine PDA with four weighted reward templates.
+`pull` requests MagicBlock VRF randomness, and the `consume_pull` callback mints
+one Metaplex Core asset directly to the player using the selected reward
 template.
 
-The frontend demonstrates the full demo flow:
+## VRF Flow
 
-- creates or reuses a local devnet demo wallet
-- creates one gachapon machine for that wallet
-- uploads four weighted reward templates once
-- requests MagicBlock VRF randomness
-- waits for the callback to mint a Metaplex Core NFT
-- links each step to Solana Explorer
+This is a base-layer VRF example, not a delegated Ephemeral Rollup flow.
+
+1. The frontend creates or reuses a local devnet demo wallet.
+2. The frontend derives a deterministic `machine_id` from that wallet pubkey, so
+   each wallet sets up one machine.
+3. `init` creates the machine, treasury PDA, and Core update-authority PDA.
+4. `upload_config` writes the four weighted NFT templates.
+5. `pull` transfers the `0.01 SOL` pull fee to the treasury and requests VRF.
+6. The MagicBlock VRF callback invokes `consume_pull`.
+7. The program validates the VRF program identity signer and mints a deterministic
+   Metaplex Core asset PDA for the player.
 
 ## Current Devnet Demo
 
@@ -25,16 +30,60 @@ The frontend demonstrates the full demo flow:
 | VRF program | `Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz` |
 | VRF queue | `Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh` |
 | Metaplex Core | `CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d` |
-| Pull fee | `0.01 SOL` |
 
-This demo uses MagicBlock's Solana devnet RPC,
-`https://rpc.magicblock.app/devnet`, because the Gachapon flow runs on the base
-layer and requests VRF from there. It does not submit transactions to an
-Ephemeral Rollup endpoint such as `https://devnet.magicblock.app`,
-`https://devnet-as.magicblock.app/`, or `https://devnet-us.magicblock.app`.
-Those ER endpoints are for delegated-account execution examples.
+The frontend uses MagicBlock's Solana devnet RPC,
+`https://rpc.magicblock.app/devnet`. ER endpoints such as
+`https://devnet.magicblock.app`, `https://devnet-as.magicblock.app/`, and
+`https://devnet-us.magicblock.app` are for delegated-account examples.
 
-## Frontend
+## Software Packages
+
+| Software   | Version | Installation Guide                                              |
+| ---------- | ------- | --------------------------------------------------------------- |
+| **Solana** | 3.1.6   | [Install Solana](https://docs.anza.xyz/cli/install)             |
+| **Rust**   | 1.85.0  | [Install Rust](https://www.rust-lang.org/tools/install)         |
+| **Anchor** | 0.32.1  | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
+| **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)          |
+
+```sh
+agave-install init 3.1.6
+rustup install 1.85.0
+avm use 0.32.1
+```
+
+## Build and Test
+
+Install dependencies and build the program:
+
+```bash
+yarn install
+anchor build
+```
+
+Run the local Anchor tests:
+
+```bash
+anchor test
+```
+
+The default tests cover initialization, config upload, authorization, and PDA
+derivation. Live VRF and Metaplex Core tests require devnet.
+
+After deploying to devnet, run the live request smoke test:
+
+```bash
+yarn test:devnet:smoke
+```
+
+Run the full devnet e2e cycle:
+
+```bash
+yarn test:devnet:e2e
+```
+
+## 🚀 Launch the Frontend
+
+To start the frontend application locally:
 
 ```bash
 cd gachapon-example/app
@@ -42,80 +91,12 @@ npm install
 npm run dev
 ```
 
-The app uses a local demo wallet pattern like the Roll Dice example. It
-generates a devnet keypair in the browser and stores it in `localStorage` under
-`solanaKeypair`. This is for demos only; do not use it as a production wallet
-custody pattern.
+The application will be available at `http://localhost:3000` or another port if
+3000 is already in use.
 
-Machine setup is deterministic per wallet. The contract still accepts
-`init(machine_id: u64)`, and the frontend derives that `machine_id` from the
-wallet pubkey, so each pubkey maps to one setup machine and can skip setup on
-later pulls.
-
-## Instructions
-
-- `init(machine_id)` initializes a machine, treasury PDA, and Core update-authority PDA.
-- `upload_config(rewards)` uploads four weighted NFT templates.
-- `pull(pull_id, client_seed)` creates a pending pull and requests VRF.
-- `consume_pull(randomness, pull_id)` is the VRF callback. It selects a weighted
-  reward and creates the Core asset directly for the player.
-
-The Core minting path follows the Colony program pattern:
-
-- `CreateV2CpiBuilder`
-- `Plugin::Attributes`
-- PDA update authority
-- fixed Core program id: `CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d`
-
-Unlike Colony's planet mint, the callback cannot rely on a user signer. The
-reward asset is therefore a deterministic PDA:
-
-```text
-["asset", machine, player, pull_id]
-```
-
-The program signs for that PDA during the Core CPI.
-
-## MagicBlock VRF Notes
-
-This example uses the same VRF request wire shape as
-`ephemeral-vrf-sdk@0.2.x`, but inlines the small request instruction helper.
-That keeps the program compatible with the Colony-style `mpl-core` dependency
-set while preserving the MagicBlock requirements:
-
-- use `DEFAULT_QUEUE` for this non-delegated base-layer example
-- pass all callback accounts in `pull`
-- validate `VRF_PROGRAM_IDENTITY` as the callback signer
-- mint only in the callback after randomness is delivered
-
-## Contract
-
-```bash
-cd gachapon-example
-yarn install
-anchor build
-anchor test
-```
-
-The default tests cover initialization, config upload, and authorization. A full
-`pull` smoke test needs the VRF and Metaplex Core programs available on the
-target cluster.
-
-After deploying to devnet, run the live request smoke test with:
-
-```bash
-yarn test:devnet:smoke
-```
-
-Run the full devnet e2e cycle with:
-
-```bash
-yarn test:devnet:e2e
-```
-
-The e2e test creates a fresh machine with placeholder reward URIs, requests VRF,
-waits for the callback to settle the pull, and verifies the minted Core asset
-owner, update authority, name, URI, and attributes.
+The app uses a local demo wallet pattern like the Roll Dice example. It stores a
+generated devnet keypair in browser `localStorage` under `solanaKeypair`; this is
+for demos only, not production wallet custody.
 
 ## Deploying Your Own Program
 
@@ -131,7 +112,6 @@ in these files, then deploy:
 - `app/lib/gachapon-devnet.ts`
 
 ```bash
-cd gachapon-example
 solana-keygen new --no-bip39-passphrase --silent --outfile target/deploy/gachapon_example-keypair.json
 anchor build
 anchor deploy --provider.cluster devnet
