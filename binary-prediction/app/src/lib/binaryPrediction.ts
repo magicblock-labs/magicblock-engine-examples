@@ -621,6 +621,7 @@ export async function placeBet(
       poolTokenAccount: new PublicKey(market.poolAta),
       priceUpdate: priceFeed(),
       tokenProgram: TOKEN_PROGRAM_ID,
+      sessionToken: null,
     })
     .signers([user])
     .rpc({ skipPreflight: true });
