@@ -73,6 +73,27 @@ yarn test:local
 vendored `--features test-mode` `ephemeral_oracle.so` fixture, so prices are deterministic and seeded
 by the test wallet.
 
+## Client
+
+The `app/` directory contains a small Vite client for exercising the local binary prediction flow.
+Run the local MagicBlock cluster first:
+
+```bash
+yarn setup
+```
+
+Then start the client in another terminal:
+
+```bash
+cd app
+yarn
+yarn dev
+```
+
+The client defaults to `http://localhost:8899` for the base layer and `http://localhost:7799` for
+the ER. Override with `VITE_PROVIDER_ENDPOINT`, `VITE_EPHEMERAL_PROVIDER_ENDPOINT`, and
+`VITE_EPHEMERAL_WS_ENDPOINT` when needed.
+
 ## Instruction Surface
 
 - `initialize(price_feed, price_feed_id, seed_amount, bet_duration_seconds, min_stake, payout_bps)`

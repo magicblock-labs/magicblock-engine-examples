@@ -1,0 +1,1032 @@
+{
+  "address": "7HHiv8th2wY24iZp2ReF7QkJyFJHwHWCgZWg7CWrQnnm",
+  "metadata": {
+    "name": "binary_prediction",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Binary up/down prediction example for MagicBlock Ephemeral Rollups"
+  },
+  "instructions": [
+    {
+      "name": "delegate_bet",
+      "docs": [
+        "Delegates the user's Bet PDA to the ER.",
+        "After delegation, `place_bet` and `settle` can update the Bet account with",
+        "low latency on the ephemeral runtime."
+      ],
+      "discriminator": [
+        55,
+        176,
+        95,
+        121,
+        115,
+        103,
+        253,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "buffer_bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                93,
+                82,
+                82,
+                170,
+                83,
+                237,
+                53,
+                115,
+                26,
+                62,
+                41,
+                227,
+                89,
+                212,
+                214,
+                230,
+                203,
+                33,
+                209,
+                146,
+                193,
+                158,
+                151,
+                201,
+                99,
+                19,
+                20,
+                44,
+                14,
+                58,
+                107,
+                58
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_program",
+          "address": "7HHiv8th2wY24iZp2ReF7QkJyFJHwHWCgZWg7CWrQnnm"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Creates the prediction pool and moves its starting liquidity into ER custody.",
+        "The Pool PDA stores market config on the base layer, while the pool",
+        "authority's token account is deposited into an EATA and delegated to the ER."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "pool_authority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "pool_authority",
+          "signer": true
+        },
+        {
+          "name": "admin_token_account",
+          "writable": true
+        },
+        {
+          "name": "pool_ephemeral_ata",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "vault_ephemeral_ata",
+          "writable": true
+        },
+        {
+          "name": "vault_token_account",
+          "writable": true
+        },
+        {
+          "name": "pool_eata_buffer",
+          "writable": true
+        },
+        {
+          "name": "pool_eata_record",
+          "writable": true
+        },
+        {
+          "name": "pool_eata_metadata",
+          "writable": true
+        },
+        {
+          "name": "vault_eata_buffer",
+          "writable": true
+        },
+        {
+          "name": "vault_eata_record",
+          "writable": true
+        },
+        {
+          "name": "vault_eata_metadata",
+          "writable": true
+        },
+        {
+          "name": "ephemeral_token_program",
+          "address": "SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "price_feed",
+          "type": "pubkey"
+        },
+        {
+          "name": "price_feed_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "seed_amount",
+          "type": "u64"
+        },
+        {
+          "name": "bet_duration_seconds",
+          "type": "i64"
+        },
+        {
+          "name": "min_stake",
+          "type": "u64"
+        },
+        {
+          "name": "payout_bps",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_bet",
+      "docs": [
+        "Creates the user's Bet PDA on the base layer.",
+        "Each user has one reusable Bet account; `settle` clears it so the same PDA",
+        "can be used again."
+      ],
+      "discriminator": [
+        195,
+        185,
+        122,
+        189,
+        203,
+        104,
+        43,
+        57
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "user"
+        },
+        {
+          "name": "bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "place_bet",
+      "docs": [
+        "Opens one UP or DOWN prediction on the ER.",
+        "The Pool PDA spends from the user's delegated token allowance, records the",
+        "current oracle price, and sets the earliest settlement time."
+      ],
+      "discriminator": [
+        222,
+        62,
+        67,
+        220,
+        63,
+        166,
+        126,
+        33
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true
+        },
+        {
+          "name": "user"
+        },
+        {
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_token_account",
+          "writable": true
+        },
+        {
+          "name": "pool_token_account",
+          "writable": true
+        },
+        {
+          "name": "price_update"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "direction",
+          "type": {
+            "defined": {
+              "name": "Direction"
+            }
+          }
+        },
+        {
+          "name": "stake",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer"
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle",
+      "docs": [
+        "Settles an expired bet using the latest oracle price.",
+        "Winners receive the configured basis-point payout, ties refund the stake,",
+        "and losses pay nothing. The Bet account is cleared afterward."
+      ],
+      "discriminator": [
+        175,
+        42,
+        185,
+        87,
+        144,
+        131,
+        102,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "user"
+        },
+        {
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_token_account",
+          "writable": true
+        },
+        {
+          "name": "pool_token_account",
+          "writable": true
+        },
+        {
+          "name": "price_update"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "undelegate_bet",
+      "docs": [
+        "Commits the user's Bet PDA back to the base layer and undelegates it.",
+        "This is optional for normal play; users only need it when they want the",
+        "account back, for example before closing it to reclaim rent."
+      ],
+      "discriminator": [
+        97,
+        183,
+        75,
+        35,
+        184,
+        36,
+        149,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Bet",
+      "discriminator": [
+        147,
+        23,
+        35,
+        59,
+        15,
+        75,
+        155,
+        32
+      ]
+    },
+    {
+      "name": "Pool",
+      "discriminator": [
+        241,
+        154,
+        109,
+        4,
+        17,
+        177,
+        109,
+        188
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidAmount",
+      "msg": "amount must be > 0"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidTokenOwner",
+      "msg": "token account is not owned by the expected authority"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidPoolConfig",
+      "msg": "invalid pool config"
+    },
+    {
+      "code": 6003,
+      "name": "MintMismatch",
+      "msg": "token account mint mismatch"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidEphemeralAta",
+      "msg": "invalid ephemeral token account PDA"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidVault",
+      "msg": "invalid e-token vault PDA"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidVaultAta",
+      "msg": "invalid e-token vault associated token account"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidDelegationPda",
+      "msg": "invalid delegation PDA"
+    },
+    {
+      "code": 6008,
+      "name": "StakeTooSmall",
+      "msg": "stake is below the minimum"
+    },
+    {
+      "code": 6009,
+      "name": "BetAlreadyOpen",
+      "msg": "bet is already open"
+    },
+    {
+      "code": 6010,
+      "name": "BetNotOpen",
+      "msg": "bet is not open"
+    },
+    {
+      "code": 6011,
+      "name": "BetNotExpired",
+      "msg": "bet has not expired"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidPriceFeed",
+      "msg": "invalid price feed account"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidTokenDelegate",
+      "msg": "token account has not delegated authority to the pool"
+    },
+    {
+      "code": 6014,
+      "name": "InsufficientDelegatedAmount",
+      "msg": "delegated token allowance is too small"
+    },
+    {
+      "code": 6015,
+      "name": "InsufficientLiquidity",
+      "msg": "pool free liquidity is too small"
+    },
+    {
+      "code": 6016,
+      "name": "MathOverflow",
+      "msg": "math overflow"
+    },
+    {
+      "code": 6017,
+      "name": "TieHasNoDirection",
+      "msg": "tie has no directional outcome"
+    }
+  ],
+  "types": [
+    {
+      "name": "Bet",
+      "docs": [
+        "Per-user prediction state.",
+        "This account is delegated to the ER while the user is playing. It holds one",
+        "open bet at a time and is reset after settlement."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "open_price",
+            "type": "i64"
+          },
+          {
+            "name": "expiry_ts",
+            "type": "i64"
+          },
+          {
+            "name": "direction",
+            "type": {
+              "defined": {
+                "name": "Direction"
+              }
+            }
+          },
+          {
+            "name": "stake",
+            "type": "u64"
+          },
+          {
+            "name": "is_open",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Direction",
+      "docs": [
+        "Direction the user predicts the price will move."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Up"
+          },
+          {
+            "name": "Down"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Pool",
+      "docs": [
+        "Pool configuration for this prediction market.",
+        "The Pool PDA signs token transfers, but the actual pool tokens are owned by",
+        "`authority` and kept in a delegated EATA on the ER."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Real signer that owns the pool token custody."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "price_feed",
+            "docs": [
+              "Oracle account accepted by betting and settlement instructions."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "price_feed_id",
+            "docs": [
+              "Pyth feed id validated inside the oracle price update account."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "bet_duration_seconds",
+            "docs": [
+              "How long a bet must stay open before it can be settled."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "min_stake",
+            "type": "u64"
+          },
+          {
+            "name": "payout_bps",
+            "docs": [
+              "Payout multiplier in basis points."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SessionTokenV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "target_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "session_signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "valid_until",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
