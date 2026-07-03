@@ -1,0 +1,30 @@
+[package]
+name = "binary-prediction"
+version = "0.1.0"
+description = "Binary up/down prediction example for MagicBlock Ephemeral Rollups"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "binary_prediction"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = [
+    "anchor-lang/idl-build",
+    "anchor-spl/idl-build",
+]
+custom-heap = []
+custom-panic = []
+anchor-debug = []
+
+[dependencies]
+anchor-lang = { version = "=1.0.2", features = ["init-if-needed"] }
+anchor-spl = { version = "=1.0.2" }
+ephemeral-rollups-sdk = { version = "=0.14.3", features = ["anchor"] }
+pyth-solana-receiver-sdk = "=2.0.0"
+session-keys = { version = "=3.1.1", features = ["no-entrypoint"] }

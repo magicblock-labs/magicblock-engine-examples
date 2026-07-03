@@ -68,6 +68,40 @@ describe("spl-tokens", () => {
 
   const TOKEN_AMOUNT = 1000n;
 
+  const sleep = async (ms: number): Promise<void> => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  };
+
+  /**
+   * Base-layer delegation can confirm before the ER has cloned the token
+   * account. Poll the ER view before sending transfer instructions that write
+   * those delegated accounts.
+   */
+  const waitForErTokenAccount = async (
+    ata: PublicKey,
+    expectedAmount: bigint,
+  ): Promise<void> => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      try {
+        const account = await getAccount(ephemeralConnection, ata);
+        if (account.amount === expectedAmount) {
+          return;
+        }
+        lastError = new Error(
+          `expected ${expectedAmount}, got ${account.amount}`,
+        );
+      } catch (error) {
+        lastError = error;
+      }
+      await sleep(500);
+    }
+
+    throw new Error(
+      `Timed out waiting for ER token account ${ata.toBase58()}: ${lastError}`,
+    );
+  };
+
   /**
    * Create a fresh mint and two recipients, each funded with SOL and holding
    * {@link TOKEN_AMOUNT} SPL tokens. Returns the mint, owners and their ATAs.
@@ -221,6 +255,10 @@ describe("spl-tokens", () => {
         { commitment: "confirmed", skipPreflight: true },
       );
     }
+    await Promise.all([
+      waitForErTokenAccount(ataA, 50n),
+      waitForErTokenAccount(ataB, 10n),
+    ]);
 
     // Transfer 2 tokens A -> B inside the ER via the SDK helper.
     const transferIxs = await transferSpl(
@@ -346,6 +384,10 @@ describe("spl-tokens", () => {
       [receiver, admin],
       { commitment: "confirmed", skipPreflight: true },
     );
+    await Promise.all([
+      waitForErTokenAccount(ataSender, 10n),
+      waitForErTokenAccount(ataReceiver, 10n),
+    ]);
 
     /// Transfer some tokens in the ER through the program
     const txT = await program.methods

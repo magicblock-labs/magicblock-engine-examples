@@ -180,6 +180,21 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 </blockquote>
 </td>
 </tr>
+<tr>
+<td valign="top" width="33%">
+<blockquote>
+<p><strong><a href="./binary-prediction/">📈 Binary Prediction</a></strong></p>
+<p>
+<img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
+<img src="https://img.shields.io/badge/Price%20Oracle-0891b2?style=flat-square" alt="Price Oracle"/>
+<img src="https://img.shields.io/badge/Session%20Keys-6366f1?style=flat-square" alt="Session Keys"/>
+</p>
+<p><em>Up/down SPL-token prediction flow using session keys and an ER price oracle.</em></p>
+</blockquote>
+</td>
+<td valign="top" width="33%"></td>
+<td valign="top" width="33%"></td>
+</tr>
 </table>
 
 ### 🎨 Templates
@@ -216,6 +231,19 @@ End-to-end app templates you can fork and build on.
 <img src="https://img.shields.io/badge/Privacy-9333ea?style=flat-square" alt="Privacy"/>
 </p>
 <p><em>Two-player RPS with hidden moves on the ER until reveal.</em></p>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td valign="top" width="33%">
+<blockquote>
+<p><strong><a href="./gachapon-example/">🪄 Magic Gachapon</a></strong></p>
+<p>
+<img src="https://img.shields.io/badge/Next.js-000000?style=flat-square&logo=next.js&logoColor=white" alt="Next.js"/>
+<img src="https://img.shields.io/badge/VRF-4f46e5?style=flat-square" alt="VRF"/>
+<img src="https://img.shields.io/badge/Metaplex%20Core-9945FF?style=flat-square" alt="Metaplex Core"/>
+</p>
+<p><em>MagicBlock VRF gachapon demo that mints a Metaplex Core NFT reward.</em></p>
 </blockquote>
 </td>
 </tr>
