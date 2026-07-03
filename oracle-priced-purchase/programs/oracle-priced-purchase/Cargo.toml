@@ -21,5 +21,4 @@ anchor-debug = []
 
 [dependencies]
 anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
-ephemeral-rollups-sdk = { version = "0.14.3", features = ["anchor"] }
 pyth-solana-receiver-sdk = "2.0.0"

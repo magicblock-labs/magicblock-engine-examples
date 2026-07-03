@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
-use ephemeral_rollups_sdk::anchor::ephemeral;
 use pyth_solana_receiver_sdk::price_update::{Price, PriceUpdateV2};
 
 declare_id!("32M8Sk4TMrktcpCwW6638MvknQbmbW4yskLaVR4vruHC");
@@ -11,7 +10,6 @@ pub const MAX_PRICE_AGE_SECONDS: u64 = 60;
 pub const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
 pub const USD_CENTS_PER_USD: u128 = 100;
 
-#[ephemeral]
 #[program]
 pub mod oracle_priced_purchase {
     use super::*;
@@ -19,7 +17,7 @@ pub mod oracle_priced_purchase {
     pub fn initialize_store(
         ctx: Context<InitializeStore>,
         token_price_usd_cents: u64,
-        sol_usd_feed: Pubkey,
+        sol_usd_feed_id: [u8; 32],
     ) -> Result<()> {
         require!(token_price_usd_cents > 0, StoreError::InvalidTokenPrice);
 
@@ -33,7 +31,7 @@ pub mod oracle_priced_purchase {
         }
 
         store.merchant = ctx.accounts.merchant.key();
-        store.sol_usd_feed = sol_usd_feed;
+        store.sol_usd_feed_id = sol_usd_feed_id;
         store.token_price_usd_cents = token_price_usd_cents;
         Ok(())
     }
@@ -45,13 +43,15 @@ pub mod oracle_priced_purchase {
             ctx.accounts.store.merchant,
             StoreError::UnauthorizedMerchant
         );
-        require_keys_eq!(
-            ctx.accounts.price_update.key(),
-            ctx.accounts.store.sol_usd_feed,
+        require!(
+            ctx.accounts.price_update.price_message.feed_id == ctx.accounts.store.sol_usd_feed_id,
             StoreError::UnexpectedPriceFeed
         );
 
-        let sol_price = read_price(&ctx.accounts.price_update)?;
+        let sol_price = read_price(
+            &ctx.accounts.price_update,
+            &ctx.accounts.store.sol_usd_feed_id,
+        )?;
         let total_usd_cents = ctx
             .accounts
             .store
@@ -139,15 +139,14 @@ pub struct BuyToken<'info> {
     pub buyer: Signer<'info>,
     #[account(mut)]
     pub merchant: SystemAccount<'info>,
-    /// CHECK: price feed bytes are validated by PriceUpdateV2 deserialization.
-    pub price_update: UncheckedAccount<'info>,
+    pub price_update: Account<'info, PriceUpdateV2>,
     pub system_program: Program<'info, System>,
 }
 
 #[account]
 pub struct Store {
     pub merchant: Pubkey,
-    pub sol_usd_feed: Pubkey,
+    pub sol_usd_feed_id: [u8; 32],
     pub token_price_usd_cents: u64,
     pub sold_count: u64,
 }
@@ -172,13 +171,9 @@ impl PurchaseReceipt {
     pub const SIZE: usize = 32 + 8 + 8 + 8 + 8 + 8 + 4 + 8;
 }
 
-fn read_price(price_update_info: &UncheckedAccount) -> Result<Price> {
-    let data = price_update_info.try_borrow_data()?;
-    let price_update = PriceUpdateV2::try_deserialize_unchecked(&mut data.as_ref())
-        .map_err(|_| error!(StoreError::InvalidPriceUpdate))?;
-    let feed_id = price_update_info.key().to_bytes();
+fn read_price(price_update: &Account<PriceUpdateV2>, feed_id: &[u8; 32]) -> Result<Price> {
     let price = price_update
-        .get_price_no_older_than(&Clock::get()?, MAX_PRICE_AGE_SECONDS, &feed_id)
+        .get_price_no_older_than(&Clock::get()?, MAX_PRICE_AGE_SECONDS, feed_id)
         .map_err(|_| error!(StoreError::InvalidPriceUpdate))?;
 
     require!(price.price > 0, StoreError::InvalidOraclePrice);

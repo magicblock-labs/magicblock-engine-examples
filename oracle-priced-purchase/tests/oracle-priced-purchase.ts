@@ -18,6 +18,18 @@ const SOL_USD_100_PRICE = new PublicKey(
 const SOL_USD_50_PRICE = new PublicKey(
   "EpdAP2KHQAXPccREjM1WsLiyKVcchYj82pv9sWZhYUY1",
 );
+const SOL_USD_100_FEED_ID = Array.from(
+  Buffer.from(
+    "969cefe5a1c3dc424aeaf191893d642799b8545431b5e2560e1cc78ccfdd91d6",
+    "hex",
+  ),
+);
+const SOL_USD_50_FEED_ID = Array.from(
+  Buffer.from(
+    "cd5b1dc2e5486ee8a1fa93a76ad56a1d15fef45c54fac50c7b489f1f3be0136a",
+    "hex",
+  ),
+);
 
 describe("oracle-priced-purchase", () => {
   const provider = process.env.PROVIDER_ENDPOINT
@@ -57,7 +69,7 @@ describe("oracle-priced-purchase", () => {
     );
 
     await program.methods
-      .initializeStore(new anchor.BN(2_500), SOL_USD_100_PRICE)
+      .initializeStore(new anchor.BN(2_500), SOL_USD_100_FEED_ID)
       .accountsPartial({
         store,
         merchant,
@@ -94,7 +106,7 @@ describe("oracle-priced-purchase", () => {
 
   it("rejects a purchase when the oracle-derived SOL cost exceeds max_lamports", async () => {
     await program.methods
-      .initializeStore(new anchor.BN(2_500), SOL_USD_50_PRICE)
+      .initializeStore(new anchor.BN(2_500), SOL_USD_50_FEED_ID)
       .accountsPartial({
         store,
         merchant,

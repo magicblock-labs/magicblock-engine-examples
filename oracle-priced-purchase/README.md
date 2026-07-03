@@ -7,7 +7,7 @@ price account format to sell a USD-priced token for SOL.
 The program models a minimal storefront-style purchase:
 
 - configure a token price in USD cents
-- bind the store to a SOL/USD `PriceUpdateV2` feed account
+- bind the store to a SOL/USD Pyth feed ID
 - read a fresh oracle price at purchase time
 - convert the USD token price into the required SOL lamports
 - reject the purchase if the required lamports exceed the buyer's `max_lamports`
@@ -66,8 +66,9 @@ yarn test:local
 > Tip: to build and run **every** example end-to-end (what CI does), run the
 > repo-root `./scripts/test-locally.sh` directly.
 
-For a live MagicBlock feed, run the chain pusher from the oracle repository and
-pass the delegated SOL/USD price feed account to `initialize_store`:
+For a live MagicBlock feed, run the chain pusher from the oracle repository,
+pass the SOL/USD Pyth feed ID to `initialize_store`, and pass the corresponding
+`PriceUpdateV2` account when buying:
 
 ```bash
 cargo run -- --auth-header "Bearer <your_auth_token>" \
@@ -78,11 +79,11 @@ cargo run -- --auth-header "Bearer <your_auth_token>" \
 ## Purchase Flow
 
 1. Initialize the store with a USD-denominated token price and a SOL/USD feed
-   account.
+   ID.
 2. A buyer calls `buy_token(quantity, max_lamports)`.
-3. The program requires the passed price account to match the configured feed,
-   deserializes `PriceUpdateV2`, and requires a fully verified price no older
-   than 60 seconds.
+3. Anchor deserializes the passed `PriceUpdateV2` account, then the program
+   requires its embedded feed ID to match the configured feed and requires a
+   fully verified price no older than 60 seconds.
 4. The program converts `token_price_usd_cents * quantity` into lamports using
    the oracle price.
 5. If the required lamports are greater than `max_lamports`, the purchase is

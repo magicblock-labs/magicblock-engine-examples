@@ -8,8 +8,7 @@
     "setup": "cd .. && SETUP_ONLY=1 ./scripts/test-locally.sh oracle-priced-purchase"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "0.32.1",
-    "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3"
+    "@coral-xyz/anchor": "0.32.1"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",
