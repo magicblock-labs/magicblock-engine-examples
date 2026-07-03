@@ -36,8 +36,8 @@ pub mod binary_prediction {
     use super::*;
 
     /// Creates the prediction pool and moves its starting liquidity into ER custody.
-    /// The Pool PDA stores market config on the base layer, while the pool
-    /// authority's token account is deposited into an EATA and delegated to the ER.
+    /// The Pool PDA stores market config and owns the pool token account that is
+    /// deposited into an EATA and delegated to the ER.
     pub fn initialize(
         ctx: Context<Initialize>,
         price_feed: Pubkey,
@@ -55,9 +55,10 @@ pub mod binary_prediction {
             ErrorCode::InvalidPoolConfig
         );
 
+        let pool_key = ctx.accounts.pool.key();
         let pool = &mut ctx.accounts.pool;
         pool.mint = ctx.accounts.mint.key();
-        pool.authority = ctx.accounts.pool_authority.key();
+        pool.authority = pool_key;
         pool.price_feed = price_feed;
         pool.price_feed_id = price_feed_id;
         pool.bet_duration_seconds = bet_duration_seconds;
@@ -78,7 +79,7 @@ pub mod binary_prediction {
         init_ephemeral_ata(
             &ctx.accounts.ephemeral_token_program,
             &ctx.accounts.pool_ephemeral_ata,
-            ctx.accounts.pool_authority.to_account_info(),
+            ctx.accounts.pool.to_account_info(),
             &ctx.accounts.mint,
             &ctx.accounts.admin,
             &ctx.accounts.system_program,
@@ -114,6 +115,8 @@ pub mod binary_prediction {
             &ctx.accounts.system_program,
             validator,
         )?;
+        let pool_bump = [ctx.accounts.pool.bump];
+        let pool_seeds: &[&[u8]] = &[POOL_SEED, &pool_bump];
         transfer_to_vault(
             &ctx.accounts.ephemeral_token_program,
             &ctx.accounts.pool_ephemeral_ata,
@@ -121,10 +124,10 @@ pub mod binary_prediction {
             &ctx.accounts.mint,
             &ctx.accounts.pool_token_account,
             &ctx.accounts.vault_token_account,
-            ctx.accounts.pool_authority.to_account_info(),
+            ctx.accounts.pool.to_account_info(),
             &ctx.accounts.token_program,
             seed_amount,
-            None,
+            Some(pool_seeds),
         )?;
         delegate_ephemeral_ata(
             &ctx.accounts.ephemeral_token_program,
@@ -185,8 +188,9 @@ pub mod binary_prediction {
     }
 
     /// Opens one UP or DOWN prediction on the ER.
-    /// The Pool PDA spends from the user's delegated token allowance, records the
-    /// current oracle price, and sets the earliest settlement time.
+    /// The payer spends from the user's token account as either the user signer
+    /// or an approved session delegate, records the current oracle price, and
+    /// sets the earliest settlement time.
     #[session_auth_or(
         ctx.accounts.user.key() == ctx.accounts.payer.key(),
         SessionError::InvalidToken
@@ -203,26 +207,29 @@ pub mod binary_prediction {
             ErrorCode::InvalidPriceFeed
         );
 
-        let pool_key = ctx.accounts.pool.key();
-        require_token_delegate(&ctx.accounts.user_token_account, pool_key, stake)?;
+        if ctx.accounts.payer.key() != ctx.accounts.user.key() {
+            require_token_delegate(
+                &ctx.accounts.user_token_account,
+                ctx.accounts.payer.key(),
+                stake,
+            )?;
+        }
 
         let open_price = read_price(&ctx.accounts.price_update, &ctx.accounts.pool.price_feed_id)?;
         let now = Clock::get()?.unix_timestamp;
         let required_payout = checked_payout(stake, ctx.accounts.pool.payout_bps)?;
-        require_token_delegate(&ctx.accounts.pool_token_account, pool_key, required_payout)?;
         let pool_balance = ctx.accounts.pool_token_account.amount;
         require!(
             pool_balance >= required_payout,
             ErrorCode::InsufficientLiquidity
         );
 
-        pool_signed_transfer(
+        signer_transfer(
             ctx.accounts.user_token_account.to_account_info(),
             ctx.accounts.pool_token_account.to_account_info(),
-            ctx.accounts.pool.to_account_info(),
+            ctx.accounts.payer.to_account_info(),
             ctx.accounts.token_program.to_account_info(),
             stake,
-            ctx.accounts.pool.bump,
         )?;
 
         let bet = &mut ctx.accounts.bet;
@@ -264,11 +271,6 @@ pub mod binary_prediction {
         };
 
         if payout > 0 {
-            require_token_delegate(
-                &ctx.accounts.pool_token_account,
-                ctx.accounts.pool.key(),
-                payout,
-            )?;
             pool_signed_transfer(
                 ctx.accounts.pool_token_account.to_account_info(),
                 ctx.accounts.user_token_account.to_account_info(),
@@ -290,8 +292,7 @@ pub mod binary_prediction {
 }
 
 /// Accounts for pool creation and one-time liquidity delegation.
-/// Notice that the Pool PDA itself is not delegated; only the pool authority's
-/// token EATA is delegated to the ER.
+/// The Pool PDA owns the pool token account and its EATA is delegated to the ER.
 #[derive(Accounts)]
 #[instruction(
     price_feed: Pubkey,
@@ -317,10 +318,9 @@ pub struct Initialize<'info> {
         init_if_needed,
         payer = admin,
         associated_token::mint = mint,
-        associated_token::authority = pool_authority
+        associated_token::authority = pool
     )]
     pub pool_token_account: Account<'info, TokenAccount>,
-    pub pool_authority: Signer<'info>,
     #[account(
         mut,
         constraint = admin_token_account.owner == admin.key() @ ErrorCode::InvalidTokenOwner,
@@ -329,7 +329,7 @@ pub struct Initialize<'info> {
     pub admin_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
-        constraint = pool_ephemeral_ata.key() == ephemeral_ata_pda(&pool_authority.key(), &mint.key()) @ ErrorCode::InvalidEphemeralAta
+        constraint = pool_ephemeral_ata.key() == ephemeral_ata_pda(&pool.key(), &mint.key()) @ ErrorCode::InvalidEphemeralAta
     )]
     /// CHECK: created and delegated by the Ephemeral SPL Token program.
     pub pool_ephemeral_ata: UncheckedAccount<'info>,
@@ -439,7 +439,7 @@ pub struct UndelegateBet<'info> {
 }
 
 /// Accounts for opening a prediction on the ER.
-/// The token accounts must already be delegated to the Pool PDA by the client.
+/// A session payer must be approved as delegate for the user's token account.
 #[derive(Accounts, Session)]
 pub struct PlaceBet<'info> {
     pub payer: Signer<'info>,
@@ -457,7 +457,7 @@ pub struct PlaceBet<'info> {
     pub user_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
-        constraint = pool_token_account.owner == pool.authority @ ErrorCode::InvalidTokenOwner,
+        constraint = pool_token_account.owner == pool.key() @ ErrorCode::InvalidTokenOwner,
         constraint = pool_token_account.mint == pool.mint @ ErrorCode::MintMismatch
     )]
     pub pool_token_account: Account<'info, TokenAccount>,
@@ -486,7 +486,7 @@ pub struct Settle<'info> {
     pub user_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
-        constraint = pool_token_account.owner == pool.authority @ ErrorCode::InvalidTokenOwner,
+        constraint = pool_token_account.owner == pool.key() @ ErrorCode::InvalidTokenOwner,
         constraint = pool_token_account.mint == pool.mint @ ErrorCode::MintMismatch
     )]
     pub pool_token_account: Account<'info, TokenAccount>,

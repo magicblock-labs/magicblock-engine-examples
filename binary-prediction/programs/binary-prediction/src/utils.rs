@@ -72,9 +72,7 @@ pub(crate) fn outcome(settle_price: i64, open_price: i64) -> Result<Direction> {
     }
 }
 
-/// Transfers tokens using the Pool PDA as the SPL delegate authority.
-/// The user and pool token accounts approve this PDA so ER instructions can move
-/// stake and payouts without requiring another wallet signature.
+/// Transfers tokens using the Pool PDA as SPL token authority.
 pub(crate) fn pool_signed_transfer<'info>(
     from: AccountInfo<'info>,
     to: AccountInfo<'info>,
@@ -91,6 +89,24 @@ pub(crate) fn pool_signed_transfer<'info>(
         authority: pool,
     };
     let cpi_ctx = CpiContext::new_with_signer(token_program.key(), cpi_accounts, signer_seeds);
+    token::transfer(cpi_ctx, amount)?;
+    Ok(())
+}
+
+/// Transfers tokens using the transaction signer as SPL owner or delegate.
+pub(crate) fn signer_transfer<'info>(
+    from: AccountInfo<'info>,
+    to: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    amount: u64,
+) -> Result<()> {
+    let cpi_accounts = SplTransfer {
+        from,
+        to,
+        authority,
+    };
+    let cpi_ctx = CpiContext::new(token_program.key(), cpi_accounts);
     token::transfer(cpi_ctx, amount)?;
     Ok(())
 }
