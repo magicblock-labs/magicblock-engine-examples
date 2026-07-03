@@ -51,8 +51,8 @@ This UI talks to two RPC endpoints:
 
 You can set them via environment variables when starting the app.
 
-Examples
-- Using localhost (same machine):
+Example using localhost:
+
 ```bash
     REACT_APP_PROVIDER_ENDPOINT=http://localhost:8899 \
     REACT_APP_EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799 \
