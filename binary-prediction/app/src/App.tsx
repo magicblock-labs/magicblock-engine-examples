@@ -30,6 +30,13 @@ import {
   StoredMarket,
 } from "./lib/binaryPrediction";
 
+type Toast = {
+  id: number;
+  tone: "success" | "error" | "info";
+  title: string;
+  detail: string;
+};
+
 const initialLogs: LogEntry[] = [
   {
     id: 1,
@@ -50,12 +57,57 @@ function expiryLabel(snapshot: MarketSnapshot | null) {
   return remaining > 0 ? `${remaining}s to settle` : "Ready to settle";
 }
 
+function settlementOutcome(
+  snapshot: MarketSnapshot | null,
+  settlementPrice: number,
+) {
+  if (!snapshot?.direction || snapshot.openPrice === "-") {
+    return {
+      tone: "info" as const,
+      title: "Ticket settled",
+      detail: "Settlement confirmed on the ER.",
+      log: "Ticket settled",
+    };
+  }
+
+  const openPrice = Number(snapshot.openPrice);
+  if (!Number.isFinite(openPrice) || !Number.isFinite(settlementPrice)) {
+    return {
+      tone: "info" as const,
+      title: "Ticket settled",
+      detail: "Settlement confirmed on the ER.",
+      log: "Ticket settled",
+    };
+  }
+
+  if (settlementPrice === openPrice) {
+    return {
+      tone: "info" as const,
+      title: "Stake refunded",
+      detail: `Open ${openPrice} matched settle ${settlementPrice}.`,
+      log: "Ticket settled: refunded",
+    };
+  }
+
+  const marketDirection: Direction =
+    settlementPrice > openPrice ? "up" : "down";
+  const won = marketDirection === snapshot.direction;
+
+  return {
+    tone: won ? ("success" as const) : ("error" as const),
+    title: won ? "You won" : "You lost",
+    detail: `${snapshot.direction.toUpperCase()} ticket vs ${marketDirection.toUpperCase()} move (${openPrice} -> ${settlementPrice}).`,
+    log: won ? "Ticket settled: won" : "Ticket settled: lost",
+  };
+}
+
 function App() {
   const [market, setMarket] = useState<StoredMarket>(() =>
     loadOrCreateMarket(),
   );
   const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [setupPrice, setSetupPrice] = useState("100");
   const [settlementPrice, setSettlementPrice] = useState("110");
@@ -74,6 +126,14 @@ function App() {
       { ...entry, id: Date.now() + Math.random() },
       ...current,
     ]);
+  }, []);
+
+  const pushToast = useCallback((toast: Omit<Toast, "id">) => {
+    const id = Date.now() + Math.random();
+    setToasts((current) => [{ ...toast, id }, ...current].slice(0, 3));
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((entry) => entry.id !== id));
+    }, 5_000);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -110,11 +170,16 @@ function App() {
           tone: "error",
           message: error instanceof Error ? error.message : String(error),
         });
+        pushToast({
+          tone: "error",
+          title: "Transaction failed",
+          detail: error instanceof Error ? error.message : String(error),
+        });
       } finally {
         setBusyLabel(null);
       }
     },
-    [pushLog, refresh],
+    [pushLog, pushToast, refresh],
   );
 
   const handleBootstrap = () =>
@@ -154,11 +219,19 @@ function App() {
 
   const handleSettle = () =>
     run("Settling ticket", async () => {
-      const signature = await settleBet(
-        market,
-        numberOrDefault(settlementPrice, 110),
-      );
-      pushLog({ tone: "success", message: "Ticket settled", signature });
+      const settlement = numberOrDefault(settlementPrice, 110);
+      const outcome = settlementOutcome(snapshot, settlement);
+      const signature = await settleBet(market, settlement);
+      pushToast({
+        tone: outcome.tone,
+        title: outcome.title,
+        detail: outcome.detail,
+      });
+      pushLog({
+        tone: outcome.tone === "error" ? "error" : "success",
+        message: outcome.log,
+        signature,
+      });
     });
 
   const handleReset = () => {
@@ -171,6 +244,14 @@ function App() {
 
   return (
     <main className="terminal">
+      <div className="toast-stack" aria-live="polite" aria-atomic="true">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast ${toast.tone}`}>
+            <strong>{toast.title}</strong>
+            <span>{toast.detail}</span>
+          </div>
+        ))}
+      </div>
       <section className="topbar">
         <div>
           <p className="eyebrow">MagicBlock ER</p>
@@ -212,7 +293,10 @@ function App() {
         </div>
         <div className={`direction-chip ${direction}`}>
           {direction === "up" ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
-          {direction.toUpperCase()}
+          {(snapshot?.isOpen
+            ? (snapshot.direction ?? direction)
+            : direction
+          ).toUpperCase()}
         </div>
         <div>
           <span>Settle</span>

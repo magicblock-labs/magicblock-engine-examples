@@ -51,6 +51,7 @@ export type MarketSnapshot = {
   poolErTokens: string;
   openPrice: string;
   currentPrice: string;
+  direction?: Direction;
   stake: string;
   expiry: string;
   isOpen: boolean;
@@ -165,6 +166,13 @@ export function shortKey(value?: string | PublicKey | null) {
   if (!value) return "-";
   const text = typeof value === "string" ? value : value.toBase58();
   return `${text.slice(0, 4)}...${text.slice(-4)}`;
+}
+
+function directionFromAccount(value: unknown): Direction | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  if ("up" in value) return "up";
+  if ("down" in value) return "down";
+  return undefined;
 }
 
 export function loadOrCreateMarket(): StoredMarket {
@@ -767,12 +775,14 @@ export async function refreshSnapshot(
   let stake = "-";
   let expiry = "-";
   let isOpen = false;
+  let betDirection: Direction | undefined;
   try {
     const account = await (erProgram as any).account.bet.fetch(bet);
     openPrice = account.openPrice.toString();
     stake = account.stake.toString();
     expiry = account.expiryTs.toString();
     isOpen = Boolean(account.isOpen);
+    betDirection = isOpen ? directionFromAccount(account.direction) : undefined;
   } catch {
     // Bet account has not been initialized or delegated yet.
   }
@@ -791,6 +801,7 @@ export async function refreshSnapshot(
     poolErTokens: market.poolAta ? shortKey(market.poolAta) : "-",
     openPrice,
     currentPrice: "-",
+    direction: betDirection,
     stake,
     expiry,
     isOpen,
