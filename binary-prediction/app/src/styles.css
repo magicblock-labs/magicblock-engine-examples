@@ -126,6 +126,47 @@ button:disabled {
   color: var(--oracle-cyan);
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.56);
+}
+
+.reset-modal {
+  width: min(420px, 100%);
+  border: 1px solid var(--desk-border-strong);
+  border-radius: 8px;
+  padding: 18px;
+  background: rgba(17, 31, 26, 0.98);
+  box-shadow: var(--shadow);
+}
+
+.reset-modal h2 {
+  margin: 8px 0 10px;
+  font-size: 1.35rem;
+}
+
+.reset-modal p:not(.eyebrow) {
+  color: var(--desk-text);
+  line-height: 1.45;
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.modal-actions .ghost-button,
+.modal-actions .danger-button {
+  margin-top: 0;
+}
+
 .topbar,
 .demo-summary,
 .demo-flow,
@@ -366,6 +407,7 @@ input:focus {
 
 .primary-button,
 .ghost-button,
+.danger-button,
 .icon-button,
 .segmented button {
   border: 1px solid var(--desk-border);
@@ -380,7 +422,8 @@ input:focus {
 }
 
 .primary-button,
-.ghost-button {
+.ghost-button,
+.danger-button {
   width: 100%;
   margin-top: 8px;
   font-weight: 800;
@@ -404,6 +447,11 @@ input:focus {
 .ghost-button {
   color: var(--desk-text);
   background: transparent;
+}
+
+.danger-button {
+  border-color: rgba(255, 107, 107, 0.5);
+  background: rgba(255, 107, 107, 0.13);
 }
 
 .icon-button {

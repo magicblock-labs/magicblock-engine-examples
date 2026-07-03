@@ -104,6 +104,7 @@ function App() {
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [lastResult, setLastResult] = useState<Omit<Toast, "id"> | null>(null);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [setupPrice, setSetupPrice] = useState("100");
   const [settlementPrice, setSettlementPrice] = useState("110");
@@ -248,6 +249,8 @@ function App() {
     setSnapshot(null);
     setLogs(initialLogs);
     setLastResult(null);
+    setToasts([]);
+    setShowResetModal(false);
   };
 
   return (
@@ -260,6 +263,44 @@ function App() {
           </div>
         ))}
       </div>
+      {showResetModal && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={() => setShowResetModal(false)}
+        >
+          <section
+            className="reset-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-market-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <p className="eyebrow">Reset demo</p>
+            <h2 id="reset-market-title">Clear saved market?</h2>
+            <p>
+              This removes the saved local market from this browser and returns
+              the demo to the initialize step.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setShowResetModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="danger-button"
+                type="button"
+                onClick={handleReset}
+              >
+                <RotateCcw size={16} />
+                Clear market
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       <section className="topbar">
         <div>
           <p className="eyebrow">MagicBlock ER</p>
@@ -312,7 +353,12 @@ function App() {
               <p className="step-index">1</p>
               <h2>Initialize</h2>
             </div>
-            <button className="icon-button" onClick={refresh} disabled={isBusy}>
+            <button
+              className="icon-button"
+              onClick={() => setShowResetModal(true)}
+              disabled={isBusy}
+              aria-label="Clear saved market"
+            >
               <RefreshCw size={16} />
             </button>
           </div>
@@ -346,7 +392,7 @@ function App() {
           </button>
           <button
             className="ghost-button"
-            onClick={handleReset}
+            onClick={() => setShowResetModal(true)}
             disabled={isBusy}
           >
             <RotateCcw size={16} />
