@@ -242,6 +242,13 @@ dt {
   margin-bottom: 18px;
 }
 
+.ticket-flags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 label {
   display: grid;
   gap: 8px;

@@ -278,11 +278,14 @@ function App() {
               <p className="eyebrow">Ticket</p>
               <h2>Prediction order</h2>
             </div>
-            {snapshot?.isOpen ? (
-              <span className="live-pill">Open</span>
-            ) : (
-              <span className="quiet-pill">Idle</span>
-            )}
+            <div className="ticket-flags">
+              <span className="quiet-pill">Direct signer</span>
+              {snapshot?.isOpen ? (
+                <span className="live-pill">Open</span>
+              ) : (
+                <span className="quiet-pill">Idle</span>
+              )}
+            </div>
           </div>
           <div className="segmented">
             <button
