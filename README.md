@@ -119,7 +119,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 <tr>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./oncurve-delegation/client-only/">📈 On-Curve Delegation / Client Only</a></strong></p>
+<p><strong><a href="./oncurve-delegation/client/">📈 On-Curve Delegation / Client</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/On--curve-475569?style=flat-square" alt="On-curve"/>

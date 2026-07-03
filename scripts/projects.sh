@@ -38,7 +38,7 @@ project_dir() {
     private-counter) echo "private-counter/anchor" ;;
     pinocchio-private-counter) echo "private-counter/pinocchio" ;;
     rock-paper-scissor) echo "rock-paper-scissor/anchor" ;;
-    oncurve-delegation) echo "oncurve-delegation/client-only" ;;
+    oncurve-delegation) echo "oncurve-delegation/client" ;;
     *) echo "" ;;
   esac
 }
