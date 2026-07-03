@@ -1,5 +1,5 @@
 {
-  "address": "7HHiv8th2wY24iZp2ReF7QkJyFJHwHWCgZWg7CWrQnnm",
+  "address": "6iL4bfFA7WAkRaRhS4XTRE6khacQ6QGBoKhg1ufXEUBT",
   "metadata": {
     "name": "binary_prediction",
     "version": "0.1.0",
@@ -58,38 +58,38 @@
             "program": {
               "kind": "const",
               "value": [
-                93,
-                82,
-                82,
-                170,
-                83,
-                237,
-                53,
-                115,
-                26,
-                62,
-                41,
-                227,
+                84,
+                224,
+                205,
+                34,
+                111,
+                8,
+                175,
+                161,
+                65,
+                149,
                 89,
-                212,
-                214,
-                230,
-                203,
-                33,
-                209,
-                146,
-                193,
-                158,
+                109,
+                127,
+                165,
+                121,
+                142,
+                39,
+                174,
+                90,
+                186,
+                135,
                 151,
-                201,
-                99,
-                19,
-                20,
+                10,
+                138,
+                218,
                 44,
+                129,
+                20,
                 14,
-                58,
-                107,
-                58
+                66,
+                170,
+                210
               ]
             }
           }
@@ -187,7 +187,7 @@
         },
         {
           "name": "owner_program",
-          "address": "7HHiv8th2wY24iZp2ReF7QkJyFJHwHWCgZWg7CWrQnnm"
+          "address": "6iL4bfFA7WAkRaRhS4XTRE6khacQ6QGBoKhg1ufXEUBT"
         },
         {
           "name": "delegation_program",
@@ -204,8 +204,8 @@
       "name": "initialize",
       "docs": [
         "Creates the prediction pool and moves its starting liquidity into ER custody.",
-        "The Pool PDA stores market config on the base layer, while the pool",
-        "authority's token account is deposited into an EATA and delegated to the ER."
+        "The Pool PDA stores market config and owns the pool token account that is",
+        "deposited into an EATA and delegated to the ER."
       ],
       "discriminator": [
         175,
@@ -250,7 +250,7 @@
             "seeds": [
               {
                 "kind": "account",
-                "path": "pool_authority"
+                "path": "pool"
               },
               {
                 "kind": "const",
@@ -332,10 +332,6 @@
               ]
             }
           }
-        },
-        {
-          "name": "pool_authority",
-          "signer": true
         },
         {
           "name": "admin_token_account",
@@ -491,8 +487,9 @@
       "name": "place_bet",
       "docs": [
         "Opens one UP or DOWN prediction on the ER.",
-        "The Pool PDA spends from the user's delegated token allowance, records the",
-        "current oracle price, and sets the earliest settlement time."
+        "The payer spends from the user's token account as either the user signer",
+        "or an approved session delegate, records the current oracle price, and",
+        "sets the earliest settlement time."
       ],
       "discriminator": [
         222,
@@ -939,8 +936,7 @@
       "name": "Pool",
       "docs": [
         "Pool configuration for this prediction market.",
-        "The Pool PDA signs token transfers, but the actual pool tokens are owned by",
-        "`authority` and kept in a delegated EATA on the ER."
+        "The Pool PDA owns pool token custody and signs payout transfers."
       ],
       "type": {
         "kind": "struct",
@@ -952,7 +948,7 @@
           {
             "name": "authority",
             "docs": [
-              "Real signer that owns the pool token custody."
+              "Pool token authority. This is the Pool PDA itself."
             ],
             "type": "pubkey"
           },

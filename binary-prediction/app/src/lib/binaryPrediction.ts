@@ -40,9 +40,6 @@ export type LogEntry = {
 export type TransactionResult = {
   signature: string;
   sendMs: number;
-  confirmMs: number;
-  totalMs: number;
-  commitment: Commitment;
 };
 
 export type MarketSnapshot = {
@@ -83,6 +80,7 @@ export type OraclePrice = {
 
 export type StoredMarket = {
   version: 1;
+  programId?: string;
   adminSecret: number[];
   userSecret: number[];
   poolAuthoritySecret: number[];
@@ -104,6 +102,10 @@ type ProviderPair = {
 
 const MIN_OPERATOR_SOL = 0.25;
 
+const idlAddress = (binaryPredictionIdl as Idl & { address?: string }).address;
+export const PROGRAM_ID = new PublicKey(
+  import.meta.env.VITE_BINARY_PREDICTION_PROGRAM_ID ?? idlAddress,
+);
 export const BASE_ENDPOINT =
   import.meta.env.VITE_PROVIDER_ENDPOINT ?? "https://rpc.magicblock.app/devnet";
 export const ER_ENDPOINT =
@@ -168,10 +170,15 @@ function directionFromAccount(value: unknown): Direction | undefined {
 
 export function loadOrCreateMarket(): StoredMarket {
   const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) return JSON.parse(stored) as StoredMarket;
+  if (stored) {
+    const market = JSON.parse(stored) as StoredMarket;
+    if (market.programId === PROGRAM_ID.toBase58()) return market;
+    localStorage.removeItem(STORAGE_KEY);
+  }
 
   const market: StoredMarket = {
     version: 1,
+    programId: PROGRAM_ID.toBase58(),
     adminSecret: Array.from(Keypair.generate().secretKey),
     userSecret: Array.from(Keypair.generate().secretKey),
     poolAuthoritySecret: Array.from(Keypair.generate().secretKey),
@@ -295,8 +302,12 @@ export function providers(market: StoredMarket): ProviderPair {
     wallet,
     anchor.AnchorProvider.defaultOptions(),
   );
-  const program = new Program(binaryPredictionIdl as Idl, base);
-  const erProgram = new Program(binaryPredictionIdl as Idl, er);
+  const idl = {
+    ...binaryPredictionIdl,
+    address: PROGRAM_ID.toBase58(),
+  } as Idl;
+  const program = new Program(idl, base);
+  const erProgram = new Program(idl, er);
 
   return { base, er, program, erProgram };
 }
@@ -428,23 +439,9 @@ async function sendSignedTransaction(
   );
   const sendMs = performance.now() - sendStart;
 
-  const confirmStart = performance.now();
-  const status = await connection.confirmTransaction(
-    { signature, ...blockhash },
-    commitment,
-  );
-  const confirmMs = performance.now() - confirmStart;
-  if (status.value.err) {
-    throw new Error(
-      `Transaction ${signature} failed: ${JSON.stringify(status.value.err)}`,
-    );
-  }
   return {
     signature,
     sendMs,
-    confirmMs,
-    totalMs: sendMs + confirmMs,
-    commitment,
   };
 }
 
@@ -460,7 +457,7 @@ export async function bootstrapMarket(
   },
 ): Promise<StoredMarket> {
   const nextMarket = { ...market };
-  const { admin, user, poolAuthority } = keypairs(nextMarket);
+  const { admin, user } = keypairs(nextMarket);
   const { base, program } = providers(nextMarket);
   const pool = poolPda(program.programId);
   const feed = priceFeed();
@@ -469,7 +466,6 @@ export async function bootstrapMarket(
   await Promise.all([
     maybeAirdrop(base.connection, admin.publicKey),
     maybeAirdrop(base.connection, user.publicKey),
-    maybeAirdrop(base.connection, poolAuthority.publicKey),
   ]);
 
   options.onLog({ tone: "info", message: "Creating prediction token mint" });
@@ -492,8 +488,8 @@ export async function bootstrapMarket(
     mint,
     admin.publicKey,
   );
-  const poolAta = getAssociatedTokenAddressSync(mint, poolAuthority.publicKey);
-  const poolEata = eata(poolAuthority.publicKey, mint);
+  const poolAta = getAssociatedTokenAddressSync(mint, pool, true);
+  const poolEata = eata(pool, mint);
   const vaultPda = vault(mint);
   const vaultEata = eata(vaultPda, mint);
   const vaultAta = getAssociatedTokenAddressSync(mint, vaultPda, true);
@@ -539,7 +535,6 @@ export async function bootstrapMarket(
       mint,
       pool,
       poolTokenAccount: poolAta,
-      poolAuthority: poolAuthority.publicKey,
       adminTokenAccount: adminAta,
       poolEphemeralAta: poolEata,
       vault: vaultPda,
@@ -566,11 +561,8 @@ export async function bootstrapMarket(
     .remainingAccounts([
       { pubkey: VALIDATOR, isSigner: false, isWritable: false },
     ])
-    .signers([poolAuthority])
     .transaction();
-  await sendSignedTransaction(base.connection, initializeTx, admin, [
-    poolAuthority,
-  ]);
+  await sendSignedTransaction(base.connection, initializeTx, admin);
 
   options.onLog({ tone: "info", message: "Preparing user bet account" });
   const bet = betPda(program.programId, user.publicKey);
@@ -632,19 +624,13 @@ export async function approveMarket(
   if (!market.mint || !market.userAta || !market.poolAta) {
     throw new Error("Market setup is incomplete");
   }
-  const { admin, user, poolAuthority } = keypairs(market);
+  const { admin, user } = keypairs(market);
   const { er, program } = providers(market);
   const pool = poolPda(program.programId);
 
   return sendSignedTransaction(
     er.connection,
     new Transaction().add(
-      createApproveInstruction(
-        new PublicKey(market.poolAta),
-        pool,
-        poolAuthority.publicKey,
-        BigInt(stakeAllowance * 20),
-      ),
       createApproveInstruction(
         new PublicKey(market.userAta),
         pool,
@@ -653,7 +639,7 @@ export async function approveMarket(
       ),
     ),
     admin,
-    [poolAuthority, user],
+    [user],
     "processed",
   );
 }
@@ -749,7 +735,7 @@ export async function placeBet(
   if (!market.userAta || !market.poolAta) {
     throw new Error("Market setup is incomplete");
   }
-  const { admin, poolAuthority, user } = keypairs(market);
+  const { admin, user } = keypairs(market);
   const { er, erProgram } = providers(market);
   const pool = poolPda(erProgram.programId);
   const bet = betPda(erProgram.programId, user.publicKey);
@@ -758,20 +744,6 @@ export async function placeBet(
 
   const transaction = await (erProgram as any).methods
     .placeBet(direction === "up" ? { up: {} } : { down: {} }, new BN(stake))
-    .preInstructions([
-      createApproveInstruction(
-        poolTokenAccount,
-        pool,
-        poolAuthority.publicKey,
-        BigInt(stake * 20),
-      ),
-      createApproveInstruction(
-        userTokenAccount,
-        pool,
-        user.publicKey,
-        BigInt(stake * 2),
-      ),
-    ])
     .accountsPartial({
       payer: user.publicKey,
       user: user.publicKey,
@@ -789,7 +761,7 @@ export async function placeBet(
     er.connection,
     transaction,
     admin,
-    [poolAuthority, user],
+    [user],
     "processed",
   );
 }
@@ -873,7 +845,7 @@ export async function settleBet(
 export async function refreshSnapshot(
   market: StoredMarket,
 ): Promise<MarketSnapshot> {
-  const { admin, user, poolAuthority, session } = keypairs(market);
+  const { admin, user, session } = keypairs(market);
   const { base, er, erProgram, program } = providers(market);
   const pool = poolPda(program.programId);
   const bet = betPda(program.programId, user.publicKey);
@@ -884,26 +856,22 @@ export async function refreshSnapshot(
     (mint ? getAssociatedTokenAddressSync(mint, user.publicKey) : undefined);
   const poolAta =
     market.poolAta ??
-    (mint
-      ? getAssociatedTokenAddressSync(mint, poolAuthority.publicKey)
-      : undefined);
+    (mint ? getAssociatedTokenAddressSync(mint, pool, true) : undefined);
 
   let userTokens = "-";
   let poolTokens = "-";
   const [adminSol, userSol, poolAuthoritySol] = await Promise.all(
-    [admin.publicKey, user.publicKey, poolAuthority.publicKey].map(
-      async (publicKey) => {
-        try {
-          const balance = await base.connection.getBalance(
-            publicKey,
-            "confirmed",
-          );
-          return (balance / anchor.web3.LAMPORTS_PER_SOL).toFixed(3);
-        } catch {
-          return "-";
-        }
-      },
-    ),
+    [admin.publicKey, user.publicKey, pool].map(async (publicKey) => {
+      try {
+        const balance = await base.connection.getBalance(
+          publicKey,
+          "confirmed",
+        );
+        return (balance / anchor.web3.LAMPORTS_PER_SOL).toFixed(3);
+      } catch {
+        return "-";
+      }
+    }),
   );
 
   if (userAta) {
@@ -971,7 +939,7 @@ export async function refreshSnapshot(
   return {
     admin: admin.publicKey.toBase58(),
     user: user.publicKey.toBase58(),
-    poolAuthority: poolAuthority.publicKey.toBase58(),
+    poolAuthority: pool.toBase58(),
     sessionSigner: session?.publicKey.toBase58() ?? "-",
     sessionToken: market.sessionToken ?? "-",
     sessionValidUntil: market.sessionValidUntil?.toString() ?? "-",

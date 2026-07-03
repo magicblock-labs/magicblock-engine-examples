@@ -73,7 +73,7 @@ function formatDuration(milliseconds?: number) {
 }
 
 function formatTransactionTiming(result: TransactionResult) {
-  return `${result.commitment} in ${formatDuration(result.totalMs)} (send ${formatDuration(result.sendMs)}, confirm ${formatDuration(result.confirmMs)})`;
+  return `sent in ${formatDuration(result.sendMs)}`;
 }
 
 function formatAmount(value: bigint) {
@@ -104,9 +104,9 @@ function settlementOutcome(
   if (!snapshot?.direction || snapshot.openPrice === "-") {
     return {
       tone: "info" as const,
-      title: "Ticket settled",
-      detail: `Settlement confirmed on the ER.${timingDetail}`,
-      log: "Ticket settled",
+      title: "Settlement submitted",
+      detail: `Settlement submitted to the ER.${timingDetail}`,
+      log: "Settlement submitted",
     };
   }
 
@@ -121,9 +121,9 @@ function settlementOutcome(
   ) {
     return {
       tone: "info" as const,
-      title: "Ticket settled",
-      detail: `Settlement confirmed with the live oracle price.${timingDetail}`,
-      log: "Ticket settled",
+      title: "Settlement submitted",
+      detail: `Settlement submitted with the live oracle price.${timingDetail}`,
+      log: "Settlement submitted",
     };
   }
 
@@ -132,7 +132,7 @@ function settlementOutcome(
       tone: "info" as const,
       title: "Stake refunded",
       detail: `${amountSummary(snapshot, false, true)} Open ${openPrice} matched settle ${settlePrice}.${timingDetail}`,
-      log: "Ticket settled: refunded",
+      log: "Settlement submitted: refund expected",
     };
   }
 
@@ -143,7 +143,9 @@ function settlementOutcome(
     tone: won ? ("success" as const) : ("error" as const),
     title: won ? "You won" : "You lost",
     detail: `${amountSummary(snapshot, won)} ${snapshot.direction.toUpperCase()} ticket vs ${marketDirection.toUpperCase()} move (${openPrice} -> ${settlePrice}).${timingDetail}`,
-    log: won ? "Ticket settled: won" : "Ticket settled: lost",
+    log: won
+      ? "Settlement submitted: win expected"
+      : "Settlement submitted: loss expected",
   };
 }
 
@@ -307,7 +309,7 @@ function App() {
       setMarket(nextMarket);
       pushLog({
         tone: "success",
-        message: `Session created: ${formatTransactionTiming(result)}`,
+        message: `Session create submitted: ${formatTransactionTiming(result)}`,
         signature: result.signature,
       });
     });
@@ -321,7 +323,7 @@ function App() {
       setMarket(nextMarket);
       pushLog({
         tone: "success",
-        message: `Session allowance approved: ${formatTransactionTiming(result)}`,
+        message: `Session allowance submitted: ${formatTransactionTiming(result)}`,
         signature: result.signature,
       });
     });
@@ -337,7 +339,7 @@ function App() {
       );
       pushLog({
         tone: "success",
-        message: `${direction.toUpperCase()} ticket opened: ER ${formatTransactionTiming(result)}`,
+        message: `${direction.toUpperCase()} ticket submitted: ER ${formatTransactionTiming(result)}`,
         signature: result.signature,
       });
     });
@@ -679,7 +681,7 @@ function App() {
               </dd>
             </div>
             <div>
-              <dt>Pool authority</dt>
+              <dt>Pool PDA</dt>
               <dd>
                 {shortKey(snapshot?.poolAuthority)} /{" "}
                 {snapshot?.poolAuthoritySol ?? "-"} SOL
