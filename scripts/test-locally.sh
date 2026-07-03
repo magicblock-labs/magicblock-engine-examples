@@ -594,6 +594,70 @@ if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
         echo "  WARNING: $so has no matching keypair ($(basename "$kp")); not preloaded."
       fi
     done
+    if [ -f "$p/Anchor.toml" ]; then
+      while IFS=$'\t' read -r address program upgradeable; do
+        [ -n "$address" ] || continue
+        case "$address" in
+          SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2|DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh)
+            echo "  $p/$program -> $address (built into mb-test-validator; skipping fixture preload)"
+            continue
+            ;;
+        esac
+        fixture="$p/$program"
+        if [ ! -f "$fixture" ]; then
+          echo "  WARNING: $p Anchor.toml fixture $program not found; not preloaded."
+          continue
+        fi
+        if [ "$upgradeable" = "true" ]; then
+          echo "  $p/$program -> $address (upgradeable genesis fixture)"
+          PRELOAD_ARGS+=(--upgradeable-program "$address" "$fixture" "$WALLET_PUBKEY")
+        else
+          echo "  $p/$program -> $address (genesis fixture)"
+          PRELOAD_ARGS+=(--bpf-program "$address" "$fixture")
+        fi
+      done < <(awk '
+        /^\[\[test\.genesis\]\]/ {
+          if (address != "" && program != "") print address "\t" program "\t" upgradeable
+          in_genesis = 1
+          address = ""
+          program = ""
+          upgradeable = "false"
+          next
+        }
+        /^\[/ && !/^\[\[test\.genesis\]\]/ {
+          if (in_genesis && address != "" && program != "") print address "\t" program "\t" upgradeable
+          in_genesis = 0
+          address = ""
+          program = ""
+          upgradeable = "false"
+          next
+        }
+        in_genesis && /^[[:space:]]*address[[:space:]]*=/ {
+          line = $0
+          sub(/^[^=]*=[[:space:]]*"/, "", line)
+          sub(/".*$/, "", line)
+          address = line
+          next
+        }
+        in_genesis && /^[[:space:]]*program[[:space:]]*=/ {
+          line = $0
+          sub(/^[^=]*=[[:space:]]*"/, "", line)
+          sub(/".*$/, "", line)
+          program = line
+          next
+        }
+        in_genesis && /^[[:space:]]*upgradeable[[:space:]]*=/ {
+          line = $0
+          sub(/^[^=]*=[[:space:]]*/, "", line)
+          sub(/[[:space:]]*#.*/, "", line)
+          upgradeable = line
+          next
+        }
+        END {
+          if (in_genesis && address != "" && program != "") print address "\t" program "\t" upgradeable
+        }
+      ' "$p/Anchor.toml")
+    fi
     for account in "$p"/tests/fixtures/accounts/*.json; do
       [ -e "$account" ] || continue
       echo "  $account"
@@ -684,6 +748,7 @@ if [ -z "$EPHEMERAL_VALIDATOR_BIN" ]; then
 fi
 echo "  Binary: $EPHEMERAL_VALIDATOR_BIN"
 echo "  Version: $("$EPHEMERAL_VALIDATOR_BIN" --version 2>&1 | head -1 || echo unknown)"
+rm -rf ./magicblock-test-storage
 RUST_LOG=info "$EPHEMERAL_VALIDATOR_BIN" \
   --no-tui \
   --lifecycle ephemeral \

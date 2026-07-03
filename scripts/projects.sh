@@ -12,7 +12,7 @@
 # Keep this list in sync when adding/removing examples; both the local runner and
 # CI pick it up automatically.
 
-REGULAR_PROJECTS=(anchor-counter crank-counter dummy-token-transfer ephemeral-account-chats magic-actions oracle-priced-purchase pinocchio-counter rust-counter session-keys spl-tokens)
+REGULAR_PROJECTS=(anchor-counter binary-prediction crank-counter dummy-token-transfer ephemeral-account-chats magic-actions oracle-priced-purchase pinocchio-counter rust-counter session-keys spl-tokens)
 VRF_PROJECTS=(rewards-delegated-vrf roll-dice pinocchio-roll-dice)
 TEE_PROJECTS=(private-counter pinocchio-private-counter rock-paper-scissor)
 
