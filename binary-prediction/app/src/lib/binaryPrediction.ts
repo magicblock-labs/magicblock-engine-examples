@@ -382,6 +382,41 @@ async function maybeAirdrop(connection: Connection, publicKey: PublicKey) {
   await connection.confirmTransaction(signature, "confirmed");
 }
 
+async function sendSignedTransaction(
+  connection: Connection,
+  transaction: Transaction,
+  feePayer: Keypair,
+  signers: Keypair[] = [],
+) {
+  const blockhash = await connection.getLatestBlockhash("confirmed");
+  const signerMap = new Map<string, Keypair>();
+  [feePayer, ...signers].forEach((signer) =>
+    signerMap.set(signer.publicKey.toBase58(), signer),
+  );
+
+  transaction.feePayer = feePayer.publicKey;
+  transaction.recentBlockhash = blockhash.blockhash;
+  transaction.partialSign(...signerMap.values());
+
+  const signature = await connection.sendRawTransaction(
+    transaction.serialize(),
+    {
+      preflightCommitment: "confirmed",
+      skipPreflight: true,
+    },
+  );
+  const status = await connection.confirmTransaction(
+    { signature, ...blockhash },
+    "confirmed",
+  );
+  if (status.value.err) {
+    throw new Error(
+      `Transaction ${signature} failed: ${JSON.stringify(status.value.err)}`,
+    );
+  }
+  return signature;
+}
+
 export async function bootstrapMarket(
   market: StoredMarket,
   options: {
@@ -396,7 +431,7 @@ export async function bootstrapMarket(
 ): Promise<StoredMarket> {
   const nextMarket = { ...market };
   const { admin, user, poolAuthority } = keypairs(nextMarket);
-  const { base, program } = providers(nextMarket);
+  const { base, er, program } = providers(nextMarket);
   const pool = poolPda(program.programId);
   const feed = priceFeed();
 
@@ -451,21 +486,25 @@ export async function bootstrapMarket(
   );
 
   options.onLog({ tone: "info", message: "Initializing oracle fixture" });
-  await base.sendAndConfirm(
-    new Transaction().add(initializePriceFeedIx(admin.publicKey, feed)),
-    [],
-    { commitment: "confirmed", skipPreflight: true },
-  );
-  await base.sendAndConfirm(
+  const feedAccount = await base.connection.getAccountInfo(feed, "confirmed");
+  const feedIsDelegated = feedAccount?.owner.equals(DELEGATION_PROGRAM_ID);
+  if (!feedAccount) {
+    await sendSignedTransaction(
+      base.connection,
+      new Transaction().add(initializePriceFeedIx(admin.publicKey, feed)),
+      admin,
+    );
+  }
+  await sendSignedTransaction(
+    feedIsDelegated ? er.connection : base.connection,
     new Transaction().add(
       updatePriceFeedIx(admin.publicKey, feed, options.price),
     ),
-    [],
-    { commitment: "confirmed", skipPreflight: true },
+    admin,
   );
 
   options.onLog({ tone: "info", message: "Seeding prediction pool" });
-  await (program as any).methods
+  const initializeTx = await (program as any).methods
     .initialize(
       feed,
       Array.from(feed.toBytes()),
@@ -510,11 +549,14 @@ export async function bootstrapMarket(
       { pubkey: VALIDATOR, isSigner: false, isWritable: false },
     ])
     .signers([poolAuthority])
-    .rpc({ skipPreflight: true });
+    .transaction();
+  await sendSignedTransaction(base.connection, initializeTx, admin, [
+    poolAuthority,
+  ]);
 
   options.onLog({ tone: "info", message: "Preparing user bet account" });
   const bet = betPda(program.programId, user.publicKey);
-  await (program as any).methods
+  const initializeBetTx = await (program as any).methods
     .initializeBet()
     .accountsPartial({
       payer: admin.publicKey,
@@ -522,14 +564,17 @@ export async function bootstrapMarket(
       bet,
       systemProgram: SystemProgram.programId,
     })
-    .rpc({ skipPreflight: false });
+    .transaction();
+  await sendSignedTransaction(base.connection, initializeBetTx, admin);
 
-  await base.sendAndConfirm(
-    new Transaction().add(delegatePriceFeedIx(admin.publicKey, feed)),
-    [],
-    { commitment: "confirmed", skipPreflight: true },
-  );
-  await (program as any).methods
+  if (!feedIsDelegated) {
+    await sendSignedTransaction(
+      base.connection,
+      new Transaction().add(delegatePriceFeedIx(admin.publicKey, feed)),
+      admin,
+    );
+  }
+  const delegateBetTx = await (program as any).methods
     .delegateBet()
     .accountsPartial({
       payer: admin.publicKey,
@@ -540,7 +585,8 @@ export async function bootstrapMarket(
       { pubkey: VALIDATOR, isSigner: false, isWritable: false },
     ])
     .signers([user])
-    .rpc({ skipPreflight: true });
+    .transaction();
+  await sendSignedTransaction(base.connection, delegateBetTx, admin, [user]);
 
   const delegateUserIxs = await delegateSpl(
     user.publicKey,
@@ -553,10 +599,12 @@ export async function bootstrapMarket(
       payer: admin.publicKey,
     },
   );
-  await base.sendAndConfirm(new Transaction().add(...delegateUserIxs), [user], {
-    commitment: "confirmed",
-    skipPreflight: true,
-  });
+  await sendSignedTransaction(
+    base.connection,
+    new Transaction().add(...delegateUserIxs),
+    admin,
+    [user],
+  );
 
   nextMarket.mint = mint.toBase58();
   nextMarket.userAta = userAta.toBase58();
@@ -573,11 +621,12 @@ export async function approveMarket(
   if (!market.mint || !market.userAta || !market.poolAta) {
     throw new Error("Market setup is incomplete");
   }
-  const { user, poolAuthority } = keypairs(market);
+  const { admin, user, poolAuthority } = keypairs(market);
   const { er, program } = providers(market);
   const pool = poolPda(program.programId);
 
-  await er.sendAndConfirm(
+  await sendSignedTransaction(
+    er.connection,
     new Transaction().add(
       createApproveInstruction(
         new PublicKey(market.poolAta),
@@ -592,8 +641,8 @@ export async function approveMarket(
         BigInt(stakeAllowance * 2),
       ),
     ),
+    admin,
     [poolAuthority, user],
-    { commitment: "confirmed", skipPreflight: true },
   );
 }
 
@@ -605,12 +654,12 @@ export async function placeBet(
   if (!market.userAta || !market.poolAta) {
     throw new Error("Market setup is incomplete");
   }
-  const { user } = keypairs(market);
-  const { erProgram } = providers(market);
+  const { admin, user } = keypairs(market);
+  const { er, erProgram } = providers(market);
   const pool = poolPda(erProgram.programId);
   const bet = betPda(erProgram.programId, user.publicKey);
 
-  return await (erProgram as any).methods
+  const transaction = await (erProgram as any).methods
     .placeBet(direction === "up" ? { up: {} } : { down: {} }, new BN(stake))
     .accountsPartial({
       payer: user.publicKey,
@@ -624,7 +673,8 @@ export async function placeBet(
       sessionToken: null,
     })
     .signers([user])
-    .rpc({ skipPreflight: true });
+    .transaction();
+  return sendSignedTransaction(er.connection, transaction, admin, [user]);
 }
 
 export async function settleBet(
@@ -638,15 +688,15 @@ export async function settleBet(
   const { er, erProgram } = providers(market);
   const pool = poolPda(erProgram.programId);
   const bet = betPda(erProgram.programId, user.publicKey);
-  await er.sendAndConfirm(
+  await sendSignedTransaction(
+    er.connection,
     new Transaction().add(
       updatePriceFeedIx(admin.publicKey, priceFeed(), settlementPrice),
     ),
-    [],
-    { commitment: "confirmed", skipPreflight: true },
+    admin,
   );
 
-  return await (erProgram as any).methods
+  const transaction = await (erProgram as any).methods
     .settle()
     .accountsPartial({
       payer: admin.publicKey,
@@ -658,7 +708,8 @@ export async function settleBet(
       priceUpdate: priceFeed(),
       tokenProgram: TOKEN_PROGRAM_ID,
     })
-    .rpc({ skipPreflight: true });
+    .transaction();
+  return sendSignedTransaction(er.connection, transaction, admin);
 }
 
 export async function refreshSnapshot(

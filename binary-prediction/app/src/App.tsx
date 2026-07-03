@@ -105,6 +105,7 @@ function App() {
         await task();
         await refresh();
       } catch (error) {
+        console.error(error);
         pushLog({
           tone: "error",
           message: error instanceof Error ? error.message : String(error),
@@ -265,7 +266,7 @@ function App() {
           <button
             className="ghost-button"
             onClick={handleReset}
-            disabled={isBusy}
+            disabled={isBusy || isBootstrapped}
           >
             <RotateCcw size={16} />
             New local wallet set
