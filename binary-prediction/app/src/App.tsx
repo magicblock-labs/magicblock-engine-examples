@@ -1,28 +1,36 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
+  KeyRound,
   Loader2,
   Play,
   RefreshCw,
   RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
 import {
-  approveMarket,
+  approveSessionWallet,
   BASE_ENDPOINT,
   bootstrapMarket,
+  createSession,
   Direction,
   ER_ENDPOINT,
+  fetchOraclePrice,
   loadOrCreateMarket,
   LogEntry,
   MarketSnapshot,
+  ORACLE_SYMBOL,
+  OraclePrice,
   placeBet,
   refreshSnapshot,
   resetStoredMarket,
   settleBet,
   shortKey,
   StoredMarket,
+  subscribeOraclePrice,
+  TransactionResult,
 } from "./lib/binaryPrediction";
 
 type Toast = {
@@ -52,46 +60,89 @@ function expiryLabel(snapshot: MarketSnapshot | null) {
   return remaining > 0 ? `${remaining}s to settle` : "Ready to settle";
 }
 
+function isReadyToSettle(snapshot: MarketSnapshot | null) {
+  if (!snapshot?.isOpen || snapshot.expiry === "-") return false;
+  const expiry = Number(snapshot.expiry);
+  return Number.isFinite(expiry) && expiry <= Math.floor(Date.now() / 1000);
+}
+
+function formatDuration(milliseconds?: number) {
+  if (!milliseconds || !Number.isFinite(milliseconds)) return "";
+  if (milliseconds < 1_000) return `${Math.max(1, Math.round(milliseconds))}ms`;
+  return `${(milliseconds / 1_000).toFixed(2)}s`;
+}
+
+function formatTransactionTiming(result: TransactionResult) {
+  return `${result.commitment} in ${formatDuration(result.totalMs)} (send ${formatDuration(result.sendMs)}, confirm ${formatDuration(result.confirmMs)})`;
+}
+
+function formatAmount(value: bigint) {
+  return `${value.toString()} token${value === 1n ? "" : "s"}`;
+}
+
+function amountSummary(
+  snapshot: MarketSnapshot,
+  won: boolean,
+  refunded = false,
+) {
+  const stake = BigInt(snapshot.stake);
+  if (refunded) return `${formatAmount(stake)} refunded.`;
+  if (!won) return `You lost ${formatAmount(stake)}.`;
+
+  const payoutBps = BigInt(snapshot.payoutBps);
+  const payout = (stake * payoutBps) / 10_000n;
+  const net = payout - stake;
+  return `You won ${formatAmount(payout)} (net +${formatAmount(net)}).`;
+}
+
 function settlementOutcome(
   snapshot: MarketSnapshot | null,
-  settlementPrice: number,
+  settlementPrice?: string,
+  result?: TransactionResult,
 ) {
+  const timingDetail = result ? ` ER ${formatTransactionTiming(result)}.` : "";
   if (!snapshot?.direction || snapshot.openPrice === "-") {
     return {
       tone: "info" as const,
       title: "Ticket settled",
-      detail: "Settlement confirmed on the ER.",
+      detail: `Settlement confirmed on the ER.${timingDetail}`,
       log: "Ticket settled",
     };
   }
 
   const openPrice = Number(snapshot.openPrice);
-  if (!Number.isFinite(openPrice) || !Number.isFinite(settlementPrice)) {
+  const settlePrice = settlementPrice ? Number(settlementPrice) : NaN;
+  const hasAmounts =
+    /^\d+$/.test(snapshot.stake) && /^\d+$/.test(snapshot.payoutBps);
+  if (
+    !Number.isFinite(openPrice) ||
+    !Number.isFinite(settlePrice) ||
+    !hasAmounts
+  ) {
     return {
       tone: "info" as const,
       title: "Ticket settled",
-      detail: "Settlement confirmed on the ER.",
+      detail: `Settlement confirmed with the live oracle price.${timingDetail}`,
       log: "Ticket settled",
     };
   }
 
-  if (settlementPrice === openPrice) {
+  if (settlePrice === openPrice) {
     return {
       tone: "info" as const,
       title: "Stake refunded",
-      detail: `Open ${openPrice} matched settle ${settlementPrice}.`,
+      detail: `${amountSummary(snapshot, false, true)} Open ${openPrice} matched settle ${settlePrice}.${timingDetail}`,
       log: "Ticket settled: refunded",
     };
   }
 
-  const marketDirection: Direction =
-    settlementPrice > openPrice ? "up" : "down";
+  const marketDirection: Direction = settlePrice > openPrice ? "up" : "down";
   const won = marketDirection === snapshot.direction;
 
   return {
     tone: won ? ("success" as const) : ("error" as const),
     title: won ? "You won" : "You lost",
-    detail: `${snapshot.direction.toUpperCase()} ticket vs ${marketDirection.toUpperCase()} move (${openPrice} -> ${settlementPrice}).`,
+    detail: `${amountSummary(snapshot, won)} ${snapshot.direction.toUpperCase()} ticket vs ${marketDirection.toUpperCase()} move (${openPrice} -> ${settlePrice}).${timingDetail}`,
     log: won ? "Ticket settled: won" : "Ticket settled: lost",
   };
 }
@@ -106,12 +157,13 @@ function App() {
   const [lastResult, setLastResult] = useState<Omit<Toast, "id"> | null>(null);
   const [showResetModal, setShowResetModal] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
-  const [setupPrice, setSetupPrice] = useState("100");
-  const [settlementPrice, setSettlementPrice] = useState("110");
+  const [oraclePrice, setOraclePrice] = useState<OraclePrice | null>(null);
   const [stake, setStake] = useState("100");
+  const [sessionAllowance, setSessionAllowance] = useState("500");
   const [duration, setDuration] = useState("8");
   const [direction, setDirection] = useState<Direction>("up");
   const [tick, setTick] = useState(0);
+  const autoSettleAttempts = useRef(new Set<string>());
 
   const isBusy = Boolean(busyLabel);
   const isBootstrapped = Boolean(
@@ -145,6 +197,19 @@ function App() {
   }, [refresh]);
 
   useEffect(() => {
+    return subscribeOraclePrice(
+      (price) => setOraclePrice(price),
+      (error) => {
+        console.error(error);
+        pushLog({
+          tone: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      },
+    );
+  }, [pushLog]);
+
+  useEffect(() => {
     const id = window.setInterval(() => setTick((value) => value + 1), 1000);
     return () => window.clearInterval(id);
   }, []);
@@ -154,6 +219,8 @@ function App() {
     if (snapshot?.isOpen) return "Ticket open";
     return "Ready";
   }, [isBootstrapped, snapshot?.isOpen]);
+  const readyToSettle = isReadyToSettle(snapshot);
+  const hasSession = Boolean(market.sessionToken);
 
   const activeDirection = snapshot?.isOpen
     ? (snapshot.direction ?? direction)
@@ -171,7 +238,6 @@ function App() {
       setBusyLabel(label);
       try {
         await task();
-        await refresh();
       } catch (error) {
         console.error(error);
         pushLog({
@@ -186,9 +252,38 @@ function App() {
       } finally {
         setBusyLabel(null);
       }
+
+      refresh().catch((error) => {
+        console.error(error);
+        pushLog({
+          tone: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
     },
     [pushLog, pushToast, refresh],
   );
+
+  const settleCurrentTicket = useCallback(async () => {
+    const livePrice = oraclePrice ?? (await fetchOraclePrice());
+    const result = await settleBet(market);
+    const outcome = settlementOutcome(snapshot, livePrice.raw, result);
+    pushToast({
+      tone: outcome.tone,
+      title: outcome.title,
+      detail: outcome.detail,
+    });
+    setLastResult({
+      tone: outcome.tone,
+      title: outcome.title,
+      detail: outcome.detail,
+    });
+    pushLog({
+      tone: outcome.tone === "error" ? "error" : "success",
+      message: `${outcome.log}: ER ${formatTransactionTiming(result)}`,
+      signature: result.signature,
+    });
+  }, [market, oraclePrice, pushLog, pushToast, snapshot]);
 
   const handleBootstrap = () =>
     run("Bootstrapping market", async () => {
@@ -198,49 +293,80 @@ function App() {
         durationSeconds: numberOrDefault(duration, 8),
         minStake: 10,
         payoutBps: 19_000,
-        price: numberOrDefault(setupPrice, 100),
         onLog: pushLog,
       });
       setMarket(nextMarket);
     });
 
+  const handleCreateSession = () =>
+    run("Creating session", async () => {
+      const { market: nextMarket, result } = await createSession(market, {
+        ttlSeconds: 3_600,
+        topUpLamports: 5_000_000,
+      });
+      setMarket(nextMarket);
+      pushLog({
+        tone: "success",
+        message: `Session created: ${formatTransactionTiming(result)}`,
+        signature: result.signature,
+      });
+    });
+
+  const handleApproveSession = () =>
+    run("Approving session", async () => {
+      const { market: nextMarket, result } = await approveSessionWallet(
+        market,
+        numberOrDefault(sessionAllowance, 500),
+      );
+      setMarket(nextMarket);
+      pushLog({
+        tone: "success",
+        message: `Session allowance approved: ${formatTransactionTiming(result)}`,
+        signature: result.signature,
+      });
+    });
+
   const handlePlaceBet = () =>
     run("Placing prediction", async () => {
       setLastResult(null);
-      await approveMarket(market, numberOrDefault(stake, 100));
-      const signature = await placeBet(
+      autoSettleAttempts.current.clear();
+      const result = await placeBet(
         market,
         direction,
         numberOrDefault(stake, 100),
       );
       pushLog({
         tone: "success",
-        message: `${direction.toUpperCase()} ticket opened`,
-        signature,
+        message: `${direction.toUpperCase()} ticket opened: ER ${formatTransactionTiming(result)}`,
+        signature: result.signature,
       });
     });
 
   const handleSettle = () =>
     run("Settling ticket", async () => {
-      const settlement = numberOrDefault(settlementPrice, 110);
-      const outcome = settlementOutcome(snapshot, settlement);
-      const signature = await settleBet(market, settlement);
-      pushToast({
-        tone: outcome.tone,
-        title: outcome.title,
-        detail: outcome.detail,
-      });
-      setLastResult({
-        tone: outcome.tone,
-        title: outcome.title,
-        detail: outcome.detail,
-      });
-      pushLog({
-        tone: outcome.tone === "error" ? "error" : "success",
-        message: outcome.log,
-        signature,
-      });
+      await settleCurrentTicket();
     });
+
+  useEffect(() => {
+    if (
+      !snapshot?.isOpen ||
+      snapshot.expiry === "-" ||
+      !oraclePrice ||
+      isBusy
+    ) {
+      return;
+    }
+
+    if (!isReadyToSettle(snapshot)) return;
+
+    const attemptKey = `${snapshot.bet}:${snapshot.expiry}:${snapshot.stake}`;
+    if (autoSettleAttempts.current.has(attemptKey)) return;
+    autoSettleAttempts.current.add(attemptKey);
+
+    void run("Auto-settling ticket", async () => {
+      await settleCurrentTicket();
+    });
+  }, [isBusy, oraclePrice, run, settleCurrentTicket, snapshot, tick]);
 
   const handleReset = () => {
     resetStoredMarket();
@@ -250,6 +376,7 @@ function App() {
     setLogs(initialLogs);
     setLastResult(null);
     setToasts([]);
+    autoSettleAttempts.current.clear();
     setShowResetModal(false);
   };
 
@@ -335,9 +462,9 @@ function App() {
             )}
             {activeDirection.toUpperCase()}
           </div>
-          <div>
-            <span>Settle</span>
-            <strong>{settlementPrice || "-"}</strong>
+          <div className="oracle-cell">
+            <span>{ORACLE_SYMBOL}</span>
+            <strong>{oraclePrice?.display ?? "-"}</strong>
           </div>
           <div>
             <span>Expiry</span>
@@ -362,14 +489,6 @@ function App() {
               <RefreshCw size={16} />
             </button>
           </div>
-          <label>
-            Opening oracle price
-            <input
-              value={setupPrice}
-              onChange={(event) => setSetupPrice(event.target.value)}
-              inputMode="numeric"
-            />
-          </label>
           <label>
             Duration seconds
             <input
@@ -397,6 +516,40 @@ function App() {
           >
             <RotateCcw size={16} />
             Clear browser state
+          </button>
+          <dl className="session-summary">
+            <div>
+              <dt>Session</dt>
+              <dd>{shortKey(market.sessionToken)}</dd>
+            </div>
+            <div>
+              <dt>Allowance</dt>
+              <dd>{market.sessionAllowance ?? "-"}</dd>
+            </div>
+          </dl>
+          <label>
+            Session allowance
+            <input
+              value={sessionAllowance}
+              onChange={(event) => setSessionAllowance(event.target.value)}
+              inputMode="numeric"
+            />
+          </label>
+          <button
+            className="ghost-button"
+            onClick={handleCreateSession}
+            disabled={isBusy || !isBootstrapped}
+          >
+            <KeyRound size={16} />
+            Create session
+          </button>
+          <button
+            className="ghost-button"
+            onClick={handleApproveSession}
+            disabled={isBusy || !isBootstrapped || !hasSession}
+          >
+            <ShieldCheck size={16} />
+            Approve session
           </button>
         </div>
 
@@ -458,31 +611,25 @@ function App() {
           <div className="panel-head">
             <div>
               <p className="step-index">3</p>
-              <h2>Settle</h2>
+              <h2>Auto-settle</h2>
             </div>
             <span className="quiet-pill" key={tick}>
               {expiryLabel(snapshot)}
             </span>
           </div>
-          <label>
-            Settlement oracle price
-            <input
-              value={settlementPrice}
-              onChange={(event) => setSettlementPrice(event.target.value)}
-              inputMode="numeric"
-            />
-          </label>
           <button
             className="primary-button settle"
             onClick={handleSettle}
-            disabled={isBusy || !snapshot?.isOpen}
+            disabled={isBusy || !readyToSettle || !oraclePrice}
           >
-            {isBusy && busyLabel === "Settling ticket" ? (
+            {isBusy &&
+            (busyLabel === "Settling ticket" ||
+              busyLabel === "Auto-settling ticket") ? (
               <Loader2 className="spin" size={16} />
             ) : (
               <CheckCircle2 size={16} />
             )}
-            Settle
+            Settle now
           </button>
           <dl className="balances">
             <div>
@@ -521,7 +668,34 @@ function App() {
           <dl className="account-list">
             <div>
               <dt>User</dt>
-              <dd>{shortKey(snapshot?.user)}</dd>
+              <dd>
+                {shortKey(snapshot?.user)} / {snapshot?.userSol ?? "-"} SOL
+              </dd>
+            </div>
+            <div>
+              <dt>Admin</dt>
+              <dd>
+                {shortKey(snapshot?.admin)} / {snapshot?.adminSol ?? "-"} SOL
+              </dd>
+            </div>
+            <div>
+              <dt>Pool authority</dt>
+              <dd>
+                {shortKey(snapshot?.poolAuthority)} /{" "}
+                {snapshot?.poolAuthoritySol ?? "-"} SOL
+              </dd>
+            </div>
+            <div>
+              <dt>Session signer</dt>
+              <dd>{shortKey(snapshot?.sessionSigner)}</dd>
+            </div>
+            <div>
+              <dt>Session token</dt>
+              <dd>{shortKey(snapshot?.sessionToken)}</dd>
+            </div>
+            <div>
+              <dt>Session allowance</dt>
+              <dd>{snapshot?.sessionAllowance ?? "-"}</dd>
             </div>
             <div>
               <dt>Pool</dt>
@@ -534,6 +708,10 @@ function App() {
             <div>
               <dt>Oracle</dt>
               <dd>{shortKey(snapshot?.priceFeed)}</dd>
+            </div>
+            <div>
+              <dt>Oracle slot</dt>
+              <dd>{oraclePrice?.slot ?? "-"}</dd>
             </div>
             <div>
               <dt>Mint</dt>

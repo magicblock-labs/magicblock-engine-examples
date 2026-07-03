@@ -309,6 +309,21 @@ dt {
   font-variant-numeric: tabular-nums;
 }
 
+.ticket-strip .oracle-cell {
+  align-items: center;
+  text-align: center;
+}
+
+.ticket-strip .oracle-cell strong {
+  width: 14ch;
+  border: 1px solid rgba(104, 216, 255, 0.2);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--oracle-cyan);
+  background: rgba(104, 216, 255, 0.08);
+  text-align: center;
+}
+
 .direction-chip {
   min-width: 120px;
   display: flex;
@@ -490,6 +505,7 @@ input:focus {
 }
 
 .balances,
+.session-summary,
 .account-list {
   display: grid;
   gap: 10px;
@@ -497,6 +513,7 @@ input:focus {
 }
 
 .balances div,
+.session-summary div,
 .account-list div {
   display: flex;
   justify-content: space-between;
