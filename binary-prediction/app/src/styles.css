@@ -127,10 +127,9 @@ button:disabled {
 }
 
 .topbar,
-.status-band,
-.price-lane,
-.workspace,
-.lower-grid {
+.demo-summary,
+.demo-flow,
+.activity-section {
   margin-bottom: 18px;
 }
 
@@ -186,66 +185,76 @@ h2 {
   background: rgba(12, 23, 19, 0.72);
 }
 
-.status-band {
+.demo-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  gap: 14px;
 }
 
-.status-band article {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 6px 10px;
-  align-items: center;
-  padding: 14px;
+.result-card,
+.ticket-strip {
   border: 1px solid var(--desk-border);
   border-radius: 8px;
-  background: rgba(12, 23, 19, 0.82);
+  background: rgba(12, 23, 19, 0.88);
 }
 
-.status-band svg {
+.result-card {
+  min-height: 132px;
+  padding: 18px;
+}
+
+.result-card strong,
+.result-card span,
+.result-card p {
+  display: block;
+}
+
+.result-card strong {
+  margin: 10px 0 8px;
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.result-card p {
+  color: var(--desk-text);
+  line-height: 1.45;
+}
+
+.result-card.success strong {
+  color: var(--tick-green);
+}
+
+.result-card.error strong {
+  color: var(--tick-red);
+}
+
+.result-card.info strong {
   color: var(--oracle-cyan);
 }
 
-.status-band span {
-  color: var(--desk-muted);
-  font-size: 0.78rem;
-}
-
-.status-band strong {
-  grid-column: 1 / -1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.price-lane {
+.ticket-strip {
   display: grid;
-  grid-template-columns: 1fr auto 1fr 1fr;
-  align-items: stretch;
-  border: 1px solid var(--desk-border-strong);
-  border-radius: 8px;
+  grid-template-columns: 1fr 0.8fr auto 0.8fr 1.1fr;
   overflow: hidden;
-  background: var(--desk-surface);
   box-shadow: var(--shadow);
 }
 
-.price-lane > div {
-  min-height: 82px;
+.ticket-strip > div {
+  min-height: 132px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 6px;
-  padding: 16px 20px;
+  padding: 18px;
   border-right: 1px solid var(--desk-border);
 }
 
-.price-lane > div:last-child {
+.ticket-strip > div:last-child {
   border-right: 0;
 }
 
-.price-lane span,
+.result-card span,
+.ticket-strip span,
 label,
 dt {
   color: var(--desk-muted);
@@ -253,14 +262,15 @@ dt {
   font-weight: 700;
 }
 
-.price-lane strong {
+.ticket-strip strong {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-variant-numeric: tabular-nums;
 }
 
 .direction-chip {
   min-width: 120px;
+  display: flex;
   align-items: center;
   text-align: center;
   font-weight: 900;
@@ -274,15 +284,16 @@ dt {
   color: var(--tick-red);
 }
 
-.workspace,
-.lower-grid {
+.demo-flow {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
-.lower-grid {
-  grid-template-columns: 0.95fr 2.05fr;
+.activity-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.6fr);
+  gap: 14px;
 }
 
 .panel {
@@ -300,11 +311,36 @@ dt {
   margin-bottom: 18px;
 }
 
+.step-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.step-index {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  border: 1px solid var(--desk-border-strong);
+  border-radius: 999px;
+  color: var(--oracle-cyan);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
 .ticket-flags {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.technical-details summary {
+  cursor: pointer;
+  color: var(--desk-ink);
+  font-weight: 800;
 }
 
 label {
@@ -480,17 +516,17 @@ code {
     justify-content: flex-start;
   }
 
-  .status-band,
-  .workspace,
-  .lower-grid {
+  .demo-summary,
+  .demo-flow,
+  .activity-section {
     grid-template-columns: 1fr;
   }
 
-  .price-lane {
-    grid-template-columns: 1fr 1fr;
+  .ticket-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .price-lane > div {
+  .ticket-strip > div {
     min-height: 72px;
   }
 
@@ -505,20 +541,16 @@ code {
     padding: 18px 0;
   }
 
-  .status-band article {
-    padding: 12px;
-  }
-
-  .price-lane {
+  .ticket-strip {
     grid-template-columns: 1fr;
   }
 
-  .price-lane > div {
+  .ticket-strip > div {
     border-right: 0;
     border-bottom: 1px solid var(--desk-border);
   }
 
-  .price-lane > div:last-child {
+  .ticket-strip > div:last-child {
     border-bottom: 0;
   }
 }

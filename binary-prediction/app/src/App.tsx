@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   ArrowDown,
   ArrowUp,
   CheckCircle2,
-  Clock3,
-  Database,
   Loader2,
   Play,
   RefreshCw,
   RotateCcw,
-  Shield,
-  Wallet,
 } from "lucide-react";
 import {
   approveMarket,
@@ -108,6 +103,7 @@ function App() {
   const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [lastResult, setLastResult] = useState<Omit<Toast, "id"> | null>(null);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [setupPrice, setSetupPrice] = useState("100");
   const [settlementPrice, setSettlementPrice] = useState("110");
@@ -158,6 +154,17 @@ function App() {
     return "Ready";
   }, [isBootstrapped, snapshot?.isOpen]);
 
+  const activeDirection = snapshot?.isOpen
+    ? (snapshot.direction ?? direction)
+    : direction;
+  const resultDisplay = lastResult ?? {
+    tone: "info" as const,
+    title: snapshot?.isOpen ? "Ticket open" : "No result yet",
+    detail: snapshot?.isOpen
+      ? `${activeDirection.toUpperCase()} ticket opened at ${snapshot.openPrice}.`
+      : "Settlement result appears here.",
+  };
+
   const run = useCallback(
     async (label: string, task: () => Promise<void>) => {
       setBusyLabel(label);
@@ -196,14 +203,9 @@ function App() {
       setMarket(nextMarket);
     });
 
-  const handleApprove = () =>
-    run("Approving token allowances", async () => {
-      await approveMarket(market, numberOrDefault(stake, 100));
-      pushLog({ tone: "success", message: "Token allowances refreshed" });
-    });
-
   const handlePlaceBet = () =>
     run("Placing prediction", async () => {
+      setLastResult(null);
       await approveMarket(market, numberOrDefault(stake, 100));
       const signature = await placeBet(
         market,
@@ -227,6 +229,11 @@ function App() {
         title: outcome.title,
         detail: outcome.detail,
       });
+      setLastResult({
+        tone: outcome.tone,
+        title: outcome.title,
+        detail: outcome.detail,
+      });
       pushLog({
         tone: outcome.tone === "error" ? "error" : "success",
         message: outcome.log,
@@ -240,6 +247,7 @@ function App() {
     setMarket(nextMarket);
     setSnapshot(null);
     setLogs(initialLogs);
+    setLastResult(null);
   };
 
   return (
@@ -255,7 +263,7 @@ function App() {
       <section className="topbar">
         <div>
           <p className="eyebrow">MagicBlock ER</p>
-          <h1>Binary Prediction Desk</h1>
+          <h1>Binary Prediction Demo</h1>
         </div>
         <div className="network-strip" aria-label="Network endpoints">
           <span>Base {BASE_ENDPOINT.replace("http://", "")}</span>
@@ -263,57 +271,46 @@ function App() {
         </div>
       </section>
 
-      <section className="status-band">
-        <article>
-          <Shield size={18} />
-          <span>Market</span>
-          <strong>{marketStatus}</strong>
-        </article>
-        <article>
-          <Wallet size={18} />
-          <span>User</span>
-          <strong>{shortKey(snapshot?.user)}</strong>
-        </article>
-        <article>
-          <Database size={18} />
-          <span>Mint</span>
-          <strong>{shortKey(snapshot?.mint)}</strong>
-        </article>
-        <article>
-          <Clock3 size={18} />
-          <span>Expiry</span>
-          <strong>{expiryLabel(snapshot)}</strong>
-        </article>
-      </section>
-
-      <section className="price-lane" aria-label="Prediction lifecycle">
-        <div>
-          <span>Open</span>
-          <strong>{snapshot?.openPrice ?? "-"}</strong>
+      <section className="demo-summary" aria-label="Demo status">
+        <div className={`result-card ${resultDisplay.tone}`}>
+          <span>Result</span>
+          <strong>{resultDisplay.title}</strong>
+          <p>{resultDisplay.detail}</p>
         </div>
-        <div className={`direction-chip ${direction}`}>
-          {direction === "up" ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
-          {(snapshot?.isOpen
-            ? (snapshot.direction ?? direction)
-            : direction
-          ).toUpperCase()}
-        </div>
-        <div>
-          <span>Settle</span>
-          <strong>{settlementPrice || "-"}</strong>
-        </div>
-        <div>
-          <span>Stake</span>
-          <strong>{snapshot?.isOpen ? snapshot.stake : stake || "-"}</strong>
+        <div className="ticket-strip">
+          <div>
+            <span>Market</span>
+            <strong>{marketStatus}</strong>
+          </div>
+          <div>
+            <span>Open</span>
+            <strong>{snapshot?.openPrice ?? "-"}</strong>
+          </div>
+          <div className={`direction-chip ${activeDirection}`}>
+            {activeDirection === "up" ? (
+              <ArrowUp size={18} />
+            ) : (
+              <ArrowDown size={18} />
+            )}
+            {activeDirection.toUpperCase()}
+          </div>
+          <div>
+            <span>Settle</span>
+            <strong>{settlementPrice || "-"}</strong>
+          </div>
+          <div>
+            <span>Expiry</span>
+            <strong>{expiryLabel(snapshot)}</strong>
+          </div>
         </div>
       </section>
 
-      <section className="workspace">
-        <div className="panel setup-panel">
+      <section className="demo-flow">
+        <div className="panel step-card setup-panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Bootstrap</p>
-              <h2>Market setup</h2>
+              <p className="step-index">1</p>
+              <h2>Initialize</h2>
             </div>
             <button className="icon-button" onClick={refresh} disabled={isBusy}>
               <RefreshCw size={16} />
@@ -350,21 +347,20 @@ function App() {
           <button
             className="ghost-button"
             onClick={handleReset}
-            disabled={isBusy || isBootstrapped}
+            disabled={isBusy}
           >
             <RotateCcw size={16} />
-            New local wallet set
+            Clear browser state
           </button>
         </div>
 
-        <div className="panel ticket-panel">
+        <div className="panel step-card ticket-panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Ticket</p>
-              <h2>Prediction order</h2>
+              <p className="step-index">2</p>
+              <h2>Predict</h2>
             </div>
             <div className="ticket-flags">
-              <span className="quiet-pill">Direct signer</span>
               {snapshot?.isOpen ? (
                 <span className="live-pill">Open</span>
               ) : (
@@ -406,25 +402,17 @@ function App() {
             {isBusy && busyLabel === "Placing prediction" ? (
               <Loader2 className="spin" size={16} />
             ) : (
-              <Activity size={16} />
+              <Play size={16} />
             )}
             Place bet
           </button>
-          <button
-            className="ghost-button"
-            onClick={handleApprove}
-            disabled={isBusy || !isBootstrapped}
-          >
-            <CheckCircle2 size={16} />
-            Approve allowance
-          </button>
         </div>
 
-        <div className="panel settle-panel">
+        <div className="panel step-card settle-panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Resolve</p>
-              <h2>Settlement</h2>
+              <p className="step-index">3</p>
+              <h2>Settle</h2>
             </div>
             <span className="quiet-pill" key={tick}>
               {expiryLabel(snapshot)}
@@ -463,38 +451,11 @@ function App() {
         </div>
       </section>
 
-      <section className="lower-grid">
-        <div className="panel account-panel">
-          <div className="panel-head">
-            <div>
-              <p className="eyebrow">Accounts</p>
-              <h2>Runtime map</h2>
-            </div>
-          </div>
-          <dl className="account-list">
-            <div>
-              <dt>Pool</dt>
-              <dd>{shortKey(snapshot?.pool)}</dd>
-            </div>
-            <div>
-              <dt>Bet</dt>
-              <dd>{shortKey(snapshot?.bet)}</dd>
-            </div>
-            <div>
-              <dt>Oracle</dt>
-              <dd>{shortKey(snapshot?.priceFeed)}</dd>
-            </div>
-            <div>
-              <dt>Authority</dt>
-              <dd>{shortKey(snapshot?.poolAuthority)}</dd>
-            </div>
-          </dl>
-        </div>
-
+      <section className="activity-section">
         <div className="panel log-panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Tape</p>
+              <p className="eyebrow">Activity</p>
               <h2>Transactions</h2>
             </div>
             {busyLabel && <span className="busy-label">{busyLabel}</span>}
@@ -508,6 +469,32 @@ function App() {
             ))}
           </ol>
         </div>
+
+        <details className="panel technical-details">
+          <summary>Technical details</summary>
+          <dl className="account-list">
+            <div>
+              <dt>User</dt>
+              <dd>{shortKey(snapshot?.user)}</dd>
+            </div>
+            <div>
+              <dt>Pool</dt>
+              <dd>{shortKey(snapshot?.pool)}</dd>
+            </div>
+            <div>
+              <dt>Bet</dt>
+              <dd>{shortKey(snapshot?.bet)}</dd>
+            </div>
+            <div>
+              <dt>Oracle</dt>
+              <dd>{shortKey(snapshot?.priceFeed)}</dd>
+            </div>
+            <div>
+              <dt>Mint</dt>
+              <dd>{shortKey(snapshot?.mint)}</dd>
+            </div>
+          </dl>
+        </details>
       </section>
     </main>
   );
