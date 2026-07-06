@@ -306,15 +306,8 @@ h2 {
   letter-spacing: -0.01em;
 }
 
-.chart-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
 .market-pill {
+  flex: 0 0 auto;
   color: var(--desk-text);
   font-size: 0.78rem;
   font-weight: 700;
@@ -324,25 +317,6 @@ h2 {
 .market-pill.open {
   color: var(--tick-green);
   border-color: rgba(83, 209, 139, 0.42);
-}
-
-.chart-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.chart-stat span {
-  color: var(--desk-muted);
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.chart-stat strong {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.98rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .chart-canvas-wrap {
@@ -356,19 +330,19 @@ h2 {
   display: block;
 }
 
-.direction-chip {
+/* Direction tag shown inline in the stats row below the price. */
+.price-balances .dir-tag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-weight: 900;
-  font-size: 0.9rem;
+  gap: 3px;
+  font-weight: 800;
 }
 
-.direction-chip.up {
+.price-balances .dir-tag.up {
   color: var(--tick-green);
 }
 
-.direction-chip.down {
+.price-balances .dir-tag.down {
   color: var(--tick-red);
 }
 
@@ -737,10 +711,6 @@ code {
 
   .chart-head {
     gap: 10px;
-  }
-
-  .chart-meta {
-    justify-content: flex-start;
   }
 }
 

@@ -446,35 +446,31 @@ function App() {
                   <span>
                     Pool <b>{snapshot?.poolTokens ?? "-"}</b>
                   </span>
+                  {snapshot?.isOpen && (
+                    <>
+                      <span>
+                        Open <b>{snapshot.openPrice}</b>
+                      </span>
+                      <span className={`dir-tag ${activeDirection}`}>
+                        {activeDirection === "up" ? (
+                          <ArrowUp size={13} />
+                        ) : (
+                          <ArrowDown size={13} />
+                        )}
+                        {activeDirection.toUpperCase()}
+                      </span>
+                      <span key={tick}>
+                        Expiry <b>{expiryLabel(snapshot)}</b>
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
-              <div className="chart-meta">
-                <span
-                  className={`market-pill ${snapshot?.isOpen ? "open" : "idle"}`}
-                >
-                  {marketStatus}
-                </span>
-                {snapshot?.isOpen && (
-                  <>
-                    <div className="chart-stat">
-                      <span>Open</span>
-                      <strong>{snapshot.openPrice}</strong>
-                    </div>
-                    <div className={`direction-chip ${activeDirection}`}>
-                      {activeDirection === "up" ? (
-                        <ArrowUp size={16} />
-                      ) : (
-                        <ArrowDown size={16} />
-                      )}
-                      {activeDirection.toUpperCase()}
-                    </div>
-                    <div className="chart-stat" key={tick}>
-                      <span>Expiry</span>
-                      <strong>{expiryLabel(snapshot)}</strong>
-                    </div>
-                  </>
-                )}
-              </div>
+              <span
+                className={`market-pill ${snapshot?.isOpen ? "open" : "idle"}`}
+              >
+                {marketStatus}
+              </span>
             </div>
             <PriceChart price={chartPrice} />
           </div>
