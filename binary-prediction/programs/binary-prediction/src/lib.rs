@@ -219,9 +219,16 @@ pub mod binary_prediction {
         let open_price = read_price(&ctx.accounts.price_update, &ctx.accounts.pool.price_feed_id)?;
         let now = Clock::get()?.unix_timestamp;
         let required_payout = checked_payout(stake, ctx.accounts.pool.payout_bps)?;
-        let pool_balance = ctx.accounts.pool_token_account.amount;
+        // Solvency is checked against the balance *after* the stake lands, since
+        // the stake is transferred into the pool below and backs the payout.
+        let available_after_stake = ctx
+            .accounts
+            .pool_token_account
+            .amount
+            .checked_add(stake)
+            .ok_or(ErrorCode::MathOverflow)?;
         require!(
-            pool_balance >= required_payout,
+            available_after_stake >= required_payout,
             ErrorCode::InsufficientLiquidity
         );
 
@@ -460,6 +467,7 @@ pub struct PlaceBet<'info> {
     pub user_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
+        constraint = pool_token_account.key() == associated_token_pda(&pool.key(), &pool.mint) @ ErrorCode::InvalidTokenOwner,
         constraint = pool_token_account.owner == pool.key() @ ErrorCode::InvalidTokenOwner,
         constraint = pool_token_account.mint == pool.mint @ ErrorCode::MintMismatch
     )]
@@ -490,6 +498,7 @@ pub struct Settle<'info> {
     pub user_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
+        constraint = pool_token_account.key() == associated_token_pda(&pool.key(), &pool.mint) @ ErrorCode::InvalidTokenOwner,
         constraint = pool_token_account.owner == pool.key() @ ErrorCode::InvalidTokenOwner,
         constraint = pool_token_account.mint == pool.mint @ ErrorCode::MintMismatch
     )]
