@@ -3,18 +3,14 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
-  KeyRound,
   Loader2,
   Play,
   RefreshCw,
   RotateCcw,
-  ShieldCheck,
 } from "lucide-react";
 import {
-  approveSessionWallet,
   BASE_ENDPOINT,
   bootstrapMarket,
-  createSession,
   Direction,
   ER_ENDPOINT,
   fetchOraclePrice,
@@ -161,7 +157,6 @@ function App() {
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [oraclePrice, setOraclePrice] = useState<OraclePrice | null>(null);
   const [stake, setStake] = useState("100");
-  const [sessionAllowance, setSessionAllowance] = useState("500");
   const [duration, setDuration] = useState("8");
   const [direction, setDirection] = useState<Direction>("up");
   const [tick, setTick] = useState(0);
@@ -222,7 +217,6 @@ function App() {
     return "Ready";
   }, [isBootstrapped, snapshot?.isOpen]);
   const readyToSettle = isReadyToSettle(snapshot);
-  const hasSession = Boolean(market.sessionToken);
 
   const activeDirection = snapshot?.isOpen
     ? (snapshot.direction ?? direction)
@@ -298,34 +292,6 @@ function App() {
         onLog: pushLog,
       });
       setMarket(nextMarket);
-    });
-
-  const handleCreateSession = () =>
-    run("Creating session", async () => {
-      const { market: nextMarket, result } = await createSession(market, {
-        ttlSeconds: 3_600,
-        topUpLamports: 5_000_000,
-      });
-      setMarket(nextMarket);
-      pushLog({
-        tone: "success",
-        message: `Session create submitted: ${formatTransactionTiming(result)}`,
-        signature: result.signature,
-      });
-    });
-
-  const handleApproveSession = () =>
-    run("Approving session", async () => {
-      const { market: nextMarket, result } = await approveSessionWallet(
-        market,
-        numberOrDefault(sessionAllowance, 500),
-      );
-      setMarket(nextMarket);
-      pushLog({
-        tone: "success",
-        message: `Session allowance submitted: ${formatTransactionTiming(result)}`,
-        signature: result.signature,
-      });
     });
 
   const handlePlaceBet = () =>
@@ -519,40 +485,6 @@ function App() {
             <RotateCcw size={16} />
             Clear browser state
           </button>
-          <dl className="session-summary">
-            <div>
-              <dt>Session</dt>
-              <dd>{shortKey(market.sessionToken)}</dd>
-            </div>
-            <div>
-              <dt>Allowance</dt>
-              <dd>{market.sessionAllowance ?? "-"}</dd>
-            </div>
-          </dl>
-          <label>
-            Session allowance
-            <input
-              value={sessionAllowance}
-              onChange={(event) => setSessionAllowance(event.target.value)}
-              inputMode="numeric"
-            />
-          </label>
-          <button
-            className="ghost-button"
-            onClick={handleCreateSession}
-            disabled={isBusy || !isBootstrapped}
-          >
-            <KeyRound size={16} />
-            Create session
-          </button>
-          <button
-            className="ghost-button"
-            onClick={handleApproveSession}
-            disabled={isBusy || !isBootstrapped || !hasSession}
-          >
-            <ShieldCheck size={16} />
-            Approve session
-          </button>
         </div>
 
         <div className="panel step-card ticket-panel">
@@ -686,18 +618,6 @@ function App() {
                 {shortKey(snapshot?.poolAuthority)} /{" "}
                 {snapshot?.poolAuthoritySol ?? "-"} SOL
               </dd>
-            </div>
-            <div>
-              <dt>Session signer</dt>
-              <dd>{shortKey(snapshot?.sessionSigner)}</dd>
-            </div>
-            <div>
-              <dt>Session token</dt>
-              <dd>{shortKey(snapshot?.sessionToken)}</dd>
-            </div>
-            <div>
-              <dt>Session allowance</dt>
-              <dd>{snapshot?.sessionAllowance ?? "-"}</dd>
             </div>
             <div>
               <dt>Pool</dt>

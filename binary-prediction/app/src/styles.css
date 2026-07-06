@@ -505,7 +505,6 @@ input:focus {
 }
 
 .balances,
-.session-summary,
 .account-list {
   display: grid;
   gap: 10px;
@@ -513,7 +512,6 @@ input:focus {
 }
 
 .balances div,
-.session-summary div,
 .account-list div {
   display: flex;
   justify-content: space-between;

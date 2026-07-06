@@ -24,7 +24,6 @@ import {
   delegateSpl,
   EPHEMERAL_SPL_TOKEN_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { SessionTokenManager } from "@magicblock-labs/gum-sdk";
 import { BN, Idl, Program } from "@coral-xyz/anchor";
 import binaryPredictionIdl from "../idl/binary_prediction.json";
 
@@ -46,10 +45,6 @@ export type MarketSnapshot = {
   admin: string;
   user: string;
   poolAuthority: string;
-  sessionSigner: string;
-  sessionToken: string;
-  sessionValidUntil: string;
-  sessionAllowance: string;
   adminSol: string;
   userSol: string;
   poolAuthoritySol: string;
@@ -84,10 +79,6 @@ export type StoredMarket = {
   adminSecret: number[];
   userSecret: number[];
   poolAuthoritySecret: number[];
-  sessionSecret?: number[];
-  sessionToken?: string;
-  sessionValidUntil?: number;
-  sessionAllowance?: number;
   mint?: string;
   userAta?: string;
   poolAta?: string;
@@ -120,7 +111,6 @@ export const VALIDATOR = new PublicKey(
 );
 
 const STORAGE_KEY = "binaryPredictionMarketV1";
-const SESSION_TOKEN_SEED = Buffer.from("session_token_v2");
 export const ORACLE_SYMBOL = "SOL/USD";
 export const SOL_PRICE_FEED = new PublicKey(
   "ENYwebBThHzmzwPLAQvCucUTsjyfBSZdD9ViXksS4jPu",
@@ -202,23 +192,7 @@ export function keypairs(market: StoredMarket) {
     poolAuthority: Keypair.fromSecretKey(
       Uint8Array.from(market.poolAuthoritySecret),
     ),
-    session: market.sessionSecret
-      ? Keypair.fromSecretKey(Uint8Array.from(market.sessionSecret))
-      : undefined,
   };
-}
-
-function withSessionKeypair(market: StoredMarket) {
-  const existing = keypairs(market).session;
-  if (existing) return { market, session: existing };
-
-  const session = Keypair.generate();
-  const nextMarket = {
-    ...market,
-    sessionSecret: Array.from(session.secretKey),
-  };
-  saveMarket(nextMarket);
-  return { market: nextMarket, session };
 }
 
 export function pda(seeds: Buffer[], programId: PublicKey): PublicKey {
@@ -235,23 +209,6 @@ export function poolPda(programId: PublicKey): PublicKey {
 
 export function betPda(programId: PublicKey, user: PublicKey): PublicKey {
   return pda([BET_SEED, user.toBuffer()], programId);
-}
-
-export function sessionTokenPda(
-  sessionProgramId: PublicKey,
-  targetProgramId: PublicKey,
-  sessionSigner: PublicKey,
-  authority: PublicKey,
-): PublicKey {
-  return pda(
-    [
-      SESSION_TOKEN_SEED,
-      targetProgramId.toBuffer(),
-      sessionSigner.toBuffer(),
-      authority.toBuffer(),
-    ],
-    sessionProgramId,
-  );
 }
 
 export function eata(owner: PublicKey, mint: PublicKey): PublicKey {
@@ -644,89 +601,6 @@ export async function approveMarket(
   );
 }
 
-export async function createSession(
-  market: StoredMarket,
-  options: {
-    ttlSeconds: number;
-    topUpLamports: number;
-  },
-): Promise<{ market: StoredMarket; result: TransactionResult }> {
-  const { market: nextMarket, session } = withSessionKeypair(market);
-  const { admin, user } = keypairs(nextMarket);
-  const { base, program } = providers(nextMarket);
-  const sessionManager = new SessionTokenManager(
-    new KeypairWallet(admin),
-    base.connection,
-  );
-  const validUntil = Math.floor(Date.now() / 1_000) + options.ttlSeconds;
-  const sessionToken = sessionTokenPda(
-    sessionManager.program.programId,
-    program.programId,
-    session.publicKey,
-    user.publicKey,
-  );
-
-  const transaction = await (sessionManager.program as any).methods
-    .createSessionV2(true, new BN(validUntil), new BN(options.topUpLamports))
-    .accounts({
-      targetProgram: program.programId,
-      sessionSigner: session.publicKey,
-      feePayer: admin.publicKey,
-      authority: user.publicKey,
-    })
-    .signers([user, session])
-    .transaction();
-  const result = await sendSignedTransaction(
-    base.connection,
-    transaction,
-    admin,
-    [user, session],
-  );
-
-  const updatedMarket = {
-    ...nextMarket,
-    sessionToken: sessionToken.toBase58(),
-    sessionValidUntil: validUntil,
-  };
-  saveMarket(updatedMarket);
-  return { market: updatedMarket, result };
-}
-
-export async function approveSessionWallet(
-  market: StoredMarket,
-  allowance: number,
-): Promise<{ market: StoredMarket; result: TransactionResult }> {
-  if (!market.userAta) {
-    throw new Error("Market setup is incomplete");
-  }
-  const { session, user } = keypairs(market);
-  if (!session || !market.sessionToken) {
-    throw new Error("Create a session before approving session allowance");
-  }
-  const { admin } = keypairs(market);
-  const { er } = providers(market);
-  const result = await sendSignedTransaction(
-    er.connection,
-    new Transaction().add(
-      createApproveInstruction(
-        new PublicKey(market.userAta),
-        session.publicKey,
-        user.publicKey,
-        BigInt(allowance),
-      ),
-    ),
-    admin,
-    [user],
-    "processed",
-  );
-  const updatedMarket = {
-    ...market,
-    sessionAllowance: allowance,
-  };
-  saveMarket(updatedMarket);
-  return { market: updatedMarket, result };
-}
-
 export async function placeBet(
   market: StoredMarket,
   direction: Direction,
@@ -762,49 +636,6 @@ export async function placeBet(
     transaction,
     admin,
     [user],
-    "processed",
-  );
-}
-
-export async function placeBetWithTokenSigner(
-  market: StoredMarket,
-  direction: Direction,
-  stake: number,
-  useSession: boolean,
-): Promise<TransactionResult> {
-  if (!market.userAta || !market.poolAta) {
-    throw new Error("Market setup is incomplete");
-  }
-  const { admin, session, user } = keypairs(market);
-  const { er, erProgram } = providers(market);
-  const pool = poolPda(erProgram.programId);
-  const bet = betPda(erProgram.programId, user.publicKey);
-  const payer = useSession ? session : user;
-  if (!payer) throw new Error("Create a session before using session betting");
-
-  const transaction = await (erProgram as any).methods
-    .placeBet(direction === "up" ? { up: {} } : { down: {} }, new BN(stake))
-    .accountsPartial({
-      payer: payer.publicKey,
-      user: user.publicKey,
-      pool,
-      bet,
-      userTokenAccount: new PublicKey(market.userAta),
-      poolTokenAccount: new PublicKey(market.poolAta),
-      priceUpdate: priceFeed(),
-      tokenProgram: TOKEN_PROGRAM_ID,
-      sessionToken:
-        useSession && market.sessionToken
-          ? new PublicKey(market.sessionToken)
-          : null,
-    })
-    .signers([payer])
-    .transaction();
-  return sendSignedTransaction(
-    er.connection,
-    transaction,
-    admin,
-    [payer],
     "processed",
   );
 }
@@ -845,7 +676,7 @@ export async function settleBet(
 export async function refreshSnapshot(
   market: StoredMarket,
 ): Promise<MarketSnapshot> {
-  const { admin, user, session } = keypairs(market);
+  const { admin, user } = keypairs(market);
   const { base, er, erProgram, program } = providers(market);
   const pool = poolPda(program.programId);
   const bet = betPda(program.programId, user.publicKey);
@@ -940,10 +771,6 @@ export async function refreshSnapshot(
     admin: admin.publicKey.toBase58(),
     user: user.publicKey.toBase58(),
     poolAuthority: pool.toBase58(),
-    sessionSigner: session?.publicKey.toBase58() ?? "-",
-    sessionToken: market.sessionToken ?? "-",
-    sessionValidUntil: market.sessionValidUntil?.toString() ?? "-",
-    sessionAllowance: market.sessionAllowance?.toString() ?? "-",
     adminSol,
     userSol,
     poolAuthoritySol,
