@@ -12,6 +12,7 @@
   --tick-red: #ff6b6b;
   --oracle-cyan: #68d8ff;
   --expiry-amber: #f4c55f;
+  --chart-line-glow: rgba(104, 216, 255, 0.25);
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
   font-family:
     Inter,
@@ -23,6 +24,7 @@
     sans-serif;
   color: var(--desk-ink);
   background: var(--desk-canvas);
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
@@ -65,8 +67,20 @@ button:disabled {
 .terminal {
   width: min(1180px, calc(100vw - 32px));
   margin: 0 auto;
-  padding: 28px 0;
+  padding: 0;
 }
+
+/* The chart + action rail fill exactly one viewport; only Technical details
+   (below the fold) requires scrolling. */
+.viewport {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+/* ---------- Toasts ---------- */
 
 .toast-stack {
   position: fixed;
@@ -126,6 +140,8 @@ button:disabled {
   color: var(--oracle-cyan);
 }
 
+/* ---------- Reset modal ---------- */
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -167,14 +183,10 @@ button:disabled {
   margin-top: 0;
 }
 
-.topbar,
-.demo-summary,
-.demo-flow,
-.activity-section {
-  margin-bottom: 18px;
-}
+/* ---------- Topbar ---------- */
 
 .topbar {
+  flex: 0 0 auto;
   display: flex;
   align-items: end;
   justify-content: space-between;
@@ -188,9 +200,10 @@ p {
 }
 
 h1 {
-  font-size: clamp(2rem, 5vw, 4rem);
-  line-height: 0.95;
-  font-weight: 780;
+  font-size: clamp(1.35rem, 2.6vw, 1.85rem);
+  line-height: 1.05;
+  font-weight: 760;
+  letter-spacing: -0.01em;
 }
 
 h2 {
@@ -202,7 +215,6 @@ h2 {
   color: var(--oracle-cyan);
   font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -219,117 +231,137 @@ h2 {
 .network-strip span,
 .live-pill,
 .quiet-pill,
-.busy-label {
+.busy-label,
+.market-pill {
   border: 1px solid var(--desk-border);
   border-radius: 999px;
   padding: 6px 10px;
   background: rgba(12, 23, 19, 0.72);
 }
 
-.demo-summary {
+/* ---------- Board: chart (left) + action rail (right) ---------- */
+
+.board {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.85fr);
   gap: 14px;
+  align-items: stretch;
 }
 
-.result-card,
-.ticket-strip {
+.panel {
   border: 1px solid var(--desk-border);
   border-radius: 8px;
   background: rgba(12, 23, 19, 0.88);
+  padding: 16px;
 }
 
-.result-card {
-  min-height: 132px;
-  padding: 18px;
-}
-
-.result-card strong,
-.result-card span,
-.result-card p {
-  display: block;
-}
-
-.result-card strong {
-  margin: 10px 0 8px;
-  font-size: 1.9rem;
-  line-height: 1;
-}
-
-.result-card p {
-  color: var(--desk-text);
-  line-height: 1.45;
-}
-
-.result-card.success strong {
-  color: var(--tick-green);
-}
-
-.result-card.error strong {
-  color: var(--tick-red);
-}
-
-.result-card.info strong {
-  color: var(--oracle-cyan);
-}
-
-.ticket-strip {
-  display: grid;
-  grid-template-columns: 1fr 0.8fr auto 0.8fr 1.1fr;
-  overflow: hidden;
+.chart-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   box-shadow: var(--shadow);
 }
 
-.ticket-strip > div {
-  min-height: 132px;
+.chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.chart-price {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 6px;
-  padding: 18px;
-  border-right: 1px solid var(--desk-border);
+  gap: 4px;
 }
 
-.ticket-strip > div:last-child {
-  border-right: 0;
-}
-
-.result-card span,
-.ticket-strip span,
-label,
-dt {
+.price-balances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 6px;
   color: var(--desk-muted);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
 }
 
-.ticket-strip strong {
+.price-balances b {
+  color: var(--desk-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.price-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1;
+  font-weight: 700;
+  color: var(--oracle-cyan);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.chart-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.market-pill {
+  color: var(--desk-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.market-pill.open {
+  color: var(--tick-green);
+  border-color: rgba(83, 209, 139, 0.42);
+}
+
+.chart-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chart-stat span {
+  color: var(--desk-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.chart-stat strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.98rem;
   font-variant-numeric: tabular-nums;
 }
 
-.ticket-strip .oracle-cell {
-  align-items: center;
-  text-align: center;
+.chart-canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 320px;
+  margin-top: 8px;
 }
 
-.ticket-strip .oracle-cell strong {
-  width: 14ch;
-  border: 1px solid rgba(104, 216, 255, 0.2);
-  border-radius: 6px;
-  padding: 8px 10px;
-  color: var(--oracle-cyan);
-  background: rgba(104, 216, 255, 0.08);
-  text-align: center;
+.chart-canvas-wrap canvas {
+  display: block;
 }
 
 .direction-chip {
-  min-width: 120px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  text-align: center;
+  gap: 6px;
   font-weight: 900;
+  font-size: 0.9rem;
 }
 
 .direction-chip.up {
@@ -340,23 +372,23 @@ dt {
   color: var(--tick-red);
 }
 
-.demo-flow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+/* ---------- Action rail ---------- */
+
+.board-rail {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
 }
 
-.activity-section {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.6fr);
-  gap: 14px;
+/* Steps size to content; the Activity log takes the slack and scrolls. */
+.board-rail > .step-card {
+  flex: 0 0 auto;
 }
 
-.panel {
-  border: 1px solid var(--desk-border);
-  border-radius: 8px;
-  background: rgba(12, 23, 19, 0.88);
-  padding: 16px;
+.board-rail > .panel {
+  padding: 13px;
 }
 
 .panel-head {
@@ -364,7 +396,40 @@ dt {
   align-items: start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
+}
+
+/* Step cards: number chip sits inline with the title to save vertical space. */
+.step-card .panel-head {
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.step-card .panel-head > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.step-card .step-index {
+  margin-bottom: 0;
+}
+
+/* Initialize: duration input and the action button share one row. */
+.setup-row {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.field-compact {
+  flex: 0 0 84px;
+  margin: 0;
+}
+
+.setup-row .primary-button {
+  flex: 1;
+  margin-top: 0;
 }
 
 .step-card {
@@ -373,24 +438,54 @@ dt {
 }
 
 .step-index {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   border: 1px solid var(--desk-border-strong);
   border-radius: 999px;
   color: var(--oracle-cyan);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 900;
 }
 
-.ticket-flags {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
+.result-readout {
+  border: 1px solid var(--desk-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: rgba(9, 19, 15, 0.6);
+}
+
+.result-readout strong {
+  display: block;
+  font-size: 1.15rem;
+  line-height: 1.15;
+  margin-bottom: 6px;
+}
+
+.result-readout p {
+  color: var(--desk-text);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.result-readout.success strong {
+  color: var(--tick-green);
+}
+
+.result-readout.error strong {
+  color: var(--tick-red);
+}
+
+.result-readout.info strong {
+  color: var(--oracle-cyan);
+}
+
+.technical-details {
+  margin-bottom: 18px;
 }
 
 .technical-details summary {
@@ -399,10 +494,21 @@ dt {
   font-weight: 800;
 }
 
+/* ---------- Form controls ---------- */
+
 label {
   display: grid;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: var(--desk-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+dt {
+  color: var(--desk-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 input {
@@ -413,6 +519,7 @@ input {
   color: var(--desk-ink);
   padding: 12px;
   outline: none;
+  font-variant-numeric: tabular-nums;
 }
 
 input:focus {
@@ -427,13 +534,23 @@ input:focus {
 .segmented button {
   border: 1px solid var(--desk-border);
   border-radius: 6px;
-  min-height: 42px;
+  min-height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   color: var(--desk-ink);
   background: var(--desk-raised);
+  transition:
+    border-color 0.15s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.1s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.primary-button:not(:disabled):active,
+.ghost-button:not(:disabled):active,
+.danger-button:not(:disabled):active,
+.segmented button:not(:disabled):active {
+  transform: scale(0.98);
 }
 
 .primary-button,
@@ -478,7 +595,7 @@ input:focus {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .segmented button.selected.up {
@@ -504,20 +621,20 @@ input:focus {
   border-color: rgba(83, 209, 139, 0.42);
 }
 
-.balances,
+/* ---------- Balances / accounts / log ---------- */
+
 .account-list {
   display: grid;
-  gap: 10px;
-  margin: 18px 0 0;
+  gap: 8px;
+  margin: 12px 0 0;
 }
 
-.balances div,
 .account-list div {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   border-top: 1px solid var(--desk-border);
-  padding-top: 10px;
+  padding-top: 8px;
 }
 
 dd {
@@ -525,14 +642,23 @@ dd {
   color: var(--desk-ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.log-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 76px;
 }
 
 .log-list {
-  min-height: 180px;
-  max-height: 260px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   display: grid;
   gap: 8px;
+  grid-auto-rows: max-content;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -545,6 +671,7 @@ dd {
   padding: 10px 0;
   border-bottom: 1px solid var(--desk-border);
   color: var(--desk-text);
+  font-size: 0.85rem;
 }
 
 .log-list li.success {
@@ -557,6 +684,7 @@ dd {
 
 code {
   color: var(--desk-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .spin {
@@ -569,6 +697,27 @@ code {
   }
 }
 
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1000px) {
+  /* Stacked layout can't fit one viewport — let the page scroll naturally. */
+  .viewport {
+    height: auto;
+  }
+
+  .board {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-panel {
+    min-height: 380px;
+  }
+
+  .board-rail {
+    overflow-y: visible;
+  }
+}
+
 @media (max-width: 900px) {
   .topbar {
     align-items: start;
@@ -578,24 +727,6 @@ code {
   .network-strip {
     justify-content: flex-start;
   }
-
-  .demo-summary,
-  .demo-flow,
-  .activity-section {
-    grid-template-columns: 1fr;
-  }
-
-  .ticket-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .ticket-strip > div {
-    min-height: 72px;
-  }
-
-  .direction-chip {
-    min-width: 0;
-  }
 }
 
 @media (max-width: 560px) {
@@ -604,16 +735,20 @@ code {
     padding: 18px 0;
   }
 
-  .ticket-strip {
-    grid-template-columns: 1fr;
+  .chart-head {
+    gap: 10px;
   }
 
-  .ticket-strip > div {
-    border-right: 0;
-    border-bottom: 1px solid var(--desk-border);
+  .chart-meta {
+    justify-content: flex-start;
   }
+}
 
-  .ticket-strip > div:last-child {
-    border-bottom: 0;
+@media (prefers-reduced-motion: reduce) {
+  .primary-button,
+  .ghost-button,
+  .danger-button,
+  .segmented button {
+    transition: none;
   }
 }

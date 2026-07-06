@@ -28,6 +28,7 @@ import {
   subscribeOraclePrice,
   TransactionResult,
 } from "./lib/binaryPrediction";
+import PriceChart from "./components/PriceChart";
 
 type Toast = {
   id: number;
@@ -160,7 +161,8 @@ function App() {
   const [duration, setDuration] = useState("8");
   const [direction, setDirection] = useState<Direction>("up");
   const [tick, setTick] = useState(0);
-  const autoSettleAttempts = useRef(new Set<string>());
+  const autoSettleInFlight = useRef(false);
+  const lastAutoSettleAt = useRef(0);
 
   const isBusy = Boolean(busyLabel);
   const isBootstrapped = Boolean(
@@ -217,6 +219,9 @@ function App() {
     return "Ready";
   }, [isBootstrapped, snapshot?.isOpen]);
   const readyToSettle = isReadyToSettle(snapshot);
+  // Derive the chart value from the already-normalized display string so it
+  // always matches the price shown in the header, regardless of exponent sign.
+  const chartPrice = oraclePrice ? Number(oraclePrice.display) : null;
 
   const activeDirection = snapshot?.isOpen
     ? (snapshot.direction ?? direction)
@@ -297,7 +302,8 @@ function App() {
   const handlePlaceBet = () =>
     run("Placing prediction", async () => {
       setLastResult(null);
-      autoSettleAttempts.current.clear();
+      autoSettleInFlight.current = false;
+      lastAutoSettleAt.current = 0;
       const result = await placeBet(
         market,
         direction,
@@ -320,21 +326,38 @@ function App() {
       !snapshot?.isOpen ||
       snapshot.expiry === "-" ||
       !oraclePrice ||
-      isBusy
+      isBusy ||
+      autoSettleInFlight.current
     ) {
       return;
     }
 
     if (!isReadyToSettle(snapshot)) return;
 
-    const attemptKey = `${snapshot.bet}:${snapshot.expiry}:${snapshot.stake}`;
-    if (autoSettleAttempts.current.has(attemptKey)) return;
-    autoSettleAttempts.current.add(attemptKey);
+    // Throttle so a premature attempt (ER clock still behind) doesn't spam the
+    // rollup with BetNotExpired failures faster than about once per second.
+    const nowMs = Date.now();
+    if (nowMs - lastAutoSettleAt.current < 750) return;
+    lastAutoSettleAt.current = nowMs;
 
-    void run("Auto-settling ticket", async () => {
-      await settleCurrentTicket();
-    });
-  }, [isBusy, oraclePrice, run, settleCurrentTicket, snapshot, tick]);
+    // The program settles only once the ER clock reaches expiry_ts (which can
+    // trail the local clock). A premature attempt fails with BetNotExpired, so
+    // we keep quiet on failure and let the next tick retry until it lands —
+    // rather than permanently giving up after one attempt.
+    autoSettleInFlight.current = true;
+    setBusyLabel("Auto-settling ticket");
+    settleCurrentTicket()
+      .catch((error) => {
+        console.debug("Auto-settle retry pending:", error);
+      })
+      .finally(() => {
+        autoSettleInFlight.current = false;
+        setBusyLabel(null);
+        refresh().catch((error) => {
+          console.error(error);
+        });
+      });
+  }, [isBusy, oraclePrice, refresh, settleCurrentTicket, snapshot, tick]);
 
   const handleReset = () => {
     resetStoredMarket();
@@ -344,7 +367,7 @@ function App() {
     setLogs(initialLogs);
     setLastResult(null);
     setToasts([]);
-    autoSettleAttempts.current.clear();
+    autoSettleInFlight.current = false;
     setShowResetModal(false);
   };
 
@@ -396,252 +419,257 @@ function App() {
           </section>
         </div>
       )}
-      <section className="topbar">
-        <div>
-          <p className="eyebrow">MagicBlock ER</p>
-          <h1>Binary Prediction Demo</h1>
-        </div>
-        <div className="network-strip" aria-label="Network endpoints">
-          <span>Base {BASE_ENDPOINT.replace("http://", "")}</span>
-          <span>ER {ER_ENDPOINT.replace("http://", "")}</span>
-        </div>
-      </section>
-
-      <section className="demo-summary" aria-label="Demo status">
-        <div className={`result-card ${resultDisplay.tone}`}>
-          <span>Result</span>
-          <strong>{resultDisplay.title}</strong>
-          <p>{resultDisplay.detail}</p>
-        </div>
-        <div className="ticket-strip">
+      <div className="viewport">
+        <section className="topbar">
           <div>
-            <span>Market</span>
-            <strong>{marketStatus}</strong>
+            <p className="eyebrow">MagicBlock ER</p>
+            <h1>Binary Prediction Demo</h1>
+          </div>
+          <div className="network-strip" aria-label="Network endpoints">
+            <span>Base {BASE_ENDPOINT.replace("http://", "")}</span>
+            <span>ER {ER_ENDPOINT.replace("http://", "")}</span>
+          </div>
+        </section>
+
+        <section className="board">
+          <div className="panel chart-panel">
+            <div className="chart-head">
+              <div className="chart-price">
+                <p className="eyebrow">{ORACLE_SYMBOL}</p>
+                <strong className="price-value">
+                  {oraclePrice?.display ?? "—"}
+                </strong>
+                <div className="price-balances">
+                  <span>
+                    User <b>{snapshot?.userTokens ?? "-"}</b>
+                  </span>
+                  <span>
+                    Pool <b>{snapshot?.poolTokens ?? "-"}</b>
+                  </span>
+                </div>
+              </div>
+              <div className="chart-meta">
+                <span
+                  className={`market-pill ${snapshot?.isOpen ? "open" : "idle"}`}
+                >
+                  {marketStatus}
+                </span>
+                {snapshot?.isOpen && (
+                  <>
+                    <div className="chart-stat">
+                      <span>Open</span>
+                      <strong>{snapshot.openPrice}</strong>
+                    </div>
+                    <div className={`direction-chip ${activeDirection}`}>
+                      {activeDirection === "up" ? (
+                        <ArrowUp size={16} />
+                      ) : (
+                        <ArrowDown size={16} />
+                      )}
+                      {activeDirection.toUpperCase()}
+                    </div>
+                    <div className="chart-stat" key={tick}>
+                      <span>Expiry</span>
+                      <strong>{expiryLabel(snapshot)}</strong>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <PriceChart price={chartPrice} />
+          </div>
+
+          <div className="board-rail">
+            <div className="panel step-card setup-panel">
+              <div className="panel-head">
+                <div>
+                  <p className="step-index">1</p>
+                  <h2>Initialize</h2>
+                </div>
+                <button
+                  className="icon-button"
+                  onClick={() => setShowResetModal(true)}
+                  disabled={isBusy}
+                  aria-label="Clear saved market"
+                >
+                  <RefreshCw size={16} />
+                </button>
+              </div>
+              <div className="setup-row">
+                <label className="field-compact">
+                  Duration (s)
+                  <input
+                    value={duration}
+                    onChange={(event) => setDuration(event.target.value)}
+                    inputMode="numeric"
+                  />
+                </label>
+                <button
+                  className="primary-button"
+                  onClick={handleBootstrap}
+                  disabled={isBusy || isBootstrapped}
+                >
+                  {isBusy && busyLabel === "Bootstrapping market" ? (
+                    <Loader2 className="spin" size={16} />
+                  ) : (
+                    <Play size={16} />
+                  )}
+                  {isBootstrapped ? "Market ready" : "Initialize market"}
+                </button>
+              </div>
+            </div>
+
+            <div className="panel step-card ticket-panel">
+              <div className="panel-head">
+                <div>
+                  <p className="step-index">2</p>
+                  <h2>Predict</h2>
+                </div>
+                {snapshot?.isOpen ? (
+                  <span className="live-pill">Open</span>
+                ) : (
+                  <span className="quiet-pill">Idle</span>
+                )}
+              </div>
+              <div className="segmented">
+                <button
+                  className={direction === "up" ? "selected up" : ""}
+                  onClick={() => setDirection("up")}
+                  disabled={isBusy}
+                >
+                  <ArrowUp size={16} />
+                  Up
+                </button>
+                <button
+                  className={direction === "down" ? "selected down" : ""}
+                  onClick={() => setDirection("down")}
+                  disabled={isBusy}
+                >
+                  <ArrowDown size={16} />
+                  Down
+                </button>
+              </div>
+              <label>
+                Stake
+                <input
+                  value={stake}
+                  onChange={(event) => setStake(event.target.value)}
+                  inputMode="numeric"
+                />
+              </label>
+              <button
+                className="primary-button trade"
+                onClick={handlePlaceBet}
+                disabled={
+                  isBusy || !isBootstrapped || Boolean(snapshot?.isOpen)
+                }
+              >
+                {isBusy && busyLabel === "Placing prediction" ? (
+                  <Loader2 className="spin" size={16} />
+                ) : (
+                  <Play size={16} />
+                )}
+                Place bet
+              </button>
+            </div>
+
+            <div className="panel step-card result-panel">
+              <div className="panel-head">
+                <div>
+                  <p className="step-index">3</p>
+                  <h2>Result</h2>
+                </div>
+                <span className="quiet-pill" key={tick}>
+                  {expiryLabel(snapshot)}
+                </span>
+              </div>
+              <div className={`result-readout ${resultDisplay.tone}`}>
+                <strong>{resultDisplay.title}</strong>
+                <p>{resultDisplay.detail}</p>
+              </div>
+              <button
+                className="primary-button settle"
+                onClick={handleSettle}
+                disabled={isBusy || !readyToSettle || !oraclePrice}
+              >
+                {isBusy &&
+                (busyLabel === "Settling ticket" ||
+                  busyLabel === "Auto-settling ticket") ? (
+                  <Loader2 className="spin" size={16} />
+                ) : (
+                  <CheckCircle2 size={16} />
+                )}
+                Settle now
+              </button>
+            </div>
+
+            <div className="panel log-panel">
+              <div className="panel-head">
+                <div>
+                  <p className="eyebrow">Activity</p>
+                  <h2>Transactions</h2>
+                </div>
+                {busyLabel && <span className="busy-label">{busyLabel}</span>}
+              </div>
+              <ol className="log-list">
+                {logs.map((entry) => (
+                  <li key={entry.id} className={entry.tone}>
+                    <span>{entry.message}</span>
+                    {entry.signature && (
+                      <code>{shortKey(entry.signature)}</code>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <details className="panel technical-details">
+        <summary>Technical details</summary>
+        <dl className="account-list">
+          <div>
+            <dt>User</dt>
+            <dd>
+              {shortKey(snapshot?.user)} / {snapshot?.userSol ?? "-"} SOL
+            </dd>
           </div>
           <div>
-            <span>Open</span>
-            <strong>{snapshot?.openPrice ?? "-"}</strong>
-          </div>
-          <div className={`direction-chip ${activeDirection}`}>
-            {activeDirection === "up" ? (
-              <ArrowUp size={18} />
-            ) : (
-              <ArrowDown size={18} />
-            )}
-            {activeDirection.toUpperCase()}
-          </div>
-          <div className="oracle-cell">
-            <span>{ORACLE_SYMBOL}</span>
-            <strong>{oraclePrice?.display ?? "-"}</strong>
+            <dt>Admin</dt>
+            <dd>
+              {shortKey(snapshot?.admin)} / {snapshot?.adminSol ?? "-"} SOL
+            </dd>
           </div>
           <div>
-            <span>Expiry</span>
-            <strong>{expiryLabel(snapshot)}</strong>
+            <dt>Pool PDA</dt>
+            <dd>
+              {shortKey(snapshot?.poolAuthority)} /{" "}
+              {snapshot?.poolAuthoritySol ?? "-"} SOL
+            </dd>
           </div>
-        </div>
-      </section>
-
-      <section className="demo-flow">
-        <div className="panel step-card setup-panel">
-          <div className="panel-head">
-            <div>
-              <p className="step-index">1</p>
-              <h2>Initialize</h2>
-            </div>
-            <button
-              className="icon-button"
-              onClick={() => setShowResetModal(true)}
-              disabled={isBusy}
-              aria-label="Clear saved market"
-            >
-              <RefreshCw size={16} />
-            </button>
+          <div>
+            <dt>Pool</dt>
+            <dd>{shortKey(snapshot?.pool)}</dd>
           </div>
-          <label>
-            Duration seconds
-            <input
-              value={duration}
-              onChange={(event) => setDuration(event.target.value)}
-              inputMode="numeric"
-            />
-          </label>
-          <button
-            className="primary-button"
-            onClick={handleBootstrap}
-            disabled={isBusy || isBootstrapped}
-          >
-            {isBusy && busyLabel === "Bootstrapping market" ? (
-              <Loader2 className="spin" size={16} />
-            ) : (
-              <Play size={16} />
-            )}
-            Initialize market
-          </button>
-          <button
-            className="ghost-button"
-            onClick={() => setShowResetModal(true)}
-            disabled={isBusy}
-          >
-            <RotateCcw size={16} />
-            Clear browser state
-          </button>
-        </div>
-
-        <div className="panel step-card ticket-panel">
-          <div className="panel-head">
-            <div>
-              <p className="step-index">2</p>
-              <h2>Predict</h2>
-            </div>
-            <div className="ticket-flags">
-              {snapshot?.isOpen ? (
-                <span className="live-pill">Open</span>
-              ) : (
-                <span className="quiet-pill">Idle</span>
-              )}
-            </div>
+          <div>
+            <dt>Bet</dt>
+            <dd>{shortKey(snapshot?.bet)}</dd>
           </div>
-          <div className="segmented">
-            <button
-              className={direction === "up" ? "selected up" : ""}
-              onClick={() => setDirection("up")}
-              disabled={isBusy}
-            >
-              <ArrowUp size={16} />
-              Up
-            </button>
-            <button
-              className={direction === "down" ? "selected down" : ""}
-              onClick={() => setDirection("down")}
-              disabled={isBusy}
-            >
-              <ArrowDown size={16} />
-              Down
-            </button>
+          <div>
+            <dt>Oracle</dt>
+            <dd>{shortKey(snapshot?.priceFeed)}</dd>
           </div>
-          <label>
-            Stake
-            <input
-              value={stake}
-              onChange={(event) => setStake(event.target.value)}
-              inputMode="numeric"
-            />
-          </label>
-          <button
-            className="primary-button trade"
-            onClick={handlePlaceBet}
-            disabled={isBusy || !isBootstrapped || Boolean(snapshot?.isOpen)}
-          >
-            {isBusy && busyLabel === "Placing prediction" ? (
-              <Loader2 className="spin" size={16} />
-            ) : (
-              <Play size={16} />
-            )}
-            Place bet
-          </button>
-        </div>
-
-        <div className="panel step-card settle-panel">
-          <div className="panel-head">
-            <div>
-              <p className="step-index">3</p>
-              <h2>Auto-settle</h2>
-            </div>
-            <span className="quiet-pill" key={tick}>
-              {expiryLabel(snapshot)}
-            </span>
+          <div>
+            <dt>Oracle slot</dt>
+            <dd>{oraclePrice?.slot ?? "-"}</dd>
           </div>
-          <button
-            className="primary-button settle"
-            onClick={handleSettle}
-            disabled={isBusy || !readyToSettle || !oraclePrice}
-          >
-            {isBusy &&
-            (busyLabel === "Settling ticket" ||
-              busyLabel === "Auto-settling ticket") ? (
-              <Loader2 className="spin" size={16} />
-            ) : (
-              <CheckCircle2 size={16} />
-            )}
-            Settle now
-          </button>
-          <dl className="balances">
-            <div>
-              <dt>User tokens</dt>
-              <dd>{snapshot?.userTokens ?? "-"}</dd>
-            </div>
-            <div>
-              <dt>Pool tokens</dt>
-              <dd>{snapshot?.poolTokens ?? "-"}</dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-
-      <section className="activity-section">
-        <div className="panel log-panel">
-          <div className="panel-head">
-            <div>
-              <p className="eyebrow">Activity</p>
-              <h2>Transactions</h2>
-            </div>
-            {busyLabel && <span className="busy-label">{busyLabel}</span>}
+          <div>
+            <dt>Mint</dt>
+            <dd>{shortKey(snapshot?.mint)}</dd>
           </div>
-          <ol className="log-list">
-            {logs.map((entry) => (
-              <li key={entry.id} className={entry.tone}>
-                <span>{entry.message}</span>
-                {entry.signature && <code>{shortKey(entry.signature)}</code>}
-              </li>
-            ))}
-          </ol>
-        </div>
-
-        <details className="panel technical-details">
-          <summary>Technical details</summary>
-          <dl className="account-list">
-            <div>
-              <dt>User</dt>
-              <dd>
-                {shortKey(snapshot?.user)} / {snapshot?.userSol ?? "-"} SOL
-              </dd>
-            </div>
-            <div>
-              <dt>Admin</dt>
-              <dd>
-                {shortKey(snapshot?.admin)} / {snapshot?.adminSol ?? "-"} SOL
-              </dd>
-            </div>
-            <div>
-              <dt>Pool PDA</dt>
-              <dd>
-                {shortKey(snapshot?.poolAuthority)} /{" "}
-                {snapshot?.poolAuthoritySol ?? "-"} SOL
-              </dd>
-            </div>
-            <div>
-              <dt>Pool</dt>
-              <dd>{shortKey(snapshot?.pool)}</dd>
-            </div>
-            <div>
-              <dt>Bet</dt>
-              <dd>{shortKey(snapshot?.bet)}</dd>
-            </div>
-            <div>
-              <dt>Oracle</dt>
-              <dd>{shortKey(snapshot?.priceFeed)}</dd>
-            </div>
-            <div>
-              <dt>Oracle slot</dt>
-              <dd>{oraclePrice?.slot ?? "-"}</dd>
-            </div>
-            <div>
-              <dt>Mint</dt>
-              <dd>{shortKey(snapshot?.mint)}</dd>
-            </div>
-          </dl>
-        </details>
-      </section>
+        </dl>
+      </details>
     </main>
   );
 }

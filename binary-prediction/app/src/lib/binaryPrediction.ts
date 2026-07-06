@@ -203,8 +203,8 @@ export function priceFeed(): PublicKey {
   return SOL_PRICE_FEED;
 }
 
-export function poolPda(programId: PublicKey): PublicKey {
-  return pda([POOL_SEED], programId);
+export function poolPda(programId: PublicKey, mint: PublicKey): PublicKey {
+  return pda([POOL_SEED, mint.toBuffer()], programId);
 }
 
 export function betPda(programId: PublicKey, user: PublicKey): PublicKey {
@@ -396,10 +396,54 @@ async function sendSignedTransaction(
   );
   const sendMs = performance.now() - sendStart;
 
+  // A raw send returns a signature even when the transaction reverts on-chain,
+  // which silently hides failures from the UI. Confirm it and surface the real
+  // error (with program logs) so a failed bet/settle is never mistaken for a
+  // successful one. `sendMs` still reports pure submit latency.
+  const confirmation = await connection.confirmTransaction(
+    {
+      signature,
+      blockhash: blockhash.blockhash,
+      lastValidBlockHeight: blockhash.lastValidBlockHeight,
+    },
+    commitment,
+  );
+  if (confirmation.value.err) {
+    throw new Error(
+      await describeTransactionError(
+        connection,
+        signature,
+        confirmation.value.err,
+      ),
+    );
+  }
+
   return {
     signature,
     sendMs,
   };
+}
+
+async function describeTransactionError(
+  connection: Connection,
+  signature: string,
+  err: unknown,
+): Promise<string> {
+  let logs: string[] | undefined;
+  try {
+    const tx = await connection.getTransaction(signature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+    logs = tx?.meta?.logMessages ?? undefined;
+  } catch {
+    // Best effort — fall back to the raw error code below.
+  }
+  const anchorLine = logs?.find(
+    (line) => line.includes("AnchorError") || line.includes("Error Message:"),
+  );
+  const detail = anchorLine ?? JSON.stringify(err);
+  return `Transaction ${signature.slice(0, 8)}… failed: ${detail}`;
 }
 
 export async function bootstrapMarket(
@@ -416,7 +460,6 @@ export async function bootstrapMarket(
   const nextMarket = { ...market };
   const { admin, user } = keypairs(nextMarket);
   const { base, program } = providers(nextMarket);
-  const pool = poolPda(program.programId);
   const feed = priceFeed();
 
   options.onLog({ tone: "info", message: "Funding local operator wallets" });
@@ -445,6 +488,7 @@ export async function bootstrapMarket(
     mint,
     admin.publicKey,
   );
+  const pool = poolPda(program.programId, mint);
   const poolAta = getAssociatedTokenAddressSync(mint, pool, true);
   const poolEata = eata(pool, mint);
   const vaultPda = vault(mint);
@@ -583,7 +627,7 @@ export async function approveMarket(
   }
   const { admin, user } = keypairs(market);
   const { er, program } = providers(market);
-  const pool = poolPda(program.programId);
+  const pool = poolPda(program.programId, new PublicKey(market.mint));
 
   return sendSignedTransaction(
     er.connection,
@@ -606,12 +650,13 @@ export async function placeBet(
   direction: Direction,
   stake: number,
 ): Promise<TransactionResult> {
-  if (!market.userAta || !market.poolAta) {
+  if (!market.mint || !market.userAta || !market.poolAta) {
     throw new Error("Market setup is incomplete");
   }
   const { admin, user } = keypairs(market);
   const { er, erProgram } = providers(market);
-  const pool = poolPda(erProgram.programId);
+  const mint = new PublicKey(market.mint);
+  const pool = poolPda(erProgram.programId, mint);
   const bet = betPda(erProgram.programId, user.publicKey);
   const poolTokenAccount = new PublicKey(market.poolAta);
   const userTokenAccount = new PublicKey(market.userAta);
@@ -621,6 +666,7 @@ export async function placeBet(
     .accountsPartial({
       payer: user.publicKey,
       user: user.publicKey,
+      mint,
       pool,
       bet,
       userTokenAccount,
@@ -643,12 +689,13 @@ export async function placeBet(
 export async function settleBet(
   market: StoredMarket,
 ): Promise<TransactionResult> {
-  if (!market.userAta || !market.poolAta) {
+  if (!market.mint || !market.userAta || !market.poolAta) {
     throw new Error("Market setup is incomplete");
   }
   const { admin, user } = keypairs(market);
   const { er, erProgram } = providers(market);
-  const pool = poolPda(erProgram.programId);
+  const mint = new PublicKey(market.mint);
+  const pool = poolPda(erProgram.programId, mint);
   const bet = betPda(erProgram.programId, user.publicKey);
 
   const transaction = await (erProgram as any).methods
@@ -656,6 +703,7 @@ export async function settleBet(
     .accountsPartial({
       payer: admin.publicKey,
       user: user.publicKey,
+      mint,
       pool,
       bet,
       userTokenAccount: new PublicKey(market.userAta),
@@ -678,10 +726,10 @@ export async function refreshSnapshot(
 ): Promise<MarketSnapshot> {
   const { admin, user } = keypairs(market);
   const { base, er, erProgram, program } = providers(market);
-  const pool = poolPda(program.programId);
   const bet = betPda(program.programId, user.publicKey);
   const feed = priceFeed();
   const mint = market.mint ? new PublicKey(market.mint) : undefined;
+  const pool = mint ? poolPda(program.programId, mint) : PublicKey.default;
   const userAta =
     market.userAta ??
     (mint ? getAssociatedTokenAddressSync(mint, user.publicKey) : undefined);

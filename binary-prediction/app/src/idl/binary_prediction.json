@@ -1,5 +1,5 @@
 {
-  "address": "6iL4bfFA7WAkRaRhS4XTRE6khacQ6QGBoKhg1ufXEUBT",
+  "address": "7HHiv8th2wY24iZp2ReF7QkJyFJHwHWCgZWg7CWrQnnm",
   "metadata": {
     "name": "binary_prediction",
     "version": "0.1.0",
@@ -58,38 +58,38 @@
             "program": {
               "kind": "const",
               "value": [
-                84,
-                224,
-                205,
-                34,
-                111,
-                8,
-                175,
-                161,
-                65,
-                149,
-                89,
-                109,
-                127,
-                165,
-                121,
-                142,
-                39,
-                174,
-                90,
-                186,
-                135,
-                151,
-                10,
-                138,
-                218,
-                44,
-                129,
-                20,
-                14,
-                66,
+                93,
+                82,
+                82,
                 170,
-                210
+                83,
+                237,
+                53,
+                115,
+                26,
+                62,
+                41,
+                227,
+                89,
+                212,
+                214,
+                230,
+                203,
+                33,
+                209,
+                146,
+                193,
+                158,
+                151,
+                201,
+                99,
+                19,
+                20,
+                44,
+                14,
+                58,
+                107,
+                58
               ]
             }
           }
@@ -187,7 +187,7 @@
         },
         {
           "name": "owner_program",
-          "address": "6iL4bfFA7WAkRaRhS4XTRE6khacQ6QGBoKhg1ufXEUBT"
+          "address": "7HHiv8th2wY24iZp2ReF7QkJyFJHwHWCgZWg7CWrQnnm"
         },
         {
           "name": "delegation_program",
@@ -239,6 +239,10 @@
                   111,
                   108
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
               }
             ]
           }
@@ -510,6 +514,9 @@
           "name": "user"
         },
         {
+          "name": "mint"
+        },
+        {
           "name": "pool",
           "pda": {
             "seeds": [
@@ -521,6 +528,10 @@
                   111,
                   108
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
               }
             ]
           }
@@ -644,6 +655,9 @@
           "name": "user"
         },
         {
+          "name": "mint"
+        },
+        {
           "name": "pool",
           "pda": {
             "seeds": [
@@ -655,6 +669,10 @@
                   111,
                   108
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
               }
             ]
           }
