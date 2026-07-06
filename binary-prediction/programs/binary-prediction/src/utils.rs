@@ -79,10 +79,11 @@ pub(crate) fn pool_signed_transfer<'info>(
     pool: AccountInfo<'info>,
     token_program: AccountInfo<'info>,
     amount: u64,
+    pool_mint: Pubkey,
     pool_bump: u8,
 ) -> Result<()> {
     let pool_bump_seed = [pool_bump];
-    let signer_seeds: &[&[&[u8]]] = &[&[POOL_SEED, &pool_bump_seed]];
+    let signer_seeds: &[&[&[u8]]] = &[&[POOL_SEED, pool_mint.as_ref(), &pool_bump_seed]];
     let cpi_accounts = SplTransfer {
         from,
         to,

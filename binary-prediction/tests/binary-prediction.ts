@@ -380,12 +380,9 @@ describe("binary-prediction", () => {
   const sessionKeypair = web3.Keypair.generate();
   const feed = priceFeed();
   const feedId = Array.from(feed.toBytes());
-  const [pool] = web3.PublicKey.findProgramAddressSync(
-    [POOL_SEED],
-    program.programId,
-  );
   const userBet = betPda(program.programId, user.publicKey);
 
+  let pool: web3.PublicKey;
   let mint: web3.PublicKey;
   let userAta: web3.PublicKey;
   let poolAta: web3.PublicKey;
@@ -409,6 +406,10 @@ describe("binary-prediction", () => {
       mint,
       user.publicKey,
     );
+    pool = web3.PublicKey.findProgramAddressSync(
+      [POOL_SEED, mint.toBuffer()],
+      program.programId,
+    )[0];
     poolAta = getAssociatedTokenAddressSync(mint, pool, true);
     poolEata = eata(pool, mint);
     vaultPda = vault(mint);
@@ -580,6 +581,7 @@ describe("binary-prediction", () => {
       .accountsPartial({
         payer: user.publicKey,
         user: user.publicKey,
+        mint,
         pool,
         bet: userBet,
         userTokenAccount: userAta,
@@ -612,6 +614,7 @@ describe("binary-prediction", () => {
       .accountsPartial({
         payer: admin.publicKey,
         user: user.publicKey,
+        mint,
         pool,
         bet: userBet,
         userTokenAccount: userAta,
@@ -675,6 +678,7 @@ describe("binary-prediction", () => {
       .accountsPartial({
         payer: sessionKeypair.publicKey,
         user: user.publicKey,
+        mint,
         pool,
         bet: userBet,
         userTokenAccount: userAta,
@@ -705,6 +709,7 @@ describe("binary-prediction", () => {
       .accountsPartial({
         payer: admin.publicKey,
         user: user.publicKey,
+        mint,
         pool,
         bet: userBet,
         userTokenAccount: userAta,

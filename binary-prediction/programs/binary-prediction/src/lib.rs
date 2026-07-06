@@ -115,8 +115,9 @@ pub mod binary_prediction {
             &ctx.accounts.system_program,
             validator,
         )?;
+        let mint_key = ctx.accounts.mint.key();
         let pool_bump = [ctx.accounts.pool.bump];
-        let pool_seeds: &[&[u8]] = &[POOL_SEED, &pool_bump];
+        let pool_seeds: &[&[u8]] = &[POOL_SEED, mint_key.as_ref(), &pool_bump];
         transfer_to_vault(
             &ctx.accounts.ephemeral_token_program,
             &ctx.accounts.pool_ephemeral_ata,
@@ -277,6 +278,7 @@ pub mod binary_prediction {
                 ctx.accounts.pool.to_account_info(),
                 ctx.accounts.token_program.to_account_info(),
                 payout,
+                ctx.accounts.pool.mint,
                 ctx.accounts.pool.bump,
             )?;
         }
@@ -310,7 +312,7 @@ pub struct Initialize<'info> {
         init,
         payer = admin,
         space = 8 + Pool::LEN,
-        seeds = [POOL_SEED],
+        seeds = [POOL_SEED, mint.key().as_ref()],
         bump
     )]
     pub pool: Account<'info, Pool>,
@@ -445,7 +447,8 @@ pub struct PlaceBet<'info> {
     pub payer: Signer<'info>,
     /// CHECK: user authority for the bet and session token.
     pub user: UncheckedAccount<'info>,
-    #[account(seeds = [POOL_SEED], bump = pool.bump)]
+    pub mint: Account<'info, Mint>,
+    #[account(seeds = [POOL_SEED, mint.key().as_ref()], bump = pool.bump)]
     pub pool: Account<'info, Pool>,
     #[account(mut, seeds = [BET_SEED, user.key().as_ref()], bump)]
     pub bet: Account<'info, Bet>,
@@ -474,7 +477,8 @@ pub struct Settle<'info> {
     pub payer: Signer<'info>,
     /// CHECK: user authority for the bet.
     pub user: UncheckedAccount<'info>,
-    #[account(seeds = [POOL_SEED], bump = pool.bump)]
+    pub mint: Account<'info, Mint>,
+    #[account(seeds = [POOL_SEED, mint.key().as_ref()], bump = pool.bump)]
     pub pool: Account<'info, Pool>,
     #[account(mut, seeds = [BET_SEED, user.key().as_ref()], bump)]
     pub bet: Account<'info, Bet>,
