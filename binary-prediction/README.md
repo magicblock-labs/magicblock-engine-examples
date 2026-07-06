@@ -75,14 +75,7 @@ by the test wallet.
 
 ## Client
 
-The `app/` directory contains a small Vite client for exercising the local binary prediction flow.
-Run the local MagicBlock cluster first:
-
-```bash
-yarn setup
-```
-
-Then start the client in another terminal:
+The `app/` directory contains a small Vite client for exercising the binary prediction flow.
 
 ```bash
 cd app
@@ -90,9 +83,19 @@ yarn
 yarn dev
 ```
 
-The client defaults to `http://localhost:8899` for the base layer and `http://localhost:7799` for
-the ER. Override with `VITE_PROVIDER_ENDPOINT`, `VITE_EPHEMERAL_PROVIDER_ENDPOINT`, and
-`VITE_EPHEMERAL_WS_ENDPOINT` when needed.
+By default the client targets MagicBlock devnet — `https://rpc.magicblock.app/devnet` for the base
+layer and `https://devnet-as.magicblock.app` (`wss://devnet-as.magicblock.app`) for the ER — so
+`yarn dev` with no overrides works out of the box against devnet.
+
+To point it at a local MagicBlock cluster instead, start the cluster with `yarn setup` and set these
+env vars before `yarn dev` (the client reads `VITE_`-prefixed vars, not the shell exports from
+`scripts/local-env.sh`):
+
+```bash
+export VITE_PROVIDER_ENDPOINT=http://localhost:8899
+export VITE_EPHEMERAL_PROVIDER_ENDPOINT=http://localhost:7799
+export VITE_EPHEMERAL_WS_ENDPOINT=ws://localhost:7800
+```
 
 ## Instruction Surface
 

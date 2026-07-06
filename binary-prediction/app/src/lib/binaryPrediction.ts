@@ -1,7 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
-  createApproveInstruction,
   createAssociatedTokenAccount,
   createMint,
   getAccount,
@@ -44,10 +43,9 @@ export type TransactionResult = {
 export type MarketSnapshot = {
   admin: string;
   user: string;
-  poolAuthority: string;
   adminSol: string;
   userSol: string;
-  poolAuthoritySol: string;
+  poolSol: string;
   mint?: string;
   pool: string;
   bet: string;
@@ -78,7 +76,6 @@ export type StoredMarket = {
   programId?: string;
   adminSecret: number[];
   userSecret: number[];
-  poolAuthoritySecret: number[];
   mint?: string;
   userAta?: string;
   poolAta?: string;
@@ -161,8 +158,12 @@ function directionFromAccount(value: unknown): Direction | undefined {
 export function loadOrCreateMarket(): StoredMarket {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored) {
-    const market = JSON.parse(stored) as StoredMarket;
-    if (market.programId === PROGRAM_ID.toBase58()) return market;
+    try {
+      const market = JSON.parse(stored) as StoredMarket;
+      if (market.programId === PROGRAM_ID.toBase58()) return market;
+    } catch {
+      // Malformed/partial JSON — fall through and reset rather than crash init.
+    }
     localStorage.removeItem(STORAGE_KEY);
   }
 
@@ -171,7 +172,6 @@ export function loadOrCreateMarket(): StoredMarket {
     programId: PROGRAM_ID.toBase58(),
     adminSecret: Array.from(Keypair.generate().secretKey),
     userSecret: Array.from(Keypair.generate().secretKey),
-    poolAuthoritySecret: Array.from(Keypair.generate().secretKey),
   };
   saveMarket(market);
   return market;
@@ -189,9 +189,6 @@ export function keypairs(market: StoredMarket) {
   return {
     admin: Keypair.fromSecretKey(Uint8Array.from(market.adminSecret)),
     user: Keypair.fromSecretKey(Uint8Array.from(market.userSecret)),
-    poolAuthority: Keypair.fromSecretKey(
-      Uint8Array.from(market.poolAuthoritySecret),
-    ),
   };
 }
 
@@ -278,12 +275,23 @@ function formatOraclePrice(raw: bigint, exponent: number) {
   return `${whole}.${fraction}`.replace(/\.?0+$/, "");
 }
 
+// Anchor account discriminator for pyth_solana_receiver_sdk's PriceUpdateV2
+// (first 8 bytes of sha256("account:PriceUpdateV2")). Validating it before
+// reading fixed offsets makes a wrong/renamed account fail clearly instead of
+// silently decoding garbage into the UI.
+const PRICE_UPDATE_V2_DISCRIMINATOR = Buffer.from([
+  34, 241, 35, 99, 157, 126, 244, 205,
+]);
+
 export function decodeOraclePrice(data: Buffer): OraclePrice {
   if (data.length < 133) {
     throw new Error("Oracle price account has invalid data");
   }
+  if (!data.subarray(0, 8).equals(PRICE_UPDATE_V2_DISCRIMINATOR)) {
+    throw new Error("Oracle account is not a Pyth PriceUpdateV2 account");
+  }
 
-  // Anchor discriminator + PriceUpdateV2 fields from pyth_solana_receiver_sdk.
+  // PriceUpdateV2 fields from pyth_solana_receiver_sdk, after the discriminator.
   const raw = data.readBigInt64LE(73);
   const exponent = data.readInt32LE(89);
   const publishTime = Number(data.readBigInt64LE(93));
@@ -618,33 +626,6 @@ export async function bootstrapMarket(
   return nextMarket;
 }
 
-export async function approveMarket(
-  market: StoredMarket,
-  stakeAllowance: number,
-): Promise<TransactionResult> {
-  if (!market.mint || !market.userAta || !market.poolAta) {
-    throw new Error("Market setup is incomplete");
-  }
-  const { admin, user } = keypairs(market);
-  const { er, program } = providers(market);
-  const pool = poolPda(program.programId, new PublicKey(market.mint));
-
-  return sendSignedTransaction(
-    er.connection,
-    new Transaction().add(
-      createApproveInstruction(
-        new PublicKey(market.userAta),
-        pool,
-        user.publicKey,
-        BigInt(stakeAllowance * 2),
-      ),
-    ),
-    admin,
-    [user],
-    "processed",
-  );
-}
-
 export async function placeBet(
   market: StoredMarket,
   direction: Direction,
@@ -739,7 +720,7 @@ export async function refreshSnapshot(
 
   let userTokens = "-";
   let poolTokens = "-";
-  const [adminSol, userSol, poolAuthoritySol] = await Promise.all(
+  const [adminSol, userSol, poolSol] = await Promise.all(
     [admin.publicKey, user.publicKey, pool].map(async (publicKey) => {
       try {
         const balance = await base.connection.getBalance(
@@ -818,10 +799,9 @@ export async function refreshSnapshot(
   return {
     admin: admin.publicKey.toBase58(),
     user: user.publicKey.toBase58(),
-    poolAuthority: pool.toBase58(),
     adminSol,
     userSol,
-    poolAuthoritySol,
+    poolSol,
     mint: market.mint,
     pool: pool.toBase58(),
     bet: bet.toBase58(),

@@ -163,6 +163,7 @@ function App() {
   const [tick, setTick] = useState(0);
   const autoSettleInFlight = useRef(false);
   const lastAutoSettleAt = useRef(0);
+  const resetModalRef = useRef<HTMLElement>(null);
 
   const isBusy = Boolean(busyLabel);
   const isBootstrapped = Boolean(
@@ -212,6 +213,18 @@ function App() {
     const id = window.setInterval(() => setTick((value) => value + 1), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  // Reset dialog: close on Escape and move focus into the dialog when it opens
+  // so keyboard users aren't left interacting with the page behind it.
+  useEffect(() => {
+    if (!showResetModal) return;
+    resetModalRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowResetModal(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showResetModal]);
 
   const marketStatus = useMemo(() => {
     if (!isBootstrapped) return "Uninitialized";
@@ -391,6 +404,8 @@ function App() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="reset-market-title"
+            ref={resetModalRef}
+            tabIndex={-1}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <p className="eyebrow">Reset demo</p>
@@ -640,8 +655,7 @@ function App() {
           <div>
             <dt>Pool PDA</dt>
             <dd>
-              {shortKey(snapshot?.poolAuthority)} /{" "}
-              {snapshot?.poolAuthoritySol ?? "-"} SOL
+              {shortKey(snapshot?.pool)} / {snapshot?.poolSol ?? "-"} SOL
             </dd>
           </div>
           <div>
