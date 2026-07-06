@@ -100,6 +100,18 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 </td>
 <td valign="top" width="33%"></td>
 </tr>
+<tr>
+<td valign="top" width="33%">
+<blockquote>
+<p><strong><a href="./oracle-priced-purchase/">📊 Oracle Priced Purchase</a></strong></p>
+<p>
+<img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
+<img src="https://img.shields.io/badge/Oracle-0d9488?style=flat-square" alt="Oracle"/>
+</p>
+<p><em>USD-priced token purchase using real-time oracle prices.</em></p>
+</blockquote>
+</td>
+</tr>
 </table>
 
 ### 🧩 Feature Examples

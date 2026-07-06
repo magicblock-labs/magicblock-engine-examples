@@ -658,6 +658,11 @@ if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
         }
       ' "$p/Anchor.toml")
     fi
+    for account in "$p"/tests/fixtures/accounts/*.json; do
+      [ -e "$account" ] || continue
+      echo "  $account"
+      PRELOAD_ARGS+=(--account - "$account")
+    done
   done
 fi
 
