@@ -73,21 +73,11 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/SPL%20Token-9945FF?style=flat-square" alt="Tokens"/>
 </p>
-<p><em>SPL token delegation example with transfers on the ER.</em></p>
+<p><em>SPL token delegation, ER transfers, and withdrawal back to base layer.</em></p>
 </blockquote>
 </td>
 </tr>
 <tr>
-<td valign="top" width="33%">
-<blockquote>
-<p><strong><a href="./dummy-token-transfer/">🪙 Dummy Token Transfer</a></strong></p>
-<p>
-<img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
-<img src="https://img.shields.io/badge/Token-0d9488?style=flat-square" alt="Tokens"/>
-</p>
-<p><em>Dummy SPL token onboarding.</em></p>
-</blockquote>
-</td>
 <td valign="top" width="33%">
 <blockquote>
 <p><strong><a href="./roll-dice/">🎲 Roll Dice</a></strong></p>
@@ -108,6 +98,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <p><em>Pinocchio VRF dice variant.</em></p>
 </blockquote>
 </td>
+<td valign="top" width="33%"></td>
 </tr>
 <tr>
 <td valign="top" width="33%">
