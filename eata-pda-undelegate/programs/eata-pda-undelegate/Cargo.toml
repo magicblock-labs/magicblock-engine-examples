@@ -1,0 +1,24 @@
+[package]
+name = "eata-pda-undelegate"
+version = "0.1.0"
+description = "Reproduction: undelegating an ephemeral ATA owned by a program PDA"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "eata_pda_undelegate"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+custom-heap = []
+custom-panic = []
+anchor-debug = []
+
+[dependencies]
+anchor-lang = { version = "1.0.2" }
+ephemeral-rollups-sdk = { version = "0.14.3", features = ["anchor"] }
