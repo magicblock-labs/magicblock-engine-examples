@@ -1,12 +1,11 @@
 use anchor_lang::prelude::*;
 
 /// Pool configuration for this prediction market.
-/// The Pool PDA signs token transfers, but the actual pool tokens are owned by
-/// `authority` and kept in a delegated EATA on the ER.
+/// The Pool PDA owns pool token custody and signs payout transfers.
 #[account]
 pub struct Pool {
     pub mint: Pubkey,
-    /// Real signer that owns the pool token custody.
+    /// Pool token authority. This is the Pool PDA itself.
     pub authority: Pubkey,
     /// Oracle account accepted by betting and settlement instructions.
     pub price_feed: Pubkey,
