@@ -103,7 +103,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <tr>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./oracle-priced-purchase/">📊 Oracle Priced Purchase</a></strong></p>
+<p><strong><a href="./oracle-priced-purchase/anchor/">📊 Oracle Priced Purchase / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Oracle-0d9488?style=flat-square" alt="Oracle"/>
@@ -186,7 +186,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 <tr>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./binary-prediction/">📈 Binary Prediction</a></strong></p>
+<p><strong><a href="./binary-prediction/anchor/">📈 Binary Prediction / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Price%20Oracle-0891b2?style=flat-square" alt="Price Oracle"/>

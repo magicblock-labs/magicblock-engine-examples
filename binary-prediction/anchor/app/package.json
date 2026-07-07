@@ -7,8 +7,8 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
-    "lint": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern \"src/**/*.{css,ts,tsx}\" \"*.{html,js,ts,json}\" --check",
-    "lint:fix": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern \"src/**/*.{css,ts,tsx}\" \"*.{html,js,ts,json}\" --write"
+    "lint": "prettier --config ../../../.prettierrc.json --ignore-path ../../../.prettierignore --no-error-on-unmatched-pattern \"src/**/*.{css,ts,tsx}\" \"*.{html,js,ts,json}\" --check",
+    "lint:fix": "prettier --config ../../../.prettierrc.json --ignore-path ../../../.prettierignore --no-error-on-unmatched-pattern \"src/**/*.{css,ts,tsx}\" \"*.{html,js,ts,json}\" --write"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",

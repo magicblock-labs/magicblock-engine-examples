@@ -25,8 +25,8 @@ project_dir() {
     anchor-counter) echo "counter/anchor" ;;
     pinocchio-counter) echo "counter/pinocchio" ;;
     rust-counter) echo "counter/native-rust" ;;
-    binary-prediction) echo "binary-prediction" ;;
-    oracle-priced-purchase) echo "oracle-priced-purchase" ;;
+    binary-prediction) echo "binary-prediction/anchor" ;;
+    oracle-priced-purchase) echo "oracle-priced-purchase/anchor" ;;
     crank-counter) echo "crank-counter/anchor" ;;
     delegation-actions) echo "delegation-actions/anchor" ;;
     ephemeral-account-chats) echo "ephemeral-account-chats/anchor" ;;
