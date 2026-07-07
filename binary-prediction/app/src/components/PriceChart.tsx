@@ -40,7 +40,6 @@ const TARGET_TICK_COUNT = 5;
 const MIN_FULL_SPAN = 1e-6;
 const AXIS_EASE_PER_SECOND = 4;
 const MAX_INTERPOLATION_GAP_MS = 220;
-const SAMPLE_SMOOTHING_FACTOR = 0.22;
 const CURVE_TENSION = 0.18;
 
 const niceNumber = (value: number, round: boolean): number => {
@@ -144,10 +143,12 @@ function PriceChart({ price }: PriceChartProps) {
       series.push({ t: now - MAX_INTERPOLATION_GAP_MS, v: previous.v });
     }
 
+    // Store the actual oracle price. Line smoothness comes from the bezier
+    // curve tension and per-frame axis easing during render; smoothing the
+    // stored sample here would leave the series short of the real price and
+    // flat-line there whenever the price prop stops changing.
     const latestStored = series[series.length - 1];
-    const chartValue = latestStored
-      ? lerp(latestStored.v, nextPrice, SAMPLE_SMOOTHING_FACTOR)
-      : nextPrice;
+    const chartValue = nextPrice;
 
     if (
       !latestStored ||
