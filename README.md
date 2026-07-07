@@ -19,7 +19,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <tr>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./anchor-counter/">➕ Anchor Counter</a></strong></p>
+<p><strong><a href="./counter/anchor/">➕ Counter / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 </p>
@@ -28,7 +28,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./rust-counter/">🦀 Rust Counter</a></strong></p>
+<p><strong><a href="./counter/native-rust/">🦀 Counter / Native Rust</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Native%20Rust-ce422b?style=flat-square" alt="Native Rust"/>
 </p>
@@ -37,7 +37,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./pinocchio-counter/">🪵 Pinocchio Counter</a></strong></p>
+<p><strong><a href="./counter/pinocchio/">🪵 Counter / Pinocchio</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Pinocchio-f97316?style=flat-square" alt="Pinocchio"/>
 </p>
@@ -48,7 +48,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <tr>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./private-counter/">🔒 Anchor Private Counter</a></strong></p>
+<p><strong><a href="./private-counter/anchor/">🔒 Private Counter / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Privacy-9333ea?style=flat-square" alt="Privacy"/>
@@ -58,7 +58,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./pinocchio-private-counter/">🪵 Pinocchio Private Counter</a></strong></p>
+<p><strong><a href="./private-counter/pinocchio/">🪵 Private Counter / Pinocchio</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Pinocchio-f97316?style=flat-square" alt="Pinocchio"/>
 <img src="https://img.shields.io/badge/Privacy-9333ea?style=flat-square" alt="Privacy"/>
@@ -68,7 +68,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./spl-tokens/">💰 SPL Tokens</a></strong></p>
+<p><strong><a href="./spl-tokens/anchor/">💰 SPL Tokens / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/SPL%20Token-9945FF?style=flat-square" alt="Tokens"/>
@@ -80,7 +80,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <tr>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./roll-dice/">🎲 Roll Dice</a></strong></p>
+<p><strong><a href="./roll-dice/anchor/">🎲 Roll Dice / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/VRF-4f46e5?style=flat-square" alt="VRF"/>
@@ -90,7 +90,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./pinocchio-roll-dice/">🎲 Pinocchio Roll Dice</a></strong></p>
+<p><strong><a href="./roll-dice/pinocchio/">🎲 Roll Dice / Pinocchio</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Pinocchio-f97316?style=flat-square" alt="Pinocchio"/>
 <img src="https://img.shields.io/badge/VRF-4f46e5?style=flat-square" alt="VRF"/>
@@ -103,7 +103,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <tr>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./oracle-priced-purchase/">📊 Oracle Priced Purchase</a></strong></p>
+<p><strong><a href="./oracle-priced-purchase/anchor/">📊 Oracle Priced Purchase / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Oracle-0d9488?style=flat-square" alt="Oracle"/>
@@ -122,7 +122,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 <tr>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./oncurve-delegation/">📈 On-Curve Delegation</a></strong></p>
+<p><strong><a href="./oncurve-delegation/client/">📈 On-Curve Delegation / Client</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/On--curve-475569?style=flat-square" alt="On-curve"/>
@@ -132,7 +132,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./magic-actions/">✨ Magic Actions</a></strong></p>
+<p><strong><a href="./magic-actions/anchor/">✨ Magic Actions / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Cross--chain-2563eb?style=flat-square" alt="Actions"/>
@@ -142,7 +142,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./delegation-actions/">✨ Delegation Actions</a></strong></p>
+<p><strong><a href="./delegation-actions/anchor/">✨ Delegation Actions / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Delegation-475569?style=flat-square" alt="Delegation"/>
@@ -154,7 +154,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 <tr>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./ephemeral-account-chats/">💬 Ephemeral Account Chats</a></strong></p>
+<p><strong><a href="./ephemeral-account-chats/anchor/">💬 Ephemeral Account Chats / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Ephemeral%20Accounts-9333ea?style=flat-square" alt="Magic Accounts"/>
@@ -164,7 +164,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./crank-counter/">⏱️ Crank Counter</a></strong></p>
+<p><strong><a href="./crank-counter/anchor/">⏱️ Crank Counter / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Crank-d97706?style=flat-square" alt="Crank"/>
@@ -174,7 +174,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./session-keys/">🔑 Session Keys</a></strong></p>
+<p><strong><a href="./session-keys/anchor/">🔑 Session Keys / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Session%20Keys-6366f1?style=flat-square" alt="Session Keys"/>
@@ -186,7 +186,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 <tr>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./binary-prediction/">📈 Binary Prediction</a></strong></p>
+<p><strong><a href="./binary-prediction/anchor/">📈 Binary Prediction / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Price%20Oracle-0891b2?style=flat-square" alt="Price Oracle"/>
@@ -218,7 +218,7 @@ End-to-end app templates you can fork and build on.
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./rewards-delegated-vrf/">🏆 Rewards (Delegated VRF)</a></strong></p>
+<p><strong><a href="./rewards-delegated-vrf/anchor/">🏆 Rewards (Delegated VRF) / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/VRF-4f46e5?style=flat-square" alt="VRF"/>
@@ -228,7 +228,7 @@ End-to-end app templates you can fork and build on.
 </td>
 <td valign="top" width="33%">
 <blockquote>
-<p><strong><a href="./rock-paper-scissor/">✊ Rock Paper Scissor</a></strong></p>
+<p><strong><a href="./rock-paper-scissor/anchor/">✊ Rock Paper Scissor / Anchor</a></strong></p>
 <p>
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 <img src="https://img.shields.io/badge/Privacy-9333ea?style=flat-square" alt="Privacy"/>
@@ -278,7 +278,7 @@ To run local tests for any example project, use the following steps:
 **Example:** To test the `pinocchio-roll-dice` example:
 
 ```bash
-cd pinocchio-roll-dice
+cd roll-dice/pinocchio
 yarn build
 yarn test:local
 ```

@@ -82,12 +82,18 @@ matches_filter() {
   fi
 }
 
-# Run one example's local test. Takes only the project name, which is also the
-# directory name. Building + preloading the program already happened up front
-# (parallel build phase + validator preload), so this just runs `yarn test:local`.
+# Run one example's local test. Takes the stable project name and resolves it to
+# the current use-case/framework directory. Building + preloading the program
+# already happened up front (parallel build phase + validator preload), so this
+# just runs `yarn test:local`.
 run_test() {
   local test_name=$1
-  local test_dir="$test_name"
+  local test_dir
+  test_dir="$(project_dir "$test_name")"
+  if [ -z "$test_dir" ]; then
+    echo "Unknown project path for '$test_name'"
+    return 1
+  fi
   local test_log="/tmp/test_${test_name}.log"
   local test_command="cd \"$test_dir\" && yarn test:local"
 
@@ -422,9 +428,9 @@ fi
 # ------------------------------------------------------------------------------
 # Example projects, grouped by the test phase that runs them. Defined in
 # scripts/projects.sh (single source of truth, shared with scripts/test-example.sh
-# and the CI matrix). The directory name IS the project name (and the argument
-# passed to run_test). Each project exposes `yarn build` (compile only) and
-# `yarn test:local` (the local test subset).
+# and the CI matrix). The project name is the stable CLI/CI identifier; project_dir
+# maps it to its use-case/framework directory. Each project exposes `yarn build`
+# (compile only) and `yarn test:local` (the local test subset).
 # ------------------------------------------------------------------------------
 # shellcheck source=scripts/projects.sh
 . "$SCRIPT_DIR/projects.sh"
@@ -448,13 +454,20 @@ add_build_projects() {
 # written to a per-project status file so the parallel poller can read it race-free.
 build_project() {
   local p="$1"
+  local dir
+  dir="$(project_dir "$p")"
+  if [ -z "$dir" ]; then
+    echo "Unknown project path for '$p'" > "/tmp/build_${p}.log"
+    echo "1" > "/tmp/build_${p}.status"
+    return
+  fi
   local log="/tmp/build_${p}.log"
   rm -f "/tmp/build_${p}.status"
   # --mutex serializes cache access across the parallel installs. Without it,
   # concurrent `yarn install` runs writing a shared dependency (e.g. @noble/hashes)
   # race on the global cache and corrupt the extracted tarball ("file appears to
   # be corrupt" / ENOENT on LICENSE). The build step still runs in parallel.
-  ( cd "$p" && yarn install --mutex file:/tmp/.yarn-install-mutex && yarn build ) > "$log" 2>&1
+  ( cd "$dir" && yarn install --mutex file:/tmp/.yarn-install-mutex && yarn build ) > "$log" 2>&1
   echo "$?" > "/tmp/build_${p}.status"
 }
 
@@ -583,12 +596,17 @@ WALLET_PUBKEY=$(solana-keygen pubkey "$HOME/.config/solana/id.json" 2>/dev/null 
 if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
   echo "Preloading programs into mb-test-validator:"
   for p in "${BUILD_PROJECTS[@]}"; do
-    for so in "$p"/target/deploy/*.so; do
+    dir="$(project_dir "$p")"
+    if [ -z "$dir" ]; then
+      echo "  WARNING: no project path for $p; not preloaded."
+      continue
+    fi
+    for so in "$dir"/target/deploy/*.so; do
       [ -e "$so" ] || continue
       kp="${so%.so}-keypair.json"
       if [ -f "$kp" ]; then
         prog=$(solana-keygen pubkey "$kp" 2>/dev/null || echo "(unreadable)")
-        echo "  $p/$(basename "$so") -> $prog"
+        echo "  $dir/$(basename "$so") -> $prog"
         PRELOAD_ARGS+=(--upgradeable-program "$kp" "$so" "$WALLET_PUBKEY")
       else
         echo "  WARNING: $so has no matching keypair ($(basename "$kp")); not preloaded."

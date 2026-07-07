@@ -1,0 +1,40 @@
+{
+  "name": "oncurve_delegation",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "ISC",
+  "dependencies": {
+    "@magicblock-labs/ephemeral-rollups-kit": "0.14.3",
+    "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
+    "@solana-program/system": "^0.9.0",
+    "@solana/buffer-layout": "^4.0.1",
+    "@solana/kit": "^4.0.0",
+    "@solana/transaction-confirmation": "^4.0.0",
+    "@solana/web3.js": "^1.98.2",
+    "borsh": "0.7.0",
+    "dotenv": "^16.5.0",
+    "fs": "0.0.2"
+  },
+  "scripts": {
+    "test:local": ". ../../scripts/local-env.sh && npx vitest run ./tests/kit/oncurve-delegation.test.ts",
+    "setup": "cd ../.. && SETUP_ONLY=1 ./scripts/test-locally.sh oncurve-delegation",
+    "test": "yarn test:local",
+    "test:web3js": "npx vitest run ./tests/web3js",
+    "build": "echo \"No program to build — SDK integration tests only\"",
+    "lint": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
+    "lint:fix": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.2.2",
+    "@types/mocha": "^10.0.10",
+    "bs58": "^6.0.0",
+    "chai": "^5.2.0",
+    "mocha": "^11.2.2",
+    "prettier": "^3.5.3",
+    "ts-mocha": "^11.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}
