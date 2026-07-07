@@ -13,7 +13,7 @@
 # Keep this list in sync when adding/removing examples; both the local runner and
 # CI pick it up automatically.
 
-REGULAR_PROJECTS=(anchor-counter binary-prediction crank-counter dummy-token-transfer ephemeral-account-chats magic-actions pinocchio-counter rust-counter session-keys spl-tokens)
+REGULAR_PROJECTS=(anchor-counter binary-prediction crank-counter ephemeral-account-chats magic-actions oracle-priced-purchase pinocchio-counter rust-counter session-keys spl-tokens)
 VRF_PROJECTS=(rewards-delegated-vrf roll-dice pinocchio-roll-dice)
 TEE_PROJECTS=(private-counter pinocchio-private-counter rock-paper-scissor)
 
@@ -25,9 +25,10 @@ project_dir() {
     anchor-counter) echo "counter/anchor" ;;
     pinocchio-counter) echo "counter/pinocchio" ;;
     rust-counter) echo "counter/native-rust" ;;
+    binary-prediction) echo "binary-prediction" ;;
+    oracle-priced-purchase) echo "oracle-priced-purchase" ;;
     crank-counter) echo "crank-counter/anchor" ;;
     delegation-actions) echo "delegation-actions/anchor" ;;
-    dummy-token-transfer) echo "dummy-token-transfer/anchor" ;;
     ephemeral-account-chats) echo "ephemeral-account-chats/anchor" ;;
     magic-actions) echo "magic-actions/anchor" ;;
     session-keys) echo "session-keys/anchor" ;;

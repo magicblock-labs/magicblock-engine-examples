@@ -247,6 +247,39 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function sendLocalTransaction(
+  connection: web3.Connection,
+  transaction: web3.Transaction,
+  feePayer: web3.Keypair,
+  signers: web3.Keypair[] = [],
+): Promise<string> {
+  const blockhash = await connection.getLatestBlockhash("confirmed");
+  const signerMap = new Map<string, web3.Keypair>();
+  [feePayer, ...signers].forEach((signer) =>
+    signerMap.set(signer.publicKey.toBase58(), signer),
+  );
+
+  transaction.feePayer = feePayer.publicKey;
+  transaction.recentBlockhash = blockhash.blockhash;
+  transaction.partialSign(...signerMap.values());
+
+  const signature = await connection.sendRawTransaction(
+    transaction.serialize(),
+    { skipPreflight: true },
+  );
+  const status = await connection.confirmTransaction(
+    { signature, ...blockhash },
+    "confirmed",
+  );
+  if (status.value.err) {
+    throw new Error(
+      `Transaction ${signature} failed: ${JSON.stringify(status.value.err)}`,
+    );
+  }
+
+  return signature;
+}
+
 function findLogValue(logMessages: string[], prefix: string): string | null {
   const message = logMessages.find((log) => log.includes(prefix));
 
@@ -344,16 +377,12 @@ describe("binary-prediction", () => {
 
   const admin = (provider.wallet as anchor.Wallet).payer;
   const user = web3.Keypair.generate();
-  const poolAuthority = web3.Keypair.generate();
   const sessionKeypair = web3.Keypair.generate();
   const feed = priceFeed();
   const feedId = Array.from(feed.toBytes());
-  const [pool] = web3.PublicKey.findProgramAddressSync(
-    [POOL_SEED],
-    program.programId,
-  );
   const userBet = betPda(program.programId, user.publicKey);
 
+  let pool: web3.PublicKey;
   let mint: web3.PublicKey;
   let userAta: web3.PublicKey;
   let poolAta: web3.PublicKey;
@@ -377,19 +406,12 @@ describe("binary-prediction", () => {
       mint,
       user.publicKey,
     );
-    await provider.sendAndConfirm(
-      new anchor.web3.Transaction().add(
-        web3.SystemProgram.transfer({
-          fromPubkey: admin.publicKey,
-          toPubkey: poolAuthority.publicKey,
-          lamports: web3.LAMPORTS_PER_SOL,
-        }),
-      ),
-      [admin],
-      { commitment: "confirmed", skipPreflight: true },
-    );
-    poolAta = getAssociatedTokenAddressSync(mint, poolAuthority.publicKey);
-    poolEata = eata(poolAuthority.publicKey, mint);
+    pool = web3.PublicKey.findProgramAddressSync(
+      [POOL_SEED, mint.toBuffer()],
+      program.programId,
+    )[0];
+    poolAta = getAssociatedTokenAddressSync(mint, pool, true);
+    poolEata = eata(pool, mint);
     vaultPda = vault(mint);
     vaultEata = eata(vaultPda, mint);
     vaultAta = getAssociatedTokenAddressSync(mint, vaultPda, true);
@@ -410,27 +432,36 @@ describe("binary-prediction", () => {
       BigInt(POOL_SEED_AMOUNT.toString()),
     );
 
-    await provider.sendAndConfirm(
-      new anchor.web3.Transaction().add(
-        initializePriceFeedIx(admin.publicKey, feed),
-      ),
-      [admin],
-      { commitment: "confirmed", skipPreflight: true },
+    const feedAccount = await provider.connection.getAccountInfo(
+      feed,
+      "confirmed",
     );
+    const feedIsDelegated = Boolean(
+      feedAccount?.owner.equals(DELEGATION_PROGRAM_ID),
+    );
+    if (!feedAccount) {
+      await sendLocalTransaction(
+        provider.connection,
+        new anchor.web3.Transaction().add(
+          initializePriceFeedIx(admin.publicKey, feed),
+        ),
+        admin,
+      );
+    }
 
-    await provider.sendAndConfirm(
+    await sendLocalTransaction(
+      feedIsDelegated ? erProvider.connection : provider.connection,
       new anchor.web3.Transaction().add(
         updatePriceFeedIx(admin.publicKey, feed, 100),
       ),
-      [admin],
-      { commitment: "confirmed", skipPreflight: true },
+      admin,
     );
 
     const validator = new web3.PublicKey(
       process.env.VALIDATOR ?? "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev",
     );
 
-    await program.methods
+    const initializeTx = await program.methods
       .initialize(
         feed,
         feedId,
@@ -447,7 +478,6 @@ describe("binary-prediction", () => {
         mint,
         pool,
         poolTokenAccount: poolAta,
-        poolAuthority: poolAuthority.publicKey,
         adminTokenAccount: adminAta,
         poolEphemeralAta: poolEata,
         vault: vaultPda,
@@ -474,8 +504,8 @@ describe("binary-prediction", () => {
       .remainingAccounts([
         { pubkey: validator, isSigner: false, isWritable: false },
       ])
-      .signers([admin, poolAuthority])
-      .rpc({ skipPreflight: true });
+      .transaction();
+    await sendLocalTransaction(provider.connection, initializeTx, admin);
 
     const poolState = await program.account.pool.fetch(pool);
     expect(poolState.betDurationSeconds.toNumber()).to.equal(
@@ -490,7 +520,7 @@ describe("binary-prediction", () => {
       0n,
     );
 
-    await program.methods
+    const initializeBetTx = await program.methods
       .initializeBet()
       .accountsPartial({
         payer: admin.publicKey,
@@ -498,18 +528,20 @@ describe("binary-prediction", () => {
         bet: userBet,
         systemProgram: web3.SystemProgram.programId,
       })
-      .signers([admin])
-      .rpc({ skipPreflight: false });
+      .transaction();
+    await sendLocalTransaction(provider.connection, initializeBetTx, admin);
 
-    await provider.sendAndConfirm(
-      new anchor.web3.Transaction().add(
-        delegatePriceFeedIx(admin.publicKey, feed),
-      ),
-      [admin],
-      { commitment: "confirmed", skipPreflight: true },
-    );
+    if (!feedIsDelegated) {
+      await sendLocalTransaction(
+        provider.connection,
+        new anchor.web3.Transaction().add(
+          delegatePriceFeedIx(admin.publicKey, feed),
+        ),
+        admin,
+      );
+    }
 
-    await program.methods
+    const delegateBetTx = await program.methods
       .delegateBet()
       .accountsPartial({
         payer: admin.publicKey,
@@ -519,8 +551,10 @@ describe("binary-prediction", () => {
       .remainingAccounts([
         { pubkey: validator, isSigner: false, isWritable: false },
       ])
-      .signers([admin, user])
-      .rpc({ skipPreflight: true });
+      .transaction();
+    await sendLocalTransaction(provider.connection, delegateBetTx, admin, [
+      user,
+    ]);
 
     const delegateUserIxs = await delegateSpl(
       user.publicKey,
@@ -533,13 +567,66 @@ describe("binary-prediction", () => {
         payer: admin.publicKey,
       },
     );
-    await provider.sendAndConfirm(
+    await sendLocalTransaction(
+      provider.connection,
       new anchor.web3.Transaction().add(...delegateUserIxs),
-      [user, admin],
-      { commitment: "confirmed", skipPreflight: true },
+      admin,
+      [user],
     );
 
     await sleep(3_000);
+
+    const placeWalletBetTx = await erProgram.methods
+      .placeBet({ up: {} }, STAKE)
+      .accountsPartial({
+        payer: user.publicKey,
+        user: user.publicKey,
+        mint,
+        pool,
+        bet: userBet,
+        userTokenAccount: userAta,
+        poolTokenAccount: poolAta,
+        priceUpdate: feed,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        sessionToken: null,
+      })
+      .transaction();
+    await sendLocalTransaction(erProvider.connection, placeWalletBetTx, admin, [
+      user,
+    ]);
+
+    let bet = await erProgram.account.bet.fetch(userBet);
+    expect(bet.openPrice.toNumber()).to.equal(100);
+    expect(bet.stake.toNumber()).to.equal(STAKE.toNumber());
+    expect(bet.isOpen).to.equal(true);
+
+    await sendLocalTransaction(
+      erProvider.connection,
+      new anchor.web3.Transaction().add(
+        updatePriceFeedIx(admin.publicKey, feed, 110),
+      ),
+      admin,
+    );
+    await sleep(BET_DURATION_MS);
+
+    const settleWinTx = await erProgram.methods
+      .settle()
+      .accountsPartial({
+        payer: admin.publicKey,
+        user: user.publicKey,
+        mint,
+        pool,
+        bet: userBet,
+        userTokenAccount: userAta,
+        poolTokenAccount: poolAta,
+        priceUpdate: feed,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .transaction();
+    await sendLocalTransaction(erProvider.connection, settleWinTx, admin);
+
+    bet = await erProgram.account.bet.fetch(userBet);
+    expect(bet.isOpen).to.equal(false);
 
     const sessionTokenManager = new SessionTokenManager(
       provider.wallet,
@@ -554,7 +641,7 @@ describe("binary-prediction", () => {
       ],
       sessionTokenManager.program.programId,
     )[0];
-    await sessionTokenManager.program.methods
+    const createSessionTx = await sessionTokenManager.program.methods
       .createSessionV2(
         true,
         new BN(Math.floor(Date.now() / 1000) + 3600),
@@ -566,81 +653,32 @@ describe("binary-prediction", () => {
         feePayer: admin.publicKey,
         authority: user.publicKey,
       })
-      .signers([admin, user, sessionKeypair])
-      .rpc({ skipPreflight: true });
+      .transaction();
+    await sendLocalTransaction(provider.connection, createSessionTx, admin, [
+      user,
+      sessionKeypair,
+    ]);
 
-    await erProvider.sendAndConfirm(
+    await sendLocalTransaction(
+      erProvider.connection,
       new anchor.web3.Transaction().add(
-        createApproveInstruction(
-          poolAta,
-          pool,
-          poolAuthority.publicKey,
-          BigInt(POOL_SEED_AMOUNT.toString()),
-        ),
         createApproveInstruction(
           userAta,
-          pool,
+          sessionKeypair.publicKey,
           user.publicKey,
-          2n * BigInt(STAKE.toString()),
+          BigInt(STAKE.toString()),
         ),
       ),
-      [admin, poolAuthority, user],
-      { commitment: "confirmed", skipPreflight: true },
+      admin,
+      [user],
     );
 
-    await erProgram.methods
-      .placeBet({ up: {} }, STAKE)
-      .accountsPartial({
-        payer: sessionKeypair.publicKey,
-        user: user.publicKey,
-        pool,
-        bet: userBet,
-        userTokenAccount: userAta,
-        poolTokenAccount: poolAta,
-        priceUpdate: feed,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        sessionToken: sessionTokenPda,
-      })
-      .signers([sessionKeypair])
-      .rpc({ skipPreflight: true });
-
-    let bet = await erProgram.account.bet.fetch(userBet);
-    expect(bet.openPrice.toNumber()).to.equal(100);
-    expect(bet.stake.toNumber()).to.equal(STAKE.toNumber());
-    expect(bet.isOpen).to.equal(true);
-
-    await erProvider.sendAndConfirm(
-      new anchor.web3.Transaction().add(
-        updatePriceFeedIx(admin.publicKey, feed, 110),
-      ),
-      [admin],
-      { commitment: "confirmed", skipPreflight: true },
-    );
-    await sleep(BET_DURATION_MS);
-
-    await erProgram.methods
-      .settle()
-      .accountsPartial({
-        payer: admin.publicKey,
-        user: user.publicKey,
-        pool,
-        bet: userBet,
-        userTokenAccount: userAta,
-        poolTokenAccount: poolAta,
-        priceUpdate: feed,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      })
-      .signers([admin])
-      .rpc({ skipPreflight: true });
-
-    bet = await erProgram.account.bet.fetch(userBet);
-    expect(bet.isOpen).to.equal(false);
-
-    await erProgram.methods
+    const placeSessionBetTx = await erProgram.methods
       .placeBet({ down: {} }, STAKE)
       .accountsPartial({
         payer: sessionKeypair.publicKey,
         user: user.publicKey,
+        mint,
         pool,
         bet: userBet,
         userTokenAccount: userAta,
@@ -649,23 +687,29 @@ describe("binary-prediction", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         sessionToken: sessionTokenPda,
       })
-      .signers([sessionKeypair])
-      .rpc({ skipPreflight: true });
+      .transaction();
+    await sendLocalTransaction(
+      erProvider.connection,
+      placeSessionBetTx,
+      admin,
+      [sessionKeypair],
+    );
 
-    await erProvider.sendAndConfirm(
+    await sendLocalTransaction(
+      erProvider.connection,
       new anchor.web3.Transaction().add(
         updatePriceFeedIx(admin.publicKey, feed, 120),
       ),
-      [admin],
-      { commitment: "confirmed", skipPreflight: true },
+      admin,
     );
     await sleep(BET_DURATION_MS);
 
-    await erProgram.methods
+    const settleLossTx = await erProgram.methods
       .settle()
       .accountsPartial({
         payer: admin.publicKey,
         user: user.publicKey,
+        mint,
         pool,
         bet: userBet,
         userTokenAccount: userAta,
@@ -673,8 +717,8 @@ describe("binary-prediction", () => {
         priceUpdate: feed,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
-      .signers([admin])
-      .rpc({ skipPreflight: true });
+      .transaction();
+    await sendLocalTransaction(erProvider.connection, settleLossTx, admin);
 
     const erUserBalance = (await getAccount(erProvider.connection, userAta))
       .amount;
@@ -683,10 +727,10 @@ describe("binary-prediction", () => {
     expect(erUserBalance).to.equal(290n);
     expect(erPoolBalance).to.equal(10_010n);
 
-    const userUndelegateSig = await erProvider.sendAndConfirm(
+    const userUndelegateSig = await sendLocalTransaction(
+      erProvider.connection,
       new anchor.web3.Transaction().add(undelegateIx(user.publicKey, mint)),
-      [user],
-      { commitment: "confirmed", skipPreflight: true },
+      user,
     );
 
     await provider.connection.confirmTransaction(
@@ -706,10 +750,11 @@ describe("binary-prediction", () => {
         idempotent: false,
       },
     );
-    await provider.sendAndConfirm(
+    await sendLocalTransaction(
+      provider.connection,
       new anchor.web3.Transaction().add(...userWithdrawIxs),
+      admin,
       [user],
-      { commitment: "confirmed", skipPreflight: true },
     );
 
     expect((await getAccount(provider.connection, userAta)).amount).to.equal(

@@ -8,6 +8,7 @@
 **/.bolt
 **/.yarn
 **/.next/
+**/dist
 **/.env
 **/tsconfig.tsbuildinfo
 **/*test-storage

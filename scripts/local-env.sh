@@ -22,7 +22,7 @@ export QFS_WS_ENDPOINT=ws://localhost:6700
 # Anchor.toml [provider] cluster (often devnet) and tests silently hit the wrong network.
 export ANCHOR_PROVIDER_URL=$PROVIDER_ENDPOINT
 export ANCHOR_WALLET="${HOME}/.config/solana/id.json"
-# Router-style tests (advanced-magic, magic-actions, dummy-token-transfer) point at the
+# Router-style tests (advanced-magic, magic-actions) point at the
 # MagicBlock router on devnet — locally there's no router, so route them through the
 # ephemeral validator.
 export ROUTER_ENDPOINT=$EPHEMERAL_PROVIDER_ENDPOINT
