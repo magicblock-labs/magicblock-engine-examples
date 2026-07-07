@@ -275,20 +275,24 @@ function formatOraclePrice(raw: bigint, exponent: number) {
   return `${whole}.${fraction}`.replace(/\.?0+$/, "");
 }
 
-// Anchor account discriminator for pyth_solana_receiver_sdk's PriceUpdateV2
-// (first 8 bytes of sha256("account:PriceUpdateV2")). Validating it before
-// reading fixed offsets makes a wrong/renamed account fail clearly instead of
-// silently decoding garbage into the UI.
-const PRICE_UPDATE_V2_DISCRIMINATOR = Buffer.from([
-  34, 241, 35, 99, 157, 126, 244, 205,
-]);
+// Accepted 8-byte account discriminators for the SOL/USD price feed. Both
+// accounts share the PriceUpdateV2 field layout read below; validating the
+// discriminator makes a wrong/corrupt account fail clearly instead of silently
+// decoding garbage into the UI. The demo reads MagicBlock's ephemeral oracle
+// (its own discriminator), but the canonical Pyth PriceUpdateV2 discriminator
+// (sha256("account:PriceUpdateV2")) is accepted too so a real Pyth feed works.
+const PRICE_UPDATE_DISCRIMINATORS = [
+  Buffer.from([234, 161, 14, 36, 172, 239, 15, 232]), // ephemeral oracle
+  Buffer.from([34, 241, 35, 99, 157, 126, 244, 205]), // Pyth PriceUpdateV2
+];
 
 export function decodeOraclePrice(data: Buffer): OraclePrice {
   if (data.length < 133) {
     throw new Error("Oracle price account has invalid data");
   }
-  if (!data.subarray(0, 8).equals(PRICE_UPDATE_V2_DISCRIMINATOR)) {
-    throw new Error("Oracle account is not a Pyth PriceUpdateV2 account");
+  const discriminator = data.subarray(0, 8);
+  if (!PRICE_UPDATE_DISCRIMINATORS.some((d) => discriminator.equals(d))) {
+    throw new Error("Oracle account is not a recognized price-update account");
   }
 
   // PriceUpdateV2 fields from pyth_solana_receiver_sdk, after the discriminator.
