@@ -612,25 +612,25 @@ if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
         echo "  WARNING: $so has no matching keypair ($(basename "$kp")); not preloaded."
       fi
     done
-    if [ -f "$p/Anchor.toml" ]; then
+    if [ -f "$dir/Anchor.toml" ]; then
       while IFS=$'\t' read -r address program upgradeable; do
         [ -n "$address" ] || continue
         case "$address" in
           SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2|DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh)
-            echo "  $p/$program -> $address (built into mb-test-validator; skipping fixture preload)"
+            echo "  $dir/$program -> $address (built into mb-test-validator; skipping fixture preload)"
             continue
             ;;
         esac
-        fixture="$p/$program"
+        fixture="$dir/$program"
         if [ ! -f "$fixture" ]; then
-          echo "  WARNING: $p Anchor.toml fixture $program not found; not preloaded."
+          echo "  WARNING: $dir Anchor.toml fixture $program not found; not preloaded."
           continue
         fi
         if [ "$upgradeable" = "true" ]; then
-          echo "  $p/$program -> $address (upgradeable genesis fixture)"
+          echo "  $dir/$program -> $address (upgradeable genesis fixture)"
           PRELOAD_ARGS+=(--upgradeable-program "$address" "$fixture" "$WALLET_PUBKEY")
         else
-          echo "  $p/$program -> $address (genesis fixture)"
+          echo "  $dir/$program -> $address (genesis fixture)"
           PRELOAD_ARGS+=(--bpf-program "$address" "$fixture")
         fi
       done < <(awk '
@@ -674,9 +674,9 @@ if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
         END {
           if (in_genesis && address != "" && program != "") print address "\t" program "\t" upgradeable
         }
-      ' "$p/Anchor.toml")
+      ' "$dir/Anchor.toml")
     fi
-    for account in "$p"/tests/fixtures/accounts/*.json; do
+    for account in "$dir"/tests/fixtures/accounts/*.json; do
       [ -e "$account" ] || continue
       echo "  $account"
       PRELOAD_ARGS+=(--account - "$account")
