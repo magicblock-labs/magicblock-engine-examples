@@ -15,7 +15,7 @@
 
 REGULAR_PROJECTS=(anchor-counter binary-prediction crank-counter ephemeral-account-chats magic-actions oracle-priced-purchase pinocchio-counter rust-counter session-keys spl-tokens)
 VRF_PROJECTS=(rewards-delegated-vrf roll-dice pinocchio-roll-dice)
-TEE_PROJECTS=(private-counter pinocchio-private-counter rock-paper-scissor)
+TEE_PROJECTS=(private-counter pinocchio-private-counter rock-paper-scissor sealed-auction)
 
 ALL_PROJECTS=("${REGULAR_PROJECTS[@]}" "${VRF_PROJECTS[@]}" "${TEE_PROJECTS[@]}")
 
@@ -39,6 +39,7 @@ project_dir() {
     private-counter) echo "private-counter/anchor" ;;
     pinocchio-private-counter) echo "private-counter/pinocchio" ;;
     rock-paper-scissor) echo "rock-paper-scissor/anchor" ;;
+    sealed-auction) echo "sealed-auction/anchor" ;;
     oncurve-delegation) echo "oncurve-delegation/client" ;;
     *) echo "" ;;
   esac
