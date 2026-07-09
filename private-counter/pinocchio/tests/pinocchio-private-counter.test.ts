@@ -6,6 +6,7 @@ import {
   TransactionInstruction,
   Connection,
   sendAndConfirmTransaction,
+  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import * as fs from "fs";
 import {
@@ -51,13 +52,21 @@ const PROGRAM_ID = new PublicKey(
 describe(
   "pinocchio-private-counter",
   async () => {
-    // Open user keypair from private key or default location
-    const KEYPAIR =
-      process.env.PRIVATE_KEY ||
-      fs.readFileSync(path.join(homedir(), "/.config/solana/id.json"), "utf8");
-    const userKeypair = Keypair.fromSecretKey(
-      Uint8Array.from(JSON.parse(KEYPAIR)),
-    );
+    // Use a fresh keypair funded via a plain airdrop
+    const isLocal = (process.env.PROVIDER_ENDPOINT || "").startsWith("http://");
+    const userKeypair = isLocal
+      ? Keypair.generate()
+      : Keypair.fromSecretKey(
+          Uint8Array.from(
+            JSON.parse(
+              process.env.PRIVATE_KEY ||
+                fs.readFileSync(
+                  path.join(homedir(), "/.config/solana/id.json"),
+                  "utf8",
+                ),
+            ),
+          ),
+        );
 
     // Set up PER connection
     const teeUrl =
@@ -115,10 +124,10 @@ describe(
               nacl.sign.detached(message, unauthorizedKeypair.secretKey),
             ),
         )
-      : "";
+      : undefined;
     const unauthorizedConnection = teeUrl.includes("tee")
       ? new Connection(
-          `${process.env.EPHEMERAL_PROVIDER_ENDPOINT || teeUrl}?token=${unauthorizedAuthToken.token}`,
+          `${process.env.EPHEMERAL_PROVIDER_ENDPOINT || teeUrl}?token=${unauthorizedAuthToken?.token}`,
           {
             wsEndpoint: `${process.env.EPHEMERAL_WS_ENDPOINT || teeWsUrl}?token=${unauthorizedAuthToken.token}`,
           },
@@ -148,6 +157,20 @@ describe(
     console.log("Permission PDA: ", permissionPda.toString());
 
     beforeAll(async () => {
+      // Fund the fresh userKeypair with enough SOL for this suite's rent + fees,
+      // before any test sends a transaction signed by it.
+      if (isLocal) {
+        const sig = await connectionBaseLayer.requestAirdrop(
+          userKeypair.publicKey,
+          2 * LAMPORTS_PER_SOL,
+        );
+        const latestBlockhash = await connectionBaseLayer.getLatestBlockhash();
+        await connectionBaseLayer.confirmTransaction(
+          { signature: sig, ...latestBlockhash },
+          "confirmed",
+        );
+      }
+
       const response = await fetch(teeUrl, {
         method: "POST",
         body: JSON.stringify({
