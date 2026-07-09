@@ -7,9 +7,7 @@ set +m
 # Restore sane terminal modes in case a previous run left the tty in raw mode.
 stty sane 2>/dev/null || true
 
-SOLANA_PID=""
-EPHEMERAL_PID=""
-QFS_PID=""
+MB_STACK_PID=""
 VRF_PID=""
 VRF_ER_PID=""
 PASSED_TESTS=()
@@ -374,8 +372,10 @@ cleanup() {
   printf '\033[2K\r\n'
   printf 'Stopping validators... '
   
-  # Kill by PID if available
-  for pid in $SOLANA_PID $EPHEMERAL_PID $QFS_PID $VRF_PID $VRF_ER_PID; do
+  # Kill by PID if available. MB_STACK_PID is mb-stack's own node process; sending
+  # it SIGTERM/SIGKILL runs its handler, which in turn signals the process groups
+  # of the base validator/ephemeral-validator/QFS it supervises.
+  for pid in $MB_STACK_PID $VRF_PID $VRF_ER_PID; do
     [ -n "$pid" ] && kill -TERM $pid 2>/dev/null || true
   done
 
@@ -383,11 +383,14 @@ cleanup() {
   sleep 1
 
   # Force kill any remaining processes
-  for pid in $SOLANA_PID $EPHEMERAL_PID $QFS_PID $VRF_PID $VRF_ER_PID; do
+  for pid in $MB_STACK_PID $VRF_PID $VRF_ER_PID; do
     [ -n "$pid" ] && kill -9 $pid 2>/dev/null || true
   done
 
-  # Also kill by process name as fallback (mb-test-validator wraps solana-test-validator).
+  # Also kill by process name as fallback, in case mb-stack was killed before it
+  # could tear down the services it supervises (mb-test-validator wraps
+  # solana-test-validator).
+  pkill -f "mb-stack" 2>/dev/null || true
   pkill -f "solana-test-validator" 2>/dev/null || true
   pkill -f "mb-test-validator" 2>/dev/null || true
   pkill -f "ephemeral-validator" 2>/dev/null || true
@@ -684,175 +687,56 @@ if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
   done
 fi
 
-# Start MagicBlock Test Validator (wraps solana-test-validator and pre-clones MB
-# programs). The example programs are injected via --upgradeable-program so tests
-# find them already on-chain at their declared addresses.
-echo "Starting MagicBlock Test Validator..."
-mb-test-validator --reset "${PRELOAD_ARGS[@]}" > ./test-ledger.log 2>&1 < /dev/null &
-
-SOLANA_PID=$!
-
-# Wait for solana-test-validator to be producing slots. cluster-version (and /health)
-# can succeed before the bank is producing; ephemeral-validator's chainlink then
-# fails to bootstrap against the remote and exits with "All pubsub clients failed".
-SOLANA_READY_TIMEOUT="${SOLANA_READY_TIMEOUT:-$([ "${ACT:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] && echo 120 || echo 90)}"
-echo "Waiting for Solana validator (up to ${SOLANA_READY_TIMEOUT}s for slot production)..."
-SOLANA_READY=0
-for ((i=1; i<=SOLANA_READY_TIMEOUT; i++)); do
-  if ! kill -0 "$SOLANA_PID" 2>/dev/null; then
-    echo "mb-test-validator exited before becoming ready."
-    echo "Last 100 lines of ./test-ledger.log:"
-    echo "----- test-ledger.log -----"
-    tail -100 ./test-ledger.log 2>/dev/null || echo "(log file not found)"
-    echo "----- end of log -----"
-    exit 1
-  fi
-  slot=$(curl -s --max-time 1 -X POST -H "content-type: application/json" \
-    -d '{"jsonrpc":"2.0","method":"getSlot","params":[{"commitment":"processed"}],"id":1}' http://127.0.0.1:8899 2>/dev/null \
-    | sed -nE 's/.*"result":([0-9]+).*/\1/p')
-  if [ -n "$slot" ] && [ "$slot" -gt 0 ]; then
-    echo "Solana validator is ready (slot=$slot)."
-    SOLANA_READY=1
-    break
-  fi
-  sleep 1
-done
-if [ "$SOLANA_READY" != "1" ]; then
-  echo "Solana validator failed to produce slots within ${SOLANA_READY_TIMEOUT}s."
-  echo "Last 100 lines of ./test-ledger.log:"
-  echo "----- test-ledger.log -----"
-  tail -100 ./test-ledger.log 2>/dev/null || echo "(log file not found)"
-  echo "----- end of log -----"
-  exit 1
-fi
-echo "Waiting for RPC to stabilize..."
-
-# Cap the local fee-payer balance so the ER can clone it.
+# Start the MagicBlock stack: mb-stack boots the base validator (wraps
+# solana-test-validator, pre-cloning MB programs), the ephemeral-validator, and the
+# query-filtering-service (QFS) as one supervised process, in that order, gating
+# each on its own health check before starting the next.
 #
-# `mb-test-validator --reset` airdrops the CLI wallet ~500M SOL (the default
-# test-validator supply). When a test uses this wallet as the ER fee payer, the
-# ephemeral-validator's chainlink cloner mirrors the account into its bank and
-# must back those lamports from its bounded internal faucet. 500M SOL exceeds
-# that faucet, so every clone fails with:
-#   Cloner error: Failed to clone regular account <wallet> : InstructionError(0, InsufficientFunds)
-# and all ER-side tests fail. Draining the bulk of the balance to the incinerator
-# leaves a sane amount the ER can replicate. The base validator resets each run,
-# so this is safe and idempotent.
-WALLET_KP="${WALLET_KP:-$HOME/.config/solana/id.json}"
-KEEP_SOL="${ER_FEE_PAYER_KEEP_SOL:-1000}"
-INCINERATOR="1nc1nerator11111111111111111111111111111111"
-BAL_LAMPORTS=$(solana balance --lamports --url http://localhost:8899 --keypair "$WALLET_KP" 2>/dev/null | awk '{print $1}')
-KEEP_LAMPORTS=$((KEEP_SOL * 1000000000))
-if [[ "$BAL_LAMPORTS" =~ ^[0-9]+$ ]] && [ "$BAL_LAMPORTS" -gt "$KEEP_LAMPORTS" ]; then
-  SEND_SOL=$(((BAL_LAMPORTS - KEEP_LAMPORTS) / 1000000000))
-  echo "Capping fee-payer balance: draining $SEND_SOL SOL (keeping ~$KEEP_SOL SOL) so the ER can clone it..."
-  solana transfer "$INCINERATOR" "$SEND_SOL" \
-    --allow-unfunded-recipient \
-    --url http://localhost:8899 \
-    --keypair "$WALLET_KP" \
-    --fee-payer "$WALLET_KP" \
-    >/dev/null 2>&1 \
-    && echo "  Fee-payer balance now ~$(solana balance --url http://localhost:8899 --keypair "$WALLET_KP" 2>/dev/null)" \
-    || echo "  WARNING: failed to cap fee-payer balance; ER clone may fail."
-fi
-
-# Start MagicBlock Ephemeral Validator
-echo "Starting MagicBlock Ephemeral Validator..."
-EPHEMERAL_VALIDATOR_BIN=$(command -v ephemeral-validator 2>/dev/null)
-if [ -z "$EPHEMERAL_VALIDATOR_BIN" ]; then
-  echo "ERROR: 'ephemeral-validator' not on PATH. Install with:"
+# Request flow for tests: client -> QFS (127.0.0.1:6699) -> ER validator
+# (127.0.0.1:7799) -> solana validator (127.0.0.1:8899).
+echo "Starting MagicBlock stack (mb-stack)..."
+MB_STACK_BIN=$(command -v mb-stack 2>/dev/null)
+if [ -z "$MB_STACK_BIN" ]; then
+  echo "ERROR: 'mb-stack' not on PATH. Install with:"
   echo "  npm install -g @magicblock-labs/ephemeral-validator"
   exit 1
 fi
-echo "  Binary: $EPHEMERAL_VALIDATOR_BIN"
-echo "  Version: $("$EPHEMERAL_VALIDATOR_BIN" --version 2>&1 | head -1 || echo unknown)"
+echo "  Binary: $MB_STACK_BIN"
 rm -rf ./magicblock-test-storage
-RUST_LOG=info "$EPHEMERAL_VALIDATOR_BIN" \
-  --no-tui \
-  --lifecycle ephemeral \
-  --remotes http://127.0.0.1:8899 \
-  --remotes ws://127.0.0.1:8900 \
-  --listen 127.0.0.1:7799 \
-  --reset \
-  > ./ephemeral-validator.log 2>&1 < /dev/null &
+RUST_LOG=info "$MB_STACK_BIN" --reset "${PRELOAD_ARGS[@]}" > ./mb-stack.log 2>&1 < /dev/null &
 
-EPHEMERAL_PID=$!
+MB_STACK_PID=$!
 
-# Wait for ephemeral-validator RPC to come up — without this, fast tests fire
-# their first ER call before the server is listening and hit "fetch failed".
-# Using bash's /dev/tcp (no external process; doesn't touch tty).
-echo "Waiting for ephemeral-validator..."
-EPHEMERAL_READY=0
-for i in {1..60}; do
-  if (echo > /dev/tcp/127.0.0.1/7799) 2>/dev/null; then
-    sleep 1   # let the RPC handler finish wiring up after the socket binds
-    EPHEMERAL_READY=1
-    break
-  fi
-  if ! kill -0 $EPHEMERAL_PID 2>/dev/null; then
-    echo "ephemeral-validator died. Last 100 lines of ./ephemeral-validator.log:"
-    echo "----- ephemeral-validator.log -----"
-    tail -100 ./ephemeral-validator.log 2>/dev/null || echo "(log file not found)"
+# Wait for mb-stack to report all three services healthy. It gates each service on
+# its own RPC health check internally (each with a 120s timeout), so give the
+# overall wait enough headroom to cover base + ER + QFS coming up in sequence.
+MB_STACK_READY_TIMEOUT="${MB_STACK_READY_TIMEOUT:-$([ "${ACT:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] && echo 240 || echo 180)}"
+echo "Waiting for MagicBlock stack (base + ephemeral + QFS, up to ${MB_STACK_READY_TIMEOUT}s)..."
+MB_STACK_READY=0
+for ((i=1; i<=MB_STACK_READY_TIMEOUT; i++)); do
+  if ! kill -0 "$MB_STACK_PID" 2>/dev/null; then
+    echo "mb-stack exited before becoming ready."
+    echo "Last 150 lines of ./mb-stack.log:"
+    echo "----- mb-stack.log -----"
+    tail -150 ./mb-stack.log 2>/dev/null || echo "(log file not found)"
     echo "----- end of log -----"
     exit 1
   fi
-  sleep 1
-done
-if [ "$EPHEMERAL_READY" != "1" ]; then
-  echo "ephemeral-validator failed to bind port 7799 within 60s."
-  echo "Last 100 lines of ./ephemeral-validator.log:"
-  tail -100 ./ephemeral-validator.log 2>/dev/null || echo "(log file not found)"
-  exit 1
-fi
-echo "Ephemeral validator is ready."
-
-# Start the Query Filtering Service (QFS) — the middleware that fronts the ER.
-# Request flow for tests: client -> QFS (127.0.0.1:6699) -> ER validator
-# (127.0.0.1:7799) -> solana validator (127.0.0.1:8899). Local tests point their
-# ER endpoint (EPHEMERAL_PROVIDER_ENDPOINT) at the QFS rather than the ER directly.
-echo "Starting Query Filtering Service..."
-QFS_BIN=$(command -v query-filtering-service 2>/dev/null)
-if [ -z "$QFS_BIN" ]; then
-  echo "ERROR: 'query-filtering-service' not on PATH."
-  echo "  Install it and re-run (it fronts the ephemeral validator for tests)."
-  exit 1
-fi
-echo "  Binary: $QFS_BIN"
-echo "  Version: $("$QFS_BIN" --version 2>&1 | head -1 || echo unknown)"
-RUST_LOG=info "$QFS_BIN" \
-  --listen-addr 127.0.0.1:6699 \
-  --listen-addr-ws 127.0.0.1:6700 \
-  --ephemeral-url http://127.0.0.1:7799 \
-  --ephemeral-url-ws ws://127.0.0.1:7800 \
-  --token-expiry-days 180 \
-  --add-cors-headers > ./query-filtering-service.log 2>&1 < /dev/null &
-
-QFS_PID=$!
-
-# Wait for the QFS to bind its HTTP listener before any test fires an ER call.
-echo "Waiting for query-filtering-service..."
-QFS_READY=0
-for i in {1..60}; do
-  if (echo > /dev/tcp/127.0.0.1/6699) 2>/dev/null; then
-    sleep 1   # let the RPC handler finish wiring up after the socket binds
-    QFS_READY=1
+  if grep -q "MagicBlock stack is ready" ./mb-stack.log 2>/dev/null; then
+    MB_STACK_READY=1
     break
   fi
-  if ! kill -0 $QFS_PID 2>/dev/null; then
-    echo "query-filtering-service died. Last 100 lines of ./query-filtering-service.log:"
-    echo "----- query-filtering-service.log -----"
-    tail -100 ./query-filtering-service.log 2>/dev/null || echo "(log file not found)"
-    echo "----- end of log -----"
-    exit 1
-  fi
   sleep 1
 done
-if [ "$QFS_READY" != "1" ]; then
-  echo "query-filtering-service failed to bind port 6699 within 60s."
-  tail -100 ./query-filtering-service.log 2>/dev/null || echo "(log file not found)"
+if [ "$MB_STACK_READY" != "1" ]; then
+  echo "mb-stack failed to become ready within ${MB_STACK_READY_TIMEOUT}s."
+  echo "Last 150 lines of ./mb-stack.log:"
+  echo "----- mb-stack.log -----"
+  tail -150 ./mb-stack.log 2>/dev/null || echo "(log file not found)"
+  echo "----- end of log -----"
   exit 1
 fi
-echo "Query Filtering Service is ready."
+cat ./mb-stack.log
 
 # Start the VRF oracle.
 echo "Starting VRF oracle..."
