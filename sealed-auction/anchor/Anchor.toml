@@ -20,12 +20,12 @@ wallet = "~/.config/solana/id.json"
 
 [[test.genesis]]
 address = "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
-program = "../../binary-prediction/anchor/tests/fixtures/dlp.so"
+program = "tests/fixtures/dlp.so"
 upgradeable = false
 
 [[test.genesis]]
 address = "SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2"
-program = "../../binary-prediction/anchor/tests/fixtures/ephemeral_token_program.so"
+program = "tests/fixtures/ephemeral_token_program.so"
 upgradeable = false
 
 [scripts]

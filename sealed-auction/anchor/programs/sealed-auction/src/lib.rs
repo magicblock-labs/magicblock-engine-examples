@@ -33,6 +33,8 @@ pub const BID_SEED: &[u8] = b"bid";
 pub const EPHEMERAL_SPL_TOKEN_PROGRAM_ID: Pubkey =
     pubkey!("SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2");
 pub const DELEGATION_PROGRAM_ID: Pubkey = pubkey!("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
+const INIT_EPHEMERAL_ATA_DISCRIMINATOR: u8 = 0;
+const DELEGATE_EPHEMERAL_ATA_DISCRIMINATOR: u8 = 4;
 
 #[ephemeral]
 #[program]
@@ -211,7 +213,6 @@ pub mod sealed_auction {
             bidder,
             amount,
             bidder_index,
-            refunded: false,
             escrow: ctx.accounts.auction_token_b_account.key(),
             bump: ctx.bumps.bid,
         };
@@ -281,7 +282,7 @@ pub mod sealed_auction {
         );
         require!(
             Clock::get()?.unix_timestamp >= ctx.accounts.auction.deadline_ts,
-            ErrorCode::DeadlineInPast
+            ErrorCode::AuctionStillOpen
         );
 
         let auction_key = ctx.accounts.auction.key();
@@ -522,7 +523,6 @@ pub mod sealed_auction {
             bid.bidder != ctx.accounts.auction.highest_bidder,
             ErrorCode::WinnerCannotRefund
         );
-        require!(!bid.refunded, ErrorCode::AlreadyRefunded);
         require_keys_eq!(
             bid.escrow,
             ctx.accounts.auction_token_b_account.key(),
@@ -614,7 +614,7 @@ fn init_ephemeral_ata<'info>(
             AccountMeta::new_readonly(mint.key(), false),
             AccountMeta::new_readonly(system_program.key(), false),
         ],
-        data: vec![0],
+        data: vec![INIT_EPHEMERAL_ATA_DISCRIMINATOR],
     };
     invoke(
         &instruction,
@@ -642,7 +642,7 @@ fn delegate_ephemeral_ata<'info>(
     system_program: &Program<'info, System>,
     validator: Option<Pubkey>,
 ) -> Result<()> {
-    let mut data = vec![4];
+    let mut data = vec![DELEGATE_EPHEMERAL_ATA_DISCRIMINATOR];
     if let Some(validator) = validator {
         data.extend_from_slice(validator.as_ref());
     }

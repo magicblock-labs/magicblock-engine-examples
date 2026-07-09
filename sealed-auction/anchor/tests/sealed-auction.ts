@@ -119,10 +119,29 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function sleepUntilUnixTimestamp(timestamp: BN): Promise<void> {
-  const waitMs = timestamp.toNumber() * 1_000 - Date.now() + 1_000;
-  if (waitMs > 0) {
-    await sleep(waitMs);
+async function chainUnixTimestamp(
+  connection: web3.Connection,
+): Promise<number> {
+  const slot = await connection.getSlot("confirmed");
+  const blockTime = await connection.getBlockTime(slot);
+  if (blockTime === null) {
+    throw new Error(`block time unavailable for slot ${slot}`);
+  }
+  return blockTime;
+}
+
+async function sleepUntilUnixTimestamp(
+  connection: web3.Connection,
+  timestamp: BN,
+): Promise<void> {
+  const target = timestamp.toNumber();
+  for (;;) {
+    const now = await chainUnixTimestamp(connection);
+    const remainingSeconds = target - now;
+    if (remainingSeconds <= 0) {
+      return;
+    }
+    await sleep(Math.min((remainingSeconds + 1) * 1_000, 2_000));
   }
 }
 
@@ -258,7 +277,6 @@ describe("sealed-auction", () => {
   const bidderOne = web3.Keypair.generate();
   const bidderTwo = web3.Keypair.generate();
   const auctionId = new BN(Date.now());
-  const deadlineTs = new BN(Math.floor(Date.now() / 1000) + 3);
 
   const teeUrl = process.env.TEE_PROVIDER_ENDPOINT || "http://localhost:6699";
   const teeWsUrl = process.env.TEE_WS_ENDPOINT || "ws://localhost:6700";
@@ -309,7 +327,7 @@ describe("sealed-auction", () => {
     if (localE2eAvailable) {
       return;
     }
-    if (RUN_E2E) {
+    if (RUN_E2E || RUN_LIVE) {
       throw new Error(localE2eSkipReason);
     }
     ctx.skip();
@@ -385,7 +403,9 @@ describe("sealed-auction", () => {
 
     return {
       auctionId: localAuctionId,
-      deadlineTs: new BN(Math.floor(Date.now() / 1000) + deadlineOffsetSeconds),
+      deadlineTs: new BN(
+        (await chainUnixTimestamp(provider.connection)) + deadlineOffsetSeconds,
+      ),
       tokenA: tokenAMint,
       tokenB: tokenBMint,
       auction: localAuction,
@@ -803,7 +823,17 @@ describe("sealed-auction", () => {
       [bidderOne, BID_ONE, liveBidOne, bidderOneTokenB],
       [bidderTwo, BID_TWO, liveBidTwo, bidderTwoTokenB],
     ] as [web3.Keypair, BN, web3.PublicKey, web3.PublicKey][]) {
-      const placeBidTx = await privateErProgram.methods
+      const bidderErConnection = await authenticatedErConnection(bidder);
+      const bidderErProvider = new anchor.AnchorProvider(
+        bidderErConnection,
+        provider.wallet,
+      );
+      const bidderErProgram = new Program(
+        program.idl,
+        bidderErProvider,
+      ) as Program<SealedAuction>;
+
+      const placeBidTx = await bidderErProgram.methods
         .placeBid(fixture.auctionId, amount)
         .accountsPartial({
           payer: auctioneer.publicKey,
@@ -818,7 +848,7 @@ describe("sealed-auction", () => {
         })
         .transaction();
       await sendLocalTransaction(
-        privateErConnection,
+        bidderErConnection,
         placeBidTx,
         auctioneer,
         [bidder],
@@ -854,7 +884,7 @@ describe("sealed-auction", () => {
       (await getAccount(erConnection, fixture.auctionTokenB)).amount,
     ).to.equal(BigInt(BID_ONE.add(BID_TWO).toString()));
 
-    await sleepUntilUnixTimestamp(fixture.deadlineTs);
+    await sleepUntilUnixTimestamp(privateErConnection, fixture.deadlineTs);
 
     const endAuctionTx = await privateErProgram.methods
       .endAuction(fixture.auctionId)
@@ -1001,7 +1031,7 @@ describe("sealed-auction", () => {
 
     const fixture = await createBaseAuctionFixture(1);
     await initializeAuction(fixture);
-    await sleep(1_500);
+    await sleepUntilUnixTimestamp(provider.connection, fixture.deadlineTs);
 
     await program.methods
       .endAuction(fixture.auctionId)
@@ -1089,6 +1119,5 @@ describe("sealed-auction", () => {
       false,
     );
     expect(TOKEN_PROGRAM_ID.equals(program.programId)).to.equal(false);
-    expect(deadlineTs.gt(new BN(0))).to.equal(true);
   });
 });

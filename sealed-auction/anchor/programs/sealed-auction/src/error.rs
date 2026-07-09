@@ -6,6 +6,8 @@ pub enum ErrorCode {
     InvalidAmount,
     #[msg("deadline must be in the future")]
     DeadlineInPast,
+    #[msg("auction deadline has not passed")]
+    AuctionStillOpen,
     #[msg("auction is not open")]
     AuctionClosed,
     #[msg("auction is not ended")]
@@ -18,8 +20,6 @@ pub enum ErrorCode {
     InvalidBid,
     #[msg("winning bidder cannot claim a refund")]
     WinnerCannotRefund,
-    #[msg("bid was already refunded")]
-    AlreadyRefunded,
     #[msg("token account is not owned by the expected authority")]
     InvalidTokenOwner,
     #[msg("token account mint mismatch")]

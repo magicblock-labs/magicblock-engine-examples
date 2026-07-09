@@ -29,13 +29,12 @@ pub struct Bid {
     pub bidder: Pubkey,
     pub amount: u64,
     pub bidder_index: u8,
-    pub refunded: bool,
     pub escrow: Pubkey,
     pub bump: u8,
 }
 
 impl Bid {
-    pub const LEN: usize = 32 + 32 + 8 + 1 + 1 + 32 + 1;
+    pub const LEN: usize = 32 + 32 + 8 + 1 + 32 + 1;
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
