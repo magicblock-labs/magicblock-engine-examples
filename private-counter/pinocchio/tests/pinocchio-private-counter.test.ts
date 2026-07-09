@@ -54,12 +54,19 @@ describe(
   async () => {
     // Use a fresh keypair funded via a plain airdrop
     const isLocal = (process.env.PROVIDER_ENDPOINT || "").startsWith("http://");
-    const KEYPAIR =
-      process.env.PRIVATE_KEY ||
-      fs.readFileSync(path.join(homedir(), "/.config/solana/id.json"), "utf8");
     const userKeypair = isLocal
       ? Keypair.generate()
-      : Keypair.fromSecretKey(Uint8Array.from(JSON.parse(KEYPAIR)));
+      : Keypair.fromSecretKey(
+          Uint8Array.from(
+            JSON.parse(
+              process.env.PRIVATE_KEY ||
+                fs.readFileSync(
+                  path.join(homedir(), "/.config/solana/id.json"),
+                  "utf8",
+                ),
+            ),
+          ),
+        );
 
     // Set up PER connection
     const teeUrl =
