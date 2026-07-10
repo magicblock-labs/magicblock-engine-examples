@@ -195,7 +195,17 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 <p><em>Up/down SPL-token prediction flow using session keys and an ER price oracle.</em></p>
 </blockquote>
 </td>
-<td valign="top" width="33%"></td>
+<td valign="top" width="33%">
+<blockquote>
+<p><strong><a href="./sealed-auction/">🔐 Sealed Auction / Anchor</a></strong></p>
+<p>
+<img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
+<img src="https://img.shields.io/badge/Privacy-9333ea?style=flat-square" alt="Privacy"/>
+<img src="https://img.shields.io/badge/SPL%20Token-9945FF?style=flat-square" alt="Tokens"/>
+</p>
+<p><em>Private sealed bids with SPL Token escrow.</em></p>
+</blockquote>
+</td>
 <td valign="top" width="33%"></td>
 </tr>
 </table>
