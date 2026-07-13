@@ -40,15 +40,15 @@ The frontend uses MagicBlock's Solana devnet RPC,
 
 | Software   | Version | Installation Guide                                              |
 | ---------- | ------- | --------------------------------------------------------------- |
-| **Solana** | 3.1.6   | [Install Solana](https://docs.anza.xyz/cli/install)             |
-| **Rust**   | 1.85.0  | [Install Rust](https://www.rust-lang.org/tools/install)         |
-| **Anchor** | 0.32.1  | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
+| **Solana** | 3.1.9   | [Install Solana](https://docs.anza.xyz/cli/install)             |
+| **Rust**   | 1.89.0  | [Install Rust](https://www.rust-lang.org/tools/install)         |
+| **Anchor** | 1.0.2   | [Install Anchor](https://www.anchor-lang.com/docs/installation) |
 | **Node**   | 24.10.0 | [Install Node](https://nodejs.org/en/download/current)          |
 
 ```sh
-agave-install init 3.1.6
-rustup install 1.85.0
-avm use 0.32.1
+agave-install init 3.1.9
+rustup install 1.89.0
+avm use 1.0.2
 ```
 
 ## Build and Test
@@ -56,14 +56,14 @@ avm use 0.32.1
 Install dependencies and build the program:
 
 ```bash
-yarn install
-anchor build
+yarn
+yarn build
 ```
 
-Run the local Anchor tests:
+Run the repository-managed local tests:
 
 ```bash
-anchor test
+yarn test:local
 ```
 
 The default tests cover initialization, config upload, authorization, and PDA
@@ -86,9 +86,9 @@ yarn test:devnet:e2e
 To start the frontend application locally:
 
 ```bash
-cd gachapon-example/app
-npm install
-npm run dev
+cd app
+yarn
+yarn dev
 ```
 
 The application will be available at `http://localhost:3000` or another port if

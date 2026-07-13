@@ -2,6 +2,7 @@
 .idea
 **/*.rs.bk
 **/target
+**/target/deploy/*-keypair.json
 **/node_modules
 **/test-ledger*
 **/.anchor
@@ -16,13 +17,6 @@
 # Bolt's predeployed program keypairs — kept in tree so anchor can deploy stable IDs.
 !/bolt-counter/target/deploy/counter-keypair.json
 !/bolt-counter/target/deploy/increase-keypair.json
-
-# Gachapon example program keypair — kept so Anchor deploys the declared ID.
-!/gachapon-example/target/
-/gachapon-example/target/*
-!/gachapon-example/target/deploy/
-/gachapon-example/target/deploy/*
-!/gachapon-example/target/deploy/gachapon_example-keypair.json
 
 **/tests-kit
 

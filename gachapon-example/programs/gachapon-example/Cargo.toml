@@ -20,5 +20,5 @@ custom-heap = []
 custom-panic = []
 
 [dependencies]
-anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
-mpl-core = { version = "=0.11.1", features = ["anchor"] }
+anchor-lang = { version = "=1.0.2", features = ["init-if-needed"] }
+mpl-core = "=0.12.1"

@@ -22,4 +22,4 @@ are the current versions of the programs after the Anchor 1.0 upgrade.
 - [Magic Actions](./magic-actions/README.md)
 - [Roll Dice](./roll-dice/README.md)
 - [Session Keys](./session-keys/README.md)
-- [SPL Tokens](./spl-tokens/)
+- [SPL Tokens (current Anchor 1.0 example)](../spl-tokens/anchor/README.md)

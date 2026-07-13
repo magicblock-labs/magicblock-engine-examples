@@ -10,7 +10,7 @@ The dice account is delegated to the Ephemeral Rollup. On the ER, the program re
 
 <img width="508" alt="Screenshot 2025-03-27 at 18 48 50" src="https://github.com/user-attachments/assets/8b67fd33-c9b4-48f1-9a1a-92a9e8d74111" />
 
-[https://roll-dice-demo.vercel.app/](https://roll-dice-demo.vercel.app//)
+[https://roll-dice-demo.vercel.app/](https://roll-dice-demo.vercel.app/)
 
 ## Software Packages
 
@@ -61,7 +61,7 @@ yarn test:local
 To start the frontend application locally:
 
 ```bash
-cd roll-dice/anchor/app
+cd app
 ```
 
 Install dependencies:

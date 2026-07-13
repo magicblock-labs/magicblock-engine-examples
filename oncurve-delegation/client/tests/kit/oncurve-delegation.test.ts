@@ -33,10 +33,12 @@ describe.skip("on-curve-delegation-kit", async () => {
   // Connections
   const connection = await Connection.create(
     process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
+    process.env.WS_ENDPOINT || "wss://api.devnet.solana.com",
   );
   const ephemeralConnection = await Connection.create(
     process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
       "https://devnet-as.magicblock.app",
+    process.env.EPHEMERAL_WS_ENDPOINT || "wss://devnet-as.magicblock.app",
   );
 
   console.log(
