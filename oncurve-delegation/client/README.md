@@ -52,8 +52,6 @@ yarn test:local
 
 `test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
 
-> Note: this example is **not** part of the default CI test suite.
-
 ### Web3.js Tests
 
 A parallel web3.js implementation of the same flow is available (run against the configured endpoints):

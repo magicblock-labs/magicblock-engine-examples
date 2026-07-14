@@ -13,7 +13,7 @@
 # Keep this list in sync when adding/removing examples; both the local runner and
 # CI pick it up automatically.
 
-REGULAR_PROJECTS=(anchor-counter binary-prediction crank-counter ephemeral-account-chats magic-actions oracle-priced-purchase pinocchio-counter rust-counter session-keys spl-tokens)
+REGULAR_PROJECTS=(anchor-counter binary-prediction crank-counter delegation-actions ephemeral-account-chats gachapon-example magic-actions oracle-priced-purchase pinocchio-counter rust-counter session-keys spl-tokens)
 VRF_PROJECTS=(rewards-delegated-vrf roll-dice pinocchio-roll-dice)
 TEE_PROJECTS=(private-counter pinocchio-private-counter rock-paper-scissor sealed-auction)
 
@@ -30,6 +30,7 @@ project_dir() {
     crank-counter) echo "crank-counter/anchor" ;;
     delegation-actions) echo "delegation-actions/anchor" ;;
     ephemeral-account-chats) echo "ephemeral-account-chats/anchor" ;;
+    gachapon-example) echo "gachapon-example" ;;
     magic-actions) echo "magic-actions/anchor" ;;
     session-keys) echo "session-keys/anchor" ;;
     spl-tokens) echo "spl-tokens/anchor" ;;

@@ -2,7 +2,6 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{
     instruction::{AccountMeta, Instruction},
     program::invoke_signed,
-    sysvar,
 };
 use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::{Attribute, Attributes, Plugin, PluginAuthority, PluginAuthorityPair};
@@ -23,6 +22,7 @@ pub const MPL_CORE_ID: Pubkey = pubkey!("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZ
 pub const VRF_PROGRAM_ID: Pubkey = pubkey!("Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz");
 pub const DEFAULT_VRF_QUEUE: Pubkey = pubkey!("Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh");
 pub const VRF_PROGRAM_IDENTITY: Pubkey = pubkey!("9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw");
+pub const SLOT_HASHES_ID: Pubkey = pubkey!("SysvarS1otHashes111111111111111111111111111");
 
 #[program]
 pub mod gachapon_example {
@@ -343,7 +343,7 @@ fn fund_treasury<'info>(
 ) -> Result<()> {
     anchor_lang::system_program::transfer(
         CpiContext::new(
-            system_program.clone(),
+            system_program.key(),
             anchor_lang::system_program::Transfer {
                 from: from.clone(),
                 to: treasury.clone(),
@@ -430,7 +430,7 @@ pub struct Pull<'info> {
     #[account(address = VRF_PROGRAM_ID)]
     pub vrf_program: UncheckedAccount<'info>,
     /// CHECK: Slot hashes sysvar required by the VRF program.
-    #[account(address = sysvar::slot_hashes::ID)]
+    #[account(address = SLOT_HASHES_ID)]
     pub slot_hashes: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     /// CHECK: Validated by address constraint.
@@ -608,7 +608,7 @@ pub fn create_request_randomness_ix(params: RawRequestRandomnessParams) -> Instr
             ),
             AccountMeta::new(params.oracle_queue, false),
             AccountMeta::new_readonly(anchor_lang::system_program::ID, false),
-            AccountMeta::new_readonly(sysvar::slot_hashes::ID, false),
+            AccountMeta::new_readonly(SLOT_HASHES_ID, false),
         ],
         data: RequestRandomness {
             caller_seed: params.caller_seed,
