@@ -3,6 +3,7 @@ export type RollEntry = {
   startTime: number;
   endTime: number | null;
   isPending: boolean;
+  timedOut?: boolean;
   signature?: string;
 };
 
