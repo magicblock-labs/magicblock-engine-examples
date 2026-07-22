@@ -15,7 +15,7 @@ custom-panic = []
 borsh = "1.6.1"
 solana-program = "4.0.0"
 solana-system-interface = { version = "3.0.0", features = ["bincode"] }
-ephemeral-rollups-sdk = { version = "0.14.3" }
+ephemeral-rollups-sdk = { version = "0.16.2" }
 
 
 [lib]

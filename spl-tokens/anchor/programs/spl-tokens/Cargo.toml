@@ -22,4 +22,4 @@ anchor-debug = []
 [dependencies]
 anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
 anchor-spl = { version = "1.0.2" }
-ephemeral-rollups-sdk = { version = "0.14.3", features = ["anchor"] }
+ephemeral-rollups-sdk = { version = "0.16.2", features = ["anchor"] }

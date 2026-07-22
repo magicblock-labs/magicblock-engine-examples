@@ -10,7 +10,7 @@ logging = []
 pinocchio = { version = "0.10", features = ["cpi", "copy"] }
 pinocchio-log = { version = "0.5" }
 pinocchio-system = { version = "0.5" }
-ephemeral-rollups-pinocchio = { version = "0.14.3" }
+ephemeral-rollups-pinocchio = { version = "0.16.2" }
 
 [target.'cfg(not(any(target_os = "solana", target_arch = "bpf")))'.dependencies]
 solana-pubkey = { version = "4.1", features = ["curve25519"] }
@@ -21,7 +21,7 @@ solana-program = "4.0.0"
 solana-program-test = "=3.0.2"
 solana-pubkey = "4.1"
 solana-signer = "3.0.0"
-solana-transaction = "4.1.1"
+solana-transaction = { version = "3.1.0", features = ["bincode", "blake3"] }
 solana-system-interface = { version = "3.2.0", features = ["bincode"] }
 
 [lib]

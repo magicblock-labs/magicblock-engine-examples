@@ -21,7 +21,7 @@ custom-panic = []
 
 [dependencies]
 anchor-lang = "1.0.2"
-ephemeral-rollups-sdk = { version = "0.14.3", features = ["anchor"] }
+ephemeral-rollups-sdk = { version = "0.16.2", features = ["anchor"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
