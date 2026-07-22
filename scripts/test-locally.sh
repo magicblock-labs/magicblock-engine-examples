@@ -594,7 +594,7 @@ fi
 # <name>-keypair.json, add an upgradeable program at the keypair's address with the
 # local wallet as upgrade authority — mirroring what `anchor deploy` /
 # `solana program deploy` produced before.
-PRELOAD_ARGS=()
+PRELOAD_ARGS=(--account mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev "$SCRIPT_DIR/mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev.json")
 WALLET_PUBKEY=$(solana-keygen pubkey "$HOME/.config/solana/id.json" 2>/dev/null || echo "")
 if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
   echo "Preloading programs into mb-test-validator:"
