@@ -99,6 +99,7 @@ export const fetchAndCacheBlockhash = async (
       blockhash,
       lastValidBlockHeight,
       timestamp: Date.now(),
+      endpoint: connection.rpcEndpoint,
     };
   } catch (error) {
     console.error("Failed to fetch blockhash:", error);
@@ -111,6 +112,7 @@ export const getCachedBlockhash = (
 ): string | null => {
   const cached = cacheRef.current;
   if (!cached) return null;
+  if (cached.endpoint !== connection.rpcEndpoint) return null;
 
   const age = Date.now() - cached.timestamp;
   if (age > BLOCKHASH_CACHE_MAX_AGE_MS) {
