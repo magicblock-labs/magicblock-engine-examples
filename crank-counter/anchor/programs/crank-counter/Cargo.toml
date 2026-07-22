@@ -23,7 +23,7 @@ custom-panic = []
 [dependencies]
 anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
 # TODO: Remove this once the SDK is published to crates.io
-ephemeral-rollups-sdk = { git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git", rev = "086eeaa0e9fcd12d442d78bcd40817a782521cbc", features = [
+ephemeral-rollups-sdk = { git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git", rev = "0fc4604157de51df28693e02e5a1a6a4a08c8a03", features = [
     "anchor",
     "crank",
 ] }

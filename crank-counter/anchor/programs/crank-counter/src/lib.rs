@@ -42,8 +42,8 @@ pub mod anchor_counter {
     }
 
     // Schedules crank for increment counter
-    pub fn schedule_increment(
-        ctx: Context<ScheduleIncrement>,
+    pub fn schedule_increment<'info>(
+        ctx: Context<'info, ScheduleIncrement<'info>>,
         args: ScheduleIncrementArgs,
     ) -> Result<()> {
         let increment_ix = Instruction {
@@ -53,8 +53,8 @@ pub mod anchor_counter {
         };
 
         ScheduleCrankCpi {
-            payer: ctx.accounts.payer.to_account_info(),
-            magic_program: ctx.accounts.magic_program.to_account_info(),
+            payer: &ctx.accounts.payer,
+            magic_program: &&ctx.accounts.magic_program,
             instruction_accounts: &[
                 ctx.accounts.payer.to_account_info(),
                 ctx.accounts.counter.to_account_info(),
