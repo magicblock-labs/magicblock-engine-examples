@@ -232,6 +232,15 @@ export default function DiceRollerDelegated() {
     deferredSaturatedUpdateRef.current = null
   }, [])
 
+  const cancelBackgroundRoll = useCallback(() => {
+    const backgroundRoll = backgroundRollRef.current
+    if (!backgroundRoll) return
+
+    backgroundRollRef.current = null
+    clearRequestTracking()
+    backgroundRoll.resolve()
+  }, [clearRequestTracking])
+
   const clearAllIntervals = useCallback(() => {
     if (rollIntervalRef.current) {
       clearInterval(rollIntervalRef.current)
@@ -473,6 +482,8 @@ export default function DiceRollerDelegated() {
         }).transaction(),
         getBlockhashAsync(connection, true),
       ])
+
+      if (!backgroundRollRef.current) return
 
       tx.recentBlockhash = latestBlockhash.blockhash
       tx.feePayer = playerKeypairRef.current.publicKey
@@ -891,6 +902,8 @@ export default function DiceRollerDelegated() {
       delegationPollIntervalRef.current = setInterval(async () => {
         const delegated = await refreshDelegationStatus()
         if (!delegated) {
+          cancelBackgroundRoll()
+          setIsDelegating(false)
           if (delegationPollIntervalRef.current) {
             clearInterval(delegationPollIntervalRef.current)
             delegationPollIntervalRef.current = null
@@ -933,7 +946,7 @@ export default function DiceRollerDelegated() {
       }
       setIsUndelegating(false)
     }
-  }, [isDelegated, refreshDelegationStatus])
+  }, [cancelBackgroundRoll, isDelegated, refreshDelegationStatus])
 
   const handleRollDice = useCallback(async () => {
     if (
