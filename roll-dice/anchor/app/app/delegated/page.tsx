@@ -54,21 +54,12 @@ import type { RollEntry, CachedBlockhash } from "@/lib/types"
 const derivePlayerPda = (user: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from(PLAYER_SEED), user.toBuffer()], PROGRAM_ID)[0]
 
-type PlayerAccountSource = "subscription" | "sync" | "poll"
-
-type BackgroundRoll = {
-  startRollnum: number | null
-  resolve: () => void
-  reject: (error: Error) => void
-}
-
-type DeferredSaturatedUpdate = {
-  accountInfo: AccountInfo<Buffer>
-  slot: number
-  observedAt: number
-}
+type PlayerAccountSource = "subscription" | "sync" | "poll" | "callback"
 
 const ROLL_FALLBACK_POLL_INITIAL_MS = 250
+const ROLL_RESULT_DEADLINE_MS = 30000
+const DELEGATION_POLL_INTERVAL_MS = 1000
+const DELEGATION_POLL_TIMEOUT_MS = 30000
 
 const MiniDice = ({ value }: { value: number | null }) => {
   if (value === null) return <span className="text-muted-foreground">-</span>
@@ -171,7 +162,7 @@ const MiniDice = ({ value }: { value: number | null }) => {
 
 const RollLatency = memo(function RollLatency({ entry }: { entry: RollEntry }) {
   const [, setTick] = useState(0)
-  const isTiming = entry.isPending && !entry.timedOut
+  const isTiming = entry.isPending
 
   useEffect(() => {
     if (!isTiming) return
@@ -185,7 +176,7 @@ const RollLatency = memo(function RollLatency({ entry }: { entry: RollEntry }) {
       ? Date.now() - entry.startTime
       : 0
 
-  return `${elapsed.toString().padStart(6, '\u00A0')}ms${isTiming ? '...' : entry.timedOut ? '+' : ''}`
+  return `${elapsed.toString().padStart(6, '\u00A0')}ms${entry.timedOut ? '+' : isTiming ? '...' : ''}`
 })
 
 export default function DiceRollerDelegated() {
@@ -205,23 +196,28 @@ export default function DiceRollerDelegated() {
   const lastObservedRollnumRef = useRef<number | null>(null)
   const lastObservedSlotRef = useRef<number | null>(null)
   const pendingRollRef = useRef(false)
-  const pendingRollnumRef = useRef<number | null>(null)
-  const backgroundRollRef = useRef<BackgroundRoll | null>(null)
+  const pendingRollGenerationRef = useRef(0)
   const pendingRequestSignatureRef = useRef<string | null>(null)
   const pendingRequestSlotRef = useRef<number | null>(null)
-  const deferredSaturatedUpdateRef = useRef<DeferredSaturatedUpdate | null>(null)
+  const unavailableClientSeedsRef = useRef<Set<number>>(new Set())
+  const nextClientSeedRef = useRef(Math.floor(Math.random() * 256))
   const programRef = useRef<anchor.Program | null>(null)
   const ephemeralProgramRef = useRef<anchor.Program | null>(null)
   const connectionRef = useRef<Connection | null>(null)
   const ephemeralConnectionRef = useRef<Connection | null>(null)
+  const ephemeralConnectionGenerationRef = useRef(0)
   const routerConnectionRef = useRef<ConnectionMagicRouter | null>(null)
   const playerPdaRef = useRef<PublicKey | null>(null)
   const subscriptionIdRef = useRef<number | null>(null)
+  const callbackLogsSubscriptionRef = useRef<{ connection: Connection; id: number } | null>(null)
   const rollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const resultPollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const resultDeadlineTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const blockhashIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const delegationPollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const delegationPollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const delegationPollDeadlineRef = useRef<NodeJS.Timeout | null>(null)
+  const delegationPollGenerationRef = useRef(0)
   const playerKeypairRef = useRef<Keypair | null>(null)
   const cachedBaseBlockhashRef = useRef<CachedBlockhash | null>(null)
   const cachedEphemeralBlockhashRef = useRef<CachedBlockhash | null>(null)
@@ -229,17 +225,19 @@ export default function DiceRollerDelegated() {
   const clearRequestTracking = useCallback(() => {
     pendingRequestSignatureRef.current = null
     pendingRequestSlotRef.current = null
-    deferredSaturatedUpdateRef.current = null
   }, [])
 
-  const cancelBackgroundRoll = useCallback(() => {
-    const backgroundRoll = backgroundRollRef.current
-    if (!backgroundRoll) return
-
-    backgroundRollRef.current = null
-    clearRequestTracking()
-    backgroundRoll.resolve()
-  }, [clearRequestTracking])
+  const cancelDelegationStatusPolling = useCallback(() => {
+    delegationPollGenerationRef.current += 1
+    if (delegationPollTimeoutRef.current) {
+      clearTimeout(delegationPollTimeoutRef.current)
+      delegationPollTimeoutRef.current = null
+    }
+    if (delegationPollDeadlineRef.current) {
+      clearTimeout(delegationPollDeadlineRef.current)
+      delegationPollDeadlineRef.current = null
+    }
+  }, [])
 
   const clearAllIntervals = useCallback(() => {
     if (rollIntervalRef.current) {
@@ -254,12 +252,18 @@ export default function DiceRollerDelegated() {
       clearTimeout(resultPollTimeoutRef.current)
       resultPollTimeoutRef.current = null
     }
-    // Note: blockhashIntervalRef is NOT cleared here - it should run continuously
-    if (delegationPollIntervalRef.current) {
-      clearInterval(delegationPollIntervalRef.current)
-      delegationPollIntervalRef.current = null
+    if (resultDeadlineTimeoutRef.current) {
+      clearTimeout(resultDeadlineTimeoutRef.current)
+      resultDeadlineTimeoutRef.current = null
     }
-  }, [])
+    if (callbackLogsSubscriptionRef.current) {
+      const { connection, id } = callbackLogsSubscriptionRef.current
+      callbackLogsSubscriptionRef.current = null
+      connection.removeOnLogsListener(id).catch(console.error)
+    }
+    // Note: blockhashIntervalRef is NOT cleared here - it should run continuously
+    cancelDelegationStatusPolling()
+  }, [cancelDelegationStatusPolling])
 
 
   const getBlockhashAsync = useCallback(async (connection: Connection, isEphemeral: boolean): Promise<CachedBlockhash> => {
@@ -267,7 +271,12 @@ export default function DiceRollerDelegated() {
     const cached = getCachedBlockhash(connection, cacheRef)
     if (cached && cacheRef.current) return cacheRef.current
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash()
-    const latestBlockhash = { blockhash, lastValidBlockHeight, timestamp: Date.now() }
+    const latestBlockhash = {
+      blockhash,
+      lastValidBlockHeight,
+      timestamp: Date.now(),
+      endpoint: connection.rpcEndpoint,
+    }
     cacheRef.current = latestBlockhash
     return latestBlockhash
   }, [])
@@ -277,6 +286,7 @@ export default function DiceRollerDelegated() {
     source: PlayerAccountSource,
     slot?: number,
     observedAt = Date.now(),
+    rollGeneration?: number,
   ) => {
     if (!programRef.current || !accountInfo?.data) return
 
@@ -293,39 +303,14 @@ export default function DiceRollerDelegated() {
           (newRollnum < lastObservedRollnum || (source === "poll" && newRollnum === lastObservedRollnum)))
       ) return
 
-      const backgroundRoll = backgroundRollRef.current
-      const activeRollnum = backgroundRoll?.startRollnum ??
-        (pendingRollRef.current ? pendingRollnumRef.current : null)
-      const requiresRequestSlot = source === "subscription" && activeRollnum === 255 && newRollnum === 255
-
-      if (requiresRequestSlot) {
-        if (slot === undefined) return
-        const requestSlot = pendingRequestSlotRef.current
-        if (requestSlot === null) {
-          const deferred = deferredSaturatedUpdateRef.current
-          if (!deferred || slot > deferred.slot) {
-            deferredSaturatedUpdateRef.current = { accountInfo, slot, observedAt }
-          }
-          return
-        }
-        if (slot <= requestSlot) return
-      }
-
-      const isResultAfter = (rollnum: number | null) => (
-        (rollnum === null && source === "subscription") ||
-        (rollnum !== null && newRollnum > rollnum) ||
-        (source === "subscription" && rollnum === 255 && newRollnum === 255 &&
-          slot !== undefined && pendingRequestSlotRef.current !== null && slot > pendingRequestSlotRef.current)
-      )
-      const completesBackgroundRoll = backgroundRoll !== null && newValue > 0 &&
-        isResultAfter(backgroundRoll.startRollnum)
-      const pendingRollnum = pendingRollnumRef.current
-      const completesPendingRoll = backgroundRoll === null && pendingRollRef.current &&
-        newValue > 0 && isResultAfter(pendingRollnum)
+      const completesPendingRoll = source === "callback" &&
+        rollGeneration === pendingRollGenerationRef.current &&
+        pendingRollRef.current &&
+        newValue > 0
 
       if (completesPendingRoll) {
         pendingRollRef.current = false
-        pendingRollnumRef.current = null
+        pendingRollGenerationRef.current += 1
         clearRequestTracking()
         clearAllIntervals()
         setIsRolling(false)
@@ -337,12 +322,6 @@ export default function DiceRollerDelegated() {
       setPlayerAccountData({ lastResult: newValue, rollnum: newRollnum })
       if (newValue > 0) setDiceValue(newValue)
 
-      if (completesBackgroundRoll && backgroundRoll) {
-        backgroundRollRef.current = null
-        clearRequestTracking()
-        backgroundRoll.resolve()
-        return
-      }
       if (!completesPendingRoll) return
 
       setRollHistory(prev => {
@@ -352,8 +331,9 @@ export default function DiceRollerDelegated() {
         updated[idx] = {
           ...updated[idx],
           value: newValue,
-          endTime: updated[idx].endTime ?? observedAt,
+          endTime: observedAt,
           isPending: false,
+          timedOut: false,
         }
         return updated
       })
@@ -365,14 +345,7 @@ export default function DiceRollerDelegated() {
   const recordRequestSlot = useCallback((signature: string, slot: number) => {
     if (pendingRequestSignatureRef.current !== signature) return
     pendingRequestSlotRef.current = slot
-
-    const deferred = deferredSaturatedUpdateRef.current
-    if (!deferred) return
-    deferredSaturatedUpdateRef.current = null
-    if (deferred.slot > slot) {
-      handlePlayerAccountChange(deferred.accountInfo, "subscription", deferred.slot, deferred.observedAt)
-    }
-  }, [handlePlayerAccountChange])
+  }, [])
 
   const trackRequestSlot = useCallback((connection: Connection, signature: string) => {
     pendingRequestSignatureRef.current = signature
@@ -381,17 +354,67 @@ export default function DiceRollerDelegated() {
     }, "processed")
   }, [recordRequestSlot])
 
-  const refreshPlayerAccount = useCallback(async (connection: Connection, source: PlayerAccountSource = "poll") => {
-    if (!playerPdaRef.current) return
+  const refreshPlayerAccount = useCallback(async (
+    connection: Connection,
+    source: PlayerAccountSource = "poll",
+    generation = ephemeralConnectionGenerationRef.current,
+    rollGeneration?: number,
+    minContextSlot?: number,
+    observedAt = Date.now(),
+  ) => {
+    const currentPlayerPda = playerPdaRef.current
+    if (!currentPlayerPda) return false
     const { context, value: accountInfo } = await connection.getAccountInfoAndContext(
-      playerPdaRef.current,
-      "processed",
+      currentPlayerPda,
+      { commitment: "processed", minContextSlot },
     )
-    if (accountInfo) handlePlayerAccountChange(accountInfo, source, context.slot)
+    if (
+      generation !== ephemeralConnectionGenerationRef.current ||
+      connection !== ephemeralConnectionRef.current ||
+      !accountInfo
+    ) return false
+
+    handlePlayerAccountChange(accountInfo, source, context.slot, observedAt, rollGeneration)
+    return true
   }, [handlePlayerAccountChange])
 
-  const updateEphemeralConnectionToValidator = useCallback(async (validatorFqdn: string) => {
-    if (!playerKeypairRef.current || !playerPdaRef.current || !programRef.current) return
+  const updateEphemeralConnectionToValidator = useCallback(async (
+    validatorFqdn: string,
+    isCurrent: () => boolean = () => true,
+  ): Promise<boolean> => {
+    const playerKeypair = playerKeypairRef.current
+    const currentPlayerPda = playerPdaRef.current
+    const baseProgram = programRef.current
+    if (!playerKeypair || !currentPlayerPda || !baseProgram || !isCurrent()) return false
+    const existingConnection = ephemeralConnectionRef.current
+    const existingGeneration = ephemeralConnectionGenerationRef.current
+    if (
+      existingConnection?.rpcEndpoint === validatorFqdn &&
+      ephemeralProgramRef.current &&
+      subscriptionIdRef.current !== null
+    ) {
+      const [{ context, value: accountInfo }, latestBlockhash] = await Promise.all([
+        existingConnection.getAccountInfoAndContext(currentPlayerPda, "processed"),
+        existingConnection.getLatestBlockhash(),
+      ])
+      if (
+        !isCurrent() ||
+        !accountInfo ||
+        existingGeneration !== ephemeralConnectionGenerationRef.current ||
+        existingConnection !== ephemeralConnectionRef.current
+      ) return false
+
+      cachedEphemeralBlockhashRef.current = {
+        ...latestBlockhash,
+        timestamp: Date.now(),
+        endpoint: existingConnection.rpcEndpoint,
+      }
+      handlePlayerAccountChange(accountInfo, "sync", context.slot)
+      return true
+    }
+
+    const oldConnection = existingConnection
+    const oldSubscriptionId = subscriptionIdRef.current
 
     // Convert https:// to wss:// for WebSocket endpoint
     const ephemeralWsEndpoint = validatorFqdn.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://")
@@ -399,147 +422,127 @@ export default function DiceRollerDelegated() {
       wsEndpoint: ephemeralWsEndpoint,
       commitment: "processed",
     })
-    
-    // Clean up old subscription
-    if (subscriptionIdRef.current !== null && ephemeralConnectionRef.current) {
-      await ephemeralConnectionRef.current.removeAccountChangeListener(subscriptionIdRef.current).catch(console.error)
-    }
-    
-    ephemeralConnectionRef.current = newEphemeralConnection
-    setEphemeralEndpoint(validatorFqdn)
-    
+
     // Recreate ephemeral program with new connection — bundled IDL.
     const ephemeralProvider = new anchor.AnchorProvider(
       newEphemeralConnection,
-      walletAdapterFrom(playerKeypairRef.current),
+      walletAdapterFrom(playerKeypair),
       anchor.AnchorProvider.defaultOptions()
     )
-    const idl = await loadIdl(PROGRAM_ID, programRef.current.provider, randomDiceDelegatedIdl)
-    ephemeralProgramRef.current = new anchor.Program(idl, ephemeralProvider)
-    
-    // Recreate subscription with new connection
-    subscriptionIdRef.current = newEphemeralConnection.onAccountChange(
-      playerPdaRef.current,
-      (accountInfo, context) => handlePlayerAccountChange(accountInfo, "subscription", context.slot),
+    const idl = await loadIdl(PROGRAM_ID, baseProgram.provider, randomDiceDelegatedIdl)
+    if (!isCurrent()) return false
+
+    const [{ context, value: accountInfo }, latestBlockhash] = await Promise.all([
+      newEphemeralConnection.getAccountInfoAndContext(currentPlayerPda, "processed"),
+      newEphemeralConnection.getLatestBlockhash(),
+    ])
+    if (
+      !isCurrent() ||
+      !accountInfo ||
+      existingGeneration !== ephemeralConnectionGenerationRef.current ||
+      existingConnection !== ephemeralConnectionRef.current
+    ) return false
+
+    const generation = ephemeralConnectionGenerationRef.current + 1
+    const newEphemeralProgram = new anchor.Program(idl, ephemeralProvider)
+    const newSubscriptionId = newEphemeralConnection.onAccountChange(
+      currentPlayerPda,
+      (updatedAccountInfo, updatedContext) => {
+        if (
+          generation !== ephemeralConnectionGenerationRef.current ||
+          newEphemeralConnection !== ephemeralConnectionRef.current
+        ) return
+        handlePlayerAccountChange(updatedAccountInfo, "subscription", updatedContext.slot)
+      },
       { commitment: "processed" }
     )
 
-    // Subscribe first, then fetch once to close the connection handoff gap.
-    await refreshPlayerAccount(newEphemeralConnection, "sync")
+    ephemeralConnectionGenerationRef.current = generation
+    // ER slots are validator-local. A slot observed on the previous validator
+    // cannot be used to order updates from this connection.
+    lastObservedSlotRef.current = null
+    ephemeralConnectionRef.current = newEphemeralConnection
+    ephemeralProgramRef.current = newEphemeralProgram
+    subscriptionIdRef.current = newSubscriptionId
+    cachedEphemeralBlockhashRef.current = {
+      ...latestBlockhash,
+      timestamp: Date.now(),
+      endpoint: newEphemeralConnection.rpcEndpoint,
+    }
+    setEphemeralEndpoint(validatorFqdn)
 
-    // Fetch blockhash for new connection
-    await fetchAndCacheBlockhash(newEphemeralConnection, cachedEphemeralBlockhashRef)
-  }, [handlePlayerAccountChange, refreshPlayerAccount])
+    if (oldSubscriptionId !== null && oldConnection) {
+      oldConnection.removeAccountChangeListener(oldSubscriptionId).catch(console.error)
+    }
 
-  const refreshDelegationStatus = useCallback(async () => {
-    if (!routerConnectionRef.current || !playerPdaRef.current) return false
+    // Publish the preflight snapshot only after the connection swap is complete.
+    handlePlayerAccountChange(accountInfo, "sync", context.slot)
+    return true
+  }, [handlePlayerAccountChange])
+
+  const refreshDelegationStatus = useCallback(async (
+    isCurrent: () => boolean = () => true,
+  ): Promise<boolean | null> => {
+    const routerConnection = routerConnectionRef.current
+    const currentPlayerPda = playerPdaRef.current
+    if (!routerConnection || !currentPlayerPda || !isCurrent()) return null
     try {
-      const delegationStatus = await routerConnectionRef.current.getDelegationStatus(playerPdaRef.current)
+      const delegationStatus = await routerConnection.getDelegationStatus(currentPlayerPda)
+      if (!isCurrent()) return null
       
       // Update ephemeral connection to use the FQDN from delegation status if available
       const delegationStatusWithFqdn = delegationStatus as { isDelegated: boolean; fqdn?: string }
       if (delegationStatusWithFqdn.isDelegated && delegationStatusWithFqdn.fqdn) {
-        await updateEphemeralConnectionToValidator(delegationStatusWithFqdn.fqdn)
+        const updated = await updateEphemeralConnectionToValidator(
+          delegationStatusWithFqdn.fqdn,
+          isCurrent,
+        )
+        if (!updated || !isCurrent()) return null
       }
 
-      // Only expose the delegated state after the ER subscription is ready and synced.
-      setIsDelegated(delegationStatus.isDelegated)
-      
       return delegationStatus.isDelegated
     } catch (error) {
+      if (!isCurrent()) return null
       console.error("Failed to refresh delegation status:", error)
-      return false
+      return null
     }
   }, [updateEphemeralConnectionToValidator])
 
-  const sendBackgroundRoll = useCallback(async () => {
-    if (
-      !ephemeralProgramRef.current ||
-      !playerKeypairRef.current ||
-      !playerPdaRef.current ||
-      !ephemeralConnectionRef.current ||
-      backgroundRollRef.current ||
-      pendingRollRef.current
-    ) return
+  const pollDelegationStatus = useCallback((
+    expectedDelegated: boolean,
+    onMatch: () => void,
+    onTimeout: () => void,
+  ) => {
+    cancelDelegationStatusPolling()
+    const generation = delegationPollGenerationRef.current
 
-    const connection = ephemeralConnectionRef.current
-    clearRequestTracking()
-    const resultPromise = new Promise<void>((resolve, reject) => {
-      backgroundRollRef.current = {
-        startRollnum: lastObservedRollnumRef.current,
-        resolve,
-        reject,
+    delegationPollDeadlineRef.current = setTimeout(() => {
+      if (generation !== delegationPollGenerationRef.current) return
+      cancelDelegationStatusPolling()
+      onTimeout()
+    }, DELEGATION_POLL_TIMEOUT_MS)
+
+    const poll = async () => {
+      const isCurrent = () => generation === delegationPollGenerationRef.current
+      const delegated = await refreshDelegationStatus(isCurrent)
+      if (generation !== delegationPollGenerationRef.current) return
+
+      if (delegated !== null) setIsDelegated(delegated)
+
+      if (delegated === expectedDelegated) {
+        cancelDelegationStatusPolling()
+        onMatch()
+        return
       }
-    })
 
-    try {
-      const randomValue = Math.floor(Math.random() * 6) + 1
-      const [tx, latestBlockhash] = await Promise.all([
-        ephemeralProgramRef.current.methods.rollDiceDelegated(randomValue).accounts({
-          payer: playerKeypairRef.current.publicKey,
-          player: playerPdaRef.current,
-          oracleQueue: ORACLE_QUEUE,
-        }).transaction(),
-        getBlockhashAsync(connection, true),
-      ])
-
-      if (!backgroundRollRef.current) return
-
-      tx.recentBlockhash = latestBlockhash.blockhash
-      tx.feePayer = playerKeypairRef.current.publicKey
-      tx.sign(playerKeypairRef.current)
-      if (!tx.signature) throw new Error("Background roll transaction signature missing")
-
-      const signature = anchor.utils.bytes.bs58.encode(tx.signature)
-      trackRequestSlot(connection, signature)
-      connection.sendRawTransaction(tx.serialize(), { skipPreflight: true }).catch((error) => {
-        console.error("[BackgroundRoll] Transaction send error; waiting for reconciliation:", error)
-      })
-
-      const pollForResult = async () => {
-        if (!backgroundRollRef.current) return
-        try {
-          await refreshPlayerAccount(connection)
-          if (!backgroundRollRef.current) return
-
-          const [{ value: signatureStatus }, blockHeight] = await Promise.all([
-            connection.getSignatureStatus(signature, { searchTransactionHistory: true }),
-            connection.getBlockHeight("processed"),
-          ])
-          if (signatureStatus && !signatureStatus.err) recordRequestSlot(signature, signatureStatus.slot)
-          if (!backgroundRollRef.current) return
-
-          if (signatureStatus?.err || (!signatureStatus && blockHeight > latestBlockhash.lastValidBlockHeight)) {
-            const backgroundRoll = backgroundRollRef.current
-            backgroundRollRef.current = null
-            clearRequestTracking()
-            backgroundRoll.reject(new Error("Background roll transaction failed or expired"))
-            return
-          }
-        } catch (error) {
-          console.error("[BackgroundRoll] Reconciliation failed:", error)
-        }
-        if (backgroundRollRef.current) {
-          timeoutRef.current = setTimeout(pollForResult, ROLL_TIMEOUT_MS)
-        }
-      }
-      timeoutRef.current = setTimeout(pollForResult, ROLL_TIMEOUT_MS)
-
-      await resultPromise
-    } catch (error) {
-      backgroundRollRef.current = null
-      clearRequestTracking()
-      throw error
-    } finally {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-        timeoutRef.current = null
-      }
+      delegationPollTimeoutRef.current = setTimeout(poll, DELEGATION_POLL_INTERVAL_MS)
     }
-  }, [clearRequestTracking, getBlockhashAsync, recordRequestSlot, refreshPlayerAccount, trackRequestSlot])
 
-  const initializeProgram = useCallback(async () => {
-    if (typeof window === "undefined") return
+    delegationPollTimeoutRef.current = setTimeout(poll, DELEGATION_POLL_INTERVAL_MS)
+  }, [cancelDelegationStatusPolling, refreshDelegationStatus])
+
+  const initializeProgram = useCallback(async (isCurrent: () => boolean) => {
+    if (typeof window === "undefined" || !isCurrent()) return
     try {
       const connection = new Connection(BASE_ENDPOINT, "confirmed")
       connectionRef.current = connection
@@ -547,27 +550,33 @@ export default function DiceRollerDelegated() {
       if (!playerKeypairRef.current) {
         playerKeypairRef.current = loadOrCreateKeypair(PLAYER_STORAGE_KEY)
       }
+      const playerKeypair = playerKeypairRef.current
 
-      await ensureFunds(connection, playerKeypairRef.current)
+      await ensureFunds(connection, playerKeypair)
+      if (!isCurrent()) return
 
       const provider = new anchor.AnchorProvider(
         connection,
-        walletAdapterFrom(playerKeypairRef.current),
+        walletAdapterFrom(playerKeypair),
         anchor.AnchorProvider.defaultOptions()
       )
 
       const idl = await loadIdl(PROGRAM_ID, provider, randomDiceDelegatedIdl)
+      if (!isCurrent()) return
       const program = new anchor.Program(idl, provider)
       programRef.current = program
 
-      const playerPk = derivePlayerPda(playerKeypairRef.current.publicKey)
+      const playerPk = derivePlayerPda(playerKeypair.publicKey)
       playerPdaRef.current = playerPk
       setPlayerPda(playerPk)
 
       let account = await connection.getAccountInfo(playerPk)
+      if (!isCurrent()) return
       if (!account) {
         await program.methods.initialize().rpc()
+        if (!isCurrent()) return
         account = await connection.getAccountInfo(playerPk)
+        if (!isCurrent()) return
       }
       if (account) {
         try {
@@ -599,33 +608,48 @@ export default function DiceRollerDelegated() {
         wsEndpoint: ephemeralWsEndpoint,
         commitment: "processed",
       })
+      const oldEphemeralConnection = ephemeralConnectionRef.current
+      const oldSubscriptionId = subscriptionIdRef.current
+      const ephemeralGeneration = ephemeralConnectionGenerationRef.current + 1
+      ephemeralConnectionGenerationRef.current = ephemeralGeneration
+      lastObservedSlotRef.current = null
       ephemeralConnectionRef.current = ephemeralConnection
       const ephemeralProvider = new anchor.AnchorProvider(
         ephemeralConnection,
-        walletAdapterFrom(playerKeypairRef.current),
+        walletAdapterFrom(playerKeypair),
         anchor.AnchorProvider.defaultOptions()
       )
       ephemeralProgramRef.current = new anchor.Program(idl, ephemeralProvider)
 
-      if (subscriptionIdRef.current !== null && ephemeralConnection) {
-        await ephemeralConnection.removeAccountChangeListener(subscriptionIdRef.current).catch(console.error)
+      if (oldSubscriptionId !== null && oldEphemeralConnection) {
+        oldEphemeralConnection.removeAccountChangeListener(oldSubscriptionId).catch(console.error)
       }
-      if (ephemeralConnection && playerPk) {
-        subscriptionIdRef.current = ephemeralConnection.onAccountChange(
-          playerPk,
-          (accountInfo, context) => handlePlayerAccountChange(accountInfo, "subscription", context.slot),
-          { commitment: "processed" }
-        )
-      }
+      subscriptionIdRef.current = ephemeralConnection.onAccountChange(
+        playerPk,
+        (accountInfo, context) => {
+          if (
+            ephemeralGeneration !== ephemeralConnectionGenerationRef.current ||
+            ephemeralConnection !== ephemeralConnectionRef.current
+          ) return
+          handlePlayerAccountChange(accountInfo, "subscription", context.slot)
+        },
+        { commitment: "processed" }
+      )
 
-      const isDelegated = await refreshDelegationStatus()
+      const delegationStatus = await refreshDelegationStatus(isCurrent)
+      if (!isCurrent()) return
+      if (delegationStatus === null) {
+        throw new Error("Unable to determine delegation status")
+      }
+      setIsDelegated(delegationStatus)
       
       // refreshDelegationStatus already updates the ephemeral connection to the FQDN from delegation status if delegated
-      if (!isDelegated && routerConnectionRef.current) {
+      if (delegationStatus === false && routerConnectionRef.current) {
         // Automatically delegate on startup if not already delegated
         setIsDelegating(true)
         try {
           const validatorResult = await routerConnectionRef.current.getClosestValidator()
+          if (!isCurrent()) return
           console.log("getClosestValidator result on init:", validatorResult)
           
           const validatorIdentity = validatorResult.identity
@@ -635,9 +659,8 @@ export default function DiceRollerDelegated() {
             throw new Error("Validator identity or fqdn not found in getClosestValidator response")
           }
           
-          await updateEphemeralConnectionToValidator(validatorFqdn)
-          
-          await ensureFunds(connection, playerKeypairRef.current)
+          await ensureFunds(connection, playerKeypair)
+          if (!isCurrent()) return
           const validatorPubkey = new PublicKey(validatorIdentity)
           const remainingAccounts = [
             {
@@ -649,49 +672,44 @@ export default function DiceRollerDelegated() {
           await program.methods
             .delegate()
             .accounts({
-              user: playerKeypairRef.current.publicKey,
+              user: playerKeypair.publicKey,
             })
             .remainingAccounts(remainingAccounts)
             .rpc()
+          if (!isCurrent()) return
 
-          // Poll every second until delegation succeeds
-          if (delegationPollIntervalRef.current) {
-            clearInterval(delegationPollIntervalRef.current)
-          }
-
-          delegationPollIntervalRef.current = setInterval(async () => {
-            const delegated = await refreshDelegationStatus()
-            if (delegated) {
-              if (delegationPollIntervalRef.current) {
-                clearInterval(delegationPollIntervalRef.current)
-                delegationPollIntervalRef.current = null
-              }
-              await sendBackgroundRoll().catch((error) => {
-                console.error("[BackgroundRoll] Warmup failed:", error)
-              })
+          pollDelegationStatus(
+            true,
+            () => setIsDelegating(false),
+            () => {
+              console.error("Timed out waiting for delegation status")
               setIsDelegating(false)
-            }
-          }, 1000)
+            },
+          )
         } catch (error) {
+          if (!isCurrent()) return
           console.error("Automatic delegation failed on startup:", error)
-          if (delegationPollIntervalRef.current) {
-            clearInterval(delegationPollIntervalRef.current)
-            delegationPollIntervalRef.current = null
-          }
+          cancelDelegationStatusPolling()
           setIsDelegating(false)
           await fetchAndCacheBlockhash(connection, cachedBaseBlockhashRef)
+          if (!isCurrent()) return
           // Use ephemeralConnectionRef.current instead of ephemeralConnection since updateEphemeralConnectionToValidator may have updated it
           if (ephemeralConnectionRef.current) {
             await fetchAndCacheBlockhash(ephemeralConnectionRef.current, cachedEphemeralBlockhashRef)
+            if (!isCurrent()) return
           }
         }
       } else {
         await fetchAndCacheBlockhash(connection, cachedBaseBlockhashRef)
+        if (!isCurrent()) return
         // Use ephemeralConnectionRef.current instead of ephemeralConnection since refreshDelegationStatus may have updated it
         if (ephemeralConnectionRef.current) {
           await fetchAndCacheBlockhash(ephemeralConnectionRef.current, cachedEphemeralBlockhashRef)
+          if (!isCurrent()) return
         }
       }
+
+      if (!isCurrent()) return
       
       // Clear any existing interval before creating a new one
       if (blockhashIntervalRef.current) {
@@ -710,15 +728,22 @@ export default function DiceRollerDelegated() {
       
       setIsInitialized(true)
     } catch (error) {
+      if (!isCurrent()) return
       console.error("Failed to initialize delegated dice:", error)
       setIsInitialized(false)
     }
-    }, [handlePlayerAccountChange, refreshDelegationStatus, sendBackgroundRoll, updateEphemeralConnectionToValidator])
+    }, [cancelDelegationStatusPolling, handlePlayerAccountChange, pollDelegationStatus, refreshDelegationStatus])
 
   useEffect(() => {
-    initializeProgram()
+    let active = true
+    void initializeProgram(() => active)
 
     return () => {
+      active = false
+      pendingRollRef.current = false
+      pendingRollGenerationRef.current += 1
+      ephemeralConnectionGenerationRef.current += 1
+      clearRequestTracking()
       clearAllIntervals()
       // Clean up blockhash refresh interval on unmount
       if (blockhashIntervalRef.current) {
@@ -731,7 +756,7 @@ export default function DiceRollerDelegated() {
         subscriptionIdRef.current = null
       }
     }
-  }, [clearAllIntervals, initializeProgram])
+  }, [clearAllIntervals, clearRequestTracking, initializeProgram])
 
   const handleDelegateToValidator = useCallback(async (validatorIdentity: string, validatorFqdn: string) => {
     if (
@@ -750,9 +775,6 @@ export default function DiceRollerDelegated() {
       
       const validatorPubkey = new PublicKey(validatorIdentity)
       
-      // Update ephemeral connection to use the fqdn
-      await updateEphemeralConnectionToValidator(validatorFqdn)
-
       await ensureFunds(connection, playerKeypair)
       const remainingAccounts = [
         {
@@ -769,33 +791,20 @@ export default function DiceRollerDelegated() {
         .remainingAccounts(remainingAccounts)
         .rpc()
 
-      // Poll every second until delegation succeeds
-      if (delegationPollIntervalRef.current) {
-        clearInterval(delegationPollIntervalRef.current)
-      }
-
-      delegationPollIntervalRef.current = setInterval(async () => {
-        const delegated = await refreshDelegationStatus()
-        if (delegated) {
-          if (delegationPollIntervalRef.current) {
-            clearInterval(delegationPollIntervalRef.current)
-            delegationPollIntervalRef.current = null
-          }
-          await sendBackgroundRoll().catch((error) => {
-            console.error("[BackgroundRoll] Warmup failed:", error)
-          })
+      pollDelegationStatus(
+        true,
+        () => setIsDelegating(false),
+        () => {
+          console.error("Timed out waiting for delegation status")
           setIsDelegating(false)
-        }
-      }, 1000)
+        },
+      )
     } catch (error) {
       console.error("Delegation failed:", error)
-      if (delegationPollIntervalRef.current) {
-        clearInterval(delegationPollIntervalRef.current)
-        delegationPollIntervalRef.current = null
-      }
+      cancelDelegationStatusPolling()
       setIsDelegating(false)
     }
-  }, [isDelegated, refreshDelegationStatus, clearAllIntervals, sendBackgroundRoll, updateEphemeralConnectionToValidator])
+  }, [cancelDelegationStatusPolling, isDelegated, pollDelegationStatus])
 
   const handleDelegate = useCallback(async () => {
     if (
@@ -827,13 +836,10 @@ export default function DiceRollerDelegated() {
       await handleDelegateToValidator(validatorIdentity, validatorFqdn)
     } catch (error) {
       console.error("Delegation failed:", error)
-      if (delegationPollIntervalRef.current) {
-        clearInterval(delegationPollIntervalRef.current)
-        delegationPollIntervalRef.current = null
-      }
+      cancelDelegationStatusPolling()
       setIsDelegating(false)
     }
-  }, [isDelegated, handleDelegateToValidator])
+  }, [cancelDelegationStatusPolling, isDelegated, handleDelegateToValidator])
 
   const handleUndelegate = useCallback(async () => {
     if (
@@ -843,7 +849,7 @@ export default function DiceRollerDelegated() {
       !routerConnectionRef.current
     )
       return
-    if (!isDelegated) return
+    if (!isDelegated || isDelegating || isRolling || isAwaitingResult) return
 
     setIsUndelegating(true)
     try {
@@ -894,23 +900,14 @@ export default function DiceRollerDelegated() {
 
       console.log(`Undelegation sent to ${validatorFqdn}`)
 
-      // Poll every second until undelegation succeeds
-      if (delegationPollIntervalRef.current) {
-        clearInterval(delegationPollIntervalRef.current)
-      }
-
-      delegationPollIntervalRef.current = setInterval(async () => {
-        const delegated = await refreshDelegationStatus()
-        if (!delegated) {
-          cancelBackgroundRoll()
-          setIsDelegating(false)
-          if (delegationPollIntervalRef.current) {
-            clearInterval(delegationPollIntervalRef.current)
-            delegationPollIntervalRef.current = null
-          }
+      pollDelegationStatus(
+        false,
+        () => setIsUndelegating(false),
+        () => {
+          console.error("Timed out waiting for undelegation status")
           setIsUndelegating(false)
-        }
-      }, 1000)
+        },
+      )
     } catch (error: any) {
       // Aggressive unwrap — SendTransactionError stores everything as
       // non-enumerable, and Anchor wraps it with another object whose
@@ -940,38 +937,73 @@ export default function DiceRollerDelegated() {
           `  signature: ${error?.signature ?? error?.txid ?? error?.tx ?? "(none)"}\n` +
           `  getLogs(): ${extraLogs ?? "(unavailable)"}`,
       )
-      if (delegationPollIntervalRef.current) {
-        clearInterval(delegationPollIntervalRef.current)
-        delegationPollIntervalRef.current = null
-      }
+      cancelDelegationStatusPolling()
       setIsUndelegating(false)
     }
-  }, [cancelBackgroundRoll, isDelegated, refreshDelegationStatus])
+  }, [cancelDelegationStatusPolling, isAwaitingResult, isDelegated, isDelegating, isRolling, pollDelegationStatus])
 
   const handleRollDice = useCallback(async () => {
     if (
       isRolling ||
       isAwaitingResult ||
       isDelegating ||
-      backgroundRollRef.current ||
+      isUndelegating ||
       pendingRollRef.current ||
       !isInitialized ||
       !isDelegated
     ) return
-    if (!ephemeralProgramRef.current || !playerKeypairRef.current || !playerPdaRef.current) return
+    const program = ephemeralProgramRef.current
+    const playerKeypair = playerKeypairRef.current
+    const playerPda = playerPdaRef.current
+    const connection = ephemeralConnectionRef.current
+    if (!program || !playerKeypair || !playerPda || !connection) return
+    if (unavailableClientSeedsRef.current.size >= 256) {
+      console.error("[RollDice] No client seeds available while previous callbacks remain unresolved")
+      return
+    }
+
+    let randomValue = nextClientSeedRef.current
+    while (unavailableClientSeedsRef.current.has(randomValue)) {
+      randomValue = (randomValue + 1) % 256
+    }
+    unavailableClientSeedsRef.current.add(randomValue)
+    nextClientSeedRef.current = (randomValue + 1) % 256
 
     console.log("[RollDice] Starting roll")
+    clearAllIntervals()
     clearRequestTracking()
+
+    const rollGeneration = pendingRollGenerationRef.current + 1
+    const connectionGeneration = ephemeralConnectionGenerationRef.current
+    const callbackInstructionLog = "Program log: Instruction: CallbackRollDiceSimple"
+    const callbackSeedLog = `Program log: client_seed=${randomValue}`
+    let requestSignature: string | null = null
+
+    pendingRollGenerationRef.current = rollGeneration
     pendingRollRef.current = true
-    pendingRollnumRef.current = lastObservedRollnumRef.current
     setIsRolling(true)
     setIsAwaitingResult(true)
-    clearAllIntervals()
+
+    const isCurrentRoll = () => (
+      pendingRollRef.current &&
+      pendingRollGenerationRef.current === rollGeneration
+    )
+    const isCurrentConnection = () => (
+      isCurrentRoll() &&
+      connectionGeneration === ephemeralConnectionGenerationRef.current &&
+      connection === ephemeralConnectionRef.current
+    )
+    const isCurrentRequest = () => (
+      isCurrentConnection() &&
+      requestSignature !== null &&
+      pendingRequestSignatureRef.current === requestSignature
+    )
 
     const failPendingRoll = () => {
-      if (!pendingRollRef.current) return
+      if (!isCurrentRoll()) return
       pendingRollRef.current = false
-      pendingRollnumRef.current = null
+      pendingRollGenerationRef.current = rollGeneration + 1
+      unavailableClientSeedsRef.current.delete(randomValue)
       clearRequestTracking()
       clearAllIntervals()
       setIsRolling(false)
@@ -979,41 +1011,111 @@ export default function DiceRollerDelegated() {
       setRollHistory(prev => prev.filter(entry => !entry.isPending))
     }
 
+    const expirePendingRoll = () => {
+      if (!isCurrentRoll()) return
+      pendingRollRef.current = false
+      pendingRollGenerationRef.current = rollGeneration + 1
+      clearRequestTracking()
+      clearAllIntervals()
+      setIsRolling(false)
+      setIsAwaitingResult(false)
+      setRollHistory(prev => {
+        const idx = prev.findIndex(entry => entry.isPending)
+        if (idx === -1) return prev
+        const updated = [...prev]
+        updated[idx] = {
+          ...updated[idx],
+          endTime: Date.now(),
+          isPending: false,
+          timedOut: true,
+        }
+        return updated
+      })
+    }
+
     rollIntervalRef.current = setInterval(() => {
-      if (!pendingRollRef.current) return
+      if (!isCurrentRoll()) return
       setDiceValue(Math.floor(Math.random() * 6) + 1)
     }, ROLL_ANIMATION_INTERVAL_MS)
 
-    // Create pending roll history entry (startTime will be set when transaction is sent)
+    // Create a pending entry immediately; its start time is replaced when the transaction is sent.
     setRollHistory(prev => {
       const newEntry = {
         value: null,
-        startTime: Date.now(), // Temporary placeholder
+        startTime: Date.now(),
         endTime: null,
         isPending: true,
       }
       return [newEntry, ...prev]
     })
 
+    resultDeadlineTimeoutRef.current = setTimeout(() => {
+      if (!isCurrentRoll()) return
+      console.error("[RollDice] Timed out waiting for the VRF callback")
+      expirePendingRoll()
+    }, ROLL_RESULT_DEADLINE_MS)
+
     try {
-      const randomValue = Math.floor(Math.random() * 6) + 1
-      const connection = ephemeralConnectionRef.current!
+      try {
+        const id = connection.onLogs(
+          playerPda,
+          (info, context) => {
+            if (
+              info.err ||
+              !info.logs.includes(callbackInstructionLog) ||
+              !info.logs.includes(callbackSeedLog)
+            ) return
+
+            const observedAt = Date.now()
+            void (async () => {
+              const signature = requestSignature
+              if (!signature || !isCurrentRequest()) return
+
+              const requestSlot = pendingRequestSlotRef.current
+              if (requestSlot !== null && context.slot < requestSlot) return
+
+              unavailableClientSeedsRef.current.delete(randomValue)
+              await refreshPlayerAccount(
+                connection,
+                "callback",
+                connectionGeneration,
+                rollGeneration,
+                context.slot,
+                observedAt,
+              )
+            })().catch(error => {
+              console.error("[RollDice] Callback account refresh failed:", error)
+            })
+          },
+          "processed",
+        )
+        callbackLogsSubscriptionRef.current = { connection, id }
+      } catch (error) {
+        console.error("[RollDice] Callback log subscription failed; using history fallback:", error)
+      }
+
       const [tx, latestBlockhash] = await Promise.all([
-        ephemeralProgramRef.current.methods.rollDiceDelegated(randomValue).accounts({
-          payer: playerKeypairRef.current.publicKey,
-          player: playerPdaRef.current,
+        program.methods.rollDiceDelegated(randomValue).accounts({
+          payer: playerKeypair.publicKey,
+          player: playerPda,
           oracleQueue: ORACLE_QUEUE,
         }).transaction(),
         getBlockhashAsync(connection, true)
       ])
+      if (!isCurrentRoll()) return
+      if (!isCurrentConnection()) {
+        failPendingRoll()
+        return
+      }
 
       tx.recentBlockhash = latestBlockhash.blockhash
-      tx.feePayer = playerKeypairRef.current.publicKey
-      tx.sign(playerKeypairRef.current)
+      tx.feePayer = playerKeypair.publicKey
+      tx.sign(playerKeypair)
       if (!tx.signature) throw new Error("Roll transaction signature missing")
 
       const transactionStartTime = Date.now()
       const signature = anchor.utils.bytes.bs58.encode(tx.signature)
+      requestSignature = signature
       trackRequestSlot(connection, signature)
       setRollHistory(prev => {
         const idx = prev.findIndex(entry => entry.isPending)
@@ -1030,18 +1132,64 @@ export default function DiceRollerDelegated() {
 
       let didTimeout = false
       let nextPollDelay = ROLL_FALLBACK_POLL_INITIAL_MS
+      const reconcileCallback = async () => {
+        const requestSlot = pendingRequestSlotRef.current
+        if (!isCurrentRequest() || requestSlot === null) return
+
+        const candidates = await connection.getSignaturesForAddress(
+          playerPda,
+          { limit: 20, until: signature },
+          "confirmed",
+        )
+        if (!isCurrentRequest()) return
+
+        for (const candidate of candidates) {
+          if (
+            candidate.err ||
+            candidate.slot < requestSlot
+          ) continue
+
+          const callback = await connection.getTransaction(candidate.signature, {
+            commitment: "confirmed",
+            maxSupportedTransactionVersion: 0,
+          })
+          if (!isCurrentRequest()) return
+
+          const logs = callback?.meta?.logMessages ?? []
+          if (
+            logs.includes(callbackInstructionLog) &&
+            logs.includes(callbackSeedLog)
+          ) {
+            unavailableClientSeedsRef.current.delete(randomValue)
+            await refreshPlayerAccount(
+              connection,
+              "callback",
+              connectionGeneration,
+              rollGeneration,
+              candidate.slot,
+            )
+            return
+          }
+        }
+      }
+
       const pollForResult = async () => {
-        if (!pendingRollRef.current) return
+        if (!isCurrentRequest()) return
         try {
-          await refreshPlayerAccount(connection)
-          if (!pendingRollRef.current) return
+          await refreshPlayerAccount(connection, "poll", connectionGeneration)
+          if (!isCurrentRequest()) return
 
           const [{ value: signatureStatus }, blockHeight] = await Promise.all([
             connection.getSignatureStatus(signature, { searchTransactionHistory: true }),
             didTimeout ? connection.getBlockHeight("processed") : Promise.resolve(null),
           ])
-          if (signatureStatus && !signatureStatus.err) recordRequestSlot(signature, signatureStatus.slot)
-          if (!pendingRollRef.current) return
+          if (!isCurrentRequest()) return
+
+          if (signatureStatus && !signatureStatus.err) {
+            recordRequestSlot(signature, signatureStatus.slot)
+            await reconcileCallback()
+          }
+          if (!isCurrentRequest()) return
 
           if (signatureStatus?.err || (!signatureStatus && blockHeight !== null && blockHeight > latestBlockhash.lastValidBlockHeight)) {
             console.error("[RollDice] Roll transaction failed or expired:", signatureStatus?.err ?? "blockhash expired")
@@ -1051,7 +1199,7 @@ export default function DiceRollerDelegated() {
         } catch (error) {
           console.error("[RollDice] Fallback account refresh failed:", error)
         }
-        if (pendingRollRef.current) {
+        if (isCurrentRequest()) {
           const delay = didTimeout
             ? ROLL_TIMEOUT_MS
             : Math.min(nextPollDelay, Math.max(0, transactionStartTime + ROLL_TIMEOUT_MS - Date.now()))
@@ -1062,7 +1210,7 @@ export default function DiceRollerDelegated() {
 
       timeoutRef.current = setTimeout(() => {
         timeoutRef.current = null
-        if (!pendingRollRef.current) return
+        if (!isCurrentRequest()) return
         didTimeout = true
         if (rollIntervalRef.current) {
           clearInterval(rollIntervalRef.current)
@@ -1075,14 +1223,13 @@ export default function DiceRollerDelegated() {
           const updated = [...prev]
           updated[idx] = {
             ...updated[idx],
-            endTime: updated[idx].startTime + ROLL_TIMEOUT_MS,
             timedOut: true,
           }
           return updated
         })
       }, ROLL_TIMEOUT_MS)
 
-      // Account notifications remain primary; guarded reads hedge delayed WebSocket delivery.
+      // Callback logs are primary; guarded reads and transaction history hedge delayed WebSocket delivery.
       resultPollTimeoutRef.current = setTimeout(pollForResult, nextPollDelay)
       nextPollDelay *= 2
       
@@ -1100,6 +1247,7 @@ export default function DiceRollerDelegated() {
     isDelegating,
     isInitialized,
     isRolling,
+    isUndelegating,
     recordRequestSlot,
     refreshPlayerAccount,
     trackRequestSlot,
@@ -1208,7 +1356,7 @@ export default function DiceRollerDelegated() {
                       </div>
                       <button
                         onClick={handleUndelegate}
-                        disabled={!isInitialized || !isDelegated || isUndelegating}
+                        disabled={!isInitialized || !isDelegated || isDelegating || isRolling || isAwaitingResult || isUndelegating}
                         className="w-full px-3 py-1.5 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isUndelegating ? "Undelegating..." : "Undelegate"}
@@ -1259,17 +1407,17 @@ export default function DiceRollerDelegated() {
             <button
               onClick={handleRollDice}
               onMouseEnter={() => {
-                if (ephemeralConnectionRef.current && !isRolling && !isAwaitingResult && !isDelegating && isInitialized && isDelegated) {
+                if (ephemeralConnectionRef.current && !isRolling && !isAwaitingResult && !isDelegating && !isUndelegating && isInitialized && isDelegated) {
                   const cached = getCachedBlockhash(ephemeralConnectionRef.current, cachedEphemeralBlockhashRef)
                   if (!cached) {
                     fetchAndCacheBlockhash(ephemeralConnectionRef.current, cachedEphemeralBlockhashRef).catch(console.error)
                   }
                 }
               }}
-              disabled={isRolling || isAwaitingResult || isDelegating || !isInitialized || !isDelegated}
+              disabled={isRolling || isAwaitingResult || isDelegating || isUndelegating || !isInitialized || !isDelegated}
               className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium shadow-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
-              {isRolling ? "Rolling..." : isAwaitingResult ? "Waiting for result..." : isDelegating ? "Warming up..." : !isInitialized ? "Initializing..." : !isDelegated ? "Delegate First" : "Roll Dice"}
+              {isRolling ? "Rolling..." : isAwaitingResult ? "Waiting for result..." : isDelegating ? "Delegating..." : isUndelegating ? "Undelegating..." : !isInitialized ? "Initializing..." : !isDelegated ? "Delegate First" : "Roll Dice"}
             </button>
           </div>
 
