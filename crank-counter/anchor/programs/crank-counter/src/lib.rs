@@ -3,14 +3,10 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
-use anchor_lang::solana_program::{
-    instruction::{AccountMeta, Instruction},
-    program::invoke_signed,
-};
-use ephemeral_rollups_sdk::consts::MAGIC_PROGRAM_ID;
-use magicblock_magic_program_api::{args::ScheduleTaskArgs, instruction::MagicBlockInstruction};
+use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
+use ephemeral_rollups_sdk::crank::{ScheduleCrankCpi, ScheduleTaskArgs};
 
-declare_id!("HetkBSVTbemvzJzcmnTS6Ge6LP9KVVXkbtdL6qguG2g9");
+declare_id!("6avjV8kWVhVf2NX6ZeE7SaqyqjRnCD6JDwhiUH6yFymz");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 
@@ -46,8 +42,8 @@ pub mod anchor_counter {
     }
 
     // Schedules crank for increment counter
-    pub fn schedule_increment(
-        ctx: Context<ScheduleIncrement>,
+    pub fn schedule_increment<'info>(
+        ctx: Context<'info, ScheduleIncrement<'info>>,
         args: ScheduleIncrementArgs,
     ) -> Result<()> {
         let increment_ix = Instruction {
@@ -56,34 +52,21 @@ pub mod anchor_counter {
             data: anchor_lang::InstructionData::data(&crate::instruction::Increment {}),
         };
 
-        let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(ScheduleTaskArgs {
-            task_id: args.task_id,
-            execution_interval_millis: args.execution_interval_millis,
-            iterations: args.iterations,
-            instructions: vec![increment_ix],
-        }))
-        .map_err(|err| {
-            msg!("ERROR: failed to serialize args {:?}", err);
-            ProgramError::InvalidArgument
-        })?;
-
-        let schedule_ix = Instruction::new_with_bytes(
-            MAGIC_PROGRAM_ID,
-            &ix_data,
-            vec![
-                AccountMeta::new(ctx.accounts.payer.key(), true),
-                AccountMeta::new(ctx.accounts.counter.key(), false),
-            ],
-        );
-
-        invoke_signed(
-            &schedule_ix,
-            &[
+        ScheduleCrankCpi {
+            payer: &ctx.accounts.payer,
+            magic_program: &&ctx.accounts.magic_program,
+            instruction_accounts: &[
                 ctx.accounts.payer.to_account_info(),
                 ctx.accounts.counter.to_account_info(),
             ],
-            &[],
-        )?;
+            args: ScheduleTaskArgs {
+                task_id: args.task_id,
+                execution_interval_millis: args.execution_interval_millis,
+                iterations: args.iterations,
+                instructions: vec![increment_ix],
+            },
+        }
+        .invoke()?;
 
         Ok(())
     }
