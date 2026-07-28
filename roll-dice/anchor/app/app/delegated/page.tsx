@@ -50,11 +50,16 @@ import {
   loadIdl,
 } from "@/lib/solana-utils"
 import type { RollEntry, CachedBlockhash } from "@/lib/types"
+import {
+  requiresLiveRollCorrelation,
+  shouldCompleteRoll,
+  type RollResultSource,
+} from "@/lib/roll-result"
 
 const derivePlayerPda = (user: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from(PLAYER_SEED), user.toBuffer()], PROGRAM_ID)[0]
 
-type PlayerAccountSource = "subscription" | "sync" | "poll" | "callback"
+type PlayerAccountSource = RollResultSource
 
 const ROLL_FALLBACK_POLL_INITIAL_MS = 250
 const ROLL_RESULT_DEADLINE_MS = 30000
@@ -197,6 +202,8 @@ export default function DiceRollerDelegated() {
   const lastObservedSlotRef = useRef<number | null>(null)
   const pendingRollRef = useRef(false)
   const pendingRollGenerationRef = useRef(0)
+  const pendingStartRollnumRef = useRef<number | null>(null)
+  const pendingClientSeedRef = useRef<number | null>(null)
   const pendingRequestSignatureRef = useRef<string | null>(null)
   const pendingRequestSlotRef = useRef<number | null>(null)
   const unavailableClientSeedsRef = useRef<Set<number>>(new Set())
@@ -223,6 +230,8 @@ export default function DiceRollerDelegated() {
   const cachedEphemeralBlockhashRef = useRef<CachedBlockhash | null>(null)
 
   const clearRequestTracking = useCallback(() => {
+    pendingStartRollnumRef.current = null
+    pendingClientSeedRef.current = null
     pendingRequestSignatureRef.current = null
     pendingRequestSlotRef.current = null
   }, [])
@@ -303,12 +312,22 @@ export default function DiceRollerDelegated() {
           (newRollnum < lastObservedRollnum || (source === "poll" && newRollnum === lastObservedRollnum)))
       ) return
 
-      const completesPendingRoll = source === "callback" &&
-        rollGeneration === pendingRollGenerationRef.current &&
-        pendingRollRef.current &&
-        newValue > 0
+      const completesPendingRoll = shouldCompleteRoll({
+        source,
+        isPending: pendingRollRef.current,
+        activeGeneration: pendingRollGenerationRef.current,
+        observedGeneration: rollGeneration,
+        startRollnum: pendingStartRollnumRef.current,
+        newRollnum,
+        newValue,
+        hasRequestSignature: pendingRequestSignatureRef.current !== null,
+        requestSlot: pendingRequestSlotRef.current,
+        observedSlot: slot,
+      })
 
       if (completesPendingRoll) {
+        const clientSeed = pendingClientSeedRef.current
+        if (clientSeed !== null) unavailableClientSeedsRef.current.delete(clientSeed)
         pendingRollRef.current = false
         pendingRollGenerationRef.current += 1
         clearRequestTracking()
@@ -980,6 +999,12 @@ export default function DiceRollerDelegated() {
     let requestSignature: string | null = null
 
     pendingRollGenerationRef.current = rollGeneration
+    pendingStartRollnumRef.current = lastObservedRollnumRef.current
+    pendingClientSeedRef.current = randomValue
+    const needsLiveCorrelation = requiresLiveRollCorrelation(
+      pendingStartRollnumRef.current,
+      unavailableClientSeedsRef.current.size,
+    )
     pendingRollRef.current = true
     setIsRolling(true)
     setIsAwaitingResult(true)
@@ -1056,42 +1081,44 @@ export default function DiceRollerDelegated() {
     }, ROLL_RESULT_DEADLINE_MS)
 
     try {
-      try {
-        const id = connection.onLogs(
-          playerPda,
-          (info, context) => {
-            if (
-              info.err ||
-              !info.logs.includes(callbackInstructionLog) ||
-              !info.logs.includes(callbackSeedLog)
-            ) return
+      if (needsLiveCorrelation) {
+        try {
+          const id = connection.onLogs(
+            playerPda,
+            (info, context) => {
+              if (
+                info.err ||
+                !info.logs.includes(callbackInstructionLog) ||
+                !info.logs.includes(callbackSeedLog)
+              ) return
 
-            const observedAt = Date.now()
-            void (async () => {
-              const signature = requestSignature
-              if (!signature || !isCurrentRequest()) return
+              const observedAt = Date.now()
+              void (async () => {
+                const signature = requestSignature
+                if (!signature || !isCurrentRequest()) return
 
-              const requestSlot = pendingRequestSlotRef.current
-              if (requestSlot !== null && context.slot < requestSlot) return
+                const requestSlot = pendingRequestSlotRef.current
+                if (requestSlot !== null && context.slot < requestSlot) return
 
-              unavailableClientSeedsRef.current.delete(randomValue)
-              await refreshPlayerAccount(
-                connection,
-                "callback",
-                connectionGeneration,
-                rollGeneration,
-                context.slot,
-                observedAt,
-              )
-            })().catch(error => {
-              console.error("[RollDice] Callback account refresh failed:", error)
-            })
-          },
-          "processed",
-        )
-        callbackLogsSubscriptionRef.current = { connection, id }
-      } catch (error) {
-        console.error("[RollDice] Callback log subscription failed; using history fallback:", error)
+                unavailableClientSeedsRef.current.delete(randomValue)
+                await refreshPlayerAccount(
+                  connection,
+                  "callback",
+                  connectionGeneration,
+                  rollGeneration,
+                  context.slot,
+                  observedAt,
+                )
+              })().catch(error => {
+                console.error("[RollDice] Callback account refresh failed:", error)
+              })
+            },
+            "processed",
+          )
+          callbackLogsSubscriptionRef.current = { connection, id }
+        } catch (error) {
+          console.error("[RollDice] Callback log subscription failed; using history fallback:", error)
+        }
       }
 
       const [tx, latestBlockhash] = await Promise.all([
@@ -1116,7 +1143,14 @@ export default function DiceRollerDelegated() {
       const transactionStartTime = Date.now()
       const signature = anchor.utils.bytes.bs58.encode(tx.signature)
       requestSignature = signature
-      trackRequestSlot(connection, signature)
+      if (needsLiveCorrelation) {
+        trackRequestSlot(connection, signature)
+      } else {
+        // Ordinary rolls need only the existing account subscription. If it is
+        // missed, fallback polling records the request slot before reconciling
+        // the seed-correlated callback from transaction history.
+        pendingRequestSignatureRef.current = signature
+      }
       setRollHistory(prev => {
         const idx = prev.findIndex(entry => entry.isPending)
         if (idx === -1) return prev
@@ -1229,7 +1263,8 @@ export default function DiceRollerDelegated() {
         })
       }, ROLL_TIMEOUT_MS)
 
-      // Callback logs are primary; guarded reads and transaction history hedge delayed WebSocket delivery.
+      // Account changes are the fast path while rollnum can advance. Correlated
+      // callback logs and history remain the fallback for saturated counters.
       resultPollTimeoutRef.current = setTimeout(pollForResult, nextPollDelay)
       nextPollDelay *= 2
       
