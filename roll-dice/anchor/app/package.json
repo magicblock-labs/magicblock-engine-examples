@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:roll-result": "node --test --experimental-strip-types lib/roll-result.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
