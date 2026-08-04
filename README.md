@@ -9,6 +9,14 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 
 > To view integrated demos for specific usecases, please look at [MagicBlock Starter Kits](https://github.com/magicblock-labs/starter-kits).
 
+After cloning, initialize the optional Private Payments example submodule:
+
+```bash
+git submodule update --init private-payments
+```
+
+The other examples work without this submodule.
+
 ## 👷 Examples
 
 ### 🧱 Basic Examples

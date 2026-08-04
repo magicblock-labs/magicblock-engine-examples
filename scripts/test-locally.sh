@@ -687,6 +687,18 @@ if [ "${#BUILD_PROJECTS[@]}" -gt 0 ]; then
   done
 fi
 
+# The account bundled with some ephemeral-validator releases is below the
+# validator's current minimum-balance check. Override it at genesis so local and
+# CI startup is deterministic and does not depend on an external faucet.
+VALIDATOR_ACCOUNT="mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
+VALIDATOR_ACCOUNT_FIXTURE="$SCRIPT_DIR/fixtures/accounts/magicblock-validator-funded.json"
+if [ ! -f "$VALIDATOR_ACCOUNT_FIXTURE" ]; then
+  echo "ERROR: validator funding fixture not found: $VALIDATOR_ACCOUNT_FIXTURE"
+  exit 1
+fi
+echo "  $VALIDATOR_ACCOUNT_FIXTURE -> $VALIDATOR_ACCOUNT (20 SOL validator funding)"
+PRELOAD_ARGS+=(--account "$VALIDATOR_ACCOUNT" "$VALIDATOR_ACCOUNT_FIXTURE")
+
 # Start the MagicBlock stack: mb-stack boots the base validator (wraps
 # solana-test-validator, pre-cloning MB programs), the ephemeral-validator, and the
 # query-filtering-service (QFS) as one supervised process, in that order, gating
