@@ -3,6 +3,13 @@
  * Provides cluster information and utilities for the application
  */
 
+import {
+  SOLANA_DEVNET_ENDPOINT,
+  SOLANA_MAINNET_ENDPOINT,
+} from "./endpoints";
+
+export { getBaseLayerSolanaEndpoint } from "./endpoints";
+
 export interface ClusterInfo {
   name: string;
   endpoint: string;
@@ -18,15 +25,15 @@ function normalizeEndpoint(endpoint: string): string {
 }
 
 export const CLUSTER_CONFIG: Record<string, ClusterInfo> = {
-  "https://rpc.magicblock.app/devnet": {
+  [SOLANA_DEVNET_ENDPOINT]: {
     name: "Solana Devnet",
-    endpoint: "https://rpc.magicblock.app/devnet",
-    wsEndpoint: "wss://rpc.magicblock.app/devnet",
+    endpoint: SOLANA_DEVNET_ENDPOINT,
+    wsEndpoint: SOLANA_DEVNET_ENDPOINT.replace(/^http/, "ws"),
   },
-  "https://rpc.magicblock.app/mainnet": {
+  [SOLANA_MAINNET_ENDPOINT]: {
     name: "Solana Mainnet",
-    endpoint: "https://rpc.magicblock.app/mainnet",
-    wsEndpoint: "wss://rpc.magicblock.app/mainnet",
+    endpoint: SOLANA_MAINNET_ENDPOINT,
+    wsEndpoint: SOLANA_MAINNET_ENDPOINT.replace(/^http/, "ws"),
   },
   "https://devnet-as.magicblock.app/": {
     name: "MagicBlock Devnet Asia",
@@ -60,11 +67,10 @@ export const CLUSTER_CONFIG: Record<string, ClusterInfo> = {
  */
 export function getClusterName(endpoint: string): string {
   const normalizedEndpoint = normalizeEndpoint(endpoint);
-  const configEntry = Object.entries(CLUSTER_CONFIG).find(
-    ([configuredEndpoint]) =>
-      normalizeEndpoint(configuredEndpoint) === normalizedEndpoint,
+  const configEntry = Object.values(CLUSTER_CONFIG).find(
+    (info) => normalizeEndpoint(info.endpoint) === normalizedEndpoint,
   );
-  return configEntry?.[1].name || "Unknown Cluster";
+  return configEntry?.name || "Unknown Cluster";
 }
 
 /**
@@ -145,7 +151,7 @@ export function saveRpcEndpointPreference(endpoint: string): void {
  * Get the default/fallback endpoint for Solana (not MagicBlock ER)
  */
 export function getDefaultSolanaEndpoint(): string {
-  return CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint;
+  return SOLANA_DEVNET_ENDPOINT;
 }
 
 /**
@@ -156,42 +162,3 @@ export function getDefaultMagicBlockErEndpoint(): string {
   return CLUSTER_CONFIG["https://devnet-as.magicblock.app/"].endpoint;
 }
 
-/**
- * Resolve the base-layer Solana RPC to use for reads when a paired MagicBlock
- * endpoint is selected. Custom endpoints are left unchanged.
- */
-export function getBaseLayerSolanaEndpoint(endpoint: string): string {
-  const normalizedEndpoint = normalizeEndpoint(endpoint);
-
-  if (
-    normalizedEndpoint ===
-      normalizeEndpoint(
-        CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint,
-      ) ||
-    normalizedEndpoint ===
-      normalizeEndpoint(
-        CLUSTER_CONFIG["https://devnet-as.magicblock.app/"].endpoint,
-      ) ||
-    normalizedEndpoint ===
-      normalizeEndpoint(
-        CLUSTER_CONFIG["https://devnet-us.magicblock.app"].endpoint,
-      )
-  ) {
-    return CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint;
-  }
-
-  if (
-    normalizedEndpoint ===
-      normalizeEndpoint(
-        CLUSTER_CONFIG["https://rpc.magicblock.app/mainnet"].endpoint,
-      ) ||
-    normalizedEndpoint ===
-      normalizeEndpoint(CLUSTER_CONFIG["https://as.magicblock.app"].endpoint) ||
-    normalizedEndpoint ===
-      normalizeEndpoint(CLUSTER_CONFIG["https://us.magicblock.app"].endpoint)
-  ) {
-    return CLUSTER_CONFIG["https://rpc.magicblock.app/mainnet"].endpoint;
-  }
-
-  return endpoint;
-}
