@@ -1,26 +1,26 @@
-export type RollResultSource = "subscription" | "sync" | "poll" | "callback"
+export type RollResultSource = "subscription" | "sync" | "poll" | "callback";
 
 export function requiresLiveRollCorrelation(
   startRollnum: number | null,
   unavailableClientSeeds: number,
 ): boolean {
-  return startRollnum === null ||
-    startRollnum >= 255 ||
-    unavailableClientSeeds > 1
+  return (
+    startRollnum === null || startRollnum >= 255 || unavailableClientSeeds > 1
+  );
 }
 
 type RollResultCompletion = {
-  source: RollResultSource
-  isPending: boolean
-  activeGeneration: number
-  observedGeneration?: number
-  startRollnum: number | null
-  newRollnum: number
-  newValue: number
-  hasRequestSignature: boolean
-  requestSlot: number | null
-  observedSlot?: number
-}
+  source: RollResultSource;
+  isPending: boolean;
+  activeGeneration: number;
+  observedGeneration?: number;
+  startRollnum: number | null;
+  newRollnum: number;
+  newValue: number;
+  hasRequestSignature: boolean;
+  requestSlot: number | null;
+  observedSlot?: number;
+};
 
 /**
  * Account subscriptions are the lowest-latency signal, but the player account
@@ -43,10 +43,10 @@ export function shouldCompleteRoll({
   requestSlot,
   observedSlot,
 }: RollResultCompletion): boolean {
-  if (!isPending || newValue <= 0) return false
+  if (!isPending || newValue <= 0) return false;
 
   if (source === "callback") {
-    return observedGeneration === activeGeneration
+    return observedGeneration === activeGeneration;
   }
 
   if (
@@ -55,9 +55,12 @@ export function shouldCompleteRoll({
     startRollnum === null ||
     startRollnum >= 255 ||
     newRollnum <= startRollnum
-  ) return false
+  )
+    return false;
 
-  return requestSlot === null ||
+  return (
+    requestSlot === null ||
     observedSlot === undefined ||
     observedSlot >= requestSlot
+  );
 }
