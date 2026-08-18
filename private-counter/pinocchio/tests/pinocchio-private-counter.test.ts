@@ -18,7 +18,6 @@ import {
   MAGIC_PROGRAM_ID,
   PERMISSION_PROGRAM_ID,
   getAuthToken,
-  GetCommitmentSignature,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import * as nacl from "tweetnacl";
 import path from "path";
@@ -688,22 +687,25 @@ describe(
       console.log(`(ER) Undelegate txHash: ${txHash}`);
       expect(txHash).toBeDefined();
 
-      const commitHash = await GetCommitmentSignature(
-        txHash,
-        connectionEphemeralRollup,
-      );
-      console.log(`(ER) Commit txHash: ${commitHash}`);
-      expect(commitHash).toBeDefined();
-
-      const result = await connectionBaseLayer.confirmTransaction(commitHash);
-      console.log(`(Base Layer) Commit result: ${result}`);
-      expect(result.value.err).toBeNull();
-
+      // Wait for the ER to commit + undelegate the counter back to the base
+      // layer, i.e. until it is owned by our program again. This polls base-layer
+      // ownership directly instead of resolving the commit signature from the ER's
+      // ScheduledCommitSent logs: the local committor can re-send the finalize tx
+      // after a transient error, and the duplicate then fails on-chain (the
+      // original already landed) — which surfaces as "Unable to find Commitment
+      // signature" even though the account did come back.
       let counter = await connectionBaseLayer.getAccountInfo(counterPda, {
         commitment: "confirmed",
       });
+      for (let i = 0; i < 60 && !counter?.owner.equals(PROGRAM_ID); i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        counter = await connectionBaseLayer.getAccountInfo(counterPda, {
+          commitment: "confirmed",
+        });
+      }
+      console.log(`(Base Layer) Counter owner: ${counter?.owner.toBase58()}`);
       expect(counter?.owner.equals(PROGRAM_ID)).toBe(true);
-    });
+    }, 90_000);
   },
   { timeout: 30000 },
 );

@@ -265,6 +265,14 @@ run_test() {
   if [ "$test_failed" = true ]; then
     # Show full output on failure
     cat "$test_log"
+    # Settlement failures (commit / undelegate never landing) only explain
+    # themselves in the ER's own logs, so surface those alongside the test output.
+    if grep -qiE "error|warn" "$REPO_ROOT/mb-stack.log" 2>/dev/null; then
+      echo ""
+      echo "----- mb-stack.log (WARN/ERROR lines, last 40) -----"
+      grep -iE "error|warn" "$REPO_ROOT/mb-stack.log" | tail -40
+      echo "----- end of mb-stack.log excerpt -----"
+    fi
   else
     # Show only stage completion markers on success with timing
     local stages_completed=""

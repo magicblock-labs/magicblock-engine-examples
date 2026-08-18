@@ -20,8 +20,9 @@ import {
 import { SplTokens } from "../target/types/spl_tokens";
 import {
   delegateSpl,
+  deriveEphemeralAta,
   deriveRentPda,
-  GetCommitmentSignature,
+  EPHEMERAL_SPL_TOKEN_PROGRAM_ID,
   transferSpl,
   undelegateIx,
   withdrawSpl,
@@ -99,6 +100,21 @@ describe("spl-tokens", () => {
 
     throw new Error(
       `Timed out waiting for ER token account ${ata.toBase58()}: ${lastError}`,
+    );
+  };
+
+  // Poll the base layer until `account` is owned by the ephemeral SPL token
+  // program again, i.e. the ER's commit + undelegate for it has landed.
+  const waitForUndelegation = async (account: PublicKey): Promise<void> => {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const info = await connection.getAccountInfo(account, "confirmed");
+      if (info?.owner.equals(EPHEMERAL_SPL_TOKEN_PROGRAM_ID)) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    throw new Error(
+      `${account.toBase58()} was not undelegated back to the base layer in time`,
     );
   };
 
@@ -288,9 +304,12 @@ describe("spl-tokens", () => {
     // Undelegate each owner in the ER (one per tx — combined undelegates are flaky
     // in CI). Withdraw runs on the base layer and requires each ephemeral ATA to be
     // owned by the SDK program again, which only happens once that owner's
-    // undelegation has committed back to base — so wait for BOTH commits before
+    // undelegation has committed back to base — so wait for BOTH before
     // withdrawing (waiting for one races the other's withdraw → InvalidAccountOwner).
-    const commits: string[] = [];
+    // Ownership is polled on the base layer rather than resolved through the ER's
+    // commit signature: the local committor can re-send the finalize tx after a
+    // transient error and the duplicate then fails on-chain (the original already
+    // landed), which surfaces as "Unable to find Commitment signature".
     for (const owner of [recipientA, recipientB]) {
       const sgn = await providerEphemeralRollup.sendAndConfirm(
         new anchor.web3.Transaction().add(
@@ -300,12 +319,13 @@ describe("spl-tokens", () => {
         { commitment: "confirmed", skipPreflight: true },
       );
       console.log(`Undelegate ${owner.publicKey.toBase58()} signature: ${sgn}`);
-      commits.push(
-        await GetCommitmentSignature(sgn, providerEphemeralRollup.connection),
-      );
     }
     await Promise.all(
-      commits.map((c) => connection.confirmTransaction(c, "confirmed")),
+      [recipientA, recipientB].map((owner) =>
+        waitForUndelegation(
+          deriveEphemeralAta(owner.publicKey, mint.publicKey)[0],
+        ),
+      ),
     );
 
     // Withdraw both balances back to their base-layer ATAs via the SDK helper.
