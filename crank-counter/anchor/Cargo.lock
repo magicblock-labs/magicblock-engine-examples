@@ -590,9 +590,7 @@ name = "crank-counter"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
- "bincode 1.3.3",
  "ephemeral-rollups-sdk",
- "sha2 0.10.9",
 ]
 
 [[package]]

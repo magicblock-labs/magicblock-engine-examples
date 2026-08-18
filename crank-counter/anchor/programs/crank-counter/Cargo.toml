@@ -27,8 +27,6 @@ ephemeral-rollups-sdk = { git = "https://github.com/magicblock-labs/ephemeral-ro
     "anchor",
     "crank",
 ] }
-sha2 = "0.10"
-bincode = "^1.3"
 
 
 [lints.rust]
