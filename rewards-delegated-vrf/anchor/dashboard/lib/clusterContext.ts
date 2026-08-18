@@ -3,10 +3,7 @@
  * Provides cluster information and utilities for the application
  */
 
-import {
-  SOLANA_DEVNET_ENDPOINT,
-  SOLANA_MAINNET_ENDPOINT,
-} from "./endpoints";
+import { SOLANA_DEVNET_ENDPOINT, SOLANA_MAINNET_ENDPOINT } from "./endpoints";
 
 export { getBaseLayerSolanaEndpoint } from "./endpoints";
 
@@ -161,4 +158,3 @@ export function getDefaultSolanaEndpoint(): string {
 export function getDefaultMagicBlockErEndpoint(): string {
   return CLUSTER_CONFIG["https://devnet-as.magicblock.app/"].endpoint;
 }
-
