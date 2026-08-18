@@ -1,7 +1,14 @@
 export type AdminActionEndpointMode = "solana" | "magicblock";
 
-export const SOLANA_DEVNET_ENDPOINT = "https://rpc.magicblock.app/devnet";
-export const SOLANA_MAINNET_ENDPOINT = "https://rpc.magicblock.app/mainnet";
+// Optional per-network overrides for the base-layer Solana RPC. WS endpoints
+// are derived from these (http -> ws).
+export const SOLANA_DEVNET_ENDPOINT =
+  process.env.NEXT_PUBLIC_SOLANA_DEVNET_RPC_URL ||
+  "https://rpc.magicblock.app/devnet";
+export const SOLANA_MAINNET_ENDPOINT =
+  process.env.NEXT_PUBLIC_SOLANA_MAINNET_RPC_URL ||
+  "https://rpc.magicblock.app/mainnet";
+
 export const MAGICBLOCK_DEVNET_ENDPOINT =
   process.env.NEXT_PUBLIC_EPHEMERAL_PROVIDER_ENDPOINT ||
   "https://devnet-as.magicblock.app/";
@@ -29,22 +36,36 @@ function isMagicBlockEndpoint(endpoint: string): boolean {
   ].includes(endpoint);
 }
 
-function isSolanaEndpoint(endpoint: string): boolean {
-  return (
-    endpoint === SOLANA_DEVNET_ENDPOINT || endpoint === SOLANA_MAINNET_ENDPOINT
-  );
-}
-
-export function isDevnetEndpoint(endpoint: string): boolean {
-  return endpoint.includes("devnet");
-}
-
-export function isMainnetEndpoint(endpoint: string): boolean {
-  return (
+// Map endpoints to Solana endpoints for delegation status checking. Always
+// returns a base-layer Solana RPC (delegation state only lives there), even
+// for custom/unknown endpoints.
+export function getSolanaEndpoint(endpoint: string): string {
+  // Check for devnet first (devnet-as.magicblock.app, devnet-us.magicblock.app, etc)
+  if (endpoint.includes("devnet")) {
+    return SOLANA_DEVNET_ENDPOINT;
+  }
+  // Check for mainnet (mainnet, as.magicblock.app, us.magicblock.app, etc)
+  else if (
     endpoint.includes("mainnet") ||
     endpoint.includes("as.magicblock.app") ||
-    endpoint === MAGICBLOCK_MAINNET_US_ENDPOINT
-  );
+    endpoint.includes("us.magicblock.app")
+  ) {
+    return SOLANA_MAINNET_ENDPOINT;
+  }
+  // Default to devnet
+  else {
+    return SOLANA_DEVNET_ENDPOINT;
+  }
+}
+
+/**
+ * Base-layer Solana RPC for reads: MagicBlock endpoints map to their paired
+ * Solana cluster; custom endpoints are used as-is.
+ */
+export function getBaseLayerSolanaEndpoint(endpoint: string): string {
+  return endpoint.includes("magicblock.app")
+    ? getSolanaEndpoint(endpoint)
+    : endpoint;
 }
 
 /**
@@ -59,15 +80,16 @@ export function resolveEndpoint(
   if (!selectedEndpoint || !isKnownPresetEndpoint(selectedEndpoint)) {
     return selectedEndpoint;
   }
-  if (mode === "magicblock") {
-    if (isMagicBlockEndpoint(selectedEndpoint)) return selectedEndpoint;
-    if (isDevnetEndpoint(selectedEndpoint)) return MAGICBLOCK_DEVNET_ENDPOINT;
-    if (isMainnetEndpoint(selectedEndpoint)) return MAGICBLOCK_MAINNET_ENDPOINT;
-  }
   if (mode === "solana") {
-    if (isSolanaEndpoint(selectedEndpoint)) return selectedEndpoint;
-    if (isDevnetEndpoint(selectedEndpoint)) return SOLANA_DEVNET_ENDPOINT;
-    if (isMainnetEndpoint(selectedEndpoint)) return SOLANA_MAINNET_ENDPOINT;
+    return isMagicBlockEndpoint(selectedEndpoint)
+      ? getBaseLayerSolanaEndpoint(selectedEndpoint)
+      : selectedEndpoint;
   }
-  return selectedEndpoint;
+  if (isMagicBlockEndpoint(selectedEndpoint)) {
+    return selectedEndpoint;
+  }
+  // A Solana preset is selected — pair it with the ER cluster that matches it
+  return selectedEndpoint === SOLANA_MAINNET_ENDPOINT
+    ? MAGICBLOCK_MAINNET_ENDPOINT
+    : MAGICBLOCK_DEVNET_ENDPOINT;
 }

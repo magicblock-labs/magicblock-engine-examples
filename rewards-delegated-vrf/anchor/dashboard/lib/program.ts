@@ -1,27 +1,7 @@
 import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import { RewardDistributor, RewardsList, TransferLookupTable } from "./types";
 import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { CLUSTER_CONFIG } from "./clusterContext";
-
-// Map endpoints to Solana endpoints for delegation status checking
-const getSolanaEndpoint = (endpoint: string): string => {
-  // Check for devnet first (devnet-as.magicblock.app, devnet-us.magicblock.app, etc)
-  if (endpoint.includes("devnet")) {
-    return CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint;
-  }
-  // Check for mainnet (mainnet, as.magicblock.app, us.magicblock.app, etc)
-  else if (
-    endpoint.includes("mainnet") ||
-    endpoint.includes("as.magicblock.app") ||
-    endpoint.includes("us.magicblock.app")
-  ) {
-    return CLUSTER_CONFIG["https://rpc.magicblock.app/mainnet"].endpoint;
-  }
-  // Default to devnet
-  else {
-    return CLUSTER_CONFIG["https://rpc.magicblock.app/devnet"].endpoint;
-  }
-};
+import { getSolanaEndpoint } from "./endpoints";
 
 export class ProgramClient {
   private connection: Connection;

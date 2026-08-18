@@ -7,6 +7,10 @@ import {
   loadRpcEndpointPreference,
   saveRpcEndpointPreference,
 } from "@/lib/clusterContext";
+import {
+  SOLANA_DEVNET_ENDPOINT,
+  SOLANA_MAINNET_ENDPOINT,
+} from "@/lib/endpoints";
 import { WalletConnect } from "./WalletConnect";
 
 interface ConnectionOption {
@@ -20,15 +24,15 @@ interface ConnectionOption {
 const DEFAULT_CONNECTIONS: ConnectionOption[] = [
   {
     name: "Solana Devnet",
-    endpoint: "https://rpc.magicblock.app/devnet",
-    wsEndpoint: "wss://rpc.magicblock.app/devnet",
+    endpoint: SOLANA_DEVNET_ENDPOINT,
+    wsEndpoint: SOLANA_DEVNET_ENDPOINT.replace(/^http/, "ws"),
     description: "Development network for testing",
     color: "bg-purple-600",
   },
   {
     name: "Solana Mainnet",
-    endpoint: "https://rpc.magicblock.app/mainnet",
-    wsEndpoint: "wss://rpc.magicblock.app/mainnet",
+    endpoint: SOLANA_MAINNET_ENDPOINT,
+    wsEndpoint: SOLANA_MAINNET_ENDPOINT.replace(/^http/, "ws"),
     description: "Production network",
     color: "bg-green-600",
   },
