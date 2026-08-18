@@ -3,6 +3,8 @@ import { BN, Program, web3 } from "@coral-xyz/anchor";
 import { AnchorCounter } from "../target/types/anchor_counter";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { MAGIC_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
+import idl from "../target/idl/anchor_counter.json";
+import { expect } from "chai";
 
 const COUNTER_SEED = "counter";
 
@@ -39,6 +41,10 @@ describe("crank-counter", () => {
   });
 
   const program = anchor.workspace.AnchorCounter as Program<AnchorCounter>;
+  const programEphemeral = new anchor.Program<AnchorCounter>(
+    idl,
+    providerEphemeralRollup,
+  );
   const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from(COUNTER_SEED)],
     program.programId,
@@ -48,18 +54,16 @@ describe("crank-counter", () => {
   console.log("Counter PDA: ", counterPDA.toString());
 
   it("Initialize counter on Solana", async () => {
-    let tx = await program.methods
+    const txHash = await program.methods
       .initialize()
       .accounts({
         user: provider.wallet.publicKey,
       })
-      .transaction();
-
-    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
+      .rpc({ skipPreflight: true, commitment: "confirmed" });
     console.log(`[Base Layer] Initialize txHash: ${txHash}`);
+
+    const counter = await program.account.counter.fetch(counterPDA);
+    expect(counter.count.toNumber()).to.equal(0);
   });
 
   it("Delegate counter to ER", async () => {
@@ -76,26 +80,22 @@ describe("crank-counter", () => {
     const remainingAccounts = validatorPubkey
       ? [{ pubkey: validatorPubkey, isSigner: false, isWritable: false }]
       : [];
-    let tx = await program.methods
+    const txHash = await program.methods
       .delegate()
       .accounts({
         payer: provider.wallet.publicKey,
         pda: counterPDA,
       })
       .remainingAccounts(remainingAccounts)
-      .transaction();
-    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
+      .rpc({ skipPreflight: true, commitment: "confirmed" });
     console.log(`[Base Layer] Delegate txHash: ${txHash}`);
   });
 
   it("Schedule increment counter on ER", async () => {
-    let tx = await program.methods
+    const txHash = await programEphemeral.methods
       .scheduleIncrement({
         taskId: new BN(1), // Task ID can be arbitrary, used mostly to cancel cranks.
-        executionIntervalMillis: new BN(100), // Milliseconds between executions.
+        executionIntervalMillis: new BN(1000), // Milliseconds between executions.
         iterations: new BN(3), // Number of times to execute the task.
       })
       .accounts({
@@ -103,35 +103,29 @@ describe("crank-counter", () => {
         payer: providerEphemeralRollup.wallet.publicKey,
         program: program.programId,
       })
-      .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx, [], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
+      .rpc({ skipPreflight: true, commitment: "confirmed" });
     console.log(`[ER] Schedule Increment txHash: ${txHash}`);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    const timeout = 10_000; // 10 seconds max wait
+    const pollInterval = 100;
+    const startTime = Date.now();
+    let counter = await programEphemeral.account.counter.fetch(counterPDA);
+    while (counter.count.toNumber() < 2) {
+      if (Date.now() - startTime > timeout) {
+        throw new Error("Timed out waiting for counter to increment");
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      counter = await programEphemeral.account.counter.fetch(counterPDA);
+    }
   });
 
   it("Undelegate counter on ER to Solana", async () => {
-    let tx = await program.methods
+    const txHash = await programEphemeral.methods
       .undelegate()
       .accounts({
         payer: providerEphemeralRollup.wallet.publicKey,
       })
-      .transaction();
-    tx.feePayer = provider.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
+      .rpc({ skipPreflight: true, commitment: "confirmed" });
     console.log(`[ER] Undelegate txHash: ${txHash}`);
   });
 
