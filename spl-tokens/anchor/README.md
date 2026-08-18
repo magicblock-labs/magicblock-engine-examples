@@ -6,6 +6,8 @@ balances back to the base layer.
 
 Includes a React UI in [`app/`](./app/README.md) for interactive demos.
 
+🌐 **Live demo:** https://spl-demo.magicblock.app
+
 This folder does **not** implement the Ephemeral SPL Token program itself. The
 local test harness preloads that program at
 `SPLxh1LVZzEkX99H6rqYizhytLWPZVV296zyYDPagv2` from

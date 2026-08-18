@@ -2,6 +2,8 @@
 
 Simple counter program using Anchor and Ephemeral Rollups.
 
+🌐 **Live demo:** https://counter-example.magicblock.app
+
 ## Software Packages
 
 This program has utilized the following software packages.
