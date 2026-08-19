@@ -2,6 +2,8 @@
 
 Counter program using Anchor, Ephemeral Rollups, and **private ephemeral permissions**. The counter PDA is delegated to the ER; access to delegated state is gated by an on-rollup permission account that only the counter authority (and configured members) can use.
 
+🌐 **Live demo:** https://private-counter-example.magicblock.app
+
 ## Overview
 
 | Layer | What happens |

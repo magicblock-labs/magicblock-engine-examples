@@ -2,6 +2,8 @@
 
 A confidential Rock Paper Scissor game built on Solana using Anchor and MagicBlock's Ephemeral Rollups SDK. This example demonstrates how to implement a two-player game with hidden choices that remain private during gameplay until the winner is revealed.
 
+🌐 **Live demo:** https://rps-example.magicblock.app
+
 ## Overview
 
 This project showcases:
