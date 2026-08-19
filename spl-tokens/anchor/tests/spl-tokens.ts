@@ -107,11 +107,13 @@ describe("spl-tokens", () => {
   // program again, i.e. the ER's commit + undelegate for it has landed.
   const waitForUndelegation = async (account: PublicKey): Promise<void> => {
     for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (attempt > 0) {
+        await sleep(1000);
+      }
       const info = await connection.getAccountInfo(account, "confirmed");
       if (info?.owner.equals(EPHEMERAL_SPL_TOKEN_PROGRAM_ID)) {
         return;
       }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
     throw new Error(
       `${account.toBase58()} was not undelegated back to the base layer in time`,
