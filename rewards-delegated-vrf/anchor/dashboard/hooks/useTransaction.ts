@@ -731,19 +731,27 @@ export const useTransaction = (props?: UseTransactionProps) => {
   // -------------------------------------------------------------------------
 
   const topUpEphemeralBalance = useCallback(
-    async (amountLamports: bigint) => {
+    async (amountLamports: bigint, authority?: PublicKey) => {
       if (!publicKey || !signTransaction)
         return { success: false, error: "Wallet not connected" };
       if (amountLamports <= 0n)
         return { success: false, error: "Amount must be greater than 0" };
-      const dist = distributorPda();
-      if (!dist) return { success: false, error: "No distributor selected" };
+      // Default to the reward distributor's escrow; callers can pass another
+      // escrow authority (e.g. the whitelist distributor PDA) to top up its
+      // separate DLP ephemeral balance instead.
+      const escrowAuthority = authority ?? distributorPda();
+      if (!escrowAuthority)
+        return { success: false, error: "No distributor selected" };
 
       setStatus({ loading: true, error: null, signature: null });
       try {
         // Ephemeral balance lives on the Solana base layer.
         const endpoint = ep("solana");
-        const tx = buildTopUpEphemeralBalance(publicKey, dist, amountLamports);
+        const tx = buildTopUpEphemeralBalance(
+          publicKey,
+          escrowAuthority,
+          amountLamports,
+        );
         const result = await sendTransaction(
           tx,
           publicKey,
