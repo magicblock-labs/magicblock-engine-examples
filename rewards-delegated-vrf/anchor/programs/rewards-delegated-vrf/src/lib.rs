@@ -377,6 +377,13 @@ pub struct UpdateReward<'info> {
     pub token_account: Option<InterfaceAccount<'info, TokenAccount>>,
 }
 
+/// Escrow index this program schedules its post-commit actions with.
+/// `ActionArgs::new` (magicblock-magic-program-api) defaults to 255, and the
+/// delegation program derives the signing escrow PDA from
+/// `[b"balance", escrow_auth, escrow_index]`, so the handlers must check
+/// against the same index.
+pub const ACTION_ESCROW_INDEX: u8 = 255;
+
 /// Post-commit action for SPL/LegacyNFT transfers. `source_authority` is
 /// the on-chain RewardDistributor OR WhitelistDistributor PDA — both share
 /// the same `[8 disc][32 second_seed][1 bump]` prefix in their account
@@ -384,9 +391,10 @@ pub struct UpdateReward<'info> {
 /// type without needing a typed `Account<T>` field. The `SourceKind` ix
 /// param tells the handler which seed prefix to combine those with.
 ///
-/// `escrow` (auto-injected by `#[action]`) is the Magic-managed SOL
-/// escrow used to pay for any rent (destination ATA creation). It is
-/// NOT the source-authority signer.
+/// `escrow` is the Magic-managed SOL escrow used to pay for any rent
+/// (destination ATA creation). It is NOT the source-authority signer — but
+/// it IS the only signer the delegation program provides on the post-commit
+/// CPI, which is what gates this instruction (see the field docs below).
 #[action]
 #[derive(Accounts)]
 pub struct TransferSplToken<'info> {
@@ -410,6 +418,25 @@ pub struct TransferSplToken<'info> {
     /// CHECK: Source program
     #[account(address = crate::ID)]
     pub source_program: UncheckedAccount<'info>,
+    /// CHECK: Escrow authority the action was scheduled with. This program
+    /// only ever schedules transfers with the source-authority PDA as the
+    /// escrow authority, and Magic requires that authority to sign the
+    /// schedule on the ER — so binding it to `source_authority` guarantees
+    /// the action was scheduled by this program, not by an arbitrary caller
+    /// or a foreign program's post-commit bundle.
+    #[account(address = source_authority.key() @ errors::RewardError::Unauthorized)]
+    pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: Magic SOL escrow PDA (rent payer). The delegation program's
+    /// call handler is the only thing that can sign for it, so requiring
+    /// it as a signer restricts this ix to the post-commit path.
+    #[account(
+        signer @ errors::RewardError::Unauthorized,
+        address = ephemeral_rollups_sdk::pda::ephemeral_balance_pda_from_payer(
+            &escrow_auth.key(),
+            ACTION_ESCROW_INDEX,
+        ) @ errors::RewardError::Unauthorized,
+    )]
+    pub escrow: UncheckedAccount<'info>,
 }
 
 /// Post-commit action for programmable-NFT transfers. See
@@ -453,6 +480,25 @@ pub struct TransferProgrammableNft<'info> {
     /// CHECK: Source program
     #[account(address = crate::ID)]
     pub source_program: UncheckedAccount<'info>,
+    /// CHECK: Escrow authority the action was scheduled with. This program
+    /// only ever schedules transfers with the source-authority PDA as the
+    /// escrow authority, and Magic requires that authority to sign the
+    /// schedule on the ER — so binding it to `source_authority` guarantees
+    /// the action was scheduled by this program, not by an arbitrary caller
+    /// or a foreign program's post-commit bundle.
+    #[account(address = source_authority.key() @ errors::RewardError::Unauthorized)]
+    pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: Magic SOL escrow PDA (rent payer). The delegation program's
+    /// call handler is the only thing that can sign for it, so requiring
+    /// it as a signer restricts this ix to the post-commit path.
+    #[account(
+        signer @ errors::RewardError::Unauthorized,
+        address = ephemeral_rollups_sdk::pda::ephemeral_balance_pda_from_payer(
+            &escrow_auth.key(),
+            ACTION_ESCROW_INDEX,
+        ) @ errors::RewardError::Unauthorized,
+    )]
+    pub escrow: UncheckedAccount<'info>,
 }
 
 #[commit]
