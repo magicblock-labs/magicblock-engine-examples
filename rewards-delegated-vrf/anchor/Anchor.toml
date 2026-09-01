@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-rewards_delegated_vrf = "28DbXYgx2bPUhmoGZpU87gtyktzSZgLJ8DcgqtKFCgtC"
+rewards_delegated_vrf = "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"
 
 [programs.localnet]
 rewards_delegated_vrf = "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y"

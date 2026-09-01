@@ -7,7 +7,13 @@ pub const TRANSFER_LOOKUP_TABLE_SEED: &[u8] = b"transfer_lookup_table";
 /// per reward distributor.
 pub const WHITELIST_DISTRIBUTOR_SEED: &[u8] = b"whitelist_distributor";
 
+/// Instructions sysvar
+pub const SYSVAR_INSTRUCTIONS_ID: anchor_lang::prelude::Pubkey =
+    anchor_lang::prelude::Pubkey::from_str_const("Sysvar1nstructions1111111111111111111111111");
+
 /// Metaplex constants
+pub const MPL_TOKEN_AUTH_RULES_ID: anchor_lang::prelude::Pubkey =
+    anchor_lang::prelude::Pubkey::from_str_const("auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg");
 pub const RULE_SET_SEED: &[u8] = b"rule_set";
 pub const METADATA_SEED: &[u8] = b"metadata";
 pub const EDITION_SEED: &[u8] = b"edition";
