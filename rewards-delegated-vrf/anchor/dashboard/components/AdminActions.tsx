@@ -2389,7 +2389,7 @@ export const AdminActions: React.FC<AdminActionsProps> = ({ selectedDistributor 
               disabled={localStatus.loading}
               className="w-full p-2 bg-gray-700 text-white placeholder-gray-500 rounded border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 text-sm"
             />
-            <p className="text-xs text-gray-400 mt-1">Amount to redeem from the reward</p>
+            <p className="text-xs text-gray-400 mt-1">Amount to redeem from the reward. For NFTs, enter <span className="text-gray-200">0</span> to drop a mint the distributor no longer holds (removes it from the pool, transfers nothing).</p>
           </div>
 
           {/* Add to Batch button */}
