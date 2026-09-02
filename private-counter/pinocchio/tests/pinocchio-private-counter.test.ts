@@ -1,4 +1,5 @@
 import {
+  type AccountInfo,
   Keypair,
   PublicKey,
   SystemProgram,
@@ -18,7 +19,6 @@ import {
   MAGIC_PROGRAM_ID,
   PERMISSION_PROGRAM_ID,
   getAuthToken,
-  GetCommitmentSignature,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import * as nacl from "tweetnacl";
 import path from "path";
@@ -688,22 +688,40 @@ describe(
       console.log(`(ER) Undelegate txHash: ${txHash}`);
       expect(txHash).toBeDefined();
 
-      const commitHash = await GetCommitmentSignature(
-        txHash,
-        connectionEphemeralRollup,
-      );
-      console.log(`(ER) Commit txHash: ${commitHash}`);
-      expect(commitHash).toBeDefined();
-
-      const result = await connectionBaseLayer.confirmTransaction(commitHash);
-      console.log(`(Base Layer) Commit result: ${result}`);
-      expect(result.value.err).toBeNull();
-
-      let counter = await connectionBaseLayer.getAccountInfo(counterPda, {
-        commitment: "confirmed",
-      });
-      expect(counter?.owner.equals(PROGRAM_ID)).toBe(true);
-    });
+      // Wait for the ER to commit + undelegate the counter back to the base
+      // layer, i.e. until it is owned by our program again. This polls base-layer
+      // ownership directly instead of resolving the commit signature from the ER's
+      // ScheduledCommitSent logs: the local committor can re-send the finalize tx
+      // after a transient error, and the duplicate then fails on-chain (the
+      // original already landed) — which surfaces as "Unable to find Commitment
+      // signature" even though the account did come back.
+      let counter: AccountInfo<Buffer> | null = null;
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        try {
+          counter = await connectionBaseLayer.getAccountInfo(counterPda, {
+            commitment: "confirmed",
+          });
+          if (counter?.owner.equals(PROGRAM_ID)) {
+            break;
+          }
+          lastError = new Error(
+            `expected ${PROGRAM_ID.toBase58()}, got ${counter?.owner.toBase58() ?? "missing account"}`,
+          );
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      console.log(`(Base Layer) Counter owner: ${counter?.owner.toBase58()}`);
+      if (!counter?.owner.equals(PROGRAM_ID)) {
+        throw new Error(
+          `Counter was not undelegated back to the base layer in time: ${lastError}`,
+        );
+      }
+    }, 90_000);
   },
   { timeout: 30000 },
 );
