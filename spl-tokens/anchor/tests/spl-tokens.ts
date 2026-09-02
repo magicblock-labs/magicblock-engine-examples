@@ -106,17 +106,25 @@ describe("spl-tokens", () => {
   // Poll the base layer until `account` is owned by the ephemeral SPL token
   // program again, i.e. the ER's commit + undelegate for it has landed.
   const waitForUndelegation = async (account: PublicKey): Promise<void> => {
+    let lastError: unknown;
     for (let attempt = 0; attempt < 60; attempt += 1) {
       if (attempt > 0) {
         await sleep(1000);
       }
-      const info = await connection.getAccountInfo(account, "confirmed");
-      if (info?.owner.equals(EPHEMERAL_SPL_TOKEN_PROGRAM_ID)) {
-        return;
+      try {
+        const info = await connection.getAccountInfo(account, "confirmed");
+        if (info?.owner.equals(EPHEMERAL_SPL_TOKEN_PROGRAM_ID)) {
+          return;
+        }
+        lastError = new Error(
+          `expected ${EPHEMERAL_SPL_TOKEN_PROGRAM_ID.toBase58()}, got ${info?.owner.toBase58() ?? "missing account"}`,
+        );
+      } catch (error) {
+        lastError = error;
       }
     }
     throw new Error(
-      `${account.toBase58()} was not undelegated back to the base layer in time`,
+      `${account.toBase58()} was not undelegated back to the base layer in time: ${lastError}`,
     );
   };
 

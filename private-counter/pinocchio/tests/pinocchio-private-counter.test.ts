@@ -1,4 +1,5 @@
 import {
+  type AccountInfo,
   Keypair,
   PublicKey,
   SystemProgram,
@@ -694,17 +695,32 @@ describe(
       // after a transient error, and the duplicate then fails on-chain (the
       // original already landed) — which surfaces as "Unable to find Commitment
       // signature" even though the account did come back.
-      let counter = await connectionBaseLayer.getAccountInfo(counterPda, {
-        commitment: "confirmed",
-      });
-      for (let i = 0; i < 60 && !counter?.owner.equals(PROGRAM_ID); i++) {
-        await new Promise((r) => setTimeout(r, 1000));
-        counter = await connectionBaseLayer.getAccountInfo(counterPda, {
-          commitment: "confirmed",
-        });
+      let counter: AccountInfo<Buffer> | null = null;
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        try {
+          counter = await connectionBaseLayer.getAccountInfo(counterPda, {
+            commitment: "confirmed",
+          });
+          if (counter?.owner.equals(PROGRAM_ID)) {
+            break;
+          }
+          lastError = new Error(
+            `expected ${PROGRAM_ID.toBase58()}, got ${counter?.owner.toBase58() ?? "missing account"}`,
+          );
+        } catch (error) {
+          lastError = error;
+        }
       }
       console.log(`(Base Layer) Counter owner: ${counter?.owner.toBase58()}`);
-      expect(counter?.owner.equals(PROGRAM_ID)).toBe(true);
+      if (!counter?.owner.equals(PROGRAM_ID)) {
+        throw new Error(
+          `Counter was not undelegated back to the base layer in time: ${lastError}`,
+        );
+      }
     }, 90_000);
   },
   { timeout: 30000 },
