@@ -31,6 +31,10 @@ cd "$REPO_ROOT"
 #   SKIP_TEE_TESTS=1      skips devnet TEE tests
 #   FAIL_FAST=0           keep running after a test fails (default: stop on the
 #                         first failure and exit non-zero — fail fast for CI)
+#   TEST_REPETITIONS=N    run each selected test N times against the same stack
+#                         (default: 1). Useful for reproducing stateful flakes.
+#   TEST_LOG_DIR=path     retain full per-run test logs in this directory
+#                         (default: /tmp).
 #   SETUP_ONLY=1          start the validators/oracles, then keep them running
 #                         until a key is pressed (no tests). Useful for poking at
 #                         the local cluster by hand.
@@ -39,10 +43,18 @@ SKIP_TEE_TESTS="${SKIP_TEE_TESTS:-0}"
 SKIP_REGULAR_TESTS="${SKIP_REGULAR_TESTS:-0}"
 SKIP_VRF_TESTS="${SKIP_VRF_TESTS:-0}"
 FAIL_FAST="${FAIL_FAST:-1}"
+TEST_REPETITIONS="${TEST_REPETITIONS:-1}"
+TEST_LOG_DIR="${TEST_LOG_DIR:-/tmp}"
 # EXACT_MATCH=1 turns TEST_FILTER into an exact project-name match instead of the
 # default substring match. Used by scripts/test-example.sh to select a single
 # example without over-selecting siblings (e.g. roll-dice vs pinocchio-roll-dice).
 EXACT_MATCH="${EXACT_MATCH:-0}"
+
+if ! [[ "$TEST_REPETITIONS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "TEST_REPETITIONS must be a positive integer (got '$TEST_REPETITIONS')."
+  exit 2
+fi
+mkdir -p "$TEST_LOG_DIR"
 
 if [ -n "$TEST_FILTER" ]; then
   echo "Filter: only running tests matching '$TEST_FILTER'"
@@ -86,13 +98,21 @@ matches_filter() {
 # just runs `yarn test:local`.
 run_test() {
   local test_name=$1
+  local repetition=${2:-1}
+  local result_name="$test_name"
+  if [ "$TEST_REPETITIONS" -gt 1 ]; then
+    result_name="$test_name [$repetition/$TEST_REPETITIONS]"
+  fi
   local test_dir
   test_dir="$(project_dir "$test_name")"
   if [ -z "$test_dir" ]; then
     echo "Unknown project path for '$test_name'"
     return 1
   fi
-  local test_log="/tmp/test_${test_name}.log"
+  local test_log="$TEST_LOG_DIR/test_${test_name}.log"
+  if [ "$TEST_REPETITIONS" -gt 1 ]; then
+    test_log="$TEST_LOG_DIR/test_${test_name}_run-${repetition}.log"
+  fi
   local test_command="cd \"$test_dir\" && yarn test:local"
 
   # TEE examples reach the ER through the QFS, so they read TEE_PROVIDER_ENDPOINT/
@@ -113,7 +133,7 @@ run_test() {
 
   echo ""
   echo "========================================"
-  echo "Testing: $TEST_COUNT. $test_name"
+  echo "Testing: $TEST_COUNT. $result_name"
   echo "========================================"
   # Program ID is best-effort: scans the project's target/deploy for the first keypair.
   local program_id="(unknown)"
@@ -314,7 +334,7 @@ run_test() {
   
   # Classify based on `test_failed` (computed from exit code + log grep above).
   if [ "$test_failed" = true ]; then
-    FAILED_TESTS+=("$test_name")
+    FAILED_TESTS+=("$result_name")
 
     # Extract details from the most informative source available.
     local error_details=""
@@ -336,15 +356,15 @@ run_test() {
       error_details="(exit code $test_exit_code — see $test_log for full output)"
     fi
 
-    FAILED_TESTS_NAMES+=("$test_name")
+    FAILED_TESTS_NAMES+=("$result_name")
     FAILED_TESTS_ERRORS+=("$error_details")
   else
-    PASSED_TESTS+=("$test_name")
+    PASSED_TESTS+=("$result_name")
   fi
   
   # Print result
   echo ""
-  if [[ " ${FAILED_TESTS[@]} " =~ " ${test_name} " ]]; then
+  if [ "$test_failed" = true ]; then
     echo "Result: ✗ FAILED"
   else
     echo "Result: ✓ PASSED"
@@ -357,14 +377,22 @@ run_test() {
   # here too so a fail-fast abort still surfaces why we stopped. Exiting triggers
   # cleanup() (EXIT trap), which stops the validators and propagates code 1.
   if [ "$test_failed" = true ] && [ "$FAIL_FAST" != "0" ]; then
-    echo "FAIL_FAST: stopping after first failure ($test_name)."
+    echo "FAIL_FAST: stopping after first failure ($result_name)."
     echo "  (set FAIL_FAST=0 to run the remaining tests anyway)"
     echo ""
-    echo "--- $test_name ---"
+    echo "--- $result_name ---"
     echo "$error_details"
     echo ""
     exit 1
   fi
+}
+
+run_test_repetitions() {
+  local test_name=$1
+  local repetition
+  for ((repetition=1; repetition<=TEST_REPETITIONS; repetition++)); do
+    run_test "$test_name" "$repetition"
+  done
 }
 
 # Cleanup function
@@ -854,7 +882,7 @@ else
   # Each project's `test:local` runs only the local subset of its tests (skipping
   # router/TEE/devnet variants). oncurve-delegation is omitted pending an SDK update.
   for project in "${REGULAR_PROJECTS[@]}"; do
-    run_test "$project"
+    run_test_repetitions "$project"
   done
 fi
 
@@ -867,7 +895,7 @@ else
   # VRF integration: roll-dice's delegated test reads VALIDATOR → defaults to the
   # local-ER validator since EPHEMERAL_PROVIDER_ENDPOINT is localhost.
   for project in "${VRF_PROJECTS[@]}"; do
-    run_test "$project"
+    run_test_repetitions "$project"
   done
 fi
 
@@ -880,7 +908,7 @@ else
   # TEE examples reach the ER through the QFS — run_test exposes TEE_PROVIDER_ENDPOINT/
   # TEE_WS_ENDPOINT to these runs (see the TEE_PROJECTS case in run_test).
   for project in "${TEE_PROJECTS[@]}"; do
-    run_test "$project"
+    run_test_repetitions "$project"
   done
 fi
 

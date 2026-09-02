@@ -1,0 +1,126 @@
+name: Diagnose RPS Settlement
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/diagnose-rps-settlement.yml
+  workflow_dispatch:
+    inputs:
+      runs_per_stack:
+        description: RPS runs against each fresh MagicBlock stack
+        required: true
+        default: "5"
+        type: choice
+        options:
+          - "3"
+          - "5"
+          - "10"
+
+permissions:
+  contents: read
+
+jobs:
+  stress-rps:
+    name: stack ${{ matrix.stack }} (${{ inputs.runs_per_stack || '3' }} runs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [1, 2, 3]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.20"
+
+      - name: Enable Corepack
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.19 --activate
+          corepack prepare yarn@1.22.22 --activate
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.89.0"
+
+      - name: Ensure stable Rust for Anchor IDL
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default 1.89.0
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev pkg-config
+
+      - name: Install Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.9/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install Anchor
+        run: cargo install --git https://github.com/solana-foundation/anchor --tag v1.0.2 anchor-cli
+
+      - name: Install MagicBlock Ephemeral Validator
+        run: npm install -g @magicblock-labs/ephemeral-validator@latest
+
+      - name: Record tool versions
+        run: |
+          mkdir -p "rps-diagnostics/stack-${{ matrix.stack }}"
+          {
+            node --version
+            rustc --version
+            solana --version
+            anchor --version
+            npm list -g --depth=0 @magicblock-labs/ephemeral-validator
+            mb-stack --version || true
+            ephemeral-validator --version || true
+          } | tee "rps-diagnostics/stack-${{ matrix.stack }}/versions.log"
+
+      - name: Configure Solana
+        env:
+          DEVNET_KEYPAIR_JSON: ${{ secrets.DEVNET_KEYPAIR_JSON }}
+        run: |
+          solana config set --url localhost
+          mkdir -p ~/.config/solana
+          if [ -n "$DEVNET_KEYPAIR_JSON" ]; then
+            printf '%s' "$DEVNET_KEYPAIR_JSON" > ~/.config/solana/id.json
+            chmod 600 ~/.config/solana/id.json
+          else
+            solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
+          fi
+
+      - name: Run repeated RPS settlement tests
+        id: stress
+        continue-on-error: true
+        env:
+          FAIL_FAST: "0"
+          TEST_REPETITIONS: ${{ inputs.runs_per_stack || '3' }}
+          TEST_LOG_DIR: ${{ github.workspace }}/rps-diagnostics/stack-${{ matrix.stack }}
+        run: |
+          sudo sysctl -w fs.inotify.max_user_instances=1280
+          sudo sysctl -w fs.inotify.max_user_watches=655360
+          sudo sysctl -w fs.file-max=2097152
+          sudo prlimit --pid $$ --nofile=1000000:1000000
+          bash scripts/test-example.sh rock-paper-scissor
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rps-settlement-stack-${{ matrix.stack }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            rps-diagnostics/stack-${{ matrix.stack }}
+            mb-stack.log
+            /tmp/build_rock-paper-scissor.log
+
+      - name: Fail when any repetition failed
+        if: steps.stress.outcome == 'failure'
+        run: exit 1
