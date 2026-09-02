@@ -1,5 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
+import { strict as assert } from "assert";
 import { MagicActions } from "../target/types/magic_actions";
 import {
   ConnectionMagicRouter,
@@ -82,31 +83,24 @@ describe("magic-actions", () => {
     console.log("✅ Incremented Counter PDA! Signature:", signature);
   });
 
-  it("Update Leaderboard!", async () => {
-    const tx = await program.methods
-      .updateLeaderboard()
-      .accounts({
-        counter: pda,
-        escrowAuth: anchor.Wallet.local().publicKey,
-        escrow: escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
-      })
-      .transaction();
+  it("Reject direct leaderboard updates!", async () => {
+    await assert.rejects(async () => {
+      const tx = await program.methods
+        .updateLeaderboard()
+        .accounts({
+          counter: pda,
+          escrowAuth: anchor.Wallet.local().publicKey,
+          escrow: escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
+        })
+        .transaction();
 
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [anchor.Wallet.local().payer],
-      { skipPreflight: true },
-    );
-
-    await printCounter(
-      program,
-      pda,
-      leaderboard_pda,
-      routerConnection,
-      signature,
-      "✅ Updated Leaderboard!",
-    );
+      await sendAndConfirmTransaction(
+        routerConnection,
+        tx,
+        [anchor.Wallet.local().payer],
+        { skipPreflight: true },
+      );
+    }, /signature verification failed|unknown signer/i);
   });
 
   it("Delegate Counter to ER and create Escrow for Magic Action!", async () => {

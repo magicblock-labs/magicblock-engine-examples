@@ -9,6 +9,8 @@ declare_id!("9K7ybJnAYtVY7RQU8ELwLqCFeXi6e8FD33Yq8ZnjDsi9");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 pub const LEADERBOARD_SEED: &[u8] = b"leaderboard";
+/// Escrow index used by `ActionArgs::new` when scheduling post-commit actions.
+pub const ACTION_ESCROW_INDEX: u8 = 255;
 
 #[ephemeral]
 #[program]
@@ -134,6 +136,18 @@ pub struct UpdateLeaderboard<'info> {
     pub leaderboard: Account<'info, Leaderboard>,
     /// CHECK: PDA owner depends on: 1) Delegated: Delegation Program; 2) Undelegated: Your program ID
     pub counter: UncheckedAccount<'info>,
+    /// CHECK: Escrow authority supplied by the Magic Action.
+    pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: Magic escrow PDA. Only the delegation program can sign for it,
+    /// which restricts this instruction to the post-commit action path.
+    #[account(
+        signer,
+        address = ephemeral_rollups_sdk::pda::ephemeral_balance_pda_from_payer(
+            &escrow_auth.key(),
+            ACTION_ESCROW_INDEX,
+        ),
+    )]
+    pub escrow: UncheckedAccount<'info>,
 }
 
 #[delegate]
