@@ -137,6 +137,38 @@ describe("magic-actions-local", () => {
     );
   });
 
+  it("Reject an incorrect counter PDA", async () => {
+    const invalidEscrow = web3.Keypair.generate();
+    await assert.rejects(
+      program.methods
+        .updateLeaderboard()
+        .accounts({
+          counter: leaderboardPda,
+          escrowAuth: provider.wallet.publicKey,
+          escrow: invalidEscrow.publicKey,
+        })
+        .signers([invalidEscrow])
+        .rpc(),
+      /Error Code: ConstraintSeeds/,
+    );
+  });
+
+  it("Reject an incorrect escrow PDA", async () => {
+    const invalidEscrow = web3.Keypair.generate();
+    await assert.rejects(
+      program.methods
+        .updateLeaderboard()
+        .accounts({
+          counter: pda,
+          escrowAuth: provider.wallet.publicKey,
+          escrow: invalidEscrow.publicKey,
+        })
+        .signers([invalidEscrow])
+        .rpc(),
+      /Error Code: ConstraintAddress/,
+    );
+  });
+
   it("Delegate Counter and create Escrow", async () => {
     const info = await provider.connection.getAccountInfo(pda);
     if (info?.owner.toBase58() === DELEGATION_PROGRAM_ID.toBase58()) {

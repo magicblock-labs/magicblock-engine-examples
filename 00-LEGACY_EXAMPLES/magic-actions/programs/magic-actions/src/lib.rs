@@ -134,9 +134,13 @@ pub struct Increment<'info> {
 pub struct UpdateLeaderboard<'info> {
     #[account(mut, seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: Account<'info, Leaderboard>,
-    /// CHECK: PDA owner depends on: 1) Delegated: Delegation Program; 2) Undelegated: Your program ID
+    /// CHECK: Owner depends on delegation state; the PDA constraint binds this
+    /// handler to the canonical counter account in either state.
+    #[account(seeds = [COUNTER_SEED], bump)]
     pub counter: UncheckedAccount<'info>,
-    /// CHECK: Escrow authority supplied by the Magic Action.
+    /// CHECK: User-selected escrow authority. Leaderboard updates are
+    /// permissionless; the derived escrow signer below authenticates the
+    /// Magic Action call path.
     pub escrow_auth: UncheckedAccount<'info>,
     /// CHECK: Magic escrow PDA. Only the delegation program can sign for it,
     /// which restricts this instruction to the post-commit action path.
@@ -181,7 +185,8 @@ pub struct CommitAndUpdateLeaderboard<'info> {
     #[account(seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: UncheckedAccount<'info>,
 
-    /// CHECK: Your program ID
+    /// CHECK: Destination program for the scheduled action.
+    #[account(address = crate::ID)]
     pub program_id: AccountInfo<'info>,
 }
 
