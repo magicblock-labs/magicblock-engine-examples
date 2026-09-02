@@ -17,6 +17,8 @@ git submodule update --init private-payments
 
 The other examples work without this submodule.
 
+Examples with a deployed frontend link to their **🌐 Live demo** below — see [Live Demos](#-live-demos) for the full list.
+
 ## 👷 Examples
 
 ### 🧱 Basic Examples
@@ -32,6 +34,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
 </p>
 <p><em>Counter program in Anchor.</em></p>
+<p>🌐 <a href="https://counter-example.magicblock.app">Live demo</a></p>
 </blockquote>
 </td>
 <td valign="top" width="33%">
@@ -62,6 +65,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <img src="https://img.shields.io/badge/Privacy-9333ea?style=flat-square" alt="Privacy"/>
 </p>
 <p><em>Anchor counter with permissions.</em></p>
+<p>🌐 <a href="https://private-counter-example.magicblock.app">Live demo</a></p>
 </blockquote>
 </td>
 <td valign="top" width="33%">
@@ -82,6 +86,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <img src="https://img.shields.io/badge/SPL%20Token-9945FF?style=flat-square" alt="Tokens"/>
 </p>
 <p><em>SPL token delegation, ER transfers, and withdrawal back to base layer.</em></p>
+<p>🌐 <a href="https://spl-demo.magicblock.app">Live demo</a></p>
 </blockquote>
 </td>
 </tr>
@@ -94,6 +99,7 @@ Core feature demos like delegation, randomness and privacy - the place to start.
 <img src="https://img.shields.io/badge/VRF-4f46e5?style=flat-square" alt="VRF"/>
 </p>
 <p><em>Dice roll using a verifiable random function (VRF) on the ER.</em></p>
+<p>🌐 <a href="https://roll-dice.magicblock.app">Live demo</a></p>
 </blockquote>
 </td>
 <td valign="top" width="33%">
@@ -188,6 +194,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 <img src="https://img.shields.io/badge/Session%20Keys-6366f1?style=flat-square" alt="Session Keys"/>
 </p>
 <p><em>Counter using gpl-session keys for delegated-signer auth on both base chain and ER.</em></p>
+<p>🌐 <a href="https://counter-session-keys-example.magicblock.app">Live demo</a></p>
 </blockquote>
 </td>
 </tr>
@@ -201,6 +208,7 @@ Focused demos of individual capabilities — on-curve delegation, actions, ephem
 <img src="https://img.shields.io/badge/Session%20Keys-6366f1?style=flat-square" alt="Session Keys"/>
 </p>
 <p><em>Up/down SPL-token prediction flow using session keys and an ER price oracle.</em></p>
+<p>🌐 <a href="https://binary-prediction.magicblock.app">Live demo</a></p>
 </blockquote>
 </td>
 <td valign="top" width="33%">
@@ -242,6 +250,7 @@ End-to-end app templates you can fork and build on.
 <img src="https://img.shields.io/badge/VRF-4f46e5?style=flat-square" alt="VRF"/>
 </p>
 <p><em>Rewards distribution program using delegated VRF.</em></p>
+<p>🌐 <a href="https://magicblock-rewards-dashboard.vercel.app">Live demo</a></p>
 </blockquote>
 </td>
 <td valign="top" width="33%">
@@ -252,6 +261,7 @@ End-to-end app templates you can fork and build on.
 <img src="https://img.shields.io/badge/Privacy-9333ea?style=flat-square" alt="Privacy"/>
 </p>
 <p><em>Two-player RPS with hidden moves on the ER until reveal.</em></p>
+<p>🌐 <a href="https://rps-example.magicblock.app">Live demo</a></p>
 </blockquote>
 </td>
 </tr>
@@ -269,6 +279,21 @@ End-to-end app templates you can fork and build on.
 </td>
 </tr>
 </table>
+
+## 🌐 Live Demos
+
+Deployed frontends for the examples that ship a UI.
+
+| Example | Live demo |
+| ------- | --------- |
+| [Counter / Anchor](./counter/anchor/) | https://counter-example.magicblock.app |
+| [Private Counter / Anchor](./private-counter/anchor/) | https://private-counter-example.magicblock.app |
+| [SPL Tokens / Anchor](./spl-tokens/anchor/) | https://spl-demo.magicblock.app |
+| [Roll Dice / Anchor](./roll-dice/anchor/) | https://roll-dice.magicblock.app |
+| [Session Keys / Anchor](./session-keys/anchor/) | https://counter-session-keys-example.magicblock.app |
+| [Binary Prediction / Anchor](./binary-prediction/anchor/) | https://binary-prediction.magicblock.app |
+| [Rewards (Delegated VRF) / Anchor](./rewards-delegated-vrf/anchor/) | https://magicblock-rewards-dashboard.vercel.app |
+| [Rock Paper Scissor / Anchor](./rock-paper-scissor/anchor/) | https://rps-example.magicblock.app |
 
 ## Testing
 

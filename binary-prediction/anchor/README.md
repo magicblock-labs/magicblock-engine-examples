@@ -2,6 +2,8 @@
 
 Anchor example for a binary up/down prediction flow on MagicBlock Ephemeral Rollups.
 
+🌐 **Live demo:** https://binary-prediction.magicblock.app
+
 The example shows a user staking SPL tokens on a directional price move. The program reads a
 MagicBlock `ephemeral-oracle` price feed on the ER, snapshots the opening price at bet time, and
 settles against the same feed after a short per-bet expiry. Correct calls pay the pool's configured

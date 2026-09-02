@@ -8,6 +8,10 @@ import { RewardsList } from "@/lib/types";
 import { PDAs } from "@/lib/pda";
 import { resolveEndpoint } from "@/lib/endpoints";
 import { CopyableAddress } from "./CopyableAddress";
+import {
+  deriveEphemeralBalancePda,
+  DEFAULT_ESCROW_INDEX,
+} from "@/lib/instructions/ephemeralBalance";
 
 interface RewardListCardProps {
   rewardList: RewardsList;
@@ -23,9 +27,15 @@ function lamportsToSol(lamports: number): string {
   return (lamports / 1e9).toFixed(6);
 }
 
+type EscrowBalancesState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "found"; distributorLamports: number; whitelistLamports: number };
+
 export function RewardListCard({ rewardList }: RewardListCardProps) {
   const { connection } = useConnection();
   const [solBalance, setSolBalance] = useState<SolBalanceState>({ status: "loading" });
+  const [escrowBalances, setEscrowBalances] = useState<EscrowBalancesState>({ status: "loading" });
 
   useEffect(() => {
     let cancelled = false;
@@ -86,6 +96,43 @@ export function RewardListCard({ rewardList }: RewardListCardProps) {
     void fetchBalance();
     return () => { cancelled = true; };
   }, [rewardList.rewardDistributor.toBase58(), rewardList.delegated, connection.rpcEndpoint]);
+
+  // DLP escrow balances — always on the Solana base layer regardless of
+  // delegation. Each distributor authority has its own escrow; the reward
+  // distributor's pays rent for reward-claim callbacks, the whitelist
+  // distributor's pays rent for whitelist_transfer payout callbacks.
+  useEffect(() => {
+    let cancelled = false;
+    setEscrowBalances({ status: "loading" });
+
+    const fetchEscrows = async () => {
+      try {
+        const solEndpoint = resolveEndpoint(connection.rpcEndpoint, "solana");
+        const solConnection = new Connection(solEndpoint, "confirmed");
+        const distEscrow = deriveEphemeralBalancePda(
+          rewardList.rewardDistributor,
+          DEFAULT_ESCROW_INDEX,
+        )[0];
+        const wlEscrow = deriveEphemeralBalancePda(
+          PDAs.getWhitelistDistributor(rewardList.rewardDistributor)[0],
+          DEFAULT_ESCROW_INDEX,
+        )[0];
+        const [distributorLamports, whitelistLamports] = await Promise.all([
+          solConnection.getBalance(distEscrow, "confirmed"),
+          solConnection.getBalance(wlEscrow, "confirmed"),
+        ]);
+        if (!cancelled) {
+          setEscrowBalances({ status: "found", distributorLamports, whitelistLamports });
+        }
+      } catch (err) {
+        console.error("[RewardListCard] Failed to fetch escrow balances:", err);
+        if (!cancelled) setEscrowBalances({ status: "error" });
+      }
+    };
+
+    void fetchEscrows();
+    return () => { cancelled = true; };
+  }, [rewardList.rewardDistributor.toBase58(), connection.rpcEndpoint]);
 
   const rewardListPda = PDAs.getRewardList(rewardList.rewardDistributor)[0];
   const startDate = new Date(Number(rewardList.startTimestamp) * 1000);
@@ -265,6 +312,72 @@ export function RewardListCard({ rewardList }: RewardListCardProps) {
             </>
           );
         })()}
+
+        {/* DLP escrow balances (base layer) — rent payers for scheduled
+            transfer callbacks. Below one ATA rent (~0.00204 SOL) the next
+            callback that must create a destination token account fails. */}
+        <div className="mt-3">
+          <p className="text-xs text-gray-400 mb-2">
+            Escrows (on base, pay ATA rent for callbacks)
+          </p>
+          {escrowBalances.status === "loading" && (
+            <p className="text-xs text-gray-500 italic">Fetching escrow balances…</p>
+          )}
+          {escrowBalances.status === "error" && (
+            <p className="text-xs text-red-400 italic">
+              Failed to fetch escrow balances — check console for details
+            </p>
+          )}
+          {escrowBalances.status === "found" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                {
+                  label: "Reward Distributor Escrow",
+                  hint: "reward-claim callbacks",
+                  escrow: deriveEphemeralBalancePda(
+                    rewardList.rewardDistributor,
+                    DEFAULT_ESCROW_INDEX,
+                  )[0],
+                  lamports: escrowBalances.distributorLamports,
+                },
+                {
+                  label: "Whitelist Distributor Escrow",
+                  hint: "whitelist_transfer payouts (e.g. buybacks)",
+                  escrow: deriveEphemeralBalancePda(
+                    PDAs.getWhitelistDistributor(rewardList.rewardDistributor)[0],
+                    DEFAULT_ESCROW_INDEX,
+                  )[0],
+                  lamports: escrowBalances.whitelistLamports,
+                },
+              ].map(({ label, hint, escrow, lamports }) => {
+                const isLow = lamports < LAMPORTS_PER_TOKEN_ACCOUNT;
+                const ataCreations = Math.floor(lamports / LAMPORTS_PER_TOKEN_ACCOUNT);
+                return (
+                  <div key={label} className="rounded bg-gray-800/60 p-2">
+                    <p className="text-xs text-gray-400 mb-1">{label}</p>
+                    <p className={`text-sm font-mono font-semibold ${
+                      isLow ? "text-red-400" : "text-white"
+                    }`}>
+                      {lamportsToSol(lamports)} <span className="text-xs font-normal text-gray-500">SOL</span>
+                    </p>
+                    <p className={`text-xs mt-0.5 ${isLow ? "text-red-400" : "text-gray-500"}`}>
+                      ~{ataCreations.toLocaleString()} ATA creation{ataCreations !== 1 ? "s" : ""} · {hint}
+                    </p>
+                    <div className="mt-1 text-xs text-gray-500">
+                      <CopyableAddress address={escrow.toBase58()} displayLength={16} />
+                    </div>
+                    {isLow && (
+                      <p className="text-xs text-red-400 mt-1 flex items-start gap-1">
+                        <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                        <span>Too low to create a token account — top up via Admin Actions → Top Up Escrow.</span>
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

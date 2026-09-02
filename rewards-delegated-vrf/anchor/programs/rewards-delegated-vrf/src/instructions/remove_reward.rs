@@ -93,11 +93,22 @@ pub fn remove_reward(
 
     validate_reward(&ctx.accounts.reward_list)?;
 
+    // For NFTs `redemption_amount` doubles as an escape hatch: pass `Some(0)`
+    // to drop a mint from the pool when the distributor no longer holds the
+    // token (e.g. after the 2026-08 drain). The post-commit settlement then
+    // transfers 0 tokens, which succeeds against an empty ATA, instead of
+    // failing the whole commit with "insufficient funds".
     let amount = match reward_type {
         RewardType::LegacyNft | RewardType::ProgrammableNft => redemption_amount.unwrap_or(1),
         _ => reward_amount * redemption_amount.unwrap_or(1),
     };
 
+    // Two PDAs must sign the Magic schedule CPI (same as consume_random_reward
+    // / admin_transfer):
+    //   - reward_list: payer for the intent bundle
+    //   - reward_distributor: escrow_authority — Magic requires it to sign.
+    // Passing only the reward_list seeds made every non-exhausted removal fail
+    // with PrivilegeEscalation.
     let reward_list_bump = ctx.bumps.reward_list;
     let reward_distributor_key = ctx.accounts.reward_distributor.key();
     let reward_list_seeds: &[&[u8]] = &[
@@ -105,7 +116,14 @@ pub fn remove_reward(
         reward_distributor_key.as_ref(),
         &[reward_list_bump],
     ];
-    let payer_seeds = &[reward_list_seeds];
+    let super_admin = ctx.accounts.reward_distributor.super_admin;
+    let reward_distributor_bump = ctx.accounts.reward_distributor.bump;
+    let reward_distributor_seeds: &[&[u8]] = &[
+        crate::constants::REWARD_DISTRIBUTOR_SEED,
+        super_admin.as_ref(),
+        &[reward_distributor_bump],
+    ];
+    let payer_seeds: &[&[&[u8]]] = &[reward_list_seeds, reward_distributor_seeds];
 
     // DelegationRecord layout: [8 discriminator][32 authority = validator][...]
     let delegation_record_data = ctx.accounts.delegation_record_reward_list.try_borrow_data()?;

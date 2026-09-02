@@ -2,6 +2,8 @@
 
 Counter program using Anchor and Ephemeral Rollups, authorized with session keys so a temporary signer can act on behalf of the counter authority without re-signing every transaction.
 
+🌐 **Live demo:** https://counter-session-keys-example.magicblock.app
+
 ## Software Packages
 
 This program has utilized the following software packages.

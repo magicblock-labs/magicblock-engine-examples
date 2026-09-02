@@ -615,6 +615,10 @@ export type RewardsDelegatedVrf = {
           signer: true;
         },
         {
+          name: "program";
+          address: "rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y";
+        },
+        {
           name: "programData";
         },
         {
@@ -1017,6 +1021,7 @@ export type RewardsDelegatedVrf = {
         },
         {
           name: "associatedTokenProgram";
+          address: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
         },
         {
           name: "systemProgram";
@@ -1024,12 +1029,15 @@ export type RewardsDelegatedVrf = {
         },
         {
           name: "tokenMetadataProgram";
+          address: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
         },
         {
           name: "sysvarInstructionProgram";
+          address: "Sysvar1nstructions1111111111111111111111111";
         },
         {
           name: "authRuleProgram";
+          address: "auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg";
         },
         {
           name: "metadata";
@@ -1102,6 +1110,7 @@ export type RewardsDelegatedVrf = {
         },
         {
           name: "associatedTokenProgram";
+          address: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
         },
         {
           name: "systemProgram";
