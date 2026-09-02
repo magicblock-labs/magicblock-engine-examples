@@ -224,7 +224,12 @@ export async function buildRemoveReward(
     .removeReward(
       rewardName,
       rewardMint ?? null,
-      redemptionAmount ? new anchor.BN(redemptionAmount) : null,
+      // `0` is meaningful for NFTs: it removes the mint from the pool while the
+      // post-commit settlement transfers nothing (used when the distributor no
+      // longer holds the token). Only undefined/null means "default (1)".
+      redemptionAmount === undefined || redemptionAmount === null
+        ? null
+        : new anchor.BN(redemptionAmount),
     )
     .accounts({
       admin: publicKey,
@@ -266,7 +271,9 @@ export async function buildRemoveRewardsBatch(
       .removeReward(
         item.rewardName,
         item.rewardMint ?? null,
-        item.redemptionAmount ? new anchor.BN(item.redemptionAmount) : null,
+        item.redemptionAmount === undefined || item.redemptionAmount === null
+          ? null
+          : new anchor.BN(item.redemptionAmount),
       )
       .accounts({
         admin: publicKey,

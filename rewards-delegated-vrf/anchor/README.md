@@ -2,6 +2,8 @@
 
 Anchor rewards program that mints random rewards on an Ephemeral Rollup using MagicBlock's verifiable random function (VRF).
 
+🌐 **Live demo (rewards dashboard):** https://magicblock-rewards-dashboard.vercel.app
+
 ## VRF Flow
 
 A reward account is delegated to the Ephemeral Rollup. On the ER, the program requests randomness from the VRF oracle; the oracle fulfills the request by invoking the program's callback instruction with verified random bytes, which the program uses to determine the reward. State is then committed back to the base layer.

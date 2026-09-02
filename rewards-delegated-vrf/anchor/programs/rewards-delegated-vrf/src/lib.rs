@@ -1,6 +1,8 @@
 #![allow(ambiguous_glob_reexports)]
 
 use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::metadata::Metadata;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use ephemeral_rollups_sdk::anchor::{action, commit, delegate, ephemeral};
 use ephemeral_vrf_sdk::anchor::vrf;
@@ -11,7 +13,7 @@ pub mod helpers;
 pub mod instructions;
 pub mod state;
 
-declare_id!("28DbXYgx2bPUhmoGZpU87gtyktzSZgLJ8DcgqtKFCgtC");
+declare_id!("rEwArDea6BfpdA8QuBLkTCLESRJfZciUFoHA68FRq6Y");
 
 #[ephemeral]
 #[program]
@@ -160,9 +162,8 @@ pub struct InitializeRewardDistributor<'info> {
     pub initializer: Signer<'info>,
     #[account(init_if_needed, payer = initializer, space = 8 + 32 + 1 + 4 + (32 * 10) + 4 + (32 * 10), seeds = [constants::REWARD_DISTRIBUTOR_SEED, initializer.key().as_ref()], bump)]
     pub reward_distributor: Account<'info, state::RewardDistributor>,
-    /// Whitelist token bag — created alongside reward_distributor so the
-    /// two PDAs stay in lockstep. `init_if_needed` backfills the account
-    /// on distributors that were created before this PDA existed.
+    /// Whitelist token bag. `init_if_needed` backfills it for distributors
+    /// created before this PDA existed.
     #[account(init_if_needed, payer = initializer, space = 8 + state::WhitelistDistributor::MAX_SIZE, seeds = [constants::WHITELIST_DISTRIBUTOR_SEED, reward_distributor.key().as_ref()], bump)]
     pub whitelist_distributor: Account<'info, state::WhitelistDistributor>,
     pub system_program: Program<'info, System>,
@@ -198,7 +199,10 @@ pub struct SetRewardList<'info> {
 pub struct InitializeTransferLookupTable<'info> {
     #[account(mut, constraint = authority.key() == program_data.upgrade_authority_address.ok_or(ProgramError::InvalidArgument)?)]
     pub authority: Signer<'info>,
-    /// CHECK: Program data account to verify upgrade authority
+    /// Binds `program_data` to this program; without it any upgradeable
+    /// program's ProgramData (and its authority) would satisfy the check.
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ errors::RewardError::Unauthorized)]
+    pub program: Program<'info, crate::program::RewardsDelegatedVrf>,
     pub program_data: Account<'info, ProgramData>,
     #[account(init_if_needed, payer = authority, space = 8 + 1 + 4 + 32 * 33, seeds = [constants::TRANSFER_LOOKUP_TABLE_SEED], bump)]
     pub transfer_lookup_table: Account<'info, state::TransferLookupTable>,
@@ -232,7 +236,7 @@ pub struct RequestRandomReward<'info> {
     /// CHECK: Validated by address constraint against the known VRF oracle queue
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
     pub oracle_queue: UncheckedAccount<'info>,
-    /// CHECK: Delegation record for reward_list — authority field contains the validator, used to derive magic_fee_vault for the callback
+    /// CHECK: reward_list delegation record; its validator derives magic_fee_vault
     #[account(address = ephemeral_rollups_sdk::pda::delegation_record_pda_from_delegated_account(&reward_list.key()))]
     pub delegation_record_reward_list: UncheckedAccount<'info>,
 }
@@ -242,14 +246,14 @@ pub struct RequestRandomReward<'info> {
 pub struct ConsumeRandomReward<'info> {
     #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
     pub vrf_program_identity: Signer<'info>,
-    /// CHECK: The user account is passed from the request_random_reward and used for the reward destination
+    /// CHECK: reward recipient, as passed to request_random_reward
     pub user: UncheckedAccount<'info>,
     pub reward_distributor: Account<'info, state::RewardDistributor>,
     #[account(mut, seeds = [constants::REWARD_LIST_SEED, reward_distributor.key().as_ref()], bump)]
     pub reward_list: Account<'info, state::RewardsList>,
     #[account(seeds = [constants::TRANSFER_LOOKUP_TABLE_SEED], bump)]
     pub transfer_lookup_table: Account<'info, state::TransferLookupTable>,
-    /// CHECK: Magic fee vault — required when reward_list payer is delegated
+    /// CHECK: Magic fee vault, required while reward_list is delegated
     #[account(mut)]
     pub magic_fee_vault: UncheckedAccount<'info>,
 }
@@ -267,7 +271,7 @@ pub struct AddReward<'info> {
         constraint = token_account.mint == mint.key() @errors::RewardError::InvalidTokenAccount
     )]
     pub token_account: InterfaceAccount<'info, TokenAccount>,
-    /// CHECK: Optional Metaplex metadata PDA. It may be absent or uninitialized for fungible tokens.
+    /// CHECK: optional Metaplex metadata PDA (absent for fungible tokens)
     pub metadata: Option<UncheckedAccount<'info>>,
 }
 
@@ -283,17 +287,16 @@ pub struct RemoveReward<'info> {
     pub transfer_lookup_table: Account<'info, state::TransferLookupTable>,
     /// CHECK: destination of the removed reward
     pub destination: UncheckedAccount<'info>,
-    /// CHECK: Delegation record for reward_list — authority field contains the validator, used to derive magic_fee_vault
+    /// CHECK: reward_list delegation record; its validator derives magic_fee_vault
     #[account(address = ephemeral_rollups_sdk::pda::delegation_record_pda_from_delegated_account(&reward_list.key()))]
     pub delegation_record_reward_list: UncheckedAccount<'info>,
-    /// CHECK: Magic fee vault — derived from the validator in the delegation record
+    /// CHECK: Magic fee vault of the delegating validator
     #[account(mut)]
     pub magic_fee_vault: UncheckedAccount<'info>,
 }
 
-/// Admin-triggered transfer of distributor-held assets to an arbitrary user,
-/// outside the VRF/redemption flow. Enforces that the transfer does not eat
-/// into assets committed to outstanding reward redemptions.
+/// Admin transfer of distributor-held assets to a user, outside the VRF flow.
+/// Cannot spend assets committed to outstanding reward redemptions.
 #[commit]
 #[derive(Accounts)]
 pub struct AdminTransfer<'info> {
@@ -310,25 +313,20 @@ pub struct AdminTransfer<'info> {
         associated_token::authority = reward_distributor,
     )]
     pub source_token_account: InterfaceAccount<'info, TokenAccount>,
-    /// CHECK: recipient pubkey (ATA is derived + created on base by the scheduled action)
+    /// CHECK: recipient; ATA is created on base by the scheduled action
     pub user: UncheckedAccount<'info>,
-    /// CHECK: Delegation record for reward_list — authority field contains the validator, used to derive magic_fee_vault
+    /// CHECK: reward_list delegation record; its validator derives magic_fee_vault
     #[account(address = ephemeral_rollups_sdk::pda::delegation_record_pda_from_delegated_account(&reward_list.key()))]
     pub delegation_record_reward_list: UncheckedAccount<'info>,
-    /// CHECK: Magic fee vault — derived from the validator in the delegation record
+    /// CHECK: Magic fee vault of the delegating validator
     #[account(mut)]
     pub magic_fee_vault: UncheckedAccount<'info>,
 }
 
-/// Whitelist-driven transfer from the per-distributor `whitelist_distributor`
-/// PDA to a user. Runs on the ER (same Magic intent infrastructure as
-/// `admin_transfer`) so the post-commit handler can sign the SPL CPI with
-/// the whitelist_distributor PDA's seeds. Authorization (super_admin /
-/// admin / whitelist member) is enforced via the `signer` constraint.
-///
-/// Unlike `admin_transfer`, the on-chain check is just an ATA-balance
-/// check — the whitelist bag is intentionally separate from the reward
-/// inventory, so there's no committed-amount math.
+/// Transfer from the `whitelist_distributor` PDA to a user, callable by
+/// super_admin / admins / whitelist members (see `signer` constraint).
+/// Same ER + post-commit flow as `admin_transfer`, but the whitelist bag is
+/// separate from the reward inventory, so only an ATA-balance check applies.
 #[commit]
 #[derive(Accounts)]
 pub struct WhitelistTransfer<'info> {
@@ -356,12 +354,12 @@ pub struct WhitelistTransfer<'info> {
         associated_token::authority = whitelist_distributor,
     )]
     pub source_token_account: InterfaceAccount<'info, TokenAccount>,
-    /// CHECK: recipient pubkey (ATA derived + created on base by the scheduled action)
+    /// CHECK: recipient; ATA is created on base by the scheduled action
     pub user: UncheckedAccount<'info>,
-    /// CHECK: Delegation record for reward_list — authority field contains the validator, used to derive magic_fee_vault
+    /// CHECK: reward_list delegation record; its validator derives magic_fee_vault
     #[account(address = ephemeral_rollups_sdk::pda::delegation_record_pda_from_delegated_account(&reward_list.key()))]
     pub delegation_record_reward_list: UncheckedAccount<'info>,
-    /// CHECK: Magic fee vault — derived from the validator in the delegation record
+    /// CHECK: Magic fee vault of the delegating validator
     #[account(mut)]
     pub magic_fee_vault: UncheckedAccount<'info>,
 }
@@ -377,16 +375,18 @@ pub struct UpdateReward<'info> {
     pub token_account: Option<InterfaceAccount<'info, TokenAccount>>,
 }
 
-/// Post-commit action for SPL/LegacyNFT transfers. `source_authority` is
-/// the on-chain RewardDistributor OR WhitelistDistributor PDA — both share
-/// the same `[8 disc][32 second_seed][1 bump]` prefix in their account
-/// data, so a single handler can read the bump + second-seed from either
-/// type without needing a typed `Account<T>` field. The `SourceKind` ix
-/// param tells the handler which seed prefix to combine those with.
+/// Escrow index used when scheduling post-commit actions (`ActionArgs::new`
+/// default). The escrow PDA is `[b"balance", escrow_auth, index]`, so the
+/// action handlers must validate against the same value.
+pub const ACTION_ESCROW_INDEX: u8 = 255;
+
+/// Post-commit action for SPL / legacy-NFT transfers.
 ///
-/// `escrow` (auto-injected by `#[action]`) is the Magic-managed SOL
-/// escrow used to pay for any rent (destination ATA creation). It is
-/// NOT the source-authority signer.
+/// `source_authority` is either a RewardDistributor or WhitelistDistributor
+/// PDA; both share the `[disc][second_seed][bump]` layout, so one handler
+/// reads the seeds from either and `SourceKind` picks the seed prefix.
+/// `escrow` (Magic SOL escrow) pays rent and is the only signer the
+/// delegation program provides, which is what gates this instruction.
 #[action]
 #[derive(Accounts)]
 pub struct TransferSplToken<'info> {
@@ -397,23 +397,34 @@ pub struct TransferSplToken<'info> {
     #[account(mut)]
     /// CHECK: destination Token Account
     pub destination_token_account: UncheckedAccount<'info>,
-    /// CHECK: source authority PDA (RewardDistributor or WhitelistDistributor).
-    /// Must be owned by this program and the SPL transfer will fail if its
-    /// derived PDA doesn't match `source_token_account.owner`.
+    /// CHECK: RewardDistributor or WhitelistDistributor PDA; must be owned by
+    /// this program. The transfer CPI fails if it isn't `source_token_account.owner`.
     #[account(owner = crate::ID)]
     pub source_authority: UncheckedAccount<'info>,
     /// CHECK: User/destination
     pub user: UncheckedAccount<'info>,
-    /// CHECK: Associated Token Program
-    pub associated_token_program: UncheckedAccount<'info>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     /// CHECK: Source program
     #[account(address = crate::ID)]
     pub source_program: UncheckedAccount<'info>,
+    /// CHECK: Must equal `source_authority`, which is the only escrow authority
+    /// this program schedules actions with — proves the action came from us.
+    #[account(address = source_authority.key() @ errors::RewardError::Unauthorized)]
+    pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: Magic SOL escrow PDA (rent payer). Only the delegation program
+    /// can sign for it, so `signer` restricts this ix to the post-commit path.
+    #[account(
+        signer @ errors::RewardError::Unauthorized,
+        address = ephemeral_rollups_sdk::pda::ephemeral_balance_pda_from_payer(
+            &escrow_auth.key(),
+            ACTION_ESCROW_INDEX,
+        ) @ errors::RewardError::Unauthorized,
+    )]
+    pub escrow: UncheckedAccount<'info>,
 }
 
-/// Post-commit action for programmable-NFT transfers. See
-/// `TransferSplToken` for the unified-source rationale.
+/// Post-commit action for programmable-NFT transfers; see `TransferSplToken`.
 #[action]
 #[derive(Accounts)]
 pub struct TransferProgrammableNft<'info> {
@@ -424,21 +435,20 @@ pub struct TransferProgrammableNft<'info> {
     #[account(mut)]
     /// CHECK: destination Token Account
     pub destination_token_account: UncheckedAccount<'info>,
-    /// CHECK: source authority PDA (RewardDistributor or WhitelistDistributor).
-    /// Must be owned by this program and the Metaplex transfer will fail if
-    /// its derived PDA doesn't match `source_token_account.owner`.
+    /// CHECK: RewardDistributor or WhitelistDistributor PDA; must be owned by
+    /// this program. The transfer CPI fails if it isn't `source_token_account.owner`.
     #[account(owner = crate::ID)]
     pub source_authority: UncheckedAccount<'info>,
     /// CHECK: User/destination
     pub user: UncheckedAccount<'info>,
-    /// CHECK: Associated Token Program
-    pub associated_token_program: UncheckedAccount<'info>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
-    /// CHECK: Token Metadata Program
-    pub token_metadata_program: UncheckedAccount<'info>,
-    /// CHECK: Sysvar Instruction Program
+    pub token_metadata_program: Program<'info, Metadata>,
+    /// CHECK: pinned to the Instructions sysvar
+    #[account(address = constants::SYSVAR_INSTRUCTIONS_ID)]
     pub sysvar_instruction_program: UncheckedAccount<'info>,
-    /// CHECK: Auth Rule Program
+    /// CHECK: pinned to the Metaplex Token Auth Rules program
+    #[account(address = constants::MPL_TOKEN_AUTH_RULES_ID)]
     pub auth_rule_program: UncheckedAccount<'info>,
     /// CHECK: Metadata PDA
     pub metadata: UncheckedAccount<'info>,
@@ -453,6 +463,20 @@ pub struct TransferProgrammableNft<'info> {
     /// CHECK: Source program
     #[account(address = crate::ID)]
     pub source_program: UncheckedAccount<'info>,
+    /// CHECK: Must equal `source_authority`, which is the only escrow authority
+    /// this program schedules actions with — proves the action came from us.
+    #[account(address = source_authority.key() @ errors::RewardError::Unauthorized)]
+    pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: Magic SOL escrow PDA (rent payer). Only the delegation program
+    /// can sign for it, so `signer` restricts this ix to the post-commit path.
+    #[account(
+        signer @ errors::RewardError::Unauthorized,
+        address = ephemeral_rollups_sdk::pda::ephemeral_balance_pda_from_payer(
+            &escrow_auth.key(),
+            ACTION_ESCROW_INDEX,
+        ) @ errors::RewardError::Unauthorized,
+    )]
+    pub escrow: UncheckedAccount<'info>,
 }
 
 #[commit]
