@@ -9,6 +9,8 @@ declare_id!("CrWQv121NBNzXjxVe5pNL7MsT2yW13dMheE4nemoudQ1");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 pub const LEADERBOARD_SEED: &[u8] = b"leaderboard";
+/// Escrow index used by `ActionArgs::new` when scheduling post-commit actions.
+pub const ACTION_ESCROW_INDEX: u8 = 255;
 
 #[ephemeral]
 #[program]
@@ -132,8 +134,24 @@ pub struct Increment<'info> {
 pub struct UpdateLeaderboard<'info> {
     #[account(mut, seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: Account<'info, Leaderboard>,
-    /// CHECK: PDA owner depends on: 1) Delegated: Delegation Program; 2) Undelegated: Your program ID
+    /// CHECK: Owner depends on delegation state; the PDA constraint binds this
+    /// handler to the canonical counter account in either state.
+    #[account(seeds = [COUNTER_SEED], bump)]
     pub counter: UncheckedAccount<'info>,
+    /// CHECK: User-selected escrow authority. Leaderboard updates are
+    /// permissionless; the derived escrow signer below authenticates the
+    /// Magic Action call path.
+    pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: Magic escrow PDA. Only the delegation program can sign for it,
+    /// which restricts this instruction to the post-commit action path.
+    #[account(
+        signer,
+        address = ephemeral_rollups_sdk::pda::ephemeral_balance_pda_from_payer(
+            &escrow_auth.key(),
+            ACTION_ESCROW_INDEX,
+        ),
+    )]
+    pub escrow: UncheckedAccount<'info>,
 }
 
 #[delegate]
@@ -167,7 +185,8 @@ pub struct CommitAndUpdateLeaderboard<'info> {
     #[account(seeds = [LEADERBOARD_SEED], bump)]
     pub leaderboard: UncheckedAccount<'info>,
 
-    /// CHECK: Your program ID
+    /// CHECK: Destination program for the scheduled action.
+    #[account(address = crate::ID)]
     pub program_id: AccountInfo<'info>,
 }
 

@@ -1,5 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
+import { strict as assert } from "assert";
 import { MagicActions } from "../target/types/magic_actions";
 import {
   DELEGATION_PROGRAM_ID,
@@ -117,21 +118,55 @@ describe("magic-actions-local", () => {
     console.log("✅ Incremented (base). Sig:", sig);
   });
 
-  it("Update Leaderboard on base layer", async () => {
+  it("Reject direct leaderboard updates", async () => {
     const info = await provider.connection.getAccountInfo(pda);
     if (info?.owner.toBase58() === DELEGATION_PROGRAM_ID.toBase58()) {
       console.log("Skipping — counter is delegated");
       return;
     }
-    const sig = await program.methods
-      .updateLeaderboard()
-      .accounts({
-        counter: pda,
-        escrowAuth: provider.wallet.publicKey,
-        escrow: escrowPdaFromEscrowAuthority(provider.wallet.publicKey),
-      })
-      .rpc({ skipPreflight: true });
-    await printCounter(`✅ Updated leaderboard. Sig: ${sig}`);
+    await assert.rejects(
+      program.methods
+        .updateLeaderboard()
+        .accounts({
+          counter: pda,
+          escrowAuth: provider.wallet.publicKey,
+          escrow: escrowPdaFromEscrowAuthority(provider.wallet.publicKey),
+        })
+        .rpc({ skipPreflight: true }),
+      /signature verification failed|unknown signer/i,
+    );
+  });
+
+  it("Reject an incorrect counter PDA", async () => {
+    const invalidEscrow = web3.Keypair.generate();
+    await assert.rejects(
+      program.methods
+        .updateLeaderboard()
+        .accounts({
+          counter: leaderboardPda,
+          escrowAuth: provider.wallet.publicKey,
+          escrow: invalidEscrow.publicKey,
+        })
+        .signers([invalidEscrow])
+        .rpc(),
+      /Error Code: ConstraintSeeds/,
+    );
+  });
+
+  it("Reject an incorrect escrow PDA", async () => {
+    const invalidEscrow = web3.Keypair.generate();
+    await assert.rejects(
+      program.methods
+        .updateLeaderboard()
+        .accounts({
+          counter: pda,
+          escrowAuth: provider.wallet.publicKey,
+          escrow: invalidEscrow.publicKey,
+        })
+        .signers([invalidEscrow])
+        .rpc(),
+      /Error Code: ConstraintAddress/,
+    );
   });
 
   it("Delegate Counter and create Escrow", async () => {
