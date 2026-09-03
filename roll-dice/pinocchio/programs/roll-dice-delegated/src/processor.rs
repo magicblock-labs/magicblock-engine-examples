@@ -124,11 +124,8 @@ pub fn process_callback_roll_dice(
         return Err(ProgramError::InvalidSeeds);
     }
 
-    // Besides the VRF program's randomness callback, this is an ordinary instruction any
-    // caller can invoke — a wallet transaction or a CPI from another program. Matching the
-    // identity address is not enough (`scoped_vrf_identity` is a public PDA any caller can
-    // pass); requiring it as a signer is what separates the real callback (only the VRF
-    // program can sign it) from a caller forging randomness.
+    // The scoped identity address is public. Its signer privilege proves that the
+    // VRF program invoked this callback. 
     if !program_identity.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
     }
