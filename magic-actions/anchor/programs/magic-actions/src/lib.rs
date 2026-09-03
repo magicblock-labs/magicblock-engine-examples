@@ -129,6 +129,10 @@ pub struct Increment<'info> {
     pub counter: Account<'info, Counter>,
 }
 
+    // `#[action]` adds the action accounts but does not authenticate the caller.
+    // This example intentionally leaves `update_leaderboard` public. A privileged handler
+    // must constrain `escrow_auth` to an expected authority and require the derived `escrow`
+    // PDA as a signer, or require an authority stored in program state.
 #[action]
 #[derive(Accounts)]
 pub struct UpdateLeaderboard<'info> {

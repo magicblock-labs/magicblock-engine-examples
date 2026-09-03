@@ -30,6 +30,9 @@ pub mod anchor_counter {
         Ok(())
     }
 
+    // This example intentionally keeps `increment` permissionless. A privileged scheduled
+    // instruction must authenticate the preceding Hydra `Trigger` through the instructions
+    // sysvar. Scheduled instructions run top-level and do not inherit a Hydra PDA signature.
     /// Increment the counter.
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;

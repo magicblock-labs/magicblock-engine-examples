@@ -22,6 +22,9 @@ pub mod delegation_actions {
         Ok(())
     }
 
+    // This example intentionally keeps `increment` permissionless. A privileged
+    // post-delegation action should require an action signer that was validated and recorded
+    // when the account was delegated, or check an authority stored in program state.
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;

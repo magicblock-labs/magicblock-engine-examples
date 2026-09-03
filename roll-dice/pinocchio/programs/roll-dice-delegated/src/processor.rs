@@ -124,6 +124,12 @@ pub fn process_callback_roll_dice(
         return Err(ProgramError::InvalidSeeds);
     }
 
+    // The scoped identity address is public. Its signer privilege proves that the
+    // VRF program invoked this callback. 
+    if !program_identity.is_signer() {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
     let rnd_u8 = random_u8_with_range(&randomness, 1, 6);
     pinocchio_log::log!("Consuming random number: {}", rnd_u8);
     pinocchio_log::log!("client_seed={}", client_seed);
