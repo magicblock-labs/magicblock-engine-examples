@@ -30,6 +30,11 @@ pub mod anchor_counter {
         Ok(())
     }
 
+    // SECURITY: besides the scheduled-crank path, this is an ordinary instruction any caller
+    // can invoke — a wallet transaction or a CPI from another program. Fine for a counter. A
+    // privileged handler must authenticate the caller for whatever it accepts: verify the
+    // crank signer PDA the scheduler supplies for the crank path, and/or a `Signer` bound to
+    // stored authority.
     /// Increment the counter.
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;

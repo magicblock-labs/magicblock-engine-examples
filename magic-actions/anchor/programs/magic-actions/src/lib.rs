@@ -127,6 +127,13 @@ pub struct Increment<'info> {
     pub counter: Account<'info, Counter>,
 }
 
+// SECURITY: besides the post-commit action path, this is an ordinary instruction any caller
+// can invoke — a wallet transaction or a CPI from another program (`#[action]` only adds the
+// action path). Fine here (just a score bump). A privileged action must authenticate the
+// caller for whatever it accepts: require the injected `escrow` signer for the post-commit
+// path (only the delegation program can sign it), and/or a `Signer` bound to stored authority.
+//     #[account(signer, address = ephemeral_balance_pda_from_payer(&escrow_auth.key(), 255))]
+//     pub escrow: UncheckedAccount<'info>,
 #[action]
 #[derive(Accounts)]
 pub struct UpdateLeaderboard<'info> {
