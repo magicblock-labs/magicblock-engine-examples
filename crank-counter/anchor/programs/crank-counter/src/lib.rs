@@ -30,11 +30,9 @@ pub mod anchor_counter {
         Ok(())
     }
 
-    // SECURITY: besides the scheduled-crank path, this is an ordinary instruction any caller
-    // can invoke — a wallet transaction or a CPI from another program. Fine for a counter. A
-    // privileged handler must authenticate the caller for whatever it accepts: verify the
-    // crank signer PDA the scheduler supplies for the crank path, and/or a `Signer` bound to
-    // stored authority.
+    // This example intentionally keeps `increment` permissionless. A privileged scheduled
+    // instruction must authenticate the preceding Hydra `Trigger` through the instructions
+    // sysvar. Scheduled instructions run top-level and do not inherit a Hydra PDA signature.
     /// Increment the counter.
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
