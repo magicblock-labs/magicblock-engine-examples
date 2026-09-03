@@ -22,11 +22,9 @@ pub mod delegation_actions {
         Ok(())
     }
 
-    // SECURITY: besides the post-delegation action path, this is an ordinary instruction any
-    // caller can invoke — a wallet transaction or a CPI from another program. Fine for a
-    // counter. A privileged handler must authenticate the caller for whatever it accepts: an
-    // escrow/authority signer for the action path, and/or a `Signer` bound to stored
-    // authority. See the magic-actions escrow pattern.
+    // This example intentionally keeps `increment` permissionless. A privileged
+    // post-delegation action should require an action signer that was validated and recorded
+    // when the account was delegated, or check an authority stored in program state.
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         let counter = &mut ctx.accounts.counter;
         counter.count += 1;
