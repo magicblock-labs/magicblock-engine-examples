@@ -17,6 +17,10 @@ REGULAR_PROJECTS=(anchor-counter binary-prediction crank-counter delegation-acti
 VRF_PROJECTS=(rewards-delegated-vrf roll-dice pinocchio-roll-dice)
 TEE_PROJECTS=(private-counter pinocchio-private-counter rock-paper-scissor sealed-auction)
 
+# Examples that ship MagicsVM tests (TS and/or Rust). Independent of validator
+# phases above — MagicsVM does not need a local cluster.
+MAGICSVM_PROJECTS=(anchor-counter rust-counter pinocchio-counter private-counter pinocchio-private-counter oracle-priced-purchase oncurve-delegation rock-paper-scissor ephemeral-account-chats session-keys binary-prediction magic-actions delegation-actions spl-tokens)
+
 ALL_PROJECTS=("${REGULAR_PROJECTS[@]}" "${VRF_PROJECTS[@]}" "${TEE_PROJECTS[@]}")
 
 # Print the directory for a stable project name, or empty if unknown.
@@ -60,6 +64,14 @@ project_phase() {
 projects_json() {
   local out="" p
   for p in "${ALL_PROJECTS[@]}"; do
+    out+="\"$p\","
+  done
+  echo "[${out%,}]"
+}
+
+magicsvm_projects_json() {
+  local out="" p
+  for p in "${MAGICSVM_PROJECTS[@]}"; do
     out+="\"$p\","
   done
   echo "[${out%,}]"

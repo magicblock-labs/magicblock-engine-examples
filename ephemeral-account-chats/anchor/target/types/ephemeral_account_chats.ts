@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/ephemeral_account_chats.json`.
  */
 export type EphemeralAccountChats = {
-  "address": "5kUATzj39y1HfMJbkW9tH3nWoLgq3WJ1scwiFdfDrdVT",
+  "address": "46ie8wmtxyVTSKqe1xoLYTXn56iAMFFJbPRvwJoqAVdM",
   "metadata": {
     "name": "ephemeralAccountChats",
     "version": "0.1.0",
@@ -500,38 +500,38 @@ export type EphemeralAccountChats = {
             "program": {
               "kind": "const",
               "value": [
-                70,
-                145,
-                111,
-                159,
-                11,
-                133,
+                46,
+                10,
+                12,
+                51,
+                3,
+                109,
+                147,
+                173,
+                199,
+                36,
+                228,
+                253,
                 215,
-                112,
-                76,
-                174,
-                91,
-                81,
-                150,
-                177,
-                124,
-                224,
+                218,
                 122,
-                138,
-                64,
-                62,
-                198,
-                210,
-                136,
-                229,
-                55,
-                20,
-                26,
-                45,
-                23,
+                211,
+                92,
+                156,
                 107,
-                40,
-                170
+                61,
+                102,
+                12,
+                152,
+                94,
+                153,
+                193,
+                63,
+                220,
+                172,
+                70,
+                87,
+                148
               ]
             }
           }
@@ -617,7 +617,7 @@ export type EphemeralAccountChats = {
         },
         {
           "name": "ownerProgram",
-          "address": "5kUATzj39y1HfMJbkW9tH3nWoLgq3WJ1scwiFdfDrdVT"
+          "address": "46ie8wmtxyVTSKqe1xoLYTXn56iAMFFJbPRvwJoqAVdM"
         },
         {
           "name": "delegationProgram",
@@ -777,14 +777,82 @@ export type EphemeralAccountChats = {
           "writable": true
         },
         {
-          "name": "buffer"
+          "name": "buffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  110,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "baseAccount"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                181,
+                183,
+                0,
+                225,
+                242,
+                87,
+                58,
+                192,
+                204,
+                6,
+                34,
+                1,
+                52,
+                74,
+                207,
+                151,
+                184,
+                53,
+                6,
+                235,
+                140,
+                229,
+                25,
+                152,
+                204,
+                98,
+                126,
+                24,
+                147,
+                128,
+                167,
+                62
+              ]
+            }
+          }
         },
         {
           "name": "payer",
           "writable": true
         },
         {
-          "name": "systemProgram"
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [

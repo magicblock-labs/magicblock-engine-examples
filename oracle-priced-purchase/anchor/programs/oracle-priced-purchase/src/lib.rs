@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
 use pyth_solana_receiver_sdk::price_update::{Price, PriceUpdateV2};
 
-declare_id!("32M8Sk4TMrktcpCwW6638MvknQbmbW4yskLaVR4vruHC");
+declare_id!("AfgVz1Ec1A51RkiuNU29zfXrssdhgiveQRCJEvZvypXD");
 
 pub const STORE_SEED: &[u8] = b"store";
 pub const RECEIPT_SEED: &[u8] = b"receipt";

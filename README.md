@@ -315,8 +315,8 @@ To run local tests for any example project, use the following steps:
 
 3. **Run Tests Locally:**
    ```bash
-   yarn test:local
-   ```
+yarn test:local
+```
 
 **Example:** To test the `pinocchio-roll-dice` example:
 
@@ -325,6 +325,18 @@ cd roll-dice/pinocchio
 yarn build
 yarn test:local
 ```
+
+### MagicsVM tests
+
+In-process MagicsVM tests (no local validators) live under `tests-magicsvm/` and `tests-magicsvm-rs/`. Shared helpers are in `test-utils/ts` (TypeScript) and `test-utils/rust` (Rust).
+
+```bash
+bash scripts/test-magicsvm.sh              # every example that has MagicsVM tests
+bash scripts/test-magicsvm.sh spl-tokens   # one example (substring match)
+```
+
+CI runs the same script per example via `.github/workflows/test-magicsvm.yml`.
+
 
 ### Local nodes
 

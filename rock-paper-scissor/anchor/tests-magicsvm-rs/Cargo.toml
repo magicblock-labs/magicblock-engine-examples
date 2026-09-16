@@ -1,0 +1,22 @@
+[workspace]
+
+[package]
+name = "anchor-rock-paper-scissor-magicsvm-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+anchor-lang = "=1.0.2"
+anchor-rock-paper-scissor = { path = "../programs/anchor-rock-paper-scissor", features = ["no-entrypoint"] }
+ephemeral-rollups-sdk = { version = "0.16.2", features = ["anchor", "access-control"] }
+magicsvm = "0.2.0"
+test-utils = { path = "../../../test-utils/rust", features = ["anchor"] }
+solana-address = "~2.6.1"
+solana-hash = "~4.5.0"
+solana-instruction = { version = "~3.4.0", features = ["bincode"] }
+solana-keypair = "3.1.2"
+solana-message = "4.2.4"
+solana-native-token = "3.0.0"
+solana-signer = "3.0.1"
+solana-transaction = { version = "4.1.5", features = ["verify"] }

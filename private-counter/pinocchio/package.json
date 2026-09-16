@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test:local": ". ../../scripts/local-env.sh && npx vitest run tests/",
+    "test:magicsvm": "vitest run tests-magicsvm/",
+    "test:magicsvm:rs": "env RUSTUP_TOOLCHAIN=nightly cargo test --manifest-path tests-magicsvm-rs/Cargo.toml",
     "setup": "cd ../.. && SETUP_ONLY=1 ./scripts/test-locally.sh pinocchio-private-counter",
     "test": "yarn test:local",
     "test:watch": "vitest watch tests/",
@@ -24,6 +26,7 @@
   "license": "MIT",
   "devDependencies": {
     "@magicblock-labs/ephemeral-rollups-sdk": "^0.11.1",
+    "@magicblock-labs/magicsvm": "0.2.0",
     "@solana-program/system": "^0.10.0",
     "@solana/kit": "^5.4.0",
     "@solana/web3.js": "^1.93.0",
@@ -34,6 +37,7 @@
     "tweetnacl": "^1.0.3",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0",
-    "prettier": "^3.5.3"
+    "prettier": "^3.5.3",
+    "@magicblock-labs/test-utils": "link:../../test-utils/ts"
   }
 }

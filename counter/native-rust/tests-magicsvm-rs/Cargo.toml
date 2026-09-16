@@ -1,0 +1,28 @@
+[package]
+name = "rust-counter-magicsvm-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+autolib = false
+
+[workspace]
+
+[[test]]
+name = "magicsvm"
+path = "tests/magicsvm.rs"
+
+[dev-dependencies]
+ephemeral-rollups-sdk = { version = "0.14.4", features = ["modular-sdk"] }
+magicblock-delegation-program-api = { version = "3.0.0", default-features = false }
+magicsvm = "0.2.0"
+test-utils = { path = "../../../test-utils/rust" }
+serde_json = "1"
+solana-address = "~2.6.1"
+solana-hash = "~4.5.0"
+solana-instruction = { version = "~3.4.0", features = ["bincode"] }
+solana-keypair = "3.1.2"
+solana-message = "4.2.4"
+solana-native-token = "3.0.0"
+solana-sdk-ids = "3.1.0"
+solana-signer = "3.0.1"
+solana-transaction = { version = "4.1.5", features = ["verify"] }
