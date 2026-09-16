@@ -7,7 +7,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-ephemeral_account_chats = "5kUATzj39y1HfMJbkW9tH3nWoLgq3WJ1scwiFdfDrdVT"
+ephemeral_account_chats = "46ie8wmtxyVTSKqe1xoLYTXn56iAMFFJbPRvwJoqAVdM"
 
 [provider]
 cluster = "devnet"

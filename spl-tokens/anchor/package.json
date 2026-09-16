@@ -5,6 +5,8 @@
     "test": "yarn test:local",
     "build": "anchor keys sync && anchor build",
     "test:local": ". ../../scripts/local-env.sh && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/spl-tokens.ts",
+    "test:magicsvm": "npx ts-mocha -p ./tsconfig.json -t 1000000 tests-magicsvm/spl-tokens.ts",
+    "test:magicsvm:rs": "env RUSTUP_TOOLCHAIN=nightly cargo test --manifest-path tests-magicsvm-rs/Cargo.toml -- --nocapture",
     "setup": "cd ../.. && SETUP_ONLY=1 ./scripts/test-locally.sh spl-tokens"
   },
   "dependencies": {
@@ -12,6 +14,7 @@
     "@magicblock-labs/ephemeral-rollups-sdk": "0.16.2"
   },
   "devDependencies": {
+    "@magicblock-labs/magicsvm": "0.2.0",
     "@solana/spl-token": "^0.4.14",
     "@types/bn.js": "^5.1.0",
     "@types/chai": "^5.2.2",
@@ -22,7 +25,8 @@
     "ts-mocha": "^11.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.22.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "@magicblock-labs/test-utils": "link:../../test-utils/ts"
   },
   "license": "MIT",
   "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447"

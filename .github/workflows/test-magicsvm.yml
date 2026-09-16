@@ -1,0 +1,85 @@
+name: Test MagicsVM
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Emit MagicsVM example names as JSON so the test job can fan out one runner
+  # per example. Source of truth: MAGICSVM_PROJECTS in scripts/projects.sh.
+  list-examples:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set
+        run: |
+          # shellcheck source=scripts/projects.sh
+          . scripts/projects.sh
+          echo "matrix=$(magicsvm_projects_json)" >> "$GITHUB_OUTPUT"
+
+  # In-process MagicsVM tests: no local validators, VRF oracle, or TEE stack.
+  test-magicsvm:
+    needs: list-examples
+    name: magicsvm (${{ matrix.example }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example: ${{ fromJSON(needs.list-examples.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.10"
+
+      - name: Enable Corepack
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.19 --activate
+          corepack prepare yarn@1.22.22 --activate
+
+      - name: Setup Rust 1.89 (Anchor builds)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.89.0"
+
+      - name: Setup Rust nightly (MagicsVM tests)
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly
+
+      # anchor idl build invokes the host `stable` toolchain after cargo build-sbf.
+      - name: Ensure stable Rust for Anchor IDL
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default 1.89.0
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev pkg-config
+
+      - name: Install Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.9/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install Anchor
+        run: |
+          cargo install --git https://github.com/solana-foundation/anchor --tag v1.0.2 anchor-cli
+
+      - name: Test MagicsVM ${{ matrix.example }}
+        env:
+          EXACT_MATCH: "1"
+        run: bash scripts/test-magicsvm.sh "${{ matrix.example }}"

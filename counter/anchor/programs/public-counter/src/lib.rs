@@ -3,7 +3,7 @@ use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
-declare_id!("79sGyNW41g8TrKyQwk7SZu432SH9ZfHmtRzEtR6CSt3n");
+declare_id!("4YM4nBzSPmqhtQULJEiW545H68RQtK5W2TthB2zkencJ");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 
