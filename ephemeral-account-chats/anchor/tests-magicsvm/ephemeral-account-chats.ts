@@ -25,13 +25,17 @@ const MAX_MESSAGE_COUNT = 5;
 describe("ephemeral-account-chats magicsvm", () => {
   const userAKp = Keypair.generate();
   const userBKp = Keypair.generate();
-  const { svm, payer, program, validator: validatorStr } =
-    bootAnchorSvm<EphemeralAccountChats>({
-      fromDir: __dirname,
-      programName: "ephemeral_account_chats",
-      payer: userAKp,
-      airdropLamports: BigInt(anchor.web3.LAMPORTS_PER_SOL),
-    });
+  const {
+    svm,
+    payer,
+    program,
+    validator: validatorStr,
+  } = bootAnchorSvm<EphemeralAccountChats>({
+    fromDir: __dirname,
+    programName: "ephemeral_account_chats",
+    payer: userAKp,
+    airdropLamports: BigInt(anchor.web3.LAMPORTS_PER_SOL),
+  });
   const userA = new anchor.Wallet(payer);
   const userB = new anchor.Wallet(userBKp);
   const validator = new PublicKey(validatorStr);
@@ -103,15 +107,11 @@ describe("ephemeral-account-chats magicsvm", () => {
 
     const profileA = program.coder.accounts.decode(
       "profile",
-      Buffer.from(
-        requireAccount(svm, profileAPda, "base").data,
-      ),
+      Buffer.from(requireAccount(svm, profileAPda, "base").data),
     );
     const profileB = program.coder.accounts.decode(
       "profile",
-      Buffer.from(
-        requireAccount(svm, profileBPda, "base").data,
-      ),
+      Buffer.from(requireAccount(svm, profileBPda, "base").data),
     );
     expect(profileA.handle).to.equal(nameA);
     expect(profileB.handle).to.equal(nameB);
@@ -192,7 +192,11 @@ describe("ephemeral-account-chats magicsvm", () => {
       "ephemeral",
     );
 
-    const conversationAccount = requireAccount(svm, conversationPda, "ephemeral");
+    const conversationAccount = requireAccount(
+      svm,
+      conversationPda,
+      "ephemeral",
+    );
     const conversation = program.coder.accounts.decode(
       "conversation",
       Buffer.from(conversationAccount.data),
@@ -260,7 +264,11 @@ describe("ephemeral-account-chats magicsvm", () => {
       }
     }
 
-    const conversationAccount = requireAccount(svm, conversationPda, "ephemeral");
+    const conversationAccount = requireAccount(
+      svm,
+      conversationPda,
+      "ephemeral",
+    );
     const conversation = program.coder.accounts.decode(
       "conversation",
       Buffer.from(conversationAccount.data),

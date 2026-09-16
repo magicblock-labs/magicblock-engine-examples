@@ -134,7 +134,9 @@ describe("anchor-rock-paper-scissor (magicsvm)", () => {
     const magicProgram = svm.getAccountFor(MAGIC_PROGRAM_ID, {
       target: "ephemeral",
     });
-    const vault = svm.getAccountFor(EPHEMERAL_VAULT_ID, { target: "ephemeral" });
+    const vault = svm.getAccountFor(EPHEMERAL_VAULT_ID, {
+      target: "ephemeral",
+    });
     console.log(
       "MAGIC_PROGRAM_ID on ephemeral:",
       magicProgram.exists ? `executable=${magicProgram.executable}` : "MISSING",
@@ -245,7 +247,13 @@ describe("anchor-rock-paper-scissor (magicsvm)", () => {
       delegateGameIx,
       delegatePlayer2ChoiceIx,
     );
-    sendSvmTx(svm, [player2], tx, "base", "join game + delegate game + p2 choice");
+    sendSvmTx(
+      svm,
+      [player2],
+      tx,
+      "base",
+      "join game + delegate game + p2 choice",
+    );
     console.log(
       `✅ Player 2 joined game ${gameId} + delegated game + p2 choice`,
     );
@@ -297,7 +305,13 @@ describe("anchor-rock-paper-scissor (magicsvm)", () => {
       initGamePermissionIx,
       initP2ChoicePermissionIx,
     );
-    sendSvmTx(svm, [player2], tx, "ephemeral", "init game + p2 choice permissions");
+    sendSvmTx(
+      svm,
+      [player2],
+      tx,
+      "ephemeral",
+      "init game + p2 choice permissions",
+    );
     console.log("✅ Game + P2 Choice permissions initialized");
 
     const permission = svm.getAccountFor(permissionForPlayer2Choice, {

@@ -62,7 +62,9 @@ describe("magic-actions-local", () => {
     if (delegated) {
       counterBase = "<Delegated>";
       const erInfo = svm.getAccountFor(pda, { target: "ephemeral" });
-      counterER = erInfo.exists ? readU64le(svm, pda, "ephemeral").toString() : "0";
+      counterER = erInfo.exists
+        ? readU64le(svm, pda, "ephemeral").toString()
+        : "0";
     } else if (svm.getAccountFor(pda, { target: "base" }).exists) {
       counterBase = readU64le(svm, pda, "base").toString();
       counterER = "<Not Delegated>";
@@ -166,7 +168,10 @@ describe("magic-actions-local", () => {
       .instruction();
     sendSvmIx(svm, [payer], [topUpIx, delegateIx], "base");
 
-    assert.equal(accountOwner(svm, pda, "base"), DELEGATION_PROGRAM_ID.toBase58());
+    assert.equal(
+      accountOwner(svm, pda, "base"),
+      DELEGATION_PROGRAM_ID.toBase58(),
+    );
     assert.ok(isDelegated(svm, pda));
     assert.equal(readU64le(svm, pda, "ephemeral"), 1n);
     const escrowAccount = requireAccount(svm, escrow, "base", "escrow");
