@@ -81,7 +81,7 @@ fn oracle_so_path() -> PathBuf {
 
 fn session_so_path() -> PathBuf {
     let mut so_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    so_path.push("../tests-magicsvm/fixtures/session-keys.so");
+    so_path.push("../tests/fixtures/session-keys.so");
     so_path
 }
 

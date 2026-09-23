@@ -32,7 +32,7 @@ fn program_so_path() -> PathBuf {
 }
 
 fn session_so_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests-magicsvm/fixtures/session-keys.so")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/session-keys.so")
 }
 
 fn program_id() -> Pubkey {
