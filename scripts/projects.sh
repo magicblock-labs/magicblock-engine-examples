@@ -1,24 +1,28 @@
 #!/bin/bash
-# Single source of truth for the example projects, grouped by the test phase that
-# runs them. The project name is the stable CLI/CI identifier; project_dir maps
-# that identifier to its location in the use-case/framework folder layout. Each
-# project exposes `yarn build` (compile only) and `yarn test:local` (the local
-# test subset).
+# Single source of truth for the example projects. The project name is the stable
+# CLI/CI identifier; project_dir maps that identifier to its location in the
+# use-case/framework folder layout. Every project exposes `yarn build`; MagicSVM
+# projects expose `yarn test` (in-process), validator projects `yarn test:local`.
 #
 # Sourced by:
 #   - scripts/test-locally.sh (full suite, runs every phase)
 #   - scripts/test-example.sh (one example per invocation — CI matrix entry point)
-#   - the CI matrix generator (reads projects_json to fan out one runner per example)
+#   - scripts/test-magicsvm.sh (MagicSVM projects, no validators)
+#   - the CI matrix generators (projects_json / magicsvm_projects_json)
 #
 # Keep this list in sync when adding/removing examples; both the local runner and
 # CI pick it up automatically.
 
-REGULAR_PROJECTS=(anchor-counter binary-prediction crank-counter delegation-actions ephemeral-account-chats gachapon-example magic-actions oracle-priced-purchase pinocchio-counter rust-counter session-keys spl-tokens)
+# Validator-based examples, grouped by the phase (validators/oracles) they need. Only the
+# examples MagicSVM cannot simulate yet stay here: scheduled tasks (crank-counter), the VRF
+# oracle (gachapon-example, roll-dice, pinocchio-roll-dice, rewards-delegated-vrf) and the
+# private-permission flow of sealed-auction (see sealed-auction/anchor/MAGICSVM_FLAWS.md).
+REGULAR_PROJECTS=(crank-counter gachapon-example)
 VRF_PROJECTS=(rewards-delegated-vrf roll-dice pinocchio-roll-dice)
-TEE_PROJECTS=(private-counter pinocchio-private-counter rock-paper-scissor sealed-auction)
+TEE_PROJECTS=(sealed-auction)
 
-# Examples that ship MagicsVM tests (TS and/or Rust). Independent of validator
-# phases above — MagicsVM does not need a local cluster.
+# Examples whose `yarn test` runs in-process on MagicSVM (TypeScript; most also ship a Rust
+# suite under tests-magicsvm-rs/ run by `yarn test:magicsvm:rs`). No local cluster needed.
 MAGICSVM_PROJECTS=(anchor-counter rust-counter pinocchio-counter private-counter pinocchio-private-counter oracle-priced-purchase oncurve-delegation rock-paper-scissor ephemeral-account-chats session-keys binary-prediction magic-actions delegation-actions spl-tokens)
 
 ALL_PROJECTS=("${REGULAR_PROJECTS[@]}" "${VRF_PROJECTS[@]}" "${TEE_PROJECTS[@]}")

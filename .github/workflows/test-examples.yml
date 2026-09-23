@@ -102,8 +102,12 @@ jobs:
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
       - name: Install Anchor
+        # Prebuilt release binary: building anchor-cli from source took ~5 min per job.
         run: |
-          cargo install --git https://github.com/solana-foundation/anchor --tag v1.0.2 anchor-cli
+          curl -sSfL -o /tmp/anchor \
+            https://github.com/solana-foundation/anchor/releases/download/v1.0.2/anchor-1.0.2-x86_64-unknown-linux-gnu
+          sudo install -m 755 /tmp/anchor /usr/local/bin/anchor
+          anchor --version
 
       - name: Install MagicBlock Ephemeral Validator
         run: |

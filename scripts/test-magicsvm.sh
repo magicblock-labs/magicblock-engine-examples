@@ -1,7 +1,8 @@
 #!/bin/bash
-# Run MagicsVM tests (TypeScript and/or Rust) for every example that has them.
+# Run the MagicSVM tests (TypeScript `yarn test`, plus the Rust suite when the
+# example has one) for every MagicSVM example (MAGICSVM_PROJECTS in projects.sh).
 #
-# MagicsVM tests are in-process and do not start validators. They do need the
+# MagicSVM tests are in-process and do not start validators. They do need the
 # compiled program .so (and IDL, for Anchor examples), so each example is built
 # first via `yarn build`.
 #
@@ -11,10 +12,11 @@
 #
 # Env:
 #   FAIL_FAST=0     keep going after a failure (default: stop on first)
-#   SKIP_TS=1       skip yarn test:magicsvm
+#   SKIP_TS=1       skip yarn test (TypeScript suite)
 #   SKIP_RS=1       skip yarn test:magicsvm:rs
 #   SKIP_BUILD=1    skip yarn build (use existing target/deploy)
 #   EXACT_MATCH=1   require the filter to equal the project name (used by CI)
+#   MAGICSVM_RS_TARGET_DIR=<dir>  CARGO_TARGET_DIR for the Rust suites (CI shares one cache)
 
 set -euo pipefail
 
@@ -46,7 +48,7 @@ matches_filter() {
   fi
 }
 
-echo "Installing MagicsVM test helpers..."
+echo "Installing MagicSVM test helpers..."
 ( cd "$REPO_ROOT/test-utils/ts" && yarn install --mutex "$YARN_MUTEX" && yarn build )
 
 run_one() {
@@ -73,19 +75,24 @@ run_one() {
       yarn build
     fi
     ran=0
-    if [ "$SKIP_TS" != "1" ] && grep -q '"test:magicsvm"' package.json; then
-      yarn test:magicsvm || exit 1
+    if [ "$SKIP_TS" != "1" ]; then
+      yarn test || exit 1
       ran=1
     fi
     if [ "$SKIP_RS" != "1" ] && grep -q '"test:magicsvm:rs"' package.json; then
-      RUSTUP_TOOLCHAIN="${MAGICSVM_RUSTUP_TOOLCHAIN:-nightly}" yarn test:magicsvm:rs || exit 1
+      rs_env=()
+      if [ -n "${MAGICSVM_RS_TARGET_DIR:-}" ]; then
+        rs_env+=("CARGO_TARGET_DIR=$MAGICSVM_RS_TARGET_DIR")
+      fi
+      env ${rs_env[@]+"${rs_env[@]}"} RUSTUP_TOOLCHAIN="${MAGICSVM_RUSTUP_TOOLCHAIN:-nightly}" \
+        yarn test:magicsvm:rs || exit 1
       ran=1
     fi
     if [ "$ran" -eq 0 ]; then
       if [ "$SKIP_TS" = "1" ] && [ "$SKIP_RS" = "1" ]; then
         exit 2
       fi
-      echo "No MagicsVM tests ran for $name (missing scripts or SKIP_TS/SKIP_RS)"
+      echo "No MagicSVM tests ran for $name (SKIP_TS/SKIP_RS)"
       exit 1
     fi
   )
