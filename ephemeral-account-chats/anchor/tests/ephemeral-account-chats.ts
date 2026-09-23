@@ -1,21 +1,17 @@
 import * as anchor from "@coral-xyz/anchor";
-import { assert, expect } from "chai";
+import { expect } from "chai";
+import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import {
-  Connection,
-  Keypair,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from "@solana/web3.js";
-import {
+  airdropOrThrow,
+  bootAnchorSvm,
   DELEGATION_PROGRAM_ID,
-  GetCommitmentSignature,
-} from "@magicblock-labs/ephemeral-rollups-sdk";
-import { Program } from "@coral-xyz/anchor";
+  requireAccount,
+  sendExpectingFailure,
+  sendSvmIx,
+} from "@magicblock-labs/test-utils";
 import { EphemeralAccountChats } from "../target/types/ephemeral_account_chats";
 
 function generateName(): string {
-  // Random number padded with 0s to 10 digits
   const randomNumber = Math.floor(Math.random() * 10000000000);
   return randomNumber.toString().padStart(10, "0");
 }
@@ -26,16 +22,23 @@ function conversationSize(messageCount: number): number {
 
 const MAX_MESSAGE_COUNT = 5;
 
-describe("ephemeral-account-chats", () => {
-  anchor.setProvider(anchor.AnchorProvider.env());
-
-  const provider = anchor.getProvider() as anchor.AnchorProvider;
-  const program: Program<EphemeralAccountChats> =
-    anchor.workspace.ephemeralAccountChats;
-  const connection = provider.connection;
-  const userA = provider.wallet;
+describe("ephemeral-account-chats magicsvm", () => {
+  const userAKp = Keypair.generate();
   const userBKp = Keypair.generate();
+  const {
+    svm,
+    payer,
+    program,
+    validator: validatorStr,
+  } = bootAnchorSvm<EphemeralAccountChats>({
+    fromDir: __dirname,
+    programName: "ephemeral_account_chats",
+    payer: userAKp,
+    airdropLamports: BigInt(anchor.web3.LAMPORTS_PER_SOL),
+  });
+  const userA = new anchor.Wallet(payer);
   const userB = new anchor.Wallet(userBKp);
+  const validator = new PublicKey(validatorStr);
 
   const nameA = generateName();
   const nameB = generateName();
@@ -53,55 +56,19 @@ describe("ephemeral-account-chats", () => {
     program.programId,
   );
 
-  const erRpcUrl =
-    process.env.EPHEMERAL_PROVIDER_ENDPOINT ??
-    process.env.MAGICBLOCK_RPC_URL ??
-    "https://devnet-as.magicblock.app";
-  const erConnection = new Connection(erRpcUrl, "confirmed");
-  let validator: PublicKey;
-  const erProgramA = new Program<EphemeralAccountChats>(
-    program.idl,
-    new anchor.AnchorProvider(erConnection, userA),
-  );
-  const erProgramB = new Program<EphemeralAccountChats>(
-    program.idl,
-    new anchor.AnchorProvider(erConnection, userB),
-  );
+  async function instruction(builder: {
+    instruction(): Promise<Parameters<typeof sendSvmIx>[2]>;
+  }): Promise<Parameters<typeof sendSvmIx>[2]> {
+    return builder.instruction();
+  }
 
-  ///---------------------------------------------------------------------------
-  /// Base layer
-  ///---------------------------------------------------------------------------
-
-  before(async () => {
-    // Transfer some balance to userB
-    const tx = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: userA.publicKey,
-        toPubkey: userB.publicKey,
-        lamports: 0.1 * anchor.web3.LAMPORTS_PER_SOL,
-      }),
+  before(() => {
+    airdropOrThrow(
+      svm,
+      userB.publicKey,
+      BigInt(anchor.web3.LAMPORTS_PER_SOL),
+      "airdrop user B",
     );
-    tx.feePayer = userA.publicKey;
-    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-    const signedTx = await userA.signTransaction(tx);
-    const txHash = await connection.sendRawTransaction(signedTx.serialize());
-    await connection.confirmTransaction(txHash, "confirmed");
-
-    const response = await fetch(erRpcUrl, {
-      method: "POST",
-      body: JSON.stringify({
-        method: "getIdentity",
-        jsonrpc: "2.0",
-        params: [
-          {
-            commitment: "confirmed",
-          },
-        ],
-        id: "c1cae191-92ec-4606-880c-c7817afaa121",
-      }),
-    });
-    const data: any = await response.json();
-    validator = new PublicKey(data.result.identity);
 
     console.log("Program ID: ", program.programId.toBase58());
     console.log("Validator: ", validator.toBase58());
@@ -113,285 +80,301 @@ describe("ephemeral-account-chats", () => {
   });
 
   it("creates profiles", async () => {
-    await program.methods
-      .createProfile(nameA)
-      .accountsPartial({
-        authority: userA.publicKey,
-        profile: profileAPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
+    sendSvmIx(
+      svm,
+      [userAKp],
+      await instruction(
+        program.methods.createProfile(nameA).accountsPartial({
+          authority: userA.publicKey,
+          profile: profileAPda,
+          systemProgram: SystemProgram.programId,
+        }),
+      ),
+      "base",
+    );
+    sendSvmIx(
+      svm,
+      [userBKp],
+      await instruction(
+        program.methods.createProfile(nameB).accountsPartial({
+          authority: userB.publicKey,
+          profile: profileBPda,
+          systemProgram: SystemProgram.programId,
+        }),
+      ),
+      "base",
+    );
 
-    await program.methods
-      .createProfile(nameB)
-      .accountsPartial({
-        authority: userB.publicKey,
-        profile: profileBPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([userBKp])
-      .rpc({ skipPreflight: true });
-
-    const profileA = await program.account.profile.fetch(profileAPda);
-    const profileB = await program.account.profile.fetch(profileBPda);
+    const profileA = program.coder.accounts.decode(
+      "profile",
+      Buffer.from(requireAccount(svm, profileAPda, "base").data),
+    );
+    const profileB = program.coder.accounts.decode(
+      "profile",
+      Buffer.from(requireAccount(svm, profileBPda, "base").data),
+    );
     expect(profileA.handle).to.equal(nameA);
     expect(profileB.handle).to.equal(nameB);
   });
 
   it("tops up profiles", async () => {
-    let profileA = await connection.getAccountInfo(profileAPda);
-    const profileALamportsBefore = profileA?.lamports ?? 0;
+    const profileABefore = requireAccount(svm, profileAPda, "base");
+    const profileALamportsBefore = Number(profileABefore.lamports);
 
-    await program.methods
-      .topUpProfile(new anchor.BN(0.05 * anchor.web3.LAMPORTS_PER_SOL))
-      .accounts({
-        authority: userA.publicKey,
-        profile: profileAPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc({ skipPreflight: true });
+    sendSvmIx(
+      svm,
+      [userAKp],
+      await instruction(
+        program.methods
+          .topUpProfile(new anchor.BN(0.05 * anchor.web3.LAMPORTS_PER_SOL))
+          .accounts({
+            authority: userA.publicKey,
+            profile: profileAPda,
+            systemProgram: SystemProgram.programId,
+          }),
+      ),
+      "base",
+    );
 
-    profileA = await connection.getAccountInfo(profileAPda);
-    expect(profileA?.lamports).to.equal(
+    const profileA = requireAccount(svm, profileAPda, "base");
+    expect(Number(profileA.lamports)).to.equal(
       0.05 * anchor.web3.LAMPORTS_PER_SOL + profileALamportsBefore,
     );
   });
 
   it("delegates profiles", async () => {
-    await program.methods
-      .delegateProfile(validator)
-      .accounts({
-        authority: userA.publicKey,
-        profile: profileAPda,
-      })
-      .rpc({ skipPreflight: true });
+    sendSvmIx(
+      svm,
+      [userAKp],
+      await instruction(
+        program.methods.delegateProfile(validator).accounts({
+          authority: userA.publicKey,
+          profile: profileAPda,
+        }),
+      ),
+      "base",
+    );
+    sendSvmIx(
+      svm,
+      [userBKp],
+      await instruction(
+        program.methods.delegateProfile(validator).accounts({
+          authority: userB.publicKey,
+          profile: profileBPda,
+        }),
+      ),
+      "base",
+    );
 
-    await program.methods
-      .delegateProfile(validator)
-      .accounts({
-        authority: userB.publicKey,
-        profile: profileBPda,
-      })
-      .signers([userBKp])
-      .rpc({ skipPreflight: true });
-
-    const profileA = await connection.getAccountInfo(profileAPda);
-    const profileB = await connection.getAccountInfo(profileBPda);
-    expect(profileA?.owner?.toBase58()).to.equal(
+    const profileA = requireAccount(svm, profileAPda, "base");
+    const profileB = requireAccount(svm, profileBPda, "base");
+    expect(profileA.programAddress.toString()).to.equal(
       DELEGATION_PROGRAM_ID.toBase58(),
     );
-    expect(profileB?.owner?.toBase58()).to.equal(
+    expect(profileB.programAddress.toString()).to.equal(
       DELEGATION_PROGRAM_ID.toBase58(),
     );
   });
 
-  ///---------------------------------------------------------------------------
-  /// In the ephemeral rollup
-  ///---------------------------------------------------------------------------
-
   it("creates a conversation", async () => {
-    await erProgramA.methods
-      .createConversation()
-      .accounts({
-        authority: userA.publicKey,
-        profileOwner: profileAPda,
-        profileOther: profileBPda,
-        conversation: conversationPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc({ skipPreflight: true });
+    sendSvmIx(
+      svm,
+      [userAKp],
+      await instruction(
+        program.methods.createConversation().accounts({
+          authority: userA.publicKey,
+          profileOwner: profileAPda,
+          profileOther: profileBPda,
+          conversation: conversationPda,
+          systemProgram: SystemProgram.programId,
+        }),
+      ),
+      "ephemeral",
+    );
 
-    const conversation = await erProgramA.account.conversation.fetch(
+    const conversationAccount = requireAccount(
+      svm,
       conversationPda,
+      "ephemeral",
+    );
+    const conversation = program.coder.accounts.decode(
+      "conversation",
+      Buffer.from(conversationAccount.data),
     );
     expect(conversation.messages.length).to.equal(0);
-    const conversationAccount = await erConnection.getAccountInfo(
-      conversationPda,
-    );
-    expect(conversationAccount?.data.length).to.equal(conversationSize(0));
+    expect(conversationAccount.data.length).to.equal(conversationSize(0));
   });
 
   it("extends a conversation", async () => {
-    await erProgramA.methods
-      .extendConversation(MAX_MESSAGE_COUNT)
-      .accounts({
-        authority: userA.publicKey,
-        profileSender: profileAPda,
-        profileOther: profileBPda,
-      })
-      .rpc({ skipPreflight: true });
+    sendSvmIx(
+      svm,
+      [userAKp],
+      await instruction(
+        program.methods.extendConversation(MAX_MESSAGE_COUNT).accountsPartial({
+          authority: userA.publicKey,
+          profileSender: profileAPda,
+          profileOther: profileBPda,
+          conversation: conversationPda,
+        }),
+      ),
+      "ephemeral",
+    );
 
-    const conversation = await erConnection.getAccountInfo(conversationPda);
-    expect(conversation?.data.length).to.equal(
+    const conversation = requireAccount(svm, conversationPda, "ephemeral");
+    expect(conversation.data.length).to.equal(
       conversationSize(MAX_MESSAGE_COUNT),
     );
   });
 
   it("appends messages to a conversation", async () => {
-    let receivedMessages = 0;
-    const subscriptionId = erConnection.onAccountChange(
-      conversationPda,
-      (account) => {
-        const parsedMessage = erProgramA.coder.accounts.decode(
-          "conversation",
-          account.data,
-        );
-        receivedMessages++;
-      },
-    );
-
     const nMessages = MAX_MESSAGE_COUNT;
-    try {
-      for (let i = 0; i < nMessages; i++) {
-        // Include i in the message so each tx has unique bytes (different signature).
-        // maxRetries: 0 prevents web3.js from auto-resending the same tx if confirmation
-        // is slow — the resend would hit "already processed" against the ER.
-        if (i % 2 === 0) {
-          await erProgramA.methods
-            .appendMessage(`Hello ${i} from user A!`)
-            .accountsPartial({
-              authority: userA.publicKey,
-              profileOwner: profileAPda,
-              profileOther: profileBPda,
-            })
-            .rpc({ skipPreflight: true, maxRetries: 0 });
-        } else {
-          await erProgramB.methods
-            .appendMessage(`Hello ${i} from user B!`)
-            .accountsPartial({
-              authority: userB.publicKey,
-              profileOwner: profileAPda,
-              profileOther: profileBPda,
-            })
-            .signers([userBKp])
-            .rpc({ skipPreflight: true, maxRetries: 0 });
-        }
+    for (let i = 0; i < nMessages; i++) {
+      if (i % 2 === 0) {
+        sendSvmIx(
+          svm,
+          [userAKp],
+          await instruction(
+            program.methods
+              .appendMessage(`Hello ${i} from user A!`)
+              .accountsPartial({
+                authority: userA.publicKey,
+                profileOwner: profileAPda,
+                profileOther: profileBPda,
+                conversation: conversationPda,
+              }),
+          ),
+          "ephemeral",
+        );
+      } else {
+        sendSvmIx(
+          svm,
+          [userBKp],
+          await instruction(
+            program.methods
+              .appendMessage(`Hello ${i} from user B!`)
+              .accountsPartial({
+                authority: userB.publicKey,
+                profileOwner: profileAPda,
+                profileOther: profileBPda,
+                conversation: conversationPda,
+              }),
+          ),
+          "ephemeral",
+        );
       }
-
-      const retries = 10;
-      for (let i = 0; i < retries; i++) {
-        if (receivedMessages === nMessages) {
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    } finally {
-      await erConnection.removeAccountChangeListener(subscriptionId);
     }
 
-    expect(receivedMessages).to.equal(nMessages);
+    const conversationAccount = requireAccount(
+      svm,
+      conversationPda,
+      "ephemeral",
+    );
+    const conversation = program.coder.accounts.decode(
+      "conversation",
+      Buffer.from(conversationAccount.data),
+    );
+    expect(conversation.messages.length).to.equal(nMessages);
 
-    try {
-      await erProgramA.methods
-        .appendMessage(
-          "Hello world, appending another message, this should be failed!",
-        )
-        .accountsPartial({
-          authority: userA.publicKey,
-          profileOwner: profileAPda,
-          profileOther: profileBPda,
-        })
-        .rpc();
-      assert.fail("The conversation should have been full");
-    } catch (error) {
-      let programError = error as anchor.ProgramError;
-      const expectedError = program.idl.errors.find(
-        (e) => e.name === "conversationCapacityExceeded",
-      );
-      expect(programError.msg).to.equal(expectedError?.msg);
-    }
+    const failed = sendExpectingFailure(
+      svm,
+      [userAKp],
+      await instruction(
+        program.methods
+          .appendMessage(
+            "Hello world, appending another message, this should be failed!",
+          )
+          .accountsPartial({
+            authority: userA.publicKey,
+            profileOwner: profileAPda,
+            profileOther: profileBPda,
+            conversation: conversationPda,
+          }),
+      ),
+      "ephemeral",
+    );
+    const expectedError = program.idl.errors.find(
+      (e) =>
+        e.name === "conversationCapacityExceeded" ||
+        e.name === "ConversationCapacityExceeded",
+    );
+    expect(failed.meta().logs().join("\n")).to.include(expectedError?.msg);
   });
 
   it("closes a conversation", async () => {
-    await erProgramA.methods
-      .closeConversation()
-      .accounts({
-        authority: userA.publicKey,
-        profileOwner: profileAPda,
-        profileOther: profileBPda,
-        conversation: conversationPda,
-      })
-      .rpc({ skipPreflight: true });
+    sendSvmIx(
+      svm,
+      [userAKp],
+      await instruction(
+        program.methods.closeConversation().accounts({
+          authority: userA.publicKey,
+          profileOwner: profileAPda,
+          profileOther: profileBPda,
+          conversation: conversationPda,
+        }),
+      ),
+      "ephemeral",
+    );
   });
 
   it("undelegates profiles", async () => {
-    const txHashA = await erProgramA.methods
-      .undelegateProfile()
-      .accountsPartial({
-        authority: userA.publicKey,
-        profile: profileAPda,
-      })
-      .rpc({ skipPreflight: true });
-    const txHashB = await erProgramB.methods
-      .undelegateProfile()
-      .accountsPartial({
-        authority: userB.publicKey,
-        profile: profileBPda,
-      })
-      .rpc({ skipPreflight: true });
-
-    const commitmentSignatureA = await GetCommitmentSignature(
-      txHashA,
-      erConnection,
+    sendSvmIx(
+      svm,
+      [userAKp],
+      await instruction(
+        program.methods.undelegateProfile().accountsPartial({
+          authority: userA.publicKey,
+          profile: profileAPda,
+        }),
+      ),
+      "ephemeral",
     );
-    const commitmentSignatureB = await GetCommitmentSignature(
-      txHashB,
-      erConnection,
+    sendSvmIx(
+      svm,
+      [userBKp],
+      await instruction(
+        program.methods.undelegateProfile().accountsPartial({
+          authority: userB.publicKey,
+          profile: profileBPda,
+        }),
+      ),
+      "ephemeral",
     );
 
-    await connection.getTransaction(commitmentSignatureA, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    });
-    await connection.getTransaction(commitmentSignatureB, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    });
-
-    const profileA = await connection.getAccountInfo(profileAPda);
-    const profileB = await connection.getAccountInfo(profileBPda);
-    expect(profileA?.owner?.toBase58()).to.equal(program.programId.toBase58());
-    expect(profileB?.owner?.toBase58()).to.equal(program.programId.toBase58());
+    const profileA = requireAccount(svm, profileAPda, "base");
+    const profileB = requireAccount(svm, profileBPda, "base");
+    expect(profileA.programAddress.toString()).to.equal(
+      program.programId.toBase58(),
+    );
+    expect(profileB.programAddress.toString()).to.equal(
+      program.programId.toBase58(),
+    );
   });
 
-  ///---------------------------------------------------------------------------
-  /// Base layer
-  ///---------------------------------------------------------------------------
-
   it("closes profiles and refunds user A", async () => {
-    await program.methods
-      .closeProfile()
-      .accounts({
-        authority: userA.publicKey,
-        profile: profileAPda,
-      })
-      .rpc();
-    await program.methods
-      .closeProfile()
-      .accounts({
-        authority: userB.publicKey,
-        profile: profileBPda,
-      })
-      .signers([userBKp])
-      .rpc({ skipPreflight: true });
-
-    const profileA = await connection.getAccountInfo(profileAPda);
-    const profileB = await connection.getAccountInfo(profileBPda);
-    expect(profileA?.owner).to.be.undefined;
-    expect(profileB?.owner).to.be.undefined;
-
-    const userBBalance = await connection.getBalance(userB.publicKey);
-    const tx = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: userB.publicKey,
-        toPubkey: userA.publicKey,
-        lamports: userBBalance - 5000,
-      }),
+    sendSvmIx(
+      svm,
+      [userAKp],
+      await instruction(
+        program.methods.closeProfile().accounts({
+          authority: userA.publicKey,
+          profile: profileAPda,
+        }),
+      ),
+      "base",
     );
-    tx.feePayer = userB.publicKey;
-    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-    const signedTx = await userB.signTransaction(tx);
-    const txHash = await connection.sendRawTransaction(signedTx.serialize());
-    await connection.confirmTransaction(txHash, "confirmed");
+    sendSvmIx(
+      svm,
+      [userBKp],
+      await instruction(
+        program.methods.closeProfile().accounts({
+          authority: userB.publicKey,
+          profile: profileBPda,
+        }),
+      ),
+      "base",
+    );
+
+    expect(svm.getAccount(profileAPda).exists).to.equal(false);
+    expect(svm.getAccount(profileBPda).exists).to.equal(false);
   });
 });

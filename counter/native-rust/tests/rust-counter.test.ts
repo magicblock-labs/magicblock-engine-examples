@@ -8,10 +8,7 @@ import {
 } from "@solana/web3.js";
 import * as borsh from "borsh";
 import bs58 from "bs58";
-import {
-  CounterInstruction,
-  IncreaseCounterPayload,
-} from "../tests/web3js/schema";
+import { CounterInstruction, IncreaseCounterPayload } from "./schema";
 import {
   MagicSVM,
   TransactionMetadata,

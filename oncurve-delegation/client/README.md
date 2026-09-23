@@ -36,25 +36,16 @@ yarn build
 
 This is an SDK-only integration example — there is no on-chain program here, so `yarn build` is a no-op.
 
-The tests run against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
+Run the tests in-process with [MagicSVM](https://github.com/magicblock-labs/magicsvm):
 
 ```bash
-yarn setup
+yarn test
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh oncurve-delegation` from the repo root: it boots the validators and holds them until you press a key.
+MagicSVM simulates the base layer and the Ephemeral Rollup in one process: no validators, no
+network. The suite assigns and delegates an on-curve account, commits its state, and undelegates it.
 
-Then, in a second terminal, run the tests against that cluster:
-
-```bash
-yarn test:local
-```
-
-`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
-
-### Web3.js Tests
-
-A parallel web3.js implementation of the same flow is available (run against the configured endpoints):
+A Rust MagicSVM suite lives in `tests-magicsvm-rs/` (needs a nightly toolchain): `yarn test:magicsvm:rs`.
 
 ```bash
 yarn test:web3js

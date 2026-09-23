@@ -42,29 +42,17 @@ yarn
 yarn build
 ```
 
-This example runs against a **local MagicBlock cluster** with static
-`PriceUpdateV2` account fixtures preloaded by the repo test harness. Start the
-cluster in one terminal and leave it running:
+Run the tests in-process with [MagicSVM](https://github.com/magicblock-labs/magicsvm):
 
 ```bash
-yarn setup
+yarn test
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh oracle-priced-purchase` from
-the repo root: it builds this example, boots the validators, preloads the oracle
-fixtures, and holds them until you press a key.
+MagicSVM simulates the base layer and the Ephemeral Rollup in one process: no validators, no
+network. The suite charges a USD-priced purchase from a SOL/USD oracle and rejects purchases above
+the buyer's maximum lamport cost.
 
-Then, in a second terminal, run this example's tests against that cluster:
-
-```bash
-yarn test:local
-```
-
-`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster
-(without it the tests fall back to devnet).
-
-> Tip: to build and run **every** example end-to-end (what CI does), run the
-> repo-root `./scripts/test-locally.sh` directly.
+A Rust MagicSVM suite lives in `tests-magicsvm-rs/` (needs a nightly toolchain): `yarn test:magicsvm:rs`.
 
 For a live MagicBlock feed, run the chain pusher from the oracle repository,
 pass the SOL/USD Pyth feed ID to `initialize_store`, and pass the corresponding

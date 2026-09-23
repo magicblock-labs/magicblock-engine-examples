@@ -37,25 +37,17 @@ yarn
 yarn build
 ```
 
-This example runs against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
+Run the tests in-process with [MagicSVM](https://github.com/magicblock-labs/magicsvm):
 
 ```bash
-yarn setup
+yarn test
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh private-counter` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+MagicSVM simulates the base layer and the Ephemeral Rollup in one process: no validators, no
+network. The suite exercises private counter delegation, ephemeral permissions, privacy changes,
+commits, and undelegation.
 
-Then, in a second terminal, run this example's tests against that cluster:
-
-```bash
-yarn test:local
-```
-
-`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
-
-> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
-
-This is a TEE (Trusted Execution Environment) example: locally, ER calls route through the QFS via the `TEE_*` endpoints. The full devnet/TEE path additionally requires a funded devnet keypair, so in CI these tests are skipped unless a `DEVNET_KEYPAIR_JSON` secret is set (the repo sets `SKIP_TEE_TESTS=1` without it).
+A Rust MagicSVM suite lives in `tests-magicsvm-rs/` (needs a nightly toolchain): `yarn test:magicsvm:rs`.
 
 ## Program Instructions
 

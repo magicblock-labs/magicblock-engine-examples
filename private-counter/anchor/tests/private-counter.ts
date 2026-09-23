@@ -1,333 +1,195 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program, web3 } from "@coral-xyz/anchor";
-import { PrivateCounter } from "../target/types/private_counter";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
-  GetCommitmentSignature,
-  getAuthToken,
-  PERMISSION_PROGRAM_ID,
+  bootAnchorSvm,
+  EPHEMERAL_VAULT_ID,
+  isDelegated,
   MAGIC_PROGRAM_ID,
+  PERMISSION_PROGRAM_ID,
   permissionPdaFromAccount,
-} from "@magicblock-labs/ephemeral-rollups-sdk";
-import * as nacl from "tweetnacl";
+  readU64le,
+  sendSvmTx,
+  validatorPubkey,
+} from "@magicblock-labs/test-utils";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { PrivateCounter } from "../target/types/private_counter";
 
-const VAULT_ID = new web3.PublicKey(
-  "MagicVau1t999999999999999999999999999999999",
-);
 const COUNTER_SEED = "counter";
 
-describe("private-counter", () => {
-  console.log("private-counter.ts");
-
-  let provider = new anchor.AnchorProvider(
-    new anchor.web3.Connection(
-      process.env.PROVIDER_ENDPOINT || "https://api.devnet.solana.com",
-      {
-        wsEndpoint: process.env.WS_ENDPOINT || undefined,
-        commitment: "confirmed",
-      },
-    ),
-    anchor.Wallet.local(),
-  );
-  anchor.setProvider(provider);
-
-  const teeUrl =
-    process.env.TEE_PROVIDER_ENDPOINT || "https://devnet-tee.magicblock.app";
-  const teeWsUrl =
-    process.env.TEE_WS_ENDPOINT || "wss://devnet-tee.magicblock.app";
-  const ephemeralRpcEndpoint = teeUrl.replace(/\/$/, "");
-
-  let providerEphemeralRollup = new anchor.AnchorProvider(
-    new anchor.web3.Connection(ephemeralRpcEndpoint, {
-      wsEndpoint: teeWsUrl,
-      commitment: "confirmed",
-    }),
-    anchor.Wallet.local(),
-  );
-
-  console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
-  console.log(
-    "Ephemeral Rollup Connection: ",
-    providerEphemeralRollup.connection.rpcEndpoint,
-  );
-  console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`);
-
-  before(async function () {
-    try {
-      const balance = await provider.connection.getBalance(
-        anchor.Wallet.local().publicKey,
-      );
-      console.log(
-        "Current balance is",
-        balance / LAMPORTS_PER_SOL,
-        " SOL",
-        "\n",
-      );
-    } catch (error) {
-      console.log("Error fetching balance:", error);
-    }
-
-    // Fetch auth token for the TEE endpoint and rebuild the ER provider with it
-    const payer = (provider.wallet as anchor.Wallet).payer;
-    const authToken = await getAuthToken(
-      ephemeralRpcEndpoint,
-      payer.publicKey,
-      (message: Uint8Array) =>
-        Promise.resolve(nacl.sign.detached(message, payer.secretKey)),
-    );
-    console.log(
-      "TEE Explorer URL:",
-      `https://explorer.solana.com/?cluster=custom&customUrl=${teeUrl}?token=${authToken.token}`,
-    );
-    providerEphemeralRollup = new anchor.AnchorProvider(
-      new anchor.web3.Connection(`${teeUrl}?token=${authToken.token}`, {
-        wsEndpoint: `${teeWsUrl}?token=${authToken.token}`,
-        commitment: "confirmed",
-      }),
-      anchor.Wallet.local(),
-    );
+describe("private-counter magicsvm", () => {
+  const { svm, payer, program } = bootAnchorSvm<PrivateCounter>({
+    fromDir: __dirname,
+    programName: "private_counter",
+    airdropLamports: BigInt(2 * LAMPORTS_PER_SOL),
   });
-
-  const program = anchor.workspace.PrivateCounter as Program<PrivateCounter>;
-
-  const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from(COUNTER_SEED), provider.wallet.publicKey.toBuffer()],
+  const [counterPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from(COUNTER_SEED), payer.publicKey.toBuffer()],
     program.programId,
   );
-
-  // Permission PDA is derived from the program's own ID (not the permission program)
   const permissionPDA = permissionPdaFromAccount(counterPDA);
 
   console.log("Program ID: ", program.programId.toString());
   console.log("Counter PDA: ", counterPDA.toString());
   console.log("Permission PDA: ", permissionPDA.toString());
+  console.log("Validator identity: ", validatorPubkey(svm).toString());
 
   it("Initialize counter on Solana", async () => {
-    const account = await provider.connection.getAccountInfo(counterPDA);
-    if (account) {
-      console.log("Counter account already exists");
-      return;
-    }
-
-    const start = Date.now();
     const tx = await program.methods
       .initialize()
       .accounts({
-        authority: provider.wallet.publicKey,
+        authority: payer.publicKey,
       })
       .transaction();
-    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
-    console.log(
-      `${Date.now() - start}ms (Base Layer) Initialize txHash: ${txHash}`,
-    );
+    sendSvmTx(svm, [payer], tx, "base");
+    if (readU64le(svm, counterPDA, "base") !== 0n) {
+      throw new Error("expected count 0 after initialize");
+    }
   });
 
   it("Increase counter on Solana", async () => {
-    const account = await provider.connection.getAccountInfo(counterPDA);
-    if (!account?.owner.equals(program.programId)) {
-      console.log("Counter is already delegated");
-      return;
+    const account = svm.getAccountFor(counterPDA, { target: "base" });
+    if (
+      !account.exists ||
+      account.programAddress.toString() !== program.programId.toString()
+    ) {
+      throw new Error("counter is not owned by the program on the base layer");
     }
-
-    const start = Date.now();
     const tx = await program.methods
       .increment()
       .accounts({
         counter: counterPDA,
       })
       .transaction();
-    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
-    console.log(
-      `${Date.now() - start}ms (Base Layer) Increment txHash: ${txHash}`,
-    );
+    sendSvmTx(svm, [payer], tx, "base");
+    if (readU64le(svm, counterPDA, "base") !== 1n) {
+      throw new Error("expected count 1 after base increment");
+    }
   });
 
   it("Delegate counter to ER", async () => {
-    const start = Date.now();
     const tx = await program.methods
       .delegate()
       .accountsPartial({
-        authority: provider.wallet.publicKey,
+        authority: payer.publicKey,
         counter: counterPDA,
-        // Pin to the TEE validator identity
-        validator: new web3.PublicKey(
-          process.env.VALIDATOR ||
-            "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo",
-        ),
+        validator: new PublicKey(validatorPubkey(svm)),
       })
       .transaction();
-    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
-    console.log(
-      `${Date.now() - start}ms (Base Layer) Delegate txHash: ${txHash}`,
-    );
-    // Wait for delegation to propagate to the ER
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    sendSvmTx(svm, [payer], tx, "base");
+    if (!isDelegated(svm, counterPDA)) {
+      throw new Error("counter is not delegated");
+    }
+    const delegated = svm.getAccountFor(counterPDA, { target: "ephemeral" });
+    if (!delegated.exists) {
+      throw new Error("delegated counter missing on ephemeral");
+    }
   });
 
   it("Initialize ephemeral permission on ER", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const permissionProgram = svm.getAccountFor(PERMISSION_PROGRAM_ID, {
+      target: "ephemeral",
+    });
+    console.log(
+      "Permission program on ephemeral:",
+      permissionProgram.exists
+        ? `exists executable=${permissionProgram.executable}`
+        : "missing",
+    );
+    const tx = await program.methods
       .initPermission()
       .accountsPartial({
-        authority: providerEphemeralRollup.wallet.publicKey,
+        authority: payer.publicKey,
         counter: counterPDA,
         permission: permissionPDA,
         magicProgram: MAGIC_PROGRAM_ID,
         permissionProgram: PERMISSION_PROGRAM_ID,
-        ephemeralVault: VAULT_ID,
+        ephemeralVault: EPHEMERAL_VAULT_ID,
       })
       .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx, [], {
-      skipPreflight: true,
+    sendSvmTx(svm, [payer], tx, "ephemeral");
+    const permission = svm.getAccountFor(permissionPDA, {
+      target: "ephemeral",
     });
-    console.log(
-      `${Date.now() - start}ms (ER) init_permission txHash: ${txHash}`,
-    );
+    if (!permission.exists) {
+      throw new Error("permission PDA was not created on ephemeral");
+    }
   });
 
   it("Increase counter on ER", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .increment()
       .accounts({
         counter: counterPDA,
       })
       .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-    console.log(`${Date.now() - start}ms (ER) Increment txHash: ${txHash}`);
+    sendSvmTx(svm, [payer], tx, "ephemeral");
+    if (readU64le(svm, counterPDA, "ephemeral") !== 2n) {
+      throw new Error("expected count 2 after ER increment");
+    }
   });
 
   it("Toggle privacy on ER (private -> public)", async () => {
-    // Flip the permission's is_private flag. The authority is always re-added as
-    // the sole member with full read flags so we never lock ourselves out.
     for (const isPrivate of [true, false]) {
-      const start = Date.now();
-      let tx = await program.methods
+      const tx = await program.methods
         .setPrivacy(isPrivate)
         .accountsPartial({
           counter: counterPDA,
-          authority: provider.wallet.publicKey,
+          authority: payer.publicKey,
           permission: permissionPDA,
           magicProgram: MAGIC_PROGRAM_ID,
           permissionProgram: PERMISSION_PROGRAM_ID,
-          ephemeralVault: VAULT_ID,
+          ephemeralVault: EPHEMERAL_VAULT_ID,
         })
         .transaction();
-      tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-      tx.recentBlockhash = (
-        await providerEphemeralRollup.connection.getLatestBlockhash()
-      ).blockhash;
-      tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-      const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-      console.log(
-        `${Date.now() - start}ms (ER) set_privacy(${isPrivate}) txHash: ${txHash}`,
-      );
+      sendSvmTx(svm, [payer], tx, "ephemeral");
     }
   });
 
   it("Close permission on ER", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .closePermission()
       .accountsPartial({
         counter: counterPDA,
-        authority: provider.wallet.publicKey,
+        authority: payer.publicKey,
         permission: permissionPDA,
         magicProgram: MAGIC_PROGRAM_ID,
         permissionProgram: PERMISSION_PROGRAM_ID,
-        ephemeralVault: VAULT_ID,
+        ephemeralVault: EPHEMERAL_VAULT_ID,
       })
       .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-    console.log(
-      `${Date.now() - start}ms (ER) Close permission txHash: ${txHash}`,
-    );
+    sendSvmTx(svm, [payer], tx, "ephemeral");
   });
 
   it("Commit counter state on ER to Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .commit()
       .accountsPartial({
-        payer: providerEphemeralRollup.wallet.publicKey,
+        payer: payer.publicKey,
         counter: counterPDA,
       })
       .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx, [], {
-      skipPreflight: true,
-    });
-    console.log(`${Date.now() - start}ms (ER) Commit txHash: ${txHash}`);
-
-    // Await the commitment confirmation on the base layer
-    const commitStart = Date.now();
-    const txCommitSgn = await GetCommitmentSignature(
-      txHash,
-      providerEphemeralRollup.connection,
-    );
-    console.log(
-      `${Date.now() - commitStart}ms (Base Layer) Commit txHash: ${txCommitSgn}`,
-    );
+    sendSvmTx(svm, [payer], tx, "ephemeral");
+    if (readU64le(svm, counterPDA, "base") !== 2n) {
+      throw new Error("expected committed count 2 on base");
+    }
   });
 
   it("Undelegate counter from ER to Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .undelegate()
       .accountsPartial({
-        payer: providerEphemeralRollup.wallet.publicKey,
+        payer: payer.publicKey,
         counter: counterPDA,
       })
       .transaction();
-    tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-    tx.recentBlockhash = (
-      await providerEphemeralRollup.connection.getLatestBlockhash()
-    ).blockhash;
-    tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-    const txHash = await providerEphemeralRollup.sendAndConfirm(tx);
-    console.log(`${Date.now() - start}ms (ER) Undelegate txHash: ${txHash}`);
-
-    // Wait for counter undelegation to settle back on the base layer
-    let retries = 10;
-    while (retries > 0) {
-      const account = await provider.connection.getAccountInfo(counterPDA);
-      if (account?.owner.equals(program.programId)) {
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      retries--;
-
-      if (retries === 0) {
-        throw new Error("Counter undelegation failed");
-      }
+    sendSvmTx(svm, [payer], tx, "ephemeral");
+    const account = svm.getAccountFor(counterPDA, { target: "base" });
+    if (
+      !account.exists ||
+      account.programAddress.toString() !== program.programId.toString()
+    ) {
+      throw new Error("counter undelegation failed");
+    }
+    if (readU64le(svm, counterPDA, "base") !== 2n) {
+      throw new Error("expected count 2 after undelegate");
     }
   });
 });

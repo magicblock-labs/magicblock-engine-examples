@@ -1,13 +1,21 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
+import { MagicSVM } from "@magicblock-labs/magicsvm";
+import {
+  airdropOrThrow,
+  bootAnchorSvm,
+  sendSvmIx,
+  setUnixTimestamp,
+} from "@magicblock-labs/test-utils";
 import {
   Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
-  Transaction,
 } from "@solana/web3.js";
 import { assert } from "chai";
+import * as fs from "fs";
+import * as path from "path";
 import { OraclePricedPurchase } from "../target/types/oracle_priced_purchase";
 
 const RECEIPT_SEED = "receipt";
@@ -30,71 +38,140 @@ const SOL_USD_50_FEED_ID = Array.from(
     "hex",
   ),
 );
+const PRICE_PUBLISH_TIME_OFFSET = 93;
+const FIXTURES_DIR = path.join(
+  __dirname,
+  "..",
+  "tests",
+  "fixtures",
+  "accounts",
+);
+
+type FixtureAccount = {
+  pubkey: string;
+  account: {
+    lamports: number;
+    data: [string, string];
+    owner: string;
+    executable: boolean;
+    rentEpoch?: number;
+  };
+};
+
+function loadOracleFixtures(svm: MagicSVM): bigint {
+  let publishTime = 0n;
+  for (const file of fs.readdirSync(FIXTURES_DIR)) {
+    if (!file.endsWith(".json")) {
+      continue;
+    }
+    const fixture = JSON.parse(
+      fs.readFileSync(path.join(FIXTURES_DIR, file), "utf8"),
+    ) as FixtureAccount;
+    const encoding = fixture.account.data[1] as BufferEncoding;
+    const data = Buffer.from(fixture.account.data[0], encoding);
+    svm.setAccount({
+      address: fixture.pubkey,
+      executable: fixture.account.executable,
+      lamports: BigInt(fixture.account.lamports),
+      programAddress: fixture.account.owner,
+      space: BigInt(data.length),
+      data: new Uint8Array(data),
+    });
+    if (data.length > PRICE_PUBLISH_TIME_OFFSET + 8) {
+      publishTime = data.readBigInt64LE(PRICE_PUBLISH_TIME_OFFSET);
+    }
+  }
+  return publishTime;
+}
+
+function decodeAccount<T>(
+  program: Program<OraclePricedPurchase>,
+  name: string,
+  address: PublicKey,
+  svm: MagicSVM,
+): T {
+  const account = svm.getAccountFor(address, { target: "base" });
+  if (!account.exists) {
+    throw new Error(`account ${address.toBase58()} does not exist`);
+  }
+  return program.coder.accounts.decode(name, Buffer.from(account.data)) as T;
+}
 
 describe("oracle-priced-purchase", () => {
-  const provider = process.env.PROVIDER_ENDPOINT
-    ? new anchor.AnchorProvider(
-        new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT, {
-          wsEndpoint: process.env.WS_ENDPOINT || undefined,
-          commitment: "confirmed",
-        }),
-        anchor.Wallet.local(),
-      )
-    : anchor.AnchorProvider.env();
-
-  anchor.setProvider(provider);
-
-  const program = anchor.workspace
-    .OraclePricedPurchase as Program<OraclePricedPurchase>;
-  const merchant = provider.wallet.publicKey;
+  const merchant = Keypair.generate();
   const buyer = Keypair.generate();
-  const [store] = anchor.web3.PublicKey.findProgramAddressSync(
+  const { svm, program } = bootAnchorSvm<OraclePricedPurchase>({
+    fromDir: __dirname,
+    programName: "oracle_priced_purchase",
+    payer: merchant,
+    airdropLamports: BigInt(10 * LAMPORTS_PER_SOL),
+  });
+  const [store] = PublicKey.findProgramAddressSync(
     [Buffer.from(STORE_SEED)],
     program.programId,
   );
-  const [receipt] = anchor.web3.PublicKey.findProgramAddressSync(
+  const [receipt] = PublicKey.findProgramAddressSync(
     [Buffer.from(RECEIPT_SEED), buyer.publicKey.toBuffer()],
     program.programId,
   );
 
   before(async () => {
-    await provider.sendAndConfirm(
-      new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: merchant,
-          toPubkey: buyer.publicKey,
-          lamports: 2 * LAMPORTS_PER_SOL,
-        }),
-      ),
+    airdropOrThrow(
+      svm,
+      buyer.publicKey,
+      BigInt(2 * LAMPORTS_PER_SOL),
+      "airdrop buyer",
     );
-
-    await program.methods
-      .initializeStore(new anchor.BN(2_500), SOL_USD_100_FEED_ID)
-      .accountsPartial({
-        store,
-        merchant,
-      })
-      .rpc({ commitment: "confirmed" });
+    setUnixTimestamp(svm, loadOracleFixtures(svm));
+    sendSvmIx(
+      svm,
+      [merchant],
+      await program.methods
+        .initializeStore(new anchor.BN(2_500), SOL_USD_100_FEED_ID)
+        .accountsPartial({
+          store,
+          merchant: merchant.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction(),
+      "base",
+    );
   });
 
   it("uses the SOL/USD oracle price to charge a USD-priced token purchase", async () => {
-    await program.methods
-      .buyToken(new anchor.BN(2), new anchor.BN(600_000_000))
-      .accountsPartial({
-        store,
-        receipt,
-        buyer: buyer.publicKey,
-        merchant,
-        priceUpdate: SOL_USD_100_PRICE,
-      })
-      .signers([buyer])
-      .rpc({ commitment: "confirmed" });
+    sendSvmIx(
+      svm,
+      [merchant, buyer],
+      await program.methods
+        .buyToken(new anchor.BN(2), new anchor.BN(600_000_000))
+        .accountsPartial({
+          store,
+          receipt,
+          buyer: buyer.publicKey,
+          merchant: merchant.publicKey,
+          priceUpdate: SOL_USD_100_PRICE,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction(),
+      "base",
+    );
 
-    const storeState = await program.account.store.fetch(store);
+    const storeState = decodeAccount<{
+      tokenPriceUsdCents: { toString(): string };
+      soldCount: { toString(): string };
+    }>(program, "store", store, svm);
     assert.equal(storeState.tokenPriceUsdCents.toString(), "2500");
     assert.equal(storeState.soldCount.toString(), "2");
 
-    const receiptState = await program.account.purchaseReceipt.fetch(receipt);
+    const receiptState = decodeAccount<{
+      buyer: PublicKey;
+      totalQuantity: { toString(): string };
+      totalPaidLamports: { toString(): string };
+      lastUnitPriceUsdCents: { toString(): string };
+      lastPaidLamports: { toString(): string };
+      oraclePrice: { toString(): string };
+      oracleExponent: number;
+    }>(program, "purchaseReceipt", receipt, svm);
     assert.equal(receiptState.buyer.toBase58(), buyer.publicKey.toBase58());
     assert.equal(receiptState.totalQuantity.toString(), "2");
     assert.equal(receiptState.totalPaidLamports.toString(), "500000000");
@@ -105,26 +182,37 @@ describe("oracle-priced-purchase", () => {
   });
 
   it("rejects a purchase when the oracle-derived SOL cost exceeds max_lamports", async () => {
-    await program.methods
-      .initializeStore(new anchor.BN(2_500), SOL_USD_50_FEED_ID)
-      .accountsPartial({
-        store,
-        merchant,
-      })
-      .rpc({ commitment: "confirmed" });
-
-    try {
+    sendSvmIx(
+      svm,
+      [merchant],
       await program.methods
-        .buyToken(new anchor.BN(1), new anchor.BN(400_000_000))
+        .initializeStore(new anchor.BN(2_500), SOL_USD_50_FEED_ID)
         .accountsPartial({
           store,
-          receipt,
-          buyer: buyer.publicKey,
-          merchant,
-          priceUpdate: SOL_USD_50_PRICE,
+          merchant: merchant.publicKey,
+          systemProgram: SystemProgram.programId,
         })
-        .signers([buyer])
-        .rpc({ commitment: "confirmed" });
+        .instruction(),
+      "base",
+    );
+
+    try {
+      sendSvmIx(
+        svm,
+        [merchant, buyer],
+        await program.methods
+          .buyToken(new anchor.BN(1), new anchor.BN(400_000_000))
+          .accountsPartial({
+            store,
+            receipt,
+            buyer: buyer.publicKey,
+            merchant: merchant.publicKey,
+            priceUpdate: SOL_USD_50_PRICE,
+            systemProgram: SystemProgram.programId,
+          })
+          .instruction(),
+        "base",
+      );
       assert.fail("expected max_lamports check to reject the purchase");
     } catch (error) {
       assert.include(String(error), "PaymentTooHigh");

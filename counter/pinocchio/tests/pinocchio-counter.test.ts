@@ -7,10 +7,6 @@ import {
 import * as borsh from "borsh";
 import * as path from "path";
 import {
-  CounterInstruction,
-  IncreaseCounterPayload,
-} from "../tests/web3js/schema";
-import {
   DELEGATION_PROGRAM_ID,
   MAGIC_CONTEXT_ID,
   MAGIC_PROGRAM_ID,
@@ -27,6 +23,35 @@ import {
 import { describe, it, expect } from "vitest";
 
 const LAMPORTS_PER_SOL = 1_000_000_000n;
+
+enum CounterInstruction {
+  InitializeCounter = "0000000000000000",
+  IncreaseCounter = "0100000000000000",
+  Delegate = "0200000000000000",
+  CommitAndUndelegate = "0300000000000000",
+  Commit = "0400000000000000",
+  IncrementAndCommit = "0500000000000000",
+  IncrementAndUndelegate = "0600000000000000",
+}
+
+class IncreaseCounterPayload {
+  increase_by: number;
+
+  constructor(increase_by: number) {
+    this.increase_by = increase_by;
+  }
+
+  static schema = new Map([
+    [
+      IncreaseCounterPayload,
+      {
+        kind: "struct",
+        fields: [["increase_by", "u64"]],
+      },
+    ],
+  ]);
+}
+
 const PROGRAM_SO = path.join("target", "deploy", "pinocchio_counter.so");
 const PROGRAM_KEYPAIR = path.join(
   "target",

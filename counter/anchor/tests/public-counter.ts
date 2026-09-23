@@ -1,204 +1,121 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program, web3 } from "@coral-xyz/anchor";
+import { web3 } from "@coral-xyz/anchor";
+import {
+  accountOwner,
+  bootAnchorSvm,
+  isDelegated,
+  readU64le,
+  sendSvmTx,
+  validatorRemainingAccount,
+} from "@magicblock-labs/test-utils";
+import assert from "assert";
 import { PublicCounter } from "../target/types/public_counter";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 const COUNTER_SEED = "counter";
 
-describe.only("public-counter", () => {
-  console.log("public-counter.ts");
-
-  // Base layer URL precedence: PROVIDER_ENDPOINT > anchor's ANCHOR_PROVIDER_URL
-  // (set by `anchor test --provider.cluster localnet`) > devnet fallback.
-  const provider = new anchor.AnchorProvider(
-    new anchor.web3.Connection(
-      process.env.PROVIDER_ENDPOINT ||
-        process.env.ANCHOR_PROVIDER_URL ||
-        "https://api.devnet.solana.com",
-      {
-        wsEndpoint: process.env.WS_ENDPOINT || undefined,
-        commitment: "confirmed",
-      },
-    ),
-    anchor.Wallet.local(),
-  );
-  anchor.setProvider(provider);
-
-  const providerEphemeralRollup = new anchor.AnchorProvider(
-    new anchor.web3.Connection(
-      process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
-        "https://devnet-as.magicblock.app/",
-      {
-        wsEndpoint:
-          process.env.EPHEMERAL_WS_ENDPOINT ||
-          "wss://devnet-as.magicblock.app/",
-        commitment: "confirmed",
-      },
-    ),
-    anchor.Wallet.local(),
-  );
-  console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
-  console.log(
-    "Ephemeral Rollup Connection: ",
-    providerEphemeralRollup.connection.rpcEndpoint,
-  );
-  console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`);
-
-  before(async function () {
-    try {
-      const balance = await provider.connection.getBalance(
-        anchor.Wallet.local().publicKey,
-      );
-      console.log(
-        "Current balance is",
-        balance / LAMPORTS_PER_SOL,
-        " SOL",
-        "\n",
-      );
-    } catch (error) {
-      console.log("Error fetching balance:", error);
-    }
+describe("public-counter magicsvm", () => {
+  const { svm, payer, program, validator } = bootAnchorSvm<PublicCounter>({
+    fromDir: __dirname,
+    programName: "public_counter",
+    airdropLamports: BigInt(2 * web3.LAMPORTS_PER_SOL),
   });
-
-  const program = anchor.workspace.PublicCounter as Program<PublicCounter>;
-  const programEphemeral = new Program<PublicCounter>(
-    program.idl,
-    providerEphemeralRollup,
-  );
-  const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
+  const [counterPDA] = web3.PublicKey.findProgramAddressSync(
     [Buffer.from(COUNTER_SEED)],
     program.programId,
   );
 
   console.log("Program ID: ", program.programId.toString());
   console.log("Counter PDA: ", counterPDA.toString());
+  console.log("Validator identity: ", validator.toString());
 
   it("Initialize counter on Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .initialize()
       .accounts({
-        user: provider.wallet.publicKey,
+        user: payer.publicKey,
       })
       .transaction();
-
-    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
+    sendSvmTx(svm, [payer], tx, "base", "initialize");
+    assert.equal(readU64le(svm, counterPDA, "base"), 0n);
   });
 
   it("Increase counter on Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .increment()
       .accounts({
         counter: counterPDA,
       })
       .transaction();
-    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) Increment txHash: ${txHash}`);
+    sendSvmTx(svm, [payer], tx, "base", "increment (base)");
+    assert.equal(readU64le(svm, counterPDA, "base"), 1n);
   });
 
   it("Delegate counter to ER", async () => {
-    const start = Date.now();
-    // Validator identity for delegation: env override wins; otherwise default by network.
-    const isLocal =
-      providerEphemeralRollup.connection.rpcEndpoint.includes("localhost") ||
-      providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1");
-    const validatorPubkey = new web3.PublicKey(
-      process.env.VALIDATOR ||
-        (isLocal
-          ? "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
-          : "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57"),
-    );
-    const remainingAccounts = [
-      { pubkey: validatorPubkey, isSigner: false, isWritable: false },
-    ];
-    let tx = await program.methods
+    const tx = await program.methods
       .delegate()
       .accounts({
-        payer: provider.wallet.publicKey,
+        payer: payer.publicKey,
         pda: counterPDA,
       })
-      .remainingAccounts(remainingAccounts)
+      .remainingAccounts([validatorRemainingAccount(svm)])
       .transaction();
-    const txHash = await provider.sendAndConfirm(tx, [provider.wallet.payer], {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    sendSvmTx(svm, [payer], tx, "base", "delegate");
+    assert.ok(isDelegated(svm, counterPDA));
   });
 
   it("Increase counter on ER", async () => {
-    const start = Date.now();
-    const txHash = await programEphemeral.methods
+    const tx = await program.methods
       .increment()
       .accounts({
         counter: counterPDA,
       })
-      .rpc();
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
+      .transaction();
+    sendSvmTx(svm, [payer], tx, "ephemeral", "increment (ER)");
+    assert.equal(readU64le(svm, counterPDA, "ephemeral"), 2n);
   });
 
   it("Commit counter state on ER to Solana", async () => {
-    const start = Date.now();
-    const txHash = await programEphemeral.methods
+    const tx = await program.methods
       .commit()
       .accounts({
-        payer: providerEphemeralRollup.wallet.publicKey,
+        payer: payer.publicKey,
       })
-      .rpc();
-
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Commit txHash: ${txHash}`);
-
-    // Get the commitment signature on the base layer
-    const comfirmCommitStart = Date.now();
-    // Await for the commitment on the base layer
-    const txCommitSgn = await GetCommitmentSignature(
-      txHash,
-      providerEphemeralRollup.connection,
-    );
-    const commitDuration = Date.now() - comfirmCommitStart;
+      .transaction();
+    sendSvmTx(svm, [payer], tx, "ephemeral", "commit");
+    const committed = svm.getAccountFor(counterPDA, { target: "base" });
+    assert.ok(committed.exists, "counter missing on base after commit");
     console.log(
-      `${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`,
+      "base account after commit:",
+      committed.programAddress.toString(),
+      Buffer.from(committed.data).readBigUInt64LE(8).toString(),
     );
+    assert.equal(readU64le(svm, counterPDA, "base"), 2n);
+    assert.ok(isDelegated(svm, counterPDA));
   });
 
   it("Increase counter on ER and commit", async () => {
-    const start = Date.now();
-    const txHash = await programEphemeral.methods
+    const tx = await program.methods
       .incrementAndCommit()
       .accounts({
-        payer: providerEphemeralRollup.wallet.publicKey,
+        payer: payer.publicKey,
       })
-      .rpc();
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Increment and Commit txHash: ${txHash}`);
+      .transaction();
+    sendSvmTx(svm, [payer], tx, "ephemeral", "incrementAndCommit");
+    assert.equal(readU64le(svm, counterPDA, "ephemeral"), 3n);
+    assert.equal(readU64le(svm, counterPDA, "base"), 3n);
   });
 
   it("Increment and undelegate counter on ER to Solana", async () => {
-    const start = Date.now();
-    const txHash = await programEphemeral.methods
+    const tx = await program.methods
       .incrementAndUndelegate()
       .accounts({
-        payer: providerEphemeralRollup.wallet.publicKey,
+        payer: payer.publicKey,
       })
-      .rpc();
-    const duration = Date.now() - start;
-    console.log(
-      `${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`,
+      .transaction();
+    sendSvmTx(svm, [payer], tx, "ephemeral", "incrementAndUndelegate");
+    assert.equal(readU64le(svm, counterPDA, "base"), 4n);
+    assert.equal(
+      accountOwner(svm, counterPDA, "base"),
+      program.programId.toString(),
     );
   });
 });

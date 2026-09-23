@@ -2,12 +2,9 @@
   "scripts": {
     "lint:fix": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
-    "test": "yarn test:local",
-    "build": "anchor keys sync && anchor build",
-    "test:local": ". ../../scripts/local-env.sh && npx ts-mocha -p ./tsconfig.json -t 1000000 tests/binary-prediction.ts",
-    "test:magicsvm": "npx ts-mocha -p ./tsconfig.json -t 1000000 tests-magicsvm/binary-prediction.ts",
-    "test:magicsvm:rs": "env RUSTUP_TOOLCHAIN=nightly cargo test --manifest-path tests-magicsvm-rs/Cargo.toml -- --nocapture",
-    "setup": "cd ../.. && SETUP_ONLY=1 ./scripts/test-locally.sh binary-prediction"
+    "test": "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/binary-prediction.ts",
+    "build": "anchor build --ignore-keys",
+    "test:magicsvm:rs": "env RUSTUP_TOOLCHAIN=nightly cargo test --manifest-path tests-magicsvm-rs/Cargo.toml -- --nocapture"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",

@@ -1,87 +1,71 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program, web3 } from "@coral-xyz/anchor";
-import { AnchorCounterSession } from "../target/types/anchor_counter_session";
-import { LAMPORTS_PER_SOL, sendAndConfirmTransaction } from "@solana/web3.js";
-import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { web3 } from "@coral-xyz/anchor";
+import {
+  accountOwner,
+  bootAnchorSvm,
+  isDelegated,
+  readU64le,
+  sendSvmTx,
+  setUnixTimestamp,
+  validatorRemainingAccount,
+} from "@magicblock-labs/test-utils";
 import { SessionTokenManager } from "@magicblock-labs/gum-sdk";
-import { initializeSessionSignerKeypair } from "../utils/initializeKeypair";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import assert from "assert";
+import * as path from "path";
+import { AnchorCounterSession } from "../target/types/anchor_counter_session";
 
 const COUNTER_SEED = "counter";
+const SESSION_TOKEN_SEED = "session_token_v2";
+const SESSION_PROGRAM_ID = "KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5";
 
-describe.only("anchor-counter-session", () => {
-  console.log("anchor-counter-session.ts");
+describe("anchor-counter-session magicsvm", () => {
+  const sessionKeypair = web3.Keypair.generate();
+  const { svm, payer, program, validator } =
+    bootAnchorSvm<AnchorCounterSession>({
+      fromDir: __dirname,
+      programName: "anchor_counter_session",
+      airdropLamports: BigInt(2 * LAMPORTS_PER_SOL),
+      extraPrograms: [
+        {
+          id: new PublicKey(SESSION_PROGRAM_ID),
+          so: path.resolve(__dirname, "fixtures", "session-keys.so"),
+        },
+      ],
+    });
+  setUnixTimestamp(svm);
 
-  // Configure the client to use the local cluster.
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-
-  const providerEphemeralRollup = new anchor.AnchorProvider(
-    new anchor.web3.Connection(
-      process.env.EPHEMERAL_PROVIDER_ENDPOINT ||
-        "https://devnet-as.magicblock.app/",
-      {
-        wsEndpoint:
-          process.env.EPHEMERAL_WS_ENDPOINT ||
-          "wss://devnet-as.magicblock.app/",
-      },
-    ),
-    anchor.Wallet.local(),
-  );
-  console.log("Base Layer Connection: ", provider.connection.rpcEndpoint);
-  console.log(
-    "Ephemeral Rollup Connection: ",
-    providerEphemeralRollup.connection.rpcEndpoint,
-  );
-  console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`);
-
-  before(async function () {
-    const balance = await provider.connection.getBalance(
-      anchor.Wallet.local().publicKey,
-    );
-    console.log("Current balance is", balance / LAMPORTS_PER_SOL, " SOL", "\n");
-  });
-
-  const program = anchor.workspace
-    .AnchorCounterSession as Program<AnchorCounterSession>;
-  const [counterPDA] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from(COUNTER_SEED), provider.wallet.publicKey.toBuffer()],
+  const [counterPDA] = web3.PublicKey.findProgramAddressSync(
+    [Buffer.from(COUNTER_SEED), payer.publicKey.toBuffer()],
     program.programId,
   );
 
-  console.log("Program ID: ", program.programId.toString());
-  console.log("Counter PDA: ", counterPDA.toString());
-
-  // Initialize Session Manager
-  const sessionKeypair = initializeSessionSignerKeypair();
   const sessionTokenManager = new SessionTokenManager(
-    provider.wallet,
-    provider.connection,
+    new anchor.Wallet(web3.Keypair.fromSecretKey(payer.secretKey)),
+    new web3.Connection("http://127.0.0.1:8899"),
   );
-  const SESSION_TOKEN_SEED = "session_token_v2";
   const sessionTokenPDA = web3.PublicKey.findProgramAddressSync(
     [
       Buffer.from(SESSION_TOKEN_SEED),
       program.programId.toBytes(),
       sessionKeypair.publicKey.toBytes(),
-      provider.wallet.publicKey.toBytes(),
+      payer.publicKey.toBytes(),
     ],
     sessionTokenManager.program.programId,
   )[0];
+
+  console.log("Program ID: ", program.programId.toString());
+  console.log("Counter PDA: ", counterPDA.toString());
   console.log(
     "Session Signer Public Key: ",
     sessionKeypair.publicKey.toString(),
   );
   console.log("Session Token PDA: ", sessionTokenPDA.toString());
+  console.log("Validator identity: ", validator.toString());
 
-  (it("Create session on Solana", async () => {
-    const start = Date.now();
-
+  it("Create session on Solana", async () => {
     const topUp = true;
-    const validUntilBN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600); // valid for 1 hour
-    // The sessionKeypair pays for: (a) rent-exempt minimum on its own system
-    // account (~890,880 lamports), (b) tx fees on every session-signed tx, and
-    // (c) the on-chain delegation buffer rent (~3M lamports) when it's the
-    // delegate ix's payer. 0.005 SOL covers all three with headroom.
+    const validUntilBN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600);
     const topUpLamportsBN = new anchor.BN(0.005 * LAMPORTS_PER_SOL);
 
     const tx = await sessionTokenManager.program.methods
@@ -89,47 +73,33 @@ describe.only("anchor-counter-session", () => {
       .accounts({
         targetProgram: program.programId,
         sessionSigner: sessionKeypair.publicKey,
-        feePayer: provider.wallet.publicKey,
-        authority: provider.wallet.publicKey,
+        feePayer: payer.publicKey,
+        authority: payer.publicKey,
       })
       .transaction();
-    tx.feePayer = provider.wallet.publicKey;
+    sendSvmTx(svm, [payer, sessionKeypair], tx, "base", "createSessionV2");
 
-    const txHash = await sendAndConfirmTransaction(
-      provider.connection,
-      tx,
-      [provider.wallet.payer!, sessionKeypair],
-      {
-        commitment: "confirmed",
-      },
+    const sessionAccount = svm.getAccount(sessionTokenPDA);
+    assert.ok(sessionAccount.exists, "session token missing on base");
+    assert.equal(
+      sessionAccount.programAddress.toString(),
+      sessionTokenManager.program.programId.toString(),
     );
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) CreateSession txHash: ${txHash}`);
-  }),
-    it("Initialize counter on Solana", async () => {
-      const start = Date.now();
-      let tx = await program.methods
-        .initialize()
-        .accounts({
-          user: provider.wallet.publicKey,
-        })
-        .transaction();
-      const txHash = await sendAndConfirmTransaction(
-        provider.connection,
-        tx,
-        [provider.wallet.payer],
-        {
-          skipPreflight: true,
-          commitment: "confirmed",
-        },
-      );
-      const duration = Date.now() - start;
-      console.log(`${duration}ms (Base Layer) Initialize txHash: ${txHash}`);
-    }));
+  });
+
+  it("Initialize counter on Solana", async () => {
+    const tx = await program.methods
+      .initialize()
+      .accounts({
+        user: payer.publicKey,
+      })
+      .transaction();
+    sendSvmTx(svm, [payer], tx, "base", "initialize");
+    assert.equal(readU64le(svm, counterPDA, "base", 40), 0n);
+  });
 
   it("Increase counter on Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .increment()
       .accounts({
         counter: counterPDA,
@@ -137,59 +107,26 @@ describe.only("anchor-counter-session", () => {
         payer: sessionKeypair.publicKey,
       })
       .transaction();
-    const txHash = await sendAndConfirmTransaction(
-      provider.connection,
-      tx,
-      [sessionKeypair],
-      {
-        skipPreflight: true,
-        commitment: "confirmed",
-      },
-    );
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) Increment txHash: ${txHash}`);
+    sendSvmTx(svm, [sessionKeypair], tx, "base", "increment (base)");
+    assert.equal(readU64le(svm, counterPDA, "base", 40), 1n);
   });
 
   it("Delegate counter to ER", async () => {
-    const start = Date.now();
-    // Validator identity for delegation: VALIDATOR env var wins; otherwise default to
-    // local-ER validator iff the ER endpoint is localhost.
-    const isLocal =
-      providerEphemeralRollup.connection.rpcEndpoint.includes("localhost") ||
-      providerEphemeralRollup.connection.rpcEndpoint.includes("127.0.0.1");
-    const validatorPubkey = process.env.VALIDATOR
-      ? new web3.PublicKey(process.env.VALIDATOR)
-      : isLocal
-        ? new web3.PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev")
-        : null;
-    const remainingAccounts = validatorPubkey
-      ? [{ pubkey: validatorPubkey, isSigner: false, isWritable: false }]
-      : [];
-    let tx = await program.methods
+    const tx = await program.methods
       .delegate()
       .accounts({
         payer: sessionKeypair.publicKey,
         pda: counterPDA,
         sessionToken: sessionTokenPDA,
       })
-      .remainingAccounts(remainingAccounts)
+      .remainingAccounts([validatorRemainingAccount(svm)])
       .transaction();
-    const txHash = await sendAndConfirmTransaction(
-      provider.connection,
-      tx,
-      [sessionKeypair],
-      {
-        skipPreflight: true,
-        commitment: "confirmed",
-      },
-    );
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) Delegate txHash: ${txHash}`);
+    sendSvmTx(svm, [sessionKeypair], tx, "base", "delegate");
+    assert.ok(isDelegated(svm, counterPDA));
   });
 
   it("Increase counter on ER", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .increment()
       .accounts({
         counter: counterPDA,
@@ -197,22 +134,12 @@ describe.only("anchor-counter-session", () => {
         payer: sessionKeypair.publicKey,
       })
       .transaction();
-    const txHash = await sendAndConfirmTransaction(
-      providerEphemeralRollup.connection,
-      tx,
-      [sessionKeypair],
-      {
-        skipPreflight: true,
-        commitment: "confirmed",
-      },
-    );
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Increment txHash: ${txHash}`);
+    sendSvmTx(svm, [sessionKeypair], tx, "ephemeral", "increment (ER)");
+    assert.equal(readU64le(svm, counterPDA, "ephemeral", 40), 2n);
   });
 
   it("Commit counter state on ER to Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .commit()
       .accounts({
         counter: counterPDA,
@@ -220,34 +147,13 @@ describe.only("anchor-counter-session", () => {
         payer: sessionKeypair.publicKey,
       })
       .transaction();
-    const txHash = await sendAndConfirmTransaction(
-      providerEphemeralRollup.connection,
-      tx,
-      [sessionKeypair],
-      {
-        skipPreflight: true,
-        commitment: "confirmed",
-      },
-    );
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Commit txHash: ${txHash}`);
-
-    // Get the commitment signature on the base layer
-    const comfirmCommitStart = Date.now();
-    // Await for the commitment on the base layer
-    const txCommitSgn = await GetCommitmentSignature(
-      txHash,
-      providerEphemeralRollup.connection,
-    );
-    const commitDuration = Date.now() - comfirmCommitStart;
-    console.log(
-      `${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`,
-    );
+    sendSvmTx(svm, [sessionKeypair], tx, "ephemeral", "commit");
+    assert.equal(readU64le(svm, counterPDA, "base", 40), 2n);
+    assert.ok(isDelegated(svm, counterPDA));
   });
 
   it("Increase counter on ER and commit", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .incrementAndCommit()
       .accounts({
         counter: counterPDA,
@@ -255,34 +161,13 @@ describe.only("anchor-counter-session", () => {
         payer: sessionKeypair.publicKey,
       })
       .transaction();
-    const txHash = await sendAndConfirmTransaction(
-      providerEphemeralRollup.connection,
-      tx,
-      [sessionKeypair],
-      {
-        skipPreflight: true,
-        commitment: "confirmed",
-      },
-    );
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (ER) Increment and Commit txHash: ${txHash}`);
-
-    // Get the commitment signature on the base layer
-    const comfirmCommitStart = Date.now();
-    // Await for the commitment on the base layer
-    const txCommitSgn = await GetCommitmentSignature(
-      txHash,
-      providerEphemeralRollup.connection,
-    );
-    const commitDuration = Date.now() - comfirmCommitStart;
-    console.log(
-      `${commitDuration}ms (Base Layer) Commit txHash: ${txCommitSgn}`,
-    );
+    sendSvmTx(svm, [sessionKeypair], tx, "ephemeral", "incrementAndCommit");
+    assert.equal(readU64le(svm, counterPDA, "ephemeral", 40), 3n);
+    assert.equal(readU64le(svm, counterPDA, "base", 40), 3n);
   });
 
   it("Increment and undelegate counter on ER to Solana", async () => {
-    const start = Date.now();
-    let tx = await program.methods
+    const tx = await program.methods
       .incrementAndUndelegate()
       .accounts({
         counter: counterPDA,
@@ -290,57 +175,25 @@ describe.only("anchor-counter-session", () => {
         payer: sessionKeypair.publicKey,
       })
       .transaction();
-    const txHash = await sendAndConfirmTransaction(
-      providerEphemeralRollup.connection,
-      tx,
-      [sessionKeypair],
-      {
-        skipPreflight: true,
-        commitment: "confirmed",
-      },
-    );
-    const duration = Date.now() - start;
-    console.log(
-      `${duration}ms (ER) Increment and Undelegate txHash: ${txHash}`,
-    );
-
-    // Get the commitment signature on the base layer
-    const comfirmCommitStart = Date.now();
-    // Await for the commitment on the base layer
-    const txCommitSgn = await GetCommitmentSignature(
-      txHash,
-      providerEphemeralRollup.connection,
-    );
-    const commitDuration = Date.now() - comfirmCommitStart;
-    console.log(
-      `${commitDuration}ms (Base Layer) Undelegate txHash: ${txCommitSgn}`,
+    sendSvmTx(svm, [sessionKeypair], tx, "ephemeral", "incrementAndUndelegate");
+    assert.equal(readU64le(svm, counterPDA, "base", 40), 4n);
+    assert.equal(
+      accountOwner(svm, counterPDA, "base"),
+      program.programId.toString(),
     );
   });
-  it("Revoke session on Solana", async () => {
-    const start = Date.now();
 
+  it("Revoke session on Solana", async () => {
     const tx = await sessionTokenManager.program.methods
       .revokeSessionV2()
       .accounts({
         sessionToken: sessionTokenPDA,
-        feePayer: provider.wallet.publicKey,
-        authority: provider.wallet.publicKey,
+        feePayer: payer.publicKey,
+        authority: payer.publicKey,
       })
       .transaction();
-    // While the session is still within `valid_until`, the program requires
-    // `authority` to be a signer (see SessionError::InvalidAuthority). Sign
-    // with the wallet (authority), not the session signer.
-    tx.feePayer = provider.wallet.publicKey;
-    const txHash = await sendAndConfirmTransaction(
-      provider.connection,
-      tx,
-      [provider.wallet.payer!],
-      {
-        skipPreflight: true,
-        commitment: "confirmed",
-      },
-    );
-    const duration = Date.now() - start;
-    console.log(`${duration}ms (Base Layer) revokeSession txHash: ${txHash}`);
+    sendSvmTx(svm, [payer], tx, "base", "revokeSessionV2");
+    const sessionAccount = svm.getAccount(sessionTokenPDA);
+    assert.equal(sessionAccount.exists, false);
   });
 });

@@ -6,7 +6,7 @@ use ephemeral_rollups_sdk::cpi::{delegate_account_with_actions, DelegateAccounts
 use ephemeral_rollups_sdk::dlp_api::compact::ClearText;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
-declare_id!("7cRQuYsAe4F6ryBTxdvxNuFpJ6XRm38qcdd9V3NH7amc");
+declare_id!("7utsCSeoSCMkFPXESmKPrAHrVqTaeTepfhXerSf8DWEh");
 
 pub const COUNTER_SEED: &[u8] = b"counter";
 

@@ -14,7 +14,7 @@ use error::ErrorCode;
 pub use state::{Bet, Direction, Pool};
 use utils::*;
 
-declare_id!("Ds6GFGKcKGEmefKcdAJmobh3EgdktYQJX1fHW1TP9USK");
+declare_id!("7HHiv8th2wY24iZp2ReF7QkJyFJHwHWCgZWg7CWrQnnm");
 
 pub const POOL_SEED: &[u8] = b"pool";
 pub const BET_SEED: &[u8] = b"bet";

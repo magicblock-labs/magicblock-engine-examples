@@ -4,11 +4,10 @@ import { BN, Program, web3 } from "@coral-xyz/anchor";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createApproveInstruction,
-  createAssociatedTokenAccount,
-  createMint,
-  getAccount,
+  createAssociatedTokenAccountInstruction,
+  createInitializeMint2Instruction,
+  createMintToInstruction,
   getAssociatedTokenAddressSync,
-  mintTo,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import {
@@ -19,12 +18,19 @@ import {
   withdrawSpl,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { SessionTokenManager } from "@magicblock-labs/gum-sdk";
+import { MagicSVM } from "@magicblock-labs/magicsvm";
+import { airdropOrThrow, sendSvmTx } from "@magicblock-labs/test-utils";
 import { expect } from "chai";
+import * as fs from "fs";
+import * as path from "path";
 
 import { BinaryPrediction } from "../target/types/binary_prediction";
 
 const ORACLE_PROGRAM_ID = new web3.PublicKey(
   "PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd",
+);
+const SESSION_PROGRAM_ID = new web3.PublicKey(
+  "KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5",
 );
 const POOL_SEED = Buffer.from("pool");
 const BET_SEED = Buffer.from("bet");
@@ -37,7 +43,7 @@ const POOL_SEED_AMOUNT = new BN(10_000);
 const BET_DURATION_SECONDS = new BN(5);
 const MIN_STAKE = new BN(10);
 const PAYOUT_BPS = new BN(19_000);
-const BET_DURATION_MS = 6_000;
+const MINT_SIZE = 82;
 
 const INITIALIZE_PRICE_FEED_DISCRIMINATOR = Buffer.from([
   68, 180, 81, 20, 102, 213, 145, 233,
@@ -48,8 +54,6 @@ const UPDATE_PRICE_FEED_DISCRIMINATOR = Buffer.from([
 const DELEGATE_PRICE_FEED_DISCRIMINATOR = Buffer.from([
   15, 179, 172, 145, 42, 73, 160, 241,
 ]);
-const SCHEDULED_COMMIT_PREFIX = "ScheduledCommitSent signature: ";
-const COMMIT_PREFIX = "ScheduledCommitSent signature[0]: ";
 
 const initializePriceFeedLayout = borsh.struct([
   borsh.str("provider"),
@@ -174,6 +178,7 @@ function updatePriceFeedIx(
   payer: web3.PublicKey,
   feed: web3.PublicKey,
   price: number,
+  timestampNs: BN,
 ): web3.TransactionInstruction {
   return new web3.TransactionInstruction({
     programId: ORACLE_PROGRAM_ID,
@@ -186,7 +191,19 @@ function updatePriceFeedIx(
       updatePriceFeedLayout,
       {
         provider: ORACLE_PROVIDER,
-        updateData: updateData(ORACLE_SYMBOL, feed, price),
+        updateData: {
+          symbol: ORACLE_SYMBOL,
+          id: Array.from(feed.toBytes()),
+          temporalNumericValue: {
+            timestampNs,
+            quantizedValue: new BN(price),
+          },
+          publisherMerkleRoot: Array(32).fill(0),
+          valueComputeAlgHash: Array(32).fill(0),
+          r: Array(32).fill(0),
+          s: Array(32).fill(0),
+          v: 0,
+        },
       },
     ),
   });
@@ -227,238 +244,231 @@ function delegatePriceFeedIx(
   });
 }
 
-function updateData(symbol: string, feed: web3.PublicKey, price: number) {
+function tokenAmount(
+  svm: MagicSVM,
+  address: web3.PublicKey,
+  target: "base" | "ephemeral",
+): bigint {
+  const account = svm.getAccountFor(address, { target });
+  expect(account.exists, `token account missing on ${target}`).to.equal(true);
+  if (!account.exists) {
+    throw new Error(`token account missing on ${target}`);
+  }
+  return Buffer.from(account.data).readBigUInt64LE(64);
+}
+
+function readPool(svm: MagicSVM, pool: web3.PublicKey) {
+  const account = svm.getAccount(pool);
+  expect(account.exists, "pool missing").to.equal(true);
+  if (!account.exists) {
+    throw new Error("pool missing");
+  }
+  const data = Buffer.from(account.data);
   return {
-    symbol,
-    id: Array.from(feed.toBytes()),
-    temporalNumericValue: {
-      timestampNs: new BN(Date.now().toString()).mul(new BN(1_000_000)),
-      quantizedValue: new BN(price),
-    },
-    publisherMerkleRoot: Array(32).fill(0),
-    valueComputeAlgHash: Array(32).fill(0),
-    r: Array(32).fill(0),
-    s: Array(32).fill(0),
-    v: 0,
+    priceFeedId: data.subarray(104, 136),
+    betDurationSeconds: Number(data.readBigInt64LE(136)),
+    minStake: Number(data.readBigUInt64LE(144)),
+    payoutBps: Number(data.readBigUInt64LE(152)),
   };
 }
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+function readBet(
+  svm: MagicSVM,
+  bet: web3.PublicKey,
+  target: "base" | "ephemeral",
+) {
+  const account = svm.getAccountFor(bet, { target });
+  expect(account.exists, `bet missing on ${target}`).to.equal(true);
+  if (!account.exists) {
+    throw new Error(`bet missing on ${target}`);
+  }
+  const data = Buffer.from(account.data);
+  return {
+    openPrice: Number(data.readBigInt64LE(8)),
+    stake: Number(data.readBigUInt64LE(25)),
+    isOpen: data[33] === 1,
+  };
 }
 
-async function sendLocalTransaction(
-  connection: web3.Connection,
-  transaction: web3.Transaction,
-  feePayer: web3.Keypair,
-  signers: web3.Keypair[] = [],
-): Promise<string> {
-  const blockhash = await connection.getLatestBlockhash("confirmed");
-  const signerMap = new Map<string, web3.Keypair>();
-  [feePayer, ...signers].forEach((signer) =>
-    signerMap.set(signer.publicKey.toBase58(), signer),
-  );
-
-  transaction.feePayer = feePayer.publicKey;
-  transaction.recentBlockhash = blockhash.blockhash;
-  transaction.partialSign(...signerMap.values());
-
-  const signature = await connection.sendRawTransaction(
-    transaction.serialize(),
-    { skipPreflight: true },
-  );
-  const status = await connection.confirmTransaction(
-    { signature, ...blockhash },
-    "confirmed",
-  );
-  if (status.value.err) {
-    throw new Error(
-      `Transaction ${signature} failed: ${JSON.stringify(status.value.err)}`,
-    );
-  }
-
-  return signature;
+function setUnixTimestamp(svm: MagicSVM, unixTimestamp: bigint) {
+  const clock = svm.getClock();
+  clock.unixTimestamp = unixTimestamp;
+  svm.setClock(clock);
 }
 
-function findLogValue(logMessages: string[], prefix: string): string | null {
-  const message = logMessages.find((log) => log.includes(prefix));
-
-  return message ? message.split(prefix)[1] : null;
-}
-
-function dumpLogs(label: string, logMessages: string[]): void {
-  console.log(`${label} logs:`);
-  for (const log of logMessages) {
-    console.log(`  ${log}`);
-  }
-}
-
-async function getCommitmentSignatureWithLogs(
-  label: string,
-  transactionSignature: string,
-  ephemeralConnection: web3.Connection,
-): Promise<string> {
-  const schedulingTransaction = await ephemeralConnection.getTransaction(
-    transactionSignature,
-    { commitment: "confirmed", maxSupportedTransactionVersion: 0 },
-  );
-  if (!schedulingTransaction?.meta) {
-    throw new Error(`${label}: scheduling transaction not found`);
-  }
-
-  const schedulingLogs = schedulingTransaction.meta.logMessages ?? [];
-  dumpLogs(
-    `${label} scheduling transaction ${transactionSignature}`,
-    schedulingLogs,
-  );
-
-  const scheduledCommitSignature = findLogValue(
-    schedulingLogs,
-    SCHEDULED_COMMIT_PREFIX,
-  );
-  if (!scheduledCommitSignature) {
-    throw new Error(`${label}: scheduled commit signature not found`);
-  }
-  console.log(`${label} scheduled commit: ${scheduledCommitSignature}`);
-
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    const scheduledTransaction = await ephemeralConnection.getTransaction(
-      scheduledCommitSignature,
-      { commitment: "confirmed", maxSupportedTransactionVersion: 0 },
-    );
-    if (scheduledTransaction?.meta) {
-      const scheduledLogs = scheduledTransaction.meta.logMessages ?? [];
-      dumpLogs(
-        `${label} scheduled commit transaction ${scheduledCommitSignature}`,
-        scheduledLogs,
-      );
-
-      const commitmentSignature = findLogValue(scheduledLogs, COMMIT_PREFIX);
-      if (!commitmentSignature) {
-        throw new Error(`${label}: base commitment signature not found`);
-      }
-
-      return commitmentSignature;
-    }
-    await sleep(1_000);
-  }
-
-  throw new Error(
-    `${label}: scheduled commit transaction ${scheduledCommitSignature} did not land`,
+function oracleTimestampNs(svm: MagicSVM): BN {
+  return new BN(svm.getClock().unixTimestamp.toString()).mul(
+    new BN(1_000_000_000),
   );
 }
 
-describe("binary-prediction", () => {
-  const provider = process.env.PROVIDER_ENDPOINT
-    ? new anchor.AnchorProvider(
-        new anchor.web3.Connection(process.env.PROVIDER_ENDPOINT, "confirmed"),
-        anchor.Wallet.local(),
-      )
-    : anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
+describe("binary-prediction magicsvm", () => {
+  const soPath = path.resolve(
+    __dirname,
+    "..",
+    "target",
+    "deploy",
+    "binary_prediction.so",
+  );
+  const oracleSoPath = path.resolve(
+    __dirname,
+    "..",
+    "tests",
+    "fixtures",
+    "ephemeral_oracle.so",
+  );
+  const sessionSoPath = path.resolve(__dirname, "fixtures", "session-keys.so");
+  expect(fs.existsSync(soPath), `missing program binary at ${soPath}`).to.equal(
+    true,
+  );
+  expect(
+    fs.existsSync(oracleSoPath),
+    `missing oracle program at ${oracleSoPath}`,
+  ).to.equal(true);
+  expect(
+    fs.existsSync(sessionSoPath),
+    `missing gum session program at ${sessionSoPath}`,
+  ).to.equal(true);
 
-  const erProvider = new anchor.AnchorProvider(
-    new anchor.web3.Connection(
-      process.env.EPHEMERAL_PROVIDER_ENDPOINT || "http://localhost:7799",
-      {
-        wsEndpoint: process.env.EPHEMERAL_WS_ENDPOINT || "ws://localhost:7800",
-        commitment: "confirmed",
-      },
+  const idl = JSON.parse(
+    fs.readFileSync(
+      path.resolve(__dirname, "..", "target", "idl", "binary_prediction.json"),
+      "utf8",
     ),
-    anchor.Wallet.local(),
   );
-
-  const program = anchor.workspace
-    .BinaryPrediction as Program<BinaryPrediction>;
-  const erProgram = new Program(
-    program.idl,
-    erProvider,
-  ) as Program<BinaryPrediction>;
-
-  const admin = (provider.wallet as anchor.Wallet).payer;
+  const admin = web3.Keypair.generate();
   const user = web3.Keypair.generate();
   const sessionKeypair = web3.Keypair.generate();
+  const mintKp = web3.Keypair.generate();
+  const dummyProvider = new anchor.AnchorProvider(
+    new web3.Connection("http://127.0.0.1:8899"),
+    new anchor.Wallet(admin),
+    { commitment: "confirmed" },
+  );
+  const program = new Program<BinaryPrediction>(idl, dummyProvider);
+  const sessionTokenManager = new SessionTokenManager(
+    dummyProvider.wallet,
+    dummyProvider.connection,
+  );
+
+  const svm = new MagicSVM();
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  setUnixTimestamp(svm, now);
+  svm.addProgramFromFile(program.programId, soPath);
+  svm.addProgramFromFile(ORACLE_PROGRAM_ID, oracleSoPath);
+  svm.addProgramFromFile(SESSION_PROGRAM_ID, sessionSoPath);
+  airdropOrThrow(
+    svm,
+    admin.publicKey,
+    BigInt(10 * web3.LAMPORTS_PER_SOL),
+    "airdrop admin",
+  );
+  airdropOrThrow(
+    svm,
+    user.publicKey,
+    BigInt(2 * web3.LAMPORTS_PER_SOL),
+    "airdrop user",
+  );
+
+  const validator = new web3.PublicKey(svm.validatorIdentity().toString());
   const feed = priceFeed();
   const feedId = Array.from(feed.toBytes());
   const userBet = betPda(program.programId, user.publicKey);
-
-  let pool: web3.PublicKey;
-  let mint: web3.PublicKey;
-  let userAta: web3.PublicKey;
-  let poolAta: web3.PublicKey;
-  let poolEata: web3.PublicKey;
-  let vaultPda: web3.PublicKey;
-  let vaultEata: web3.PublicKey;
-  let vaultAta: web3.PublicKey;
-  let sessionTokenPda: web3.PublicKey;
+  const mint = mintKp.publicKey;
+  const userAta = getAssociatedTokenAddressSync(mint, user.publicKey);
+  const adminAta = getAssociatedTokenAddressSync(mint, admin.publicKey);
+  const pool = web3.PublicKey.findProgramAddressSync(
+    [POOL_SEED, mint.toBuffer()],
+    program.programId,
+  )[0];
+  const poolAta = getAssociatedTokenAddressSync(mint, pool, true);
+  const poolEata = eata(pool, mint);
+  const vaultPda = vault(mint);
+  const vaultEata = eata(vaultPda, mint);
+  const vaultAta = getAssociatedTokenAddressSync(mint, vaultPda, true);
+  const sessionTokenPda = web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("session_token_v2"),
+      program.programId.toBuffer(),
+      sessionKeypair.publicKey.toBuffer(),
+      user.publicKey.toBuffer(),
+    ],
+    sessionTokenManager.program.programId,
+  )[0];
 
   it("runs initialize -> bet -> settle -> user withdraw", async () => {
-    mint = await createMint(
-      provider.connection,
-      admin,
-      admin.publicKey,
-      null,
-      0,
+    const mintRent = Number(
+      svm.minimumBalanceForRentExemption(BigInt(MINT_SIZE)),
     );
-    userAta = await createAssociatedTokenAccount(
-      provider.connection,
-      admin,
-      mint,
-      user.publicKey,
-    );
-    pool = web3.PublicKey.findProgramAddressSync(
-      [POOL_SEED, mint.toBuffer()],
-      program.programId,
-    )[0];
-    poolAta = getAssociatedTokenAddressSync(mint, pool, true);
-    poolEata = eata(pool, mint);
-    vaultPda = vault(mint);
-    vaultEata = eata(vaultPda, mint);
-    vaultAta = getAssociatedTokenAddressSync(mint, vaultPda, true);
-
-    await mintTo(provider.connection, admin, mint, userAta, admin, 1_000n);
-    const adminAta = await createAssociatedTokenAccount(
-      provider.connection,
-      admin,
-      mint,
-      admin.publicKey,
-    );
-    await mintTo(
-      provider.connection,
-      admin,
-      mint,
-      adminAta,
-      admin,
-      BigInt(POOL_SEED_AMOUNT.toString()),
-    );
-
-    const feedAccount = await provider.connection.getAccountInfo(
-      feed,
-      "confirmed",
-    );
-    const feedIsDelegated = Boolean(
-      feedAccount?.owner.equals(DELEGATION_PROGRAM_ID),
-    );
-    if (!feedAccount) {
-      await sendLocalTransaction(
-        provider.connection,
-        new anchor.web3.Transaction().add(
-          initializePriceFeedIx(admin.publicKey, feed),
-        ),
-        admin,
-      );
-    }
-
-    await sendLocalTransaction(
-      feedIsDelegated ? erProvider.connection : provider.connection,
-      new anchor.web3.Transaction().add(
-        updatePriceFeedIx(admin.publicKey, feed, 100),
+    sendSvmTx(
+      svm,
+      [admin, mintKp],
+      new web3.Transaction().add(
+        web3.SystemProgram.createAccount({
+          fromPubkey: admin.publicKey,
+          newAccountPubkey: mint,
+          space: MINT_SIZE,
+          lamports: mintRent,
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeMint2Instruction(mint, 0, admin.publicKey, null),
       ),
-      admin,
+      "base",
+      "create mint",
     );
 
-    const validator = new web3.PublicKey(
-      process.env.VALIDATOR ?? "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev",
+    sendSvmTx(
+      svm,
+      [admin],
+      new web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          admin.publicKey,
+          userAta,
+          user.publicKey,
+          mint,
+        ),
+        createAssociatedTokenAccountInstruction(
+          admin.publicKey,
+          adminAta,
+          admin.publicKey,
+          mint,
+        ),
+      ),
+      "base",
+      "create ATAs",
+    );
+
+    sendSvmTx(
+      svm,
+      [admin],
+      new web3.Transaction().add(
+        createMintToInstruction(mint, userAta, admin.publicKey, 1_000n),
+        createMintToInstruction(
+          mint,
+          adminAta,
+          admin.publicKey,
+          BigInt(POOL_SEED_AMOUNT.toString()),
+        ),
+      ),
+      "base",
+      "mint tokens",
+    );
+
+    sendSvmTx(
+      svm,
+      [admin],
+      new web3.Transaction().add(initializePriceFeedIx(admin.publicKey, feed)),
+      "base",
+      "initialize price feed",
+    );
+    sendSvmTx(
+      svm,
+      [admin],
+      new web3.Transaction().add(
+        updatePriceFeedIx(admin.publicKey, feed, 100, oracleTimestampNs(svm)),
+      ),
+      "base",
+      "update price feed 100",
     );
 
     const initializeTx = await program.methods
@@ -471,7 +481,7 @@ describe("binary-prediction", () => {
         PAYOUT_BPS,
       )
       .preInstructions([
-        web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 1_000_000 }),
+        web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
       ])
       .accountsPartial({
         admin: admin.publicKey,
@@ -505,20 +515,18 @@ describe("binary-prediction", () => {
         { pubkey: validator, isSigner: false, isWritable: false },
       ])
       .transaction();
-    await sendLocalTransaction(provider.connection, initializeTx, admin);
+    sendSvmTx(svm, [admin], initializeTx, "base", "initialize");
 
-    const poolState = await program.account.pool.fetch(pool);
-    expect(poolState.betDurationSeconds.toNumber()).to.equal(
+    const poolState = readPool(svm, pool);
+    expect(poolState.betDurationSeconds).to.equal(
       BET_DURATION_SECONDS.toNumber(),
     );
     expect(Buffer.from(poolState.priceFeedId)).to.deep.equal(
       Buffer.from(feedId),
     );
-    expect(poolState.minStake.toNumber()).to.equal(MIN_STAKE.toNumber());
-    expect(poolState.payoutBps.toNumber()).to.equal(PAYOUT_BPS.toNumber());
-    expect((await getAccount(provider.connection, poolAta)).amount).to.equal(
-      0n,
-    );
+    expect(poolState.minStake).to.equal(MIN_STAKE.toNumber());
+    expect(poolState.payoutBps).to.equal(PAYOUT_BPS.toNumber());
+    expect(tokenAmount(svm, poolAta, "base")).to.equal(0n);
 
     const initializeBetTx = await program.methods
       .initializeBet()
@@ -529,17 +537,15 @@ describe("binary-prediction", () => {
         systemProgram: web3.SystemProgram.programId,
       })
       .transaction();
-    await sendLocalTransaction(provider.connection, initializeBetTx, admin);
+    sendSvmTx(svm, [admin], initializeBetTx, "base", "initialize bet");
 
-    if (!feedIsDelegated) {
-      await sendLocalTransaction(
-        provider.connection,
-        new anchor.web3.Transaction().add(
-          delegatePriceFeedIx(admin.publicKey, feed),
-        ),
-        admin,
-      );
-    }
+    sendSvmTx(
+      svm,
+      [admin],
+      new web3.Transaction().add(delegatePriceFeedIx(admin.publicKey, feed)),
+      "base",
+      "delegate price feed",
+    );
 
     const delegateBetTx = await program.methods
       .delegateBet()
@@ -552,9 +558,7 @@ describe("binary-prediction", () => {
         { pubkey: validator, isSigner: false, isWritable: false },
       ])
       .transaction();
-    await sendLocalTransaction(provider.connection, delegateBetTx, admin, [
-      user,
-    ]);
+    sendSvmTx(svm, [admin, user], delegateBetTx, "base", "delegate bet");
 
     const delegateUserIxs = await delegateSpl(
       user.publicKey,
@@ -567,16 +571,15 @@ describe("binary-prediction", () => {
         payer: admin.publicKey,
       },
     );
-    await sendLocalTransaction(
-      provider.connection,
-      new anchor.web3.Transaction().add(...delegateUserIxs),
-      admin,
-      [user],
+    sendSvmTx(
+      svm,
+      [admin, user],
+      new web3.Transaction().add(...delegateUserIxs),
+      "base",
+      "delegate user SPL",
     );
 
-    await sleep(3_000);
-
-    const placeWalletBetTx = await erProgram.methods
+    const placeWalletBetTx = await program.methods
       .placeBet({ up: {} }, STAKE)
       .accountsPartial({
         payer: user.publicKey,
@@ -591,25 +594,35 @@ describe("binary-prediction", () => {
         sessionToken: null,
       })
       .transaction();
-    await sendLocalTransaction(erProvider.connection, placeWalletBetTx, admin, [
-      user,
-    ]);
+    sendSvmTx(
+      svm,
+      [admin, user],
+      placeWalletBetTx,
+      "ephemeral",
+      "place wallet bet",
+    );
 
-    let bet = await erProgram.account.bet.fetch(userBet);
-    expect(bet.openPrice.toNumber()).to.equal(100);
-    expect(bet.stake.toNumber()).to.equal(STAKE.toNumber());
+    let bet = readBet(svm, userBet, "ephemeral");
+    expect(bet.openPrice).to.equal(100);
+    expect(bet.stake).to.equal(STAKE.toNumber());
     expect(bet.isOpen).to.equal(true);
 
-    await sendLocalTransaction(
-      erProvider.connection,
-      new anchor.web3.Transaction().add(
-        updatePriceFeedIx(admin.publicKey, feed, 110),
+    sendSvmTx(
+      svm,
+      [admin],
+      new web3.Transaction().add(
+        updatePriceFeedIx(admin.publicKey, feed, 110, oracleTimestampNs(svm)),
       ),
-      admin,
+      "ephemeral",
+      "update price feed 110",
     );
-    await sleep(BET_DURATION_MS);
+    setUnixTimestamp(
+      svm,
+      svm.getClock().unixTimestamp +
+        BigInt(BET_DURATION_SECONDS.toNumber() + 1),
+    );
 
-    const settleWinTx = await erProgram.methods
+    const settleWinTx = await program.methods
       .settle()
       .accountsPartial({
         payer: admin.publicKey,
@@ -623,28 +636,15 @@ describe("binary-prediction", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .transaction();
-    await sendLocalTransaction(erProvider.connection, settleWinTx, admin);
+    sendSvmTx(svm, [admin], settleWinTx, "ephemeral", "settle win");
 
-    bet = await erProgram.account.bet.fetch(userBet);
+    bet = readBet(svm, userBet, "ephemeral");
     expect(bet.isOpen).to.equal(false);
 
-    const sessionTokenManager = new SessionTokenManager(
-      provider.wallet,
-      provider.connection,
-    );
-    sessionTokenPda = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("session_token_v2"),
-        program.programId.toBuffer(),
-        sessionKeypair.publicKey.toBuffer(),
-        user.publicKey.toBuffer(),
-      ],
-      sessionTokenManager.program.programId,
-    )[0];
     const createSessionTx = await sessionTokenManager.program.methods
       .createSessionV2(
         true,
-        new BN(Math.floor(Date.now() / 1000) + 3600),
+        new BN(Number(svm.getClock().unixTimestamp) + 3600),
         new BN(0.005 * web3.LAMPORTS_PER_SOL),
       )
       .accounts({
@@ -654,14 +654,18 @@ describe("binary-prediction", () => {
         authority: user.publicKey,
       })
       .transaction();
-    await sendLocalTransaction(provider.connection, createSessionTx, admin, [
-      user,
-      sessionKeypair,
-    ]);
+    sendSvmTx(
+      svm,
+      [admin, user, sessionKeypair],
+      createSessionTx,
+      "base",
+      "create session",
+    );
 
-    await sendLocalTransaction(
-      erProvider.connection,
-      new anchor.web3.Transaction().add(
+    sendSvmTx(
+      svm,
+      [admin, user],
+      new web3.Transaction().add(
         createApproveInstruction(
           userAta,
           sessionKeypair.publicKey,
@@ -669,11 +673,11 @@ describe("binary-prediction", () => {
           BigInt(STAKE.toString()),
         ),
       ),
-      admin,
-      [user],
+      "ephemeral",
+      "approve session delegate",
     );
 
-    const placeSessionBetTx = await erProgram.methods
+    const placeSessionBetTx = await program.methods
       .placeBet({ down: {} }, STAKE)
       .accountsPartial({
         payer: sessionKeypair.publicKey,
@@ -688,23 +692,30 @@ describe("binary-prediction", () => {
         sessionToken: sessionTokenPda,
       })
       .transaction();
-    await sendLocalTransaction(
-      erProvider.connection,
-      placeSessionBetTx,
-      admin,
+    sendSvmTx(
+      svm,
       [sessionKeypair],
+      placeSessionBetTx,
+      "ephemeral",
+      "place session bet",
     );
 
-    await sendLocalTransaction(
-      erProvider.connection,
-      new anchor.web3.Transaction().add(
-        updatePriceFeedIx(admin.publicKey, feed, 120),
+    sendSvmTx(
+      svm,
+      [admin],
+      new web3.Transaction().add(
+        updatePriceFeedIx(admin.publicKey, feed, 120, oracleTimestampNs(svm)),
       ),
-      admin,
+      "ephemeral",
+      "update price feed 120",
     );
-    await sleep(BET_DURATION_MS);
+    setUnixTimestamp(
+      svm,
+      svm.getClock().unixTimestamp +
+        BigInt(BET_DURATION_SECONDS.toNumber() + 1),
+    );
 
-    const settleLossTx = await erProgram.methods
+    const settleLossTx = await program.methods
       .settle()
       .accountsPartial({
         payer: admin.publicKey,
@@ -718,28 +729,19 @@ describe("binary-prediction", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .transaction();
-    await sendLocalTransaction(erProvider.connection, settleLossTx, admin);
+    sendSvmTx(svm, [admin], settleLossTx, "ephemeral", "settle loss");
 
-    const erUserBalance = (await getAccount(erProvider.connection, userAta))
-      .amount;
-    const erPoolBalance = (await getAccount(erProvider.connection, poolAta))
-      .amount;
+    const erUserBalance = tokenAmount(svm, userAta, "ephemeral");
+    const erPoolBalance = tokenAmount(svm, poolAta, "ephemeral");
     expect(erUserBalance).to.equal(290n);
     expect(erPoolBalance).to.equal(10_010n);
 
-    const userUndelegateSig = await sendLocalTransaction(
-      erProvider.connection,
-      new anchor.web3.Transaction().add(undelegateIx(user.publicKey, mint)),
-      user,
-    );
-
-    await provider.connection.confirmTransaction(
-      await getCommitmentSignatureWithLogs(
-        "user undelegate",
-        userUndelegateSig,
-        erProvider.connection,
-      ),
-      "confirmed",
+    sendSvmTx(
+      svm,
+      [user],
+      new web3.Transaction().add(undelegateIx(user.publicKey, mint)),
+      "ephemeral",
+      "user undelegate",
     );
 
     const userWithdrawIxs = await withdrawSpl(
@@ -750,18 +752,15 @@ describe("binary-prediction", () => {
         idempotent: false,
       },
     );
-    await sendLocalTransaction(
-      provider.connection,
-      new anchor.web3.Transaction().add(...userWithdrawIxs),
-      admin,
-      [user],
+    sendSvmTx(
+      svm,
+      [admin, user],
+      new web3.Transaction().add(...userWithdrawIxs),
+      "base",
+      "user withdraw",
     );
 
-    expect((await getAccount(provider.connection, userAta)).amount).to.equal(
-      990n,
-    );
-    expect((await getAccount(provider.connection, poolAta)).amount).to.equal(
-      0n,
-    );
+    expect(tokenAmount(svm, userAta, "base")).to.equal(990n);
+    expect(tokenAmount(svm, poolAta, "base")).to.equal(0n);
   });
 });

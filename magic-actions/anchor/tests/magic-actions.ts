@@ -1,317 +1,233 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program, web3 } from "@coral-xyz/anchor";
 import { strict as assert } from "assert";
-import { MagicActions } from "../target/types/magic_actions";
 import {
-  ConnectionMagicRouter,
   createCloseEscrowInstruction,
   createTopUpEscrowInstruction,
   escrowPdaFromEscrowAuthority,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
-import { Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import {
+  accountOwner,
+  bootAnchorSvm,
+  DELEGATION_PROGRAM_ID,
+  isDelegated,
+  readU64le,
+  requireAccount,
+  sendExpectingFailure,
+  sendSvmIx,
+} from "@magicblock-labs/test-utils";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { MagicActions } from "../target/types/magic_actions";
 
 const COUNTER_SEED = "counter";
 const SEED_LEADERBOARD = "leaderboard";
 
-describe("magic-actions", () => {
-  anchor.setProvider(anchor.AnchorProvider.env());
-  const program = anchor.workspace.magicActions as Program<MagicActions>;
+function failedBlob(result: {
+  err(): unknown;
+  meta(): { logs(): string[] };
+  toString(): string;
+}): string {
+  const logs = result.meta().logs().join("\n");
+  const err = JSON.stringify(result.err());
+  const raw = `${result.toString()}\n${err}\n${logs}`;
+  if (/SignatureFailure|signature/i.test(raw)) {
+    return `signature verification failed\n${raw}`;
+  }
+  return raw;
+}
 
-  const routerConnection: ConnectionMagicRouter = new ConnectionMagicRouter(
-    process.env.ROUTER_ENDPOINT || "https://devnet-router.magicblock.app",
-    {
-      wsEndpoint:
-        process.env.ROUTER_WS_ENDPOINT || "wss://devnet-router.magicblock.app",
-    },
-  );
-
-  const [pda] = anchor.web3.PublicKey.findProgramAddressSync(
+describe("magic-actions-local", () => {
+  const { svm, payer, program, validator } = bootAnchorSvm<MagicActions>({
+    fromDir: __dirname,
+    programName: "magic_actions",
+    airdropLamports: BigInt(LAMPORTS_PER_SOL) * 10n,
+  });
+  const programId = program.programId;
+  const [pda] = PublicKey.findProgramAddressSync(
     [Buffer.from(COUNTER_SEED)],
-    program.programId,
+    programId,
   );
-
-  const [leaderboard_pda] = anchor.web3.PublicKey.findProgramAddressSync(
+  const [leaderboardPda] = PublicKey.findProgramAddressSync(
     [Buffer.from(SEED_LEADERBOARD)],
-    program.programId,
+    programId,
   );
+  const escrow = escrowPdaFromEscrowAuthority(payer.publicKey);
+  const validatorKey = new PublicKey(validator);
 
-  console.log("Router Endpoint: ", routerConnection.rpcEndpoint);
-  console.log("Program ID: ", program.programId.toBase58());
-  console.log("Counter PDA: ", pda.toBase58());
-  console.log("Leaderboard PDA: ", leaderboard_pda.toBase58());
+  function printCounter(message: string) {
+    const delegated = isDelegated(svm, pda);
+    const highScore = readU64le(svm, leaderboardPda, "base");
 
-  it("Initialize Counter!", async () => {
-    const tx = (await program.methods
+    let counterBase = "<n/a>";
+    let counterER = "<n/a>";
+    if (delegated) {
+      counterBase = "<Delegated>";
+      const erInfo = svm.getAccountFor(pda, { target: "ephemeral" });
+      counterER = erInfo.exists
+        ? readU64le(svm, pda, "ephemeral").toString()
+        : "0";
+    } else if (svm.getAccountFor(pda, { target: "base" }).exists) {
+      counterBase = readU64le(svm, pda, "base").toString();
+      counterER = "<Not Delegated>";
+    }
+    console.log("--------------------------------");
+    console.log(`| ${delegated ? "✅ Delegated" : "❌ Not Delegated"}`);
+    console.log("--------------------------------");
+    console.log("| Counter (Base): ", counterBase);
+    console.log("| Counter (ER):   ", counterER);
+    console.log("| High Score:     ", highScore.toString());
+    console.log("--------------------------------");
+    console.log(message);
+  }
+
+  it("Initialize Counter", async () => {
+    const ix = await program.methods
       .initialize()
       .accounts({
-        // @ts-ignore
         counter: pda,
-        user: anchor.Wallet.local().publicKey,
+        user: payer.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .transaction()) as Transaction;
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [anchor.Wallet.local().payer],
-      { skipPreflight: true },
-    );
-    await printCounter(
-      program,
-      pda,
-      leaderboard_pda,
-      routerConnection,
-      signature,
-      "✅ Initialized Counter PDA!",
-    );
+      } as never)
+      .instruction();
+    sendSvmIx(svm, [payer], ix, "base");
+    requireAccount(svm, pda, "base", "counter");
+    requireAccount(svm, leaderboardPda, "base", "leaderboard");
+    assert.equal(readU64le(svm, pda, "base"), 0n);
+    assert.equal(readU64le(svm, leaderboardPda, "base"), 0n);
+    printCounter("✅ Initialized");
   });
 
-  it("Increment Counter!", async () => {
-    const tx = (await program.methods
+  it("Increment Counter on base layer", async () => {
+    const ix = await program.methods
       .increment()
+      .accounts({ counter: pda })
+      .instruction();
+    sendSvmIx(svm, [payer], ix, "base");
+    assert.equal(readU64le(svm, pda, "base"), 1n);
+    console.log("✅ Incremented (base)");
+  });
+
+  it("Reject direct leaderboard updates", async () => {
+    const ix = await program.methods
+      .updateLeaderboard()
       .accounts({
         counter: pda,
+        escrowAuth: payer.publicKey,
+        escrow,
       })
-      .transaction()) as Transaction;
-
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [anchor.Wallet.local().payer],
-      { skipPreflight: true },
-    );
-    console.log("✅ Incremented Counter PDA! Signature:", signature);
+      .instruction();
+    const blob = failedBlob(sendExpectingFailure(svm, [payer], ix, "base"));
+    assert.match(blob, /signature verification failed|unknown signer/i);
   });
 
-  it("Reject direct leaderboard updates!", async () => {
-    await assert.rejects(async () => {
-      const tx = await program.methods
-        .updateLeaderboard()
-        .accounts({
-          counter: pda,
-          escrowAuth: anchor.Wallet.local().publicKey,
-          escrow: escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
-        })
-        .transaction();
-
-      await sendAndConfirmTransaction(
-        routerConnection,
-        tx,
-        [anchor.Wallet.local().payer],
-        { skipPreflight: true },
-      );
-    }, /signature verification failed|unknown signer/i);
+  it("Reject an incorrect counter PDA", async () => {
+    const invalidEscrow = anchor.web3.Keypair.generate();
+    const ix = await program.methods
+      .updateLeaderboard()
+      .accounts({
+        counter: leaderboardPda,
+        escrowAuth: payer.publicKey,
+        escrow: invalidEscrow.publicKey,
+      })
+      .instruction();
+    const blob = failedBlob(
+      sendExpectingFailure(svm, [payer, invalidEscrow], ix, "base"),
+    );
+    assert.match(blob, /Error Code: ConstraintSeeds/);
   });
 
-  it("Delegate Counter to ER and create Escrow for Magic Action!", async () => {
-    const validator = await routerConnection.getClosestValidator();
-    console.log("Delegating to closest validator: ", JSON.stringify(validator));
-
-    // Add local validator identity to the remaining accounts if running on localnet
-    const remainingAccounts =
-      routerConnection.rpcEndpoint.includes("localhost") ||
-      routerConnection.rpcEndpoint.includes("127.0.0.1")
-        ? [
-            {
-              pubkey: new web3.PublicKey(
-                process.env.VALIDATOR ||
-                  "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev",
-              ),
-              isSigner: false,
-              isWritable: false,
-            },
-          ]
-        : [
-            {
-              pubkey: new web3.PublicKey(validator.identity),
-              isSigner: false,
-              isWritable: false,
-            },
-          ];
-
-    const topUpEscrowIx = createTopUpEscrowInstruction(
-      escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
-      anchor.Wallet.local().publicKey,
-      anchor.Wallet.local().publicKey,
-      10000, // top-up amount in lamports
+  it("Reject an incorrect escrow PDA", async () => {
+    const invalidEscrow = anchor.web3.Keypair.generate();
+    const ix = await program.methods
+      .updateLeaderboard()
+      .accounts({
+        counter: pda,
+        escrowAuth: payer.publicKey,
+        escrow: invalidEscrow.publicKey,
+      })
+      .instruction();
+    const blob = failedBlob(
+      sendExpectingFailure(svm, [payer, invalidEscrow], ix, "base"),
     );
+    assert.match(blob, /Error Code: ConstraintAddress/);
+  });
 
+  it("Delegate Counter and create Escrow", async () => {
+    const remainingAccounts = [
+      { pubkey: validatorKey, isSigner: false, isWritable: false },
+    ];
+    const topUpIx = createTopUpEscrowInstruction(
+      escrow,
+      payer.publicKey,
+      payer.publicKey,
+      10000,
+    );
     const delegateIx = await program.methods
       .delegate()
-      .accounts({
-        payer: anchor.Wallet.local().publicKey,
-        pda: pda,
-      })
+      .accounts({ payer: payer.publicKey, pda })
       .remainingAccounts(remainingAccounts)
       .instruction();
+    sendSvmIx(svm, [payer], [topUpIx, delegateIx], "base");
 
-    const tx = new Transaction().add(topUpEscrowIx, delegateIx);
-
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [anchor.Wallet.local().payer],
-      { skipPreflight: true },
+    assert.equal(
+      accountOwner(svm, pda, "base"),
+      DELEGATION_PROGRAM_ID.toBase58(),
     );
-
-    await sleepWithAnimation(1);
-    console.log("✅ Delegated Counter PDA! Signature:", signature);
+    assert.ok(isDelegated(svm, pda));
+    assert.equal(readU64le(svm, pda, "ephemeral"), 1n);
+    const escrowAccount = requireAccount(svm, escrow, "base", "escrow");
+    assert.ok(escrowAccount.lamports > 0n);
+    console.log("✅ Delegated");
   });
 
-  it("Increment Counter on ER!", async () => {
-    const tx = await program.methods
+  it("Increment Counter in ER", async () => {
+    const ix = await program.methods
       .increment()
-      .accounts({
-        counter: pda,
-      })
-      .transaction();
-
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [anchor.Wallet.local().payer],
-      { skipPreflight: true },
-    );
-
-    await printCounter(
-      program,
-      pda,
-      leaderboard_pda,
-      routerConnection,
-      signature,
-      "✅ Incremented Counter PDA!",
-    );
+      .accounts({ counter: pda })
+      .instruction();
+    sendSvmIx(svm, [payer], ix, "ephemeral");
+    assert.equal(readU64le(svm, pda, "ephemeral"), 2n);
+    printCounter("✅ Incremented (ER)");
   });
 
-  it("Update Leaderboard While Delegated!", async () => {
-    const tx = await program.methods
+  it("Update Leaderboard while delegated", async () => {
+    const ix = await program.methods
       .commitAndUpdateLeaderboard()
       .accounts({
-        payer: anchor.Wallet.local().publicKey,
-        programId: program.programId,
-      })
-      .transaction();
+        payer: payer.publicKey,
+        programId,
+      } as never)
+      .instruction();
+    sendSvmIx(svm, [payer], ix, "ephemeral");
 
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [anchor.Wallet.local().payer],
-      { skipPreflight: true },
+    const highScore = readU64le(svm, leaderboardPda, "base");
+    const erCount = readU64le(svm, pda, "ephemeral");
+    assert.equal(
+      highScore,
+      erCount,
+      "post-commit magic action must update the base leaderboard from the committed counter",
     );
-
-    await sleepWithAnimation(2);
-    await printCounter(
-      program,
-      pda,
-      leaderboard_pda,
-      routerConnection,
-      signature,
-      "✅ Updated Leaderboard While Delegated!",
-    );
+    printCounter("✅ Updated leaderboard while delegated");
   });
 
-  it("Undelegate Counter!", async () => {
-    const tx = await program.methods
+  it("Undelegate Counter", async () => {
+    const ix = await program.methods
       .undelegate()
-      .accounts({
-        payer: anchor.Wallet.local().publicKey,
-      })
-      .transaction();
-
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [anchor.Wallet.local().payer],
-      { skipPreflight: true },
-    );
-    await sleepWithAnimation(5);
-    await printCounter(
-      program,
-      pda,
-      leaderboard_pda,
-      routerConnection,
-      signature,
-      "✅ Undelegated Counter PDA!",
-    );
+      .accounts({ payer: payer.publicKey })
+      .instruction();
+    sendSvmIx(svm, [payer], ix, "ephemeral");
+    assert.equal(accountOwner(svm, pda, "base"), programId.toBase58());
+    assert.equal(readU64le(svm, pda, "base"), 2n);
+    printCounter("✅ Undelegated");
   });
-  it("Close Escrow for Action!", async () => {
-    const closeEscrowIx = createCloseEscrowInstruction(
-      escrowPdaFromEscrowAuthority(anchor.Wallet.local().publicKey),
-      anchor.Wallet.local().publicKey,
-    );
 
-    const tx = new Transaction().add(closeEscrowIx);
-
-    const signature = await sendAndConfirmTransaction(
-      routerConnection,
-      tx,
-      [anchor.Wallet.local().payer],
-      { skipPreflight: true },
+  it("Close Escrow", async () => {
+    const ix = createCloseEscrowInstruction(escrow, payer.publicKey);
+    sendSvmIx(svm, [payer], ix, "base");
+    const escrowAccount = svm.getAccountFor(escrow, { target: "base" });
+    assert.ok(
+      !escrowAccount.exists || escrowAccount.lamports === 0n,
+      "escrow should be closed",
     );
-    await printCounter(
-      program,
-      pda,
-      leaderboard_pda,
-      routerConnection,
-      signature,
-      "✅ Esrow closed!",
-    );
+    console.log("✅ Escrow closed");
   });
 });
-
-async function printCounter(
-  program: Program<MagicActions>,
-  counter_pda: web3.PublicKey,
-  leaderboard_pda: web3.PublicKey,
-  routerConnection: ConnectionMagicRouter,
-  signature: string,
-  message: string,
-) {
-  console.log(message + " Signature: ", signature);
-  const delegationStatus = await routerConnection.getDelegationStatus(
-    counter_pda,
-  );
-  const leaderboardAccount = await program.account.leaderboard.fetch(
-    leaderboard_pda,
-  );
-
-  var counterER = "";
-  var counterBase = "";
-  var delegationStatusMsg = "";
-
-  if (delegationStatus.isDelegated) {
-    const counterAccountER = await routerConnection.getAccountInfo(counter_pda);
-    const countValue = counterAccountER?.data.readBigUInt64LE(8);
-    counterER = countValue?.toString() || "0";
-    counterBase = "<Delegated>";
-    delegationStatusMsg = "✅ Delegated";
-  } else {
-    counterER = "<Not Delegated>";
-    const counterAccount = await program.account.counter.fetch(counter_pda); // Fetchs on Devnet
-    counterBase = counterAccount.count.toNumber().toString();
-    delegationStatusMsg = "❌ Not Delegated";
-  }
-
-  console.log("--------------------------------");
-  console.log("| " + delegationStatusMsg);
-  console.log("--------------------------------");
-  console.log("| Counter (Base): ", counterBase);
-  console.log("| Counter (ER): ", counterER);
-  console.log("| High Score: ", leaderboardAccount.highScore.toNumber());
-  console.log("--------------------------------");
-}
-
-async function sleepWithAnimation(seconds: number): Promise<void> {
-  const totalMs = seconds * 1000;
-  const interval = 500; // Update every 500ms
-  const iterations = Math.floor(totalMs / interval);
-
-  for (let i = 0; i < iterations; i++) {
-    const dots = ".".repeat((i % 3) + 1);
-    process.stdout.write(`\rWaiting${dots}   `);
-    await new Promise((resolve) => setTimeout(resolve, interval));
-  }
-
-  // Clear the line
-  process.stdout.write("\r\x1b[K");
-}
