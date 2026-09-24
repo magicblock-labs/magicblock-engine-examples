@@ -52,16 +52,12 @@ jobs:
           . scripts/projects.sh
           echo "dir=$(project_dir "${{ matrix.example }}")" >> "$GITHUB_OUTPUT"
 
+      # Node only runs the `yarn build` / `yarn test` scripts: the suites are Rust, so
+      # there are no node_modules to install or cache.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # Pin 24.10 — MagicSVM's @solana/errors@8.3.0 pulls commander@15,
-          # which requires Node >=22.12. Example READMEs document 24.10.0.
           node-version: "24.10"
-          cache: yarn
-          cache-dependency-path: |
-            ${{ steps.dir.outputs.dir }}/yarn.lock
-            test-utils/ts/yarn.lock
 
       - name: Enable Corepack
         run: |
@@ -74,13 +70,9 @@ jobs:
         with:
           toolchain: "1.89.0"
 
-      - name: Setup Rust nightly (MagicSVM Rust suites)
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          toolchain: nightly
-
-      # anchor idl build invokes the host `stable` toolchain after cargo build-sbf.
-      - name: Ensure stable Rust for Anchor IDL
+      # The MagicSVM suites run on `cargo +stable` (MagicSVM does not build on 1.89),
+      # and anchor idl build also invokes the host `stable` toolchain.
+      - name: Setup stable Rust (MagicSVM suites, Anchor IDL)
         run: |
           rustup toolchain install stable --profile minimal
           rustup default 1.89.0
