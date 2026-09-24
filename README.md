@@ -302,14 +302,13 @@ layer and an Ephemeral Rollup in one process, no validators and no network.
 
 ```bash
 cd <example-directory>
-yarn install
 yarn build
 yarn test
 ```
 
-The TypeScript suite lives in each example's `tests/`; most examples also ship a Rust suite in
-`tests-magicsvm-rs/` (`yarn test:magicsvm:rs`, needs a nightly toolchain). Shared helpers are in
-`test-utils/ts` and `test-utils/rust`. To run every MagicSVM example from the repo root:
+Each example's suite is Rust, in `tests-magicsvm-rs/`; shared helpers are in `test-utils/rust`.
+`yarn test` runs `cargo +stable test`, since MagicSVM needs a newer Rust than the 1.89 toolchain
+used for program builds. To run every MagicSVM example from the repo root:
 
 ```bash
 bash scripts/test-magicsvm.sh              # all MagicSVM examples

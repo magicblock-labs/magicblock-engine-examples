@@ -4,9 +4,7 @@
   "description": "Tests for pinocchio-private-counter program",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run tests/",
-    "test:magicsvm:rs": "env RUSTUP_TOOLCHAIN=nightly cargo test --manifest-path tests-magicsvm-rs/Cargo.toml",
-    "test:watch": "vitest watch tests/",
+    "test": "cargo +stable test --manifest-path tests-magicsvm-rs/Cargo.toml",
     "build": "cargo build-sbf",
     "check": "cargo check",
     "lint": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
@@ -22,19 +20,6 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@magicblock-labs/ephemeral-rollups-sdk": "^0.11.1",
-    "@magicblock-labs/magicsvm": "0.2.0",
-    "@solana-program/system": "^0.10.0",
-    "@solana/kit": "^5.4.0",
-    "@solana/web3.js": "^1.93.0",
-    "@types/node": "^20.0.0",
-    "borsh": "^0.7.0",
-    "dotenv": "^16.0.0",
-    "ts-node": "^10.9.0",
-    "tweetnacl": "^1.0.3",
-    "typescript": "^5.0.0",
-    "vitest": "^3.0.0",
-    "prettier": "^3.5.3",
-    "@magicblock-labs/test-utils": "link:../../test-utils/ts"
+    "prettier": "^3.5.3"
   }
 }

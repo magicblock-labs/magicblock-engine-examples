@@ -69,7 +69,7 @@ yarn
 yarn build
 ```
 
-Run the tests in-process with [MagicSVM](https://github.com/magicblock-labs/magicsvm):
+Run the Rust test suite in `tests-magicsvm-rs/` in-process with [MagicSVM](https://github.com/magicblock-labs/magicsvm):
 
 ```bash
 yarn test
@@ -79,6 +79,6 @@ MagicSVM simulates the base layer and the Ephemeral Rollup in one process: no va
 network. The suite tests a post-delegation action, base and Ephemeral Rollup increments, and
 undelegation.
 
-A Rust MagicSVM suite lives in `tests-magicsvm-rs/` (needs a nightly toolchain): `yarn test:magicsvm:rs`.
+`yarn test` runs `cargo +stable test`: MagicSVM needs a newer Rust than the 1.89 toolchain used for program builds.
 
 [delegation program]: https://github.com/magicblock-labs/delegation-program

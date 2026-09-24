@@ -4,9 +4,7 @@
   "description": "Client tests for pinocchio-counter program",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run tests/",
-    "test:magicsvm:rs": "env RUSTUP_TOOLCHAIN=nightly cargo test --manifest-path tests-magicsvm-rs/Cargo.toml",
-    "test:watch": "vitest watch tests/",
+    "test": "cargo +stable test --manifest-path tests-magicsvm-rs/Cargo.toml",
     "build": "cargo build-sbf --features logging",
     "build:release": "cargo build --release",
     "build:dev": "cargo build",
@@ -23,22 +21,7 @@
   "author": "",
   "license": "Apache-2.0",
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "ts-node": "^10.9.0",
-    "typescript": "^5.0.0",
-    "vitest": "^0.34.0",
-    "prettier": "^3.5.3",
-    "@magicblock-labs/test-utils": "link:../../test-utils/ts"
-  },
-  "dependencies": {
-    "@magicblock-labs/ephemeral-rollups-kit": "0.14.3",
-    "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
-    "@magicblock-labs/magicsvm": "0.2.0",
-    "@solana-program/system": "^0.10.0",
-    "@solana/kit": "^5.4.0",
-    "@solana/web3.js": "^1.93.0",
-    "borsh": "^0.7.0",
-    "dotenv": "^16.0.0"
+    "prettier": "^3.5.3"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

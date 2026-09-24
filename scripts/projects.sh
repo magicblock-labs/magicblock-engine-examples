@@ -21,8 +21,8 @@ REGULAR_PROJECTS=(crank-counter gachapon-example)
 VRF_PROJECTS=(rewards-delegated-vrf roll-dice pinocchio-roll-dice)
 TEE_PROJECTS=(sealed-auction)
 
-# Examples whose `yarn test` runs in-process on MagicSVM (TypeScript; most also ship a Rust
-# suite under tests-magicsvm-rs/ run by `yarn test:magicsvm:rs`). No local cluster needed.
+# Examples whose `yarn test` runs the Rust MagicSVM suite under tests-magicsvm-rs/ in-process.
+# No local cluster needed.
 MAGICSVM_PROJECTS=(anchor-counter rust-counter pinocchio-counter private-counter pinocchio-private-counter oracle-priced-purchase oncurve-delegation rock-paper-scissor ephemeral-account-chats session-keys binary-prediction magic-actions delegation-actions spl-tokens)
 
 ALL_PROJECTS=("${REGULAR_PROJECTS[@]}" "${VRF_PROJECTS[@]}" "${TEE_PROJECTS[@]}")

@@ -2,28 +2,11 @@
   "scripts": {
     "lint:fix": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern */*.js \"*/**/*{.js,.ts}\" --check",
-    "test": "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/public-counter.ts",
-    "build": "anchor build --ignore-keys",
-    "test:magicsvm:rs": "env RUSTUP_TOOLCHAIN=nightly cargo test --manifest-path tests-magicsvm-rs/Cargo.toml -- --nocapture"
-  },
-  "dependencies": {
-    "@coral-xyz/anchor": "0.32.1",
-    "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
-    "bs58": "^6.0.0",
-    "tweetnacl": "^1.0.3"
+    "test": "cargo +stable test --manifest-path tests-magicsvm-rs/Cargo.toml",
+    "build": "anchor build --ignore-keys"
   },
   "devDependencies": {
-    "@types/bn.js": "^5.1.0",
-    "@types/chai": "^5.2.2",
-    "@types/mocha": "^10.0.10",
-    "@magicblock-labs/magicsvm": "0.2.0",
-    "chai": "^5.2.0",
-    "mocha": "^11.2.2",
-    "prettier": "^3.5.3",
-    "ts-mocha": "^11.1.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.3",
-    "@magicblock-labs/test-utils": "link:../../test-utils/ts"
+    "prettier": "^3.5.3"
   },
   "license": "MIT",
   "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447"
