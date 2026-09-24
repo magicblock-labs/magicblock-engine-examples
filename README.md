@@ -297,9 +297,31 @@ Deployed frontends for the examples that ship a UI.
 
 ## Testing
 
-To run local tests for any example project, use the following steps:
+Most examples test in-process with [MagicSVM](https://github.com/magicblock-labs/magicsvm): a base
+layer and an Ephemeral Rollup in one process, no validators and no network.
 
-1. **Install Dependencies (Local nodes + example directory):**
+```bash
+cd <example-directory>
+yarn build
+yarn test
+```
+
+Each example's suite is Rust, in `tests-magicsvm-rs/`; shared helpers are in `test-utils/rust`.
+`yarn test` runs `cargo +stable test`, since MagicSVM needs a newer Rust than the 1.89 toolchain
+used for program builds. To run every MagicSVM example from the repo root:
+
+```bash
+bash scripts/test-magicsvm.sh              # all MagicSVM examples
+bash scripts/test-magicsvm.sh spl-tokens   # one example (substring match)
+```
+
+### Examples that still need local nodes
+
+MagicSVM does not simulate scheduled tasks, the VRF oracle, or the private-permission flow yet, so
+`crank-counter`, `gachapon-example`, `roll-dice` (Anchor and Pinocchio), `rewards-delegated-vrf`
+and `sealed-auction` run against a local MagicBlock cluster instead:
+
+1. **Install the local nodes and the example:**
 
    ```bash
    npm install -g @magicblock-labs/ephemeral-validator@latest
@@ -307,24 +329,21 @@ To run local tests for any example project, use the following steps:
    yarn install
    ```
 
-2. **Setup local nodes:**
+2. **Start the local nodes** (builds the example, boots the validators, holds them until a key press):
 
    ```bash
    yarn setup
    ```
 
-3. **Run Tests Locally:**
+3. **Run the tests against them** in a second terminal:
+
    ```bash
    yarn test:local
    ```
 
-**Example:** To test the `pinocchio-roll-dice` example:
-
-```bash
-cd roll-dice/pinocchio
-yarn build
-yarn test:local
-```
+CI mirrors this split: `.github/workflows/test-magicsvm.yml` runs one MagicSVM job per example and
+`.github/workflows/test-examples.yml` runs the validator-based examples. Both matrices come from
+`scripts/projects.sh`.
 
 ### Local nodes
 

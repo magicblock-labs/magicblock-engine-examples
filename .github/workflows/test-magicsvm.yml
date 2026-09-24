@@ -1,0 +1,133 @@
+name: Test MagicSVM
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Emit MagicSVM example names as JSON so the test job can fan out one runner
+  # per example. Source of truth: MAGICSVM_PROJECTS in scripts/projects.sh.
+  list-examples:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set
+        run: |
+          # shellcheck source=scripts/projects.sh
+          . scripts/projects.sh
+          echo "matrix=$(magicsvm_projects_json)" >> "$GITHUB_OUTPUT"
+
+  # In-process MagicSVM tests: no local validators, VRF oracle, or TEE stack.
+  # The tests themselves take seconds; the job time is toolchain install plus
+  # `anchor build`, so Anchor comes from its prebuilt binary and the program and
+  # Rust-suite build outputs are cached between runs.
+  test-magicsvm:
+    needs: list-examples
+    name: magicsvm (${{ matrix.example }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example: ${{ fromJSON(needs.list-examples.outputs.matrix) }}
+    env:
+      # One native target dir for every example's tests-magicsvm-rs suite: they share
+      # the same magicsvm/solana dependency graph, so one cache serves all of them.
+      MAGICSVM_RS_TARGET_DIR: ${{ github.workspace }}/.magicsvm-rs-target
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve example directory
+        id: dir
+        run: |
+          # shellcheck source=scripts/projects.sh
+          . scripts/projects.sh
+          echo "dir=$(project_dir "${{ matrix.example }}")" >> "$GITHUB_OUTPUT"
+
+      # Node only runs the `yarn build` / `yarn test` scripts: the suites are Rust, so
+      # there are no node_modules to install or cache.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.10"
+
+      - name: Enable Corepack
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.19 --activate
+          corepack prepare yarn@1.22.22 --activate
+
+      - name: Setup Rust 1.89 (Anchor builds)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.89.0"
+
+      # The MagicSVM suites run on `cargo +stable` (MagicSVM does not build on 1.89),
+      # and anchor idl build also invokes the host `stable` toolchain.
+      - name: Setup stable Rust (MagicSVM suites, Anchor IDL)
+        id: stable
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default 1.89.0
+          echo "rustc=$(rustc +stable --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev pkg-config
+
+      - name: Install Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.9/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install Anchor
+        # Prebuilt release binary: building anchor-cli from source took ~5 min per job.
+        run: |
+          curl -sSfL -o /tmp/anchor \
+            https://github.com/solana-foundation/anchor/releases/download/v1.0.2/anchor-1.0.2-x86_64-unknown-linux-gnu
+          sudo install -m 755 /tmp/anchor /usr/local/bin/anchor
+          anchor --version
+
+      # Program build cache (per example): the SBF toolchain download plus the
+      # example's target/ so `anchor build` / `cargo build-sbf` only recompiles the
+      # program crate itself.
+      - name: Cache program build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/solana
+            ${{ steps.dir.outputs.dir }}/target
+          key: magicsvm-program-${{ matrix.example }}-${{ hashFiles(format('{0}/Cargo.lock', steps.dir.outputs.dir)) }}-${{ hashFiles(format('{0}/programs/**', steps.dir.outputs.dir), format('{0}/src/**', steps.dir.outputs.dir), format('{0}/Cargo.toml', steps.dir.outputs.dir)) }}
+          restore-keys: |
+            magicsvm-program-${{ matrix.example }}-${{ hashFiles(format('{0}/Cargo.lock', steps.dir.outputs.dir)) }}-
+            magicsvm-program-${{ matrix.example }}-
+
+      # Cargo registry plus the shared native target dir for the Rust MagicSVM suites. The key
+      # carries the stable rustc version: an exact-key hit is never re-saved, so without it a
+      # stable release would leave CI restoring stale artifacts and recompiling on every run.
+      - name: Cache Rust suite build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ${{ env.MAGICSVM_RS_TARGET_DIR }}
+          key: magicsvm-rs-${{ steps.stable.outputs.rustc }}-${{ hashFiles('**/tests-magicsvm-rs/Cargo.lock', 'test-utils/rust/Cargo.lock') }}-${{ matrix.example }}
+          restore-keys: |
+            magicsvm-rs-${{ steps.stable.outputs.rustc }}-${{ hashFiles('**/tests-magicsvm-rs/Cargo.lock', 'test-utils/rust/Cargo.lock') }}-
+            magicsvm-rs-${{ steps.stable.outputs.rustc }}-
+
+      - name: Test MagicSVM ${{ matrix.example }}
+        env:
+          EXACT_MATCH: "1"
+        run: bash scripts/test-magicsvm.sh "${{ matrix.example }}"

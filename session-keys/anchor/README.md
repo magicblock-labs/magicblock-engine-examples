@@ -30,23 +30,17 @@ yarn
 yarn build
 ```
 
-This example runs against a **local MagicBlock cluster** — a base Solana validator plus an Ephemeral Rollup, fronted by the Query Filtering Service. Start it in one terminal and leave it running:
+Run the Rust test suite in `tests-magicsvm-rs/` in-process with [MagicSVM](https://github.com/magicblock-labs/magicsvm):
 
 ```bash
-yarn setup
+yarn test
 ```
 
-`yarn setup` runs `SETUP_ONLY=1 ./scripts/test-locally.sh session-keys` from the repo root: it builds this example, boots the validators, and holds them until you press a key.
+MagicSVM simulates the base layer and the Ephemeral Rollup in one process: no validators, no
+network. The suite creates and revokes a session while exercising counter delegation, commits, and
+undelegation through that session.
 
-Then, in a second terminal, run this example's tests against that cluster:
-
-```bash
-yarn test:local
-```
-
-`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster (without it the tests fall back to devnet).
-
-> Tip: to build and run **every** example end-to-end (what CI does), run the repo-root `./scripts/test-locally.sh` directly.
+`yarn test` runs `cargo +stable test`: MagicSVM needs a newer Rust than the 1.89 toolchain used for program builds.
 
 ## 🔑 Session Keys
 

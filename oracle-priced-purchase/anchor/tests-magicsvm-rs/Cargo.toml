@@ -1,0 +1,34 @@
+[package]
+name = "oracle-priced-purchase-magicsvm-tests"
+version = "0.1.0"
+description = "MagicSVM copies of the oracle-priced-purchase tests"
+edition = "2021"
+publish = false
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[workspace]
+
+[[test]]
+name = "magicsvm"
+path = "tests/magicsvm.rs"
+
+[dependencies]
+anchor-lang = "=1.0.2"
+base64 = "0.22"
+magicsvm = "0.2.0"
+test-utils = { path = "../../../test-utils/rust", features = ["anchor"] }
+oracle-priced-purchase = { path = "../programs/oracle-priced-purchase", features = ["no-entrypoint"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+solana-account = "4.3.1"
+solana-address = "2.6.1"
+solana-clock = "3.1.1"
+solana-instruction = { version = "3.4.0", features = ["bincode"] }
+solana-keypair = "3.1.2"
+solana-message = "4.2.4"
+solana-native-token = "3.0.0"
+solana-signer = "3.0.1"
+solana-transaction = { version = "4.1.5", features = ["verify"] }

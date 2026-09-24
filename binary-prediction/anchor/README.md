@@ -58,22 +58,17 @@ yarn
 yarn build
 ```
 
-This example runs against a local MagicBlock cluster: a base Solana validator, an Ephemeral Rollup,
-and the Query Filtering Service. Start it in one terminal and leave it running:
+Run the Rust test suite in `tests-magicsvm-rs/` in-process with [MagicSVM](https://github.com/magicblock-labs/magicsvm):
 
 ```bash
-yarn setup
+yarn test
 ```
 
-Then, in a second terminal, run the lifecycle test:
+MagicSVM simulates the base layer and the Ephemeral Rollup in one process: no validators, no
+network. The suite runs prediction initialization, betting, settlement, and withdrawal with a
+vendored session-keys program.
 
-```bash
-yarn test:local
-```
-
-`test:local` sources `scripts/local-env.sh` so the SDK targets the local cluster. The test uses a
-vendored `--features test-mode` `ephemeral_oracle.so` fixture, so prices are deterministic and seeded
-by the test wallet.
+`yarn test` runs `cargo +stable test`: MagicSVM needs a newer Rust than the 1.89 toolchain used for program builds.
 
 ## Client
 
@@ -89,9 +84,8 @@ By default the client targets MagicBlock devnet — `https://rpc.magicblock.app/
 layer and `https://devnet-as.magicblock.app` (`wss://devnet-as.magicblock.app`) for the ER — so
 `yarn dev` with no overrides works out of the box against devnet.
 
-To point it at a local MagicBlock cluster instead, start the cluster with `yarn setup` and set these
-env vars before `yarn dev` (the client reads `VITE_`-prefixed vars, not the shell exports from
-`scripts/local-env.sh`):
+To point it at a separately running local MagicBlock cluster, set these environment variables before
+`yarn dev`:
 
 ```bash
 export VITE_PROVIDER_ENDPOINT=http://localhost:8899
