@@ -30,6 +30,7 @@ import {
     withdrawSpl,
     delegateSpl,
     deriveShuttleAta, initVaultIx, initVaultAtaIx, delegateEphemeralAtaIx, deriveVault, deriveVaultAta,
+    isMagicAtaTokenAccount,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 // Minimal SPL helpers (vendored) to avoid importing "@solana/spl-token" in the browser.
@@ -177,7 +178,14 @@ type TempAccount = {
     solLamports?: bigint; // Native SOL balance in lamports
     // Delegation status on Ephemeral chain: true if eATA owner authority is DELEGATION_PROGRAM_ID
     eDelegated?: boolean;
+    baseAtaExists?: boolean; // Canonical wallet ATA exists on the base layer
+    magicAta?: boolean; // ER ATA exists with the Magic ATA close_authority marker
 };
+
+// The 5th card demos Magic ATAs: it gets no base ATA at setup; its ATA
+// is created directly inside the ER on the first ephemeral transfer to it.
+const MAGIC_ATA_INDEX = 4;
+const ACCOUNT_COUNT = 5;
 
 const fmt = (v?: bigint, decimals: number = 6) => {
     if (v === undefined) return '…';
@@ -449,8 +457,8 @@ const App: React.FC = () => {
     );
 
     // Per-card delegate/undelegate input values (by index)
-    const [delegateAmounts, setDelegateAmounts] = useState<string[]>(() => Array(4).fill("1"));
-    const [undelegateAmounts, setUndelegateAmounts] = useState<string[]>(() => Array(4).fill("1"));
+    const [delegateAmounts, setDelegateAmounts] = useState<string[]>(() => Array(ACCOUNT_COUNT).fill("1"));
+    const [undelegateAmounts, setUndelegateAmounts] = useState<string[]>(() => Array(ACCOUNT_COUNT).fill("1"));
 
     // Temp accounts (persist across refresh via localStorage)
     const [accounts, setAccounts] = useState<TempAccount[]>(() => {
@@ -458,11 +466,11 @@ const App: React.FC = () => {
         let list: TempAccount[] = [];
 
         if (stored?.version === 1 && Array.isArray(stored.keys)) {
-            list = stored.keys.slice(0, 4).map(k => ({ keypair: Keypair.fromSecretKey(fromBase64(k)) }));
+            list = stored.keys.slice(0, ACCOUNT_COUNT).map(k => ({ keypair: Keypair.fromSecretKey(fromBase64(k)) }));
         }
 
-        // Ensure exactly 4 accounts
-        while (list.length < 4) {
+        // Ensure exactly ACCOUNT_COUNT accounts
+        while (list.length < ACCOUNT_COUNT) {
             list.push({ keypair: Keypair.generate() });
         }
 
@@ -684,11 +692,13 @@ const App: React.FC = () => {
 
             let balance = 0n;
             let eDelegated: boolean | undefined;
+            let baseAtaExists = false;
 
             // Fetch L1 balance and delegation status
             try {
                 const ai = await connection.getAccountInfo(ata, 'processed');
                 if (ai) {
+                    baseAtaExists = true;
                     balance = parseTokenAmount(ai) ?? 0n;
                     const eAtaAcc = await connection.getAccountInfo(eAta, 'processed');
                     eDelegated = eAtaAcc?.owner.equals(DELEGATION_PROGRAM_ID);
@@ -699,11 +709,13 @@ const App: React.FC = () => {
 
             // Fetch ephemeral balance
             let eBalance = 0n;
+            let magicAta = false;
             if (eConn) {
                 try {
                     const aiE = await eConn.getAccountInfo(ata, 'processed');
                     if (aiE) {
                         eBalance = parseTokenAmount(aiE) ?? 0n;
+                        magicAta = isMagicAtaTokenAccount(aiE.data);
                     }
                 } catch {
                     // default is fine
@@ -724,7 +736,7 @@ const App: React.FC = () => {
                 `ata=${ata.toBase58().slice(0, 6)}… eAta=${eAta.toBase58().slice(0, 6)}… ` +
                 `base=${balance.toString()} er=${eBalance.toString()} delegated=${eDelegated} sol=${solLamports.toString()}`,
             );
-            return { ...acc, ata, eAta, balance, eBalance, solLamports, eDelegated } as TempAccount;
+            return { ...acc, ata, eAta, balance, eBalance, solLamports, eDelegated, baseAtaExists, magicAta } as TempAccount;
         }));
 
         setAccounts(updated);
@@ -921,6 +933,20 @@ const App: React.FC = () => {
         if (fromIdx === toIdx && fromBalance === toBalance) {
             return setTransactionError('Source and destination are the same pocket — pick different account or side.');
         }
+        // The Magic ATA demo account has no base ATA until it is undelegated
+        // (which materializes it). ER → ER and private Base → Ephemeral are the
+        // exceptions: both create and fund the Magic ATA on the ER.
+        const isEphToEph = fromBalance === 'ephemeral' && toBalance === 'ephemeral';
+        const isPrivateBaseToEph =
+            transferVisibility === 'private' &&
+            fromBalance === 'base' &&
+            toBalance === 'ephemeral';
+        if (toIdx === MAGIC_ATA_INDEX && !dst.baseAtaExists && !isEphToEph && !isPrivateBaseToEph) {
+            return setTransactionError(`Account #${MAGIC_ATA_INDEX + 1} is a Magic ATA demo account with no base-layer ATA yet. Fund it with an Ephemeral → Ephemeral transfer first, or Undelegate it to materialize it on base.`);
+        }
+        if (fromIdx === MAGIC_ATA_INDEX && fromBalance === 'base' && !src.baseAtaExists) {
+            return setTransactionError(`Account #${MAGIC_ATA_INDEX + 1} has no base-layer balance yet. Use its ephemeral balance, or Undelegate it first.`);
+        }
         const conn = usesEphemeralConnection ? eConn : connection;
         if (!conn) return;
         try {
@@ -996,6 +1022,9 @@ const App: React.FC = () => {
             console.log("Shuttle eata: ", shuttleEphemeralAta.toBase58());
             console.log("Src ata: ", srcAta.toBase58());
 
+            // transferSpl already ensures the destination exists on ER → ER
+            // transfers (idempotent Magic ATA create bundled with the
+            // funding transfer), so no special-casing is needed here.
             const ixs: TransactionInstruction[] = [
                 createNoopInstruction(),
                 ...transferIxs,
@@ -1127,26 +1156,27 @@ const App: React.FC = () => {
                         null,
                         tokenProgram,
                     ),
-                    // create ATAs for all accounts
-                    ...accounts.map((a, idx) =>
-                        createAssociatedTokenAccountInstruction(
+                    // create ATAs for all accounts, except the Magic ATA demo
+                    // account whose ATA is created lazily inside the ER
+                    ...accounts.flatMap((a, idx) =>
+                        idx === MAGIC_ATA_INDEX ? [] : [createAssociatedTokenAccountInstruction(
                             payer.publicKey,
                             ataPubkeys[idx],
                             a.keypair.publicKey,
                             mintKp.publicKey,
                             tokenProgram,
-                        )
+                        )]
                     ),
                     // mint tokens to each
-                    ...ataPubkeys.map(ata =>
-                        createMintToInstruction(
+                    ...ataPubkeys.flatMap((ata, idx) =>
+                        idx === MAGIC_ATA_INDEX ? [] : [createMintToInstruction(
                             mintKp.publicKey,
                             ata,
                             payer.publicKey,
                             Number(amountBase),
                             [],
                             tokenProgram,
-                        )
+                        )]
                     ),
                 );
                 mintTx.feePayer = payer.publicKey;
@@ -1156,6 +1186,8 @@ const App: React.FC = () => {
                         transferQueue,
                         mintKp.publicKey,
                         queueValidator,
+                        undefined,
+                        tokenProgram,
                     ),
                     initRentPdaIx(
                         payer.publicKey,
@@ -1438,12 +1470,19 @@ const App: React.FC = () => {
             console.log("Transfer queue:", transferQueue.toBase58());
             console.log("Rent pda: ", rentPda.toBase58());
 
+            // The queue mint is arbitrary — detect its token program from the owner
+            const queueMintInfo = await connection.getAccountInfo(queueMint, 'confirmed');
+            const queueTokenProgram =
+                (queueMintInfo && knownTokenProgramFromOwner(queueMintInfo.owner)) ?? selectedTokenProgram;
+
             const tx = new Transaction().add(
                 initTransferQueueIx(
                     payer.publicKey,
                     transferQueue,
                     queueMint,
                     queueValidator,
+                    undefined,
+                    queueTokenProgram,
                 ),
                 initRentPdaIx(
                     payer.publicKey,
@@ -1482,7 +1521,7 @@ const App: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [accounts, connection, ensureAirdropLamports, loadSetupQueueKeypair, queueMintAddress]);
+    }, [accounts, connection, ensureAirdropLamports, loadSetupQueueKeypair, queueMintAddress, selectedTokenProgram]);
 
     const handleStartQueueCrank = useCallback(async () => {
         setTransactionError(null);
@@ -1683,7 +1722,25 @@ const App: React.FC = () => {
                              } catch (_) { /* ignore */ }
                          }}
                          style={{ ...CARD_STYLE, minWidth: 250 }}>
-                        <div style={{ height: 4, borderRadius: 999, background: 'linear-gradient(90deg,#22d3ee,#a78bfa)', marginBottom: 12, opacity: 0.9 }} />
+                        <div style={{ height: 4, borderRadius: 999, background: i === MAGIC_ATA_INDEX && !a.baseAtaExists ? 'linear-gradient(90deg,#fbbf24,#f59e0b)' : 'linear-gradient(90deg,#22d3ee,#a78bfa)', marginBottom: 12, opacity: 0.9 }} />
+                        {/* Magic ATA branding only until the first undelegation materializes
+                            the base ATA — from then on this is a normal account */}
+                        {i === MAGIC_ATA_INDEX && !a.baseAtaExists && (
+                            <div style={{ marginBottom: 8 }}>
+                                <span style={{
+                                    display: 'inline-block',
+                                    background: 'rgba(251,191,36,0.12)',
+                                    border: '1px solid rgba(251,191,36,0.4)',
+                                    color: '#fbbf24',
+                                    borderRadius: 999,
+                                    padding: '2px 10px',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                }}>
+                                    Magic ATA
+                                </span>
+                            </div>
+                        )}
                         <div style={{ fontSize: 12, color: '#9ca3af' }}>Address</div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                             <div style={{ fontFamily: 'monospace', color: '#ffffff', letterSpacing: '0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1740,7 +1797,7 @@ const App: React.FC = () => {
                             </div>
                             <div>
                                 <div style={{ fontSize: 12, color: '#9ca3af' }}>Ephemeral SPL</div>
-                                <div style={{ fontWeight: 700, color: '#a78bfa', fontSize: 16 }}>{a.eDelegated ? fmt(a.eBalance, decimals) : '-'}</div>
+                                <div style={{ fontWeight: 700, color: '#a78bfa', fontSize: 16 }}>{(a.eDelegated || a.magicAta) ? fmt(a.eBalance, decimals) : '-'}</div>
                             </div>
                         </div>
                         <div style={{ height: 2 }} />
@@ -1794,12 +1851,19 @@ const App: React.FC = () => {
                         <div style={{ height: 2 }} />
                         {/* Delegation status on Ephemeral chain */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                            <div style={{ fontWeight: 700, fontSize: 14, color: a.eDelegated ? '#34d399' : '#f87171' }}>
-                                {a.eDelegated ? 'eATA Delegated' : 'eAta not delegated'}
-                            </div>
+                            {i === MAGIC_ATA_INDEX && !a.baseAtaExists && !a.eDelegated ? (
+                                <div style={{ fontWeight: 700, fontSize: 14, color: a.magicAta ? '#fbbf24' : '#f87171' }}>
+                                    {a.magicAta ? 'Magic ATA (ER only)' : 'Not materialized'}
+                                </div>
+                            ) : (
+                                <div style={{ fontWeight: 700, fontSize: 14, color: a.eDelegated ? '#34d399' : '#f87171' }}>
+                                    {a.eDelegated ? 'eATA Delegated' : 'eAta not delegated'}
+                                </div>
+                            )}
                         </div>
                         <div style={{ height: 8 }} />
-                        {/* Delegate */}
+                        {/* Delegate (hidden while the Magic ATA account has no base ATA to delegate from) */}
+                        {(i !== MAGIC_ATA_INDEX || a.baseAtaExists) && (
                         <div style={{ display: 'grid', width: '100%', gridTemplateColumns: '7fr 3fr', gap: 8, alignItems: 'center' }}>
                             <input
                                 type="number"
@@ -1908,6 +1972,7 @@ const App: React.FC = () => {
                                 Delegate
                             </button>
                         </div>
+                        )}
                         <div style={{ height: 8 }} />
                         {/* Undelegate */}
                         <div style={{ display: 'grid', width: '100%', gridTemplateColumns: '7fr 3fr', gap: 8, alignItems: 'center' }}>
@@ -1949,7 +2014,10 @@ const App: React.FC = () => {
                                             idempotent: true,
                                             validator: validator.current,
                                             tokenProgram: selectedTokenProgram,
-                                            shuttleId
+                                            shuttleId,
+                                            // The Magic ATA demo account has no base wallet ATA
+                                            // (the withdraw merge destination) until first undelegation
+                                            initAtasIfMissing: true,
                                         });
                                         const txW = new Transaction().add(...ixsW);
                                         txW.feePayer = a.keypair.publicKey;

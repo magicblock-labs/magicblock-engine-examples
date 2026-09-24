@@ -1878,10 +1878,10 @@
   dependencies:
     "@lit-labs/ssr-dom-shim" "^1.5.0"
 
-"@magicblock-labs/ephemeral-rollups-sdk@0.16.2":
-  version "0.16.2"
-  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.16.2.tgz#d9ec087aad33a2ddde55756328e4bad7ae31df06"
-  integrity sha512-rXeIlGjwCrgfKwJ/vU4A7rLd1aYJoo05c+GkhJmH/B08WYCpDL6Kabo3lztsJ/tiaFaeLCZc0/8FgKrFBd1mZQ==
+"@magicblock-labs/ephemeral-rollups-sdk@0.17.2":
+  version "0.17.2"
+  resolved "https://registry.yarnpkg.com/@magicblock-labs/ephemeral-rollups-sdk/-/ephemeral-rollups-sdk-0.17.2.tgz#08c96eb6d751903bf4379eea7e0ea9a647bc844d"
+  integrity sha512-oB7PLfeoq9ZnxlBEvfbNGXaOlFFNO300nOSswrqDvcuyoblzbPsMixK5MUjn36nI6uCzRmzBVyDoO/J/0wtoiw==
   dependencies:
     "@noble/curves" "^1.4.2"
     "@noble/hashes" "^1.4.0"
