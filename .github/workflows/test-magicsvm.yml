@@ -73,9 +73,11 @@ jobs:
       # The MagicSVM suites run on `cargo +stable` (MagicSVM does not build on 1.89),
       # and anchor idl build also invokes the host `stable` toolchain.
       - name: Setup stable Rust (MagicSVM suites, Anchor IDL)
+        id: stable
         run: |
           rustup toolchain install stable --profile minimal
           rustup default 1.89.0
+          echo "rustc=$(rustc +stable --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
 
       - name: Install native dependencies
         run: |
@@ -109,7 +111,9 @@ jobs:
             magicsvm-program-${{ matrix.example }}-${{ hashFiles(format('{0}/Cargo.lock', steps.dir.outputs.dir)) }}-
             magicsvm-program-${{ matrix.example }}-
 
-      # Cargo registry plus the shared native target dir for the Rust MagicSVM suites.
+      # Cargo registry plus the shared native target dir for the Rust MagicSVM suites. The key
+      # carries the stable rustc version: an exact-key hit is never re-saved, so without it a
+      # stable release would leave CI restoring stale artifacts and recompiling on every run.
       - name: Cache Rust suite build
         uses: actions/cache@v4
         with:
@@ -118,10 +122,10 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             ${{ env.MAGICSVM_RS_TARGET_DIR }}
-          key: magicsvm-rs-${{ hashFiles('**/tests-magicsvm-rs/Cargo.lock', 'test-utils/rust/Cargo.lock') }}-${{ matrix.example }}
+          key: magicsvm-rs-${{ steps.stable.outputs.rustc }}-${{ hashFiles('**/tests-magicsvm-rs/Cargo.lock', 'test-utils/rust/Cargo.lock') }}-${{ matrix.example }}
           restore-keys: |
-            magicsvm-rs-${{ hashFiles('**/tests-magicsvm-rs/Cargo.lock', 'test-utils/rust/Cargo.lock') }}-
-            magicsvm-rs-
+            magicsvm-rs-${{ steps.stable.outputs.rustc }}-${{ hashFiles('**/tests-magicsvm-rs/Cargo.lock', 'test-utils/rust/Cargo.lock') }}-
+            magicsvm-rs-${{ steps.stable.outputs.rustc }}-
 
       - name: Test MagicSVM ${{ matrix.example }}
         env:
