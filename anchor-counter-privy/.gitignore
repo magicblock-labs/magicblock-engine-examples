@@ -1,0 +1,23 @@
+*.DS_Store
+.idea
+**/*.rs.bk
+**/target/*
+**/node_modules
+**/test-ledger
+**/.anchor
+**/.bolt
+**/.yarn
+**/.next/
+**/.env
+**/magicblock-test-storage
+!target/deploy/
+target/deploy/*
+!target/deploy/*-keypair.json
+!/bolt-counter/target/deploy/counter-keypair.json
+!/bolt-counter/target/deploy/increase-keypair.json
+
+# But don't ignore the target/idl/ directory
+!**/anchor-minter/target/idl/
+!**/anchor-counter/target/idl/
+!**/anchor-minter/target/deploy/anchor-counter/magicblock-test-storage/
+anchor-counter/magicblock-test-storage/
