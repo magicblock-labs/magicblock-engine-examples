@@ -285,6 +285,7 @@ End-to-end app templates you can fork and build on.
 <img src="https://img.shields.io/badge/Payments%20API-0ea5e9?style=flat-square" alt="Payments API"/>
 </p>
 <p><em>Make your program gasless: Payments API deposits and withdrawals, free ER transactions from a 0-SOL wallet. Tip jar example.</em></p>
+<p>🌐 <a href="https://gasless-starter.vercel.app">Live demo</a></p>
 </blockquote>
 </td>
 </tr>
@@ -304,6 +305,7 @@ Deployed frontends for the examples that ship a UI.
 | [Binary Prediction / Anchor](./binary-prediction/anchor/) | https://binary-prediction.magicblock.app |
 | [Rewards (Delegated VRF) / Anchor](./rewards-delegated-vrf/anchor/) | https://magicblock-rewards-dashboard.vercel.app |
 | [Rock Paper Scissor / Anchor](./rock-paper-scissor/anchor/) | https://rps-example.magicblock.app |
+| [Gasless Starter / Anchor](./gasless-starter/anchor/) | https://gasless-starter.vercel.app |
 
 ## Testing
 
