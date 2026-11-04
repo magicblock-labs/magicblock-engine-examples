@@ -11,6 +11,7 @@
 **/.next/
 **/dist
 **/.env
+**/.vercel
 **/tsconfig.tsbuildinfo
 **/*test-storage
 
