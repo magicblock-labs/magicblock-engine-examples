@@ -260,13 +260,18 @@ describe("tip-jar", () => {
         destination: tokenAccount(tipper.publicKey),
       })
       .instruction();
-    let failed = false;
+    let error = "";
     try {
       await sendOnEr(tipper, ix);
-    } catch {
-      failed = true;
+    } catch (e) {
+      error = String(e);
     }
-    assert.ok(failed, "a non-authority withdrawal must fail");
+    // 2001 = Anchor's ConstraintHasOne: the jar's `has_one = authority` check.
+    assert.include(
+      error,
+      '"Custom":2001',
+      "a non-authority withdrawal must fail",
+    );
     assert.equal(await erTokenBalance(jar), 2_000_000n);
   });
 

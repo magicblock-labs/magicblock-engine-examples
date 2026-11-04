@@ -79,7 +79,9 @@ test("saves the receipt before sending and settles once the rollup balance arriv
 test("a failed send keeps the receipt and blocks a second payment", async () => {
   state.sendFails = true;
   const first = payments.pay(owner, "deposit", 1_000_000n);
-  await new Promise((r) => setTimeout(r, 20));
+  for (let i = 0; i < 100 && !payments.pending(owner.publicKey); i++) {
+    await new Promise((r) => setTimeout(r, 10));
+  }
   assert.ok(payments.pending(owner.publicKey), "receipt saved before sending");
   await assert.rejects(
     payments.pay(owner, "deposit", 1_000_000n),

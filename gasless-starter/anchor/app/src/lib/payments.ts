@@ -74,11 +74,13 @@ export async function buildPayment(
     }),
     signal: AbortSignal.timeout(25_000),
   });
-  const body = await response.json();
+  // Error pages (a 502 from a proxy, say) may not be JSON.
+  const body = await response.json().catch(() => null);
   invariant(
     response.ok,
-    body.error?.message ?? `Payments API returned ${response.status}.`,
+    body?.error?.message ?? `Payments API returned ${response.status}.`,
   );
+  invariant(body, "Payments API returned an unreadable response.");
   return body as PaymentBuild;
 }
 

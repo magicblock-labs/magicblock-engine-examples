@@ -233,7 +233,11 @@ export default function App() {
             type="file"
             accept="application/json"
             hidden
-            onChange={(e) => onImport(e.target.files?.[0])}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = ""; // so picking the same file again still fires
+              onImport(file);
+            }}
           />
         </div>
       </section>

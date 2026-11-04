@@ -60,12 +60,14 @@ export async function readBalances(owner: PublicKey): Promise<Balances> {
 export const jarTokenBalance = (jar: PublicKey) => tokenAmount(er, jar);
 
 /** The jar as the ER sees it (live), not the last commit on Solana. */
-export const fetchJar = (jar: PublicKey) =>
-  program.account.jar.fetch(jar).catch(() => {
-    throw new Error(
-      `No tip jar at ${jar.toBase58()}. Run \`yarn create-jar\` and set VITE_JAR_ADDRESS.`,
-    );
-  });
+export async function fetchJar(jar: PublicKey) {
+  const account = await program.account.jar.fetchNullable(jar);
+  invariant(
+    account,
+    `No tip jar at ${jar.toBase58()}. Run \`yarn create-jar\` and set VITE_JAR_ADDRESS.`,
+  );
+  return account;
+}
 
 /**
  * Send one instruction to the ER. The wallet is the fee payer even though it

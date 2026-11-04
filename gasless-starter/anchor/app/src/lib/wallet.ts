@@ -27,10 +27,19 @@ function withStore<T>(
     open.onerror = () => reject(new Error("Browser storage is unavailable."));
     open.onsuccess = () => {
       const db = open.result;
-      const request = run(db.transaction(STORE, mode).objectStore(STORE));
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-      request.transaction!.oncomplete = () => db.close();
+      const tx = db.transaction(STORE, mode);
+      const request = run(tx.objectStore(STORE));
+      // Resolve on commit, not on request success: a write isn't saved until then.
+      tx.oncomplete = () => {
+        db.close();
+        resolve(request.result);
+      };
+      tx.onerror = tx.onabort = () => {
+        db.close();
+        reject(
+          request.error ?? tx.error ?? new Error("Browser storage failed."),
+        );
+      };
     };
   });
 }
