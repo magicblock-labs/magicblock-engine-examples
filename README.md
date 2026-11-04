@@ -277,6 +277,16 @@ End-to-end app templates you can fork and build on.
 <p><em>MagicBlock VRF gachapon demo that mints a Metaplex Core NFT reward.</em></p>
 </blockquote>
 </td>
+<td valign="top" width="33%">
+<blockquote>
+<p><strong><a href="./gasless-starter/anchor/">⛽ Gasless Starter / Anchor</a></strong></p>
+<p>
+<img src="https://img.shields.io/badge/Anchor-5243AA?style=flat-square" alt="Anchor"/>
+<img src="https://img.shields.io/badge/Payments%20API-0ea5e9?style=flat-square" alt="Payments API"/>
+</p>
+<p><em>Make your program gasless: Payments API deposits and withdrawals, free ER transactions from a 0-SOL wallet. Tip jar example.</em></p>
+</blockquote>
+</td>
 </tr>
 </table>
 
