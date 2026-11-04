@@ -108,7 +108,9 @@ jobs:
         run: |
           # Provides ephemeral-validator, query-filtering-service, vrf-oracle and
           # mb-test-validator — every binary test-locally.sh needs.
-          npm install -g @magicblock-labs/ephemeral-validator@latest
+          # Pinned: 1.1.1's committor sends transactions the base validator can't
+          # deserialize, so every commit-to-base test times out.
+          npm install -g @magicblock-labs/ephemeral-validator@0.14.10
 
       - name: Configure Solana
         env:
