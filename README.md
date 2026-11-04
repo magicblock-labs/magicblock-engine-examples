@@ -312,7 +312,7 @@ To run local tests for any example project, use the following steps:
 1. **Install Dependencies (Local nodes + example directory):**
 
    ```bash
-   npm install -g @magicblock-labs/ephemeral-validator@latest
+   npm install -g @magicblock-labs/ephemeral-validator@0.14.10
    cd <example-directory>
    yarn install
    ```

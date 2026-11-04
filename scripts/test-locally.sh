@@ -706,7 +706,7 @@ echo "Starting MagicBlock stack (mb-stack)..."
 MB_STACK_BIN=$(command -v mb-stack 2>/dev/null)
 if [ -z "$MB_STACK_BIN" ]; then
   echo "ERROR: 'mb-stack' not on PATH. Install with:"
-  echo "  npm install -g @magicblock-labs/ephemeral-validator"
+  echo "  npm install -g @magicblock-labs/ephemeral-validator@0.14.10"
   exit 1
 fi
 echo "  Binary: $MB_STACK_BIN"
