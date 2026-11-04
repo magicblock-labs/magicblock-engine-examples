@@ -12,6 +12,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import {
@@ -27,17 +28,25 @@ const RPC = process.env.RPC_URL ?? "https://rpc.magicblock.app/devnet";
 const VALIDATOR = new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
 const USDC_MINT = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 
+const loadKeypair = (path: string) =>
+  Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(readFileSync(path, "utf8"))),
+  );
+
 async function main() {
-  const wallet = anchor.Wallet.local();
+  // Pays for setup. Defaults to the Solana CLI wallet.
+  const wallet = new anchor.Wallet(
+    loadKeypair(
+      process.env.ANCHOR_WALLET ?? `${homedir()}/.config/solana/id.json`,
+    ),
+  );
   const provider = new anchor.AnchorProvider(
     new Connection(RPC, "confirmed"),
     wallet,
   );
   const program = new Program<TipJar>(idl as TipJar, provider);
   const authority = process.argv[2]
-    ? Keypair.fromSecretKey(
-        Uint8Array.from(JSON.parse(readFileSync(process.argv[2], "utf8"))),
-      )
+    ? loadKeypair(process.argv[2])
     : wallet.payer;
   const [jar] = PublicKey.findProgramAddressSync(
     [Buffer.from("jar"), authority.publicKey.toBuffer()],
