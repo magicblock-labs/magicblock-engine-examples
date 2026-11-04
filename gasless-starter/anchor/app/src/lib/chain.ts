@@ -1,5 +1,6 @@
 import { BN, Program } from "@coral-xyz/anchor";
 import {
+  type BlockhashWithExpiryBlockHeight,
   Connection,
   Keypair,
   PublicKey,
@@ -69,15 +70,39 @@ export async function fetchJar(jar: PublicKey) {
   return account;
 }
 
+// ER blockhashes stay valid for about a minute, so fetch the next one ahead of
+// time and sending costs no extra round trip. Each one is used only once: two
+// identical tips with the same blockhash would be the same transaction.
+const fetchBlockhash = () =>
+  er.getLatestBlockhash().then(
+    (value) => ({ value, at: Date.now() }),
+    () => undefined, // retried by takeBlockhash
+  );
+let nextBlockhash = fetchBlockhash();
+
+async function takeBlockhash(): Promise<BlockhashWithExpiryBlockHeight> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const cached = nextBlockhash;
+    nextBlockhash = fetchBlockhash();
+    const hit = await cached;
+    if (hit && Date.now() - hit.at < 30_000) return hit.value;
+  }
+  throw new Error("Could not reach the rollup.");
+}
+
 /**
  * Send one instruction to the ER. The wallet is the fee payer even though it
  * holds no SOL: ER transactions are free. No popup, no gas.
+ *
+ * The ER executes a transaction as soon as it arrives, so polling its status
+ * right after sending is faster than `confirmTransaction`, which opens a
+ * websocket for every call.
  */
 export async function sendOnEr(
   wallet: Keypair,
   ix: TransactionInstruction,
 ): Promise<string> {
-  const { blockhash, lastValidBlockHeight } = await er.getLatestBlockhash();
+  const { blockhash, lastValidBlockHeight } = await takeBlockhash();
   const tx = new Transaction({
     feePayer: wallet.publicKey,
     blockhash,
@@ -87,15 +112,20 @@ export async function sendOnEr(
   const signature = await er.sendRawTransaction(tx.serialize(), {
     skipPreflight: true,
   });
-  const { value } = await er.confirmTransaction(
-    { signature, blockhash, lastValidBlockHeight },
-    "confirmed",
-  );
-  invariant(
-    !value.err,
-    `Rollup rejected the transaction: ${JSON.stringify(value.err)}`,
-  );
-  return signature;
+  for (const deadline = Date.now() + 30_000; Date.now() < deadline;) {
+    const {
+      value: [status],
+    } = await er.getSignatureStatuses([signature]);
+    if (status?.confirmationStatus) {
+      invariant(
+        !status.err,
+        `Rollup rejected the transaction: ${JSON.stringify(status.err)}`,
+      );
+      return signature;
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`Rollup did not confirm ${signature} in 30 seconds.`);
 }
 
 export const tipInstruction = (

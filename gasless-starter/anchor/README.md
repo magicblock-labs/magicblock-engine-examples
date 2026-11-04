@@ -157,7 +157,13 @@ tx.sign(wallet);
 await er.sendRawTransaction(tx.serialize(), { skipPreflight: true });
 ```
 
-The ER is free, so this works with 0 SOL. An embedded keypair
+The ER is free, so this works with 0 SOL. To keep each action to two round
+trips, `sendOnEr` fetches the next blockhash in the background (using each one
+once) and polls `getSignatureStatuses` right after sending. The ER executes on
+arrival, so the first poll usually confirms; `confirmTransaction` would open a
+new websocket every time.
+
+An embedded keypair
 (`app/src/lib/wallet.ts`) signs with no popup, which makes each action feel
 instant. A browser wallet works too, but it asks for approval every time.
 

@@ -104,11 +104,12 @@ export class SponsoredPayments {
     } catch {
       // A failed send does not mean the payment failed. Reconcile decides.
     }
-    for (let attempt = 0; attempt < 40; attempt++) {
-      if (await this.reconcile(owner.publicKey, attempt % 5 === 4)) {
+    // Poll every 0.5 s for up to 40 s, resending every 5 s.
+    for (let attempt = 0; attempt < 80; attempt++) {
+      if (await this.reconcile(owner.publicKey, attempt % 10 === 9)) {
         return receipt.signature;
       }
-      await sleep(1000);
+      await sleep(500);
     }
     throw new Error(
       "The payment is still settling. Its receipt is saved; refresh in a minute.",
