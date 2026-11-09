@@ -5,7 +5,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::Metadata;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use ephemeral_rollups_sdk::anchor::{action, commit, delegate, ephemeral};
-use ephemeral_vrf_sdk::anchor::vrf;
+use ephemeral_rollups_sdk::anchor::{vrf, vrf_callback};
 
 pub mod constants;
 pub mod errors;
@@ -234,18 +234,23 @@ pub struct RequestRandomReward<'info> {
     #[account(seeds = [constants::TRANSFER_LOOKUP_TABLE_SEED], bump)]
     pub transfer_lookup_table: Account<'info, state::TransferLookupTable>,
     /// CHECK: Validated by address constraint against the known VRF oracle queue
-    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
+    #[account(mut, address = ephemeral_rollups_sdk::vrf::consts::DEFAULT_EPHEMERAL_QUEUE)]
     pub oracle_queue: UncheckedAccount<'info>,
     /// CHECK: reward_list delegation record; its validator derives magic_fee_vault
     #[account(address = ephemeral_rollups_sdk::pda::delegation_record_pda_from_delegated_account(&reward_list.key()))]
     pub delegation_record_reward_list: UncheckedAccount<'info>,
 }
 
+/// VRF callback. `#[vrf_callback]` injects `vrf_program_identity: Signer`
+/// constrained to `scoped_vrf_identity(&crate::ID)`. That PDA is bound to this
+/// program, so only randomness requested by this program (i.e. through the
+/// gated `request_random_reward`) can reach this handler. Do NOT use the legacy
+/// global `VRF_PROGRAM_IDENTITY`: it signs callbacks for any requester, which
+/// would let anyone trigger reward payouts.
+#[vrf_callback]
 #[commit]
 #[derive(Accounts)]
 pub struct ConsumeRandomReward<'info> {
-    #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
-    pub vrf_program_identity: Signer<'info>,
     /// CHECK: reward recipient, as passed to request_random_reward
     pub user: UncheckedAccount<'info>,
     pub reward_distributor: Account<'info, state::RewardDistributor>,

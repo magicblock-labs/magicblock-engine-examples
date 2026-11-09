@@ -26,10 +26,12 @@ export const TEST_WHITELIST_USER = new PublicKey(
 );
 
 /**
- * Derive the VRF Program Identity PDA
- * This is used to validate that VRF callbacks come from the official VRF program
- * The identity PDA is derived from the callback program (this rewards program), not the VRF program
- * Seed: "identity", Program: rewards program (PROGRAM_ID)
+ * Derive this program's caller identity PDA (seed: "identity", program: PROGRAM_ID).
+ * The rewards program signs the randomness *request* with it.
+ *
+ * Not to be confused with the callback signer: the VRF oracle signs
+ * consumeRandomReward with the scoped identity PDA(["identity", PROGRAM_ID], VRF_PROGRAM_ID),
+ * which the program validates on-chain. Clients never pass that account.
  */
 export function getVrfProgramIdentity(): PublicKey {
   const IDENTITY_SEED = Buffer.from("identity");

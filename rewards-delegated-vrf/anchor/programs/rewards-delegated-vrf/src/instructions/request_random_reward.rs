@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::consts::{MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID};
-use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
-use ephemeral_vrf_sdk::types::SerializableAccountMeta;
+use ephemeral_rollups_sdk::vrf::instructions::{
+    create_request_high_priority_scoped_randomness_ix, RequestRandomnessParams,
+};
+use ephemeral_rollups_sdk::vrf::types::SerializableAccountMeta;
 
 use crate::instruction;
 use crate::RequestRandomReward;
@@ -50,7 +52,9 @@ pub fn request_random_reward(ctx: Context<RequestRandomReward>, client_seed: u8)
         &ephemeral_rollups_sdk::id(),
     );
 
-    let ix = create_request_randomness_ix(RequestRandomnessParams {
+    // Scoped request: the oracle signs the callback with the per-program identity
+    // `scoped_vrf_identity(&crate::ID)`, which `ConsumeRandomReward` validates.
+    let ix = create_request_high_priority_scoped_randomness_ix(RequestRandomnessParams {
         payer: ctx.accounts.admin.key(),
         oracle_queue: ctx.accounts.oracle_queue.key(),
         callback_program_id: ID,
