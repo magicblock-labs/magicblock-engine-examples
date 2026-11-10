@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::constants;
+use crate::errors::RewardError;
 use crate::instructions::shared::{schedule_transfer_action, TransferSource};
 use crate::state::RewardType;
 use crate::ConsumeRandomReward;
@@ -37,12 +38,15 @@ pub fn consume_random_reward(
         let reward_list = &mut ctx.accounts.reward_list;
         // Log the raw randomness proof as hex for auditability
         msg!("Randomness proof: {:?}", randomness.map(|b| b));
-        let rnd_u32 = ephemeral_vrf_sdk::rnd::random_u32(&randomness);
+        let rnd_u32 = ephemeral_rollups_sdk::vrf::rnd::random_u32(&randomness);
+        // Width of [min, max] inclusive. Kept in u64: a full u32 range (0..=u32::MAX)
+        // has 2^32 values, which would wrap to 0 as u32 and panic on `% 0`.
         let range = (reward_list.global_range_max as u64)
             .checked_sub(reward_list.global_range_min as u64)
-            .unwrap()
+            .ok_or(RewardError::InvalidDrawRange)?
             + 1;
-        let result = reward_list.global_range_min + (rnd_u32 % range as u32);
+        // `offset < range <= 2^32`, and `min + offset <= max`, so both casts are lossless.
+        let result = reward_list.global_range_min + ((rnd_u32 as u64) % range) as u32;
         msg!("Random result: {:?} for user: {:?}", result, user.key());
 
         for reward in reward_list.rewards.iter() {
@@ -60,7 +64,10 @@ pub fn consume_random_reward(
         for reward in reward_list.rewards.iter_mut() {
             if result >= reward.draw_range_min && result <= reward.draw_range_max {
                 found_reward = true;
-                if reward.redemption_count < reward.redemption_limit {
+                if reward.reward_mints.is_empty() {
+                    // Checked before counting a redemption, and avoids `% 0` on mint selection.
+                    msg!("Reward '{}' has no mints left to distribute", reward.name);
+                } else if reward.redemption_count < reward.redemption_limit {
                     reward.redemption_count = reward.redemption_count.saturating_add(1);
                     msg!(
                         "Won reward '{}' (range {}-{})",
@@ -79,7 +86,7 @@ pub fn consume_random_reward(
                                 let mut rnd_bytes = [0u8; 32];
                                 rnd_bytes.copy_from_slice(&randomness);
                                 rnd_bytes.rotate_left(4);
-                                let rnd_mint = ephemeral_vrf_sdk::rnd::random_u32(&rnd_bytes);
+                                let rnd_mint = ephemeral_rollups_sdk::vrf::rnd::random_u32(&rnd_bytes);
                                 let mint_index = (rnd_mint as usize) % mint_count;
                                 reward.reward_mints.remove(mint_index)
                             }
