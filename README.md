@@ -9,6 +9,12 @@ Read more about Ephemeral Rollups [here](https://docs.magicblock.gg/EphemeralRol
 
 > To view integrated demos for specific usecases, please look at [MagicBlock Starter Kits](https://github.com/magicblock-labs/starter-kits).
 
+> Building with an AI coding agent? Install the [MagicBlock Dev Skill](https://github.com/magicblock-labs/magicblock-dev-skill) so Claude Code, Cursor, Codex, or another agent knows the delegation, commit, VRF, and private payment patterns used in these examples:
+>
+> ```bash
+> npx skills add magicblock-labs/magicblock-dev-skill
+> ```
+
 After cloning, initialize the optional Private Payments example submodule:
 
 ```bash
